@@ -64,11 +64,8 @@ def main() -> None:
     )
     kokoro = Kokoro.from_session(session, str(models / "voices-v1.0.bin"))
 
-    lines = [
-        l.strip()
-        for l in args.lines.read_text("utf-8").splitlines()
-        if l.strip() and not l.startswith("#")
-    ]
+    text = args.lines.read_text("utf-8").splitlines()
+    lines = [line.strip() for line in text if line.strip() and not line.startswith("#")]
     kokoro.create("Warming up.", voice=args.voices[0], lang="en-us")  # first call pays for setup
     for voice in args.voices:
         folder = args.out / f"kokoro-{voice}"
