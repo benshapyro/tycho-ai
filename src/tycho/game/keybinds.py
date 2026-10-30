@@ -4,7 +4,7 @@ The defaults live in Data.p4k (Data\\Libs\\Config\\defaultProfile.xml, as CryXml
 The player's changes live in actionmaps.xml, which lists only what they rebound,
 per device: "kb1_" keyboard, "mo1_" mouse, "js1_"... joysticks, "gp1_" gamepad.
 
-Ultimo presses keyboard keys and mouse buttons, so only those inputs are kept.
+Tycho presses keyboard keys and mouse buttons, so only those inputs are kept.
 Rebinding an action on a joystick leaves its keyboard key in place.
 """
 
@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, replace
 
-from ultimo.game.localization import resolve
+from tycho.game.localization import resolve
 
 DEFAULTS_P4K_PATH = r"Data\Libs\Config\defaultProfile.xml"
 MODIFIERS = frozenset({"lalt", "ralt", "lctrl", "rctrl", "lshift", "rshift"})
@@ -38,7 +38,7 @@ class KeyInput:
         parts = [p.strip() for p in text.split("+") if p.strip()]
         keys = [p for p in parts if p not in MODIFIERS]
         if len(keys) > 1:
-            return None  # chords of two ordinary keys aren't something Ultimo will press
+            return None  # chords of two ordinary keys aren't something Tycho will press
         if not keys:  # a modifier bound on its own, e.g. "lctrl"
             return cls(parts[-1], tuple(parts[:-1]))
         return cls(keys[0], tuple(sorted(p for p in parts if p in MODIFIERS)))

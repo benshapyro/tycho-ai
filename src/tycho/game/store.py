@@ -10,16 +10,16 @@ import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from ultimo.game import cryxml, localization
-from ultimo.game.install import GameInstall
-from ultimo.game.keybinds import DEFAULTS_P4K_PATH, Action, Keybinds, apply_profile, parse_defaults
-from ultimo.game.p4k import P4kArchive
+from tycho.game import cryxml, localization
+from tycho.game.install import GameInstall
+from tycho.game.keybinds import DEFAULTS_P4K_PATH, Action, Keybinds, apply_profile, parse_defaults
+from tycho.game.p4k import P4kArchive
 
 type _Stamp = tuple[int, int] | None
 
 
 def default_cache_dir() -> Path:
-    return Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ultimo" / "cache"
+    return Path(os.environ.get("LOCALAPPDATA", Path.home())) / "tycho" / "cache"
 
 
 class KeybindStore:

@@ -6,12 +6,12 @@ from pathlib import Path
 import pytest
 
 from tests.fakes.cryxml_writer import encode
-from ultimo.game import cryxml
-from ultimo.game.install import GameInstall
-from ultimo.game.keybinds import Keybinds, KeyInput, apply_profile, parse_defaults
-from ultimo.game.localization import parse_global_ini, resolve
-from ultimo.game.p4k import P4kArchive
-from ultimo.game.store import KeybindStore
+from tycho.game import cryxml
+from tycho.game.install import GameInstall
+from tycho.game.keybinds import Keybinds, KeyInput, apply_profile, parse_defaults
+from tycho.game.localization import parse_global_ini, resolve
+from tycho.game.p4k import P4kArchive
+from tycho.game.store import KeybindStore
 
 DEFAULTS = """<profile>
   <actionmap name="spaceship_movement">

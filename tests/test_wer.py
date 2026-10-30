@@ -1,6 +1,6 @@
 import pytest
 
-from ultimo.eval import normalize, score_clip, word_errors
+from tycho.eval import normalize, score_clip, word_errors
 
 
 def test_normalize_drops_case_punctuation_and_apostrophes() -> None:

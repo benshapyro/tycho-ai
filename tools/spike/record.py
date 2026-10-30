@@ -18,11 +18,11 @@ from pathlib import Path
 
 import soundfile as sf
 
-from ultimo.audio.clip import Samples
-from ultimo.audio.microphone import SAMPLE_RATE, Microphone
-from ultimo.ptt import Binding, DeviceKind, Edge, InputSource, PushToTalk, capture_binding
-from ultimo.ptt import windows as win
-from ultimo.ptt.joystick import JoystickSource
+from tycho.audio.clip import Samples
+from tycho.audio.microphone import SAMPLE_RATE, Microphone
+from tycho.ptt import Binding, DeviceKind, Edge, InputSource, PushToTalk, capture_binding
+from tycho.ptt import windows as win
+from tycho.ptt.joystick import JoystickSource
 
 POLL_SECONDS = 0.005
 TAIL_SECONDS = 0.15  # keep recording briefly after release so the last word isn't clipped

@@ -1,6 +1,6 @@
 import numpy as np
 
-from ultimo.audio.clip import ClipBuffer
+from tycho.audio.clip import ClipBuffer
 
 
 def _block(value: float, frames: int = 10) -> np.ndarray[tuple[int], np.dtype[np.float32]]:

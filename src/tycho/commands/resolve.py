@@ -2,8 +2,8 @@
 
 from dataclasses import dataclass
 
-from ultimo.commands.matcher import Command
-from ultimo.game.keybinds import Action, Keybinds
+from tycho.commands.matcher import Command
+from tycho.game.keybinds import Action, Keybinds
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,10 +1,10 @@
-# Ultimo
+# Tycho
 
 **An unofficial voice co-pilot for Star Citizen®.**
 
-> *Ultimo* (spacer slang): someone reliable and trustworthy.
+> Named after Tycho Brahe, who charted the stars with unmatched precision before the telescope existed.
 
-Ultimo turns natural speech into in-game actions, using your own keybinds. It checks the game's state before flipping a switch, says what it did, and asks before doing anything you can't undo. It answers trade, loadout and location questions from live community data.
+Tycho turns natural speech into in-game actions, using your own keybinds. It checks the game's state before flipping a switch, says what it did, and asks before doing anything you can't undo. It answers trade, loadout and location questions from live community data.
 
 **Status: pre-alpha.** Nothing works yet. We're measuring latency before committing to an architecture.
 
@@ -34,7 +34,7 @@ See [docs/architecture.md](docs/architecture.md) for the design, [docs/adr](docs
 
 ## Data sources
 
-Ultimo uses community data from the [Star Citizen Wiki API](https://api.star-citizen.wiki) and [UEX Corp](https://uexcorp.space). Thank you to both. Each user supplies their own UEX API token.
+Tycho uses community data from the [Star Citizen Wiki API](https://api.star-citizen.wiki) and [UEX Corp](https://uexcorp.space). Thank you to both. Each user supplies their own UEX API token.
 
 ## Licence
 

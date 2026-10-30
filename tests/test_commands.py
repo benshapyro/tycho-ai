@@ -1,7 +1,7 @@
 import pytest
 
-from ultimo.commands import Command, CommandMatcher, Defer, Match, resolve
-from ultimo.game.keybinds import Action, Keybinds, KeyInput
+from tycho.commands import Command, CommandMatcher, Defer, Match, resolve
+from tycho.game.keybinds import Action, Keybinds, KeyInput
 
 MATCHER = CommandMatcher.default()
 
@@ -18,7 +18,7 @@ def _ids(text: str) -> str:
         ("Okay, lights off please.", "lights_off"),
         ("could you close the doors", "doors_close"),
         ("Shields the front.", "shields_front"),
-        ("hey ultimo gear down", "landing_gear_down"),
+        ("hey tycho gear down", "landing_gear_down"),
         ("Lower the landing gear now.", "landing_gear_down"),
         ("open the doors then lights on", "doors_open+lights_on"),
         ("flight ready and request landing", "flight_ready+request_landing"),

@@ -1,14 +1,14 @@
-# Ultimo architecture
+# Tycho architecture
 
 Status: draft. Decisions are recorded in [adr/](adr). Anything still unproven is marked **(to measure)**.
 
-## 1. What Ultimo is
+## 1. What Tycho is
 
-Ultimo is a voice co-pilot for Star Citizen. You talk to it the way you'd talk to a crewmate. It works out what you mean, presses the right keys through your own keybinds, looks at your screen when you let it, and answers questions from live game data.
+Tycho is a voice co-pilot for Star Citizen. You talk to it the way you'd talk to a crewmate. It works out what you mean, presses the right keys through your own keybinds, looks at your screen when you let it, and answers questions from live game data.
 
-Existing tools in this space, for Star Citizen and other games, share the same failures. Ultimo is built around fixing them:
+Existing tools in this space, for Star Citizen and other games, share the same failures. Tycho is built around fixing them:
 
-1. **It knows what's going on.** Other assistants press keys blind. They can't tell whether your shields are already on, or whether you're in a seat or on foot, so "turn on shields" can turn them off. Ultimo tracks state and checks before toggling.
+1. **It knows what's going on.** Other assistants press keys blind. They can't tell whether your shields are already on, or whether you're in a seat or on foot, so "turn on shields" can turn them off. Tycho tracks state and checks before toggling.
 2. **Common commands feel instant.** "Landing gear" should happen in well under half a second, with no round trip to a cloud model.
 3. **It understands loose, chained and contextual requests.** "Get us ready to leave and call the tower" becomes the full startup sequence. "Do that again" and "no, the other one" work.
 4. **It knows the game.** Trade, loadout, mining, location and lore answers come from live data, not a model's memory, and say where they came from.
@@ -23,7 +23,7 @@ Existing tools in this space, for Star Citizen and other games, share the same f
 - Answer game-knowledge questions from live sources: UEX Corp, the Star Citizen Wiki API, and starcitizen.tools.
 - Have a voice and persona worth listening to for hours, configurable by the user.
 - Be measurable: a test set of real spoken commands, with accuracy and latency tracked on every change.
-- Cheap to run, with no technical setup: an API key is all a player provides. Speech-to-text runs locally and Ultimo manages it; the language model runs in the cloud. See [ADR 6](adr/0006-cloud-brain-local-ears.md).
+- Cheap to run, with no technical setup: an API key is all a player provides. Speech-to-text runs locally and Tycho manages it; the language model runs in the cloud. See [ADR 6](adr/0006-cloud-brain-local-ears.md).
 
 **Non-goals (for now)**
 - Playing the game for you: flying, fighting, mining loops.
@@ -31,7 +31,7 @@ Existing tools in this space, for Star Citizen and other games, share the same f
 - Other games, although the core shouldn't rule them out.
 - Mobile or web versions.
 
-**Anti-goals: Ultimo fails if it does any of these, even if everything else works**
+**Anti-goals: Tycho fails if it does any of these, even if everything else works**
 - Reading or writing game memory, injecting into the game process, or anything else that could trip Easy Anti-Cheat or break CIG's terms. See [ADR 3](adr/0003-staying-within-cig-rules.md).
 - Unattended automation that amounts to botting.
 - An irreversible or costly action (self-destruct, eject, accepting or abandoning a contract, buying or selling) without explicit confirmation.
@@ -40,17 +40,17 @@ Existing tools in this space, for Star Citizen and other games, share the same f
 
 ### AI-native principles
 
-Ultimo is an AI product, not traditional software with a chatbot added. In practice:
+Tycho is an AI product, not traditional software with a chatbot added. In practice:
 
 - **Setup is a conversation.** First run finds your mics and controllers, has you say something to check your level, and has you press your push-to-talk button. The settings screen shows the result.
 - **Ask or click, same result.** Every setting can be changed by voice or in the GUI, and both edit the same settings. See [ADR 5](adr/0005-settings-one-schema-three-ways-in.md).
-- **It explains itself.** When something is wrong, such as a silent mic, a missing keybind or a service that's down, Ultimo says what and why in plain words, instead of just failing.
+- **It explains itself.** When something is wrong, such as a silent mic, a missing keybind or a service that's down, Tycho says what and why in plain words, instead of just failing.
 - **It learns where you can see it.** Ship names, places and shorthand it picks up are listed where you can review, edit and delete them. Nothing is learned in secret.
 - **Quality is measured.** Speech, understanding and actions are scored against recorded speech on every change. See section 6.
 
 ## 3. Constraints
 
-- **Windows only.** The game runs only on Windows, and Ultimo sends keypresses and captures the screen there.
+- **Windows only.** The game runs only on Windows, and Tycho sends keypresses and captures the screen there.
 - **The game has no API.** The legitimate ways in are: key and mouse input, screen capture, files the game writes (`Game.log` and the keybinding file), and outside web data.
 - **It shares the PC with a demanding game.** Local speech and vision models compete with Star Citizen for the CPU and GPU. Their cost must be measured with the game running.
 - **Keybinds change between patches,** and players customise them. Bindings are read from the user's own setup, never hard-coded.
@@ -62,11 +62,11 @@ Ultimo is an AI product, not traditional software with a chatbot added. In pract
 
 1. **Activation.** The user holds push-to-talk: a keyboard key, mouse button, or HOTAS or stick button. A wake word is optional, because wake words false-trigger during voice chat and gameplay noise.
 2. **Speech to text.** Text streams as the user speaks. Releasing push-to-talk marks the end of speech.
-3. **Fast path.** If the phrase matches a known command ("landing gear", "open the doors", "request landing"), Ultimo runs it straight away, with no model involved. Target: under 300 ms from the end of speech to the keypress.
+3. **Fast path.** If the phrase matches a known command ("landing gear", "open the doors", "request landing"), Tycho runs it straight away, with no model involved. Target: under 300 ms from the end of speech to the keypress.
 4. **Sorting.** Anything else goes to a quick sorter: a game action, a question, a request to look at the screen, conversation, or noise to ignore.
-5. **Thinking.** The brain (Claude) gets the request, the current state as Ultimo understands it, recent conversation and a set of tools. It plans and calls those tools.
-6. **Doing.** Tools press keys, capture the screen, look things up, or update what Ultimo believes about the game.
-7. **Receipt and speech.** Ultimo reports what it actually did ("Gear down") and whether it confirmed the result. Replies are spoken in the persona's voice and start before the full reply is written.
+5. **Thinking.** The brain (Claude) gets the request, the current state as Tycho understands it, recent conversation and a set of tools. It plans and calls those tools.
+6. **Doing.** Tools press keys, capture the screen, look things up, or update what Tycho believes about the game.
+7. **Receipt and speech.** Tycho reports what it actually did ("Gear down") and whether it confirmed the result. Replies are spoken in the persona's voice and start before the full reply is written.
 
 ### 4.2 Components
 
@@ -80,7 +80,7 @@ Ultimo is an AI product, not traditional software with a chatbot added. In pract
 | Input | Sends scancode keypresses and cancellable sequences through the user's keybinds |
 | Eyes | Captures the game window only, when allowed |
 | Log reader | Tails `Game.log` and turns lines into state updates |
-| State tracker | What Ultimo believes is true right now (see 4.3) |
+| State tracker | What Tycho believes is true right now (see 4.3) |
 | Safety gate | The single checkpoint every action passes through (see 4.7) |
 | Knowledge | Game data lookups: UEX Corp, the Wiki API, starcitizen.tools |
 | Voice | Streaming text to speech, plus pre-rendered short replies |
@@ -91,11 +91,11 @@ Every outside service (transcription, models, voice) sits behind a small typed i
 
 ### 4.3 Knowing the state of the game
 
-This is the core of the design. Ultimo keeps a running picture of the game: ship, seat, power, shields, landing gear, doors, quantum status, location and current mission. Each fact records **where it came from** and **how sure** Ultimo is:
+This is the core of the design. Tycho keeps a running picture of the game: ship, seat, power, shields, landing gear, doors, quantum status, location and current mission. Each fact records **where it came from** and **how sure** Tycho is:
 
 - **Seen:** read from a screen capture. High confidence, for a short time.
 - **Logged:** from `Game.log`. High confidence, but only for events the log records.
-- **Assumed:** inferred from a key Ultimo pressed. Low confidence, because the game may have ignored it.
+- **Assumed:** inferred from a key Tycho pressed. Low confidence, because the game may have ignored it.
 
 Rules:
 - Before pressing a toggle whose state matters (shields, power, gear, doors, lights), check the state. If it's only assumed and a wrong guess would matter, look at the screen first if allowed, or say what it's about to do.
@@ -105,7 +105,7 @@ Rules:
 ### 4.4 Screen vision and permission
 
 - **Per-request trigger:** a word the user chooses ("look", say) captures the game window together with what was said, and sends both to the brain.
-- **Standing permission (off by default):** a setting that lets Ultimo capture whenever the state tracker needs to confirm something.
+- **Standing permission (off by default):** a setting that lets Tycho capture whenever the state tracker needs to confirm something.
 - Only the game window is captured, never the whole desktop.
 - Captures live in memory and are discarded after use, unless the user says "save that".
 - An indicator in the control panel and a short sound show when a capture happens.
@@ -114,10 +114,10 @@ Vision is never on the fast path. It's for questions ("what's this contract wort
 
 ### 4.5 Keybinds and actions
 
-- Ultimo reads the user's bindings from Star Citizen's `actionmaps.xml`, under `LIVE\user\client\0\Profiles\default\`.
+- Tycho reads the user's bindings from Star Citizen's `actionmaps.xml`, under `LIVE\user\client\0\Profiles\default\`.
 - It turns them into actions with friendly names and the phrases that trigger them. The user can edit the list.
 - Sequences ("startup", "prepare to land") are named, editable lists of actions with waits between them.
-- When an action has no binding, Ultimo says so instead of guessing.
+- When an action has no binding, Tycho says so instead of guessing.
 - After a patch, it rereads the file and reports actions that were added, removed or changed.
 
 ### 4.6 The sorter
@@ -137,13 +137,13 @@ Every action passes through one safety gate, which can refuse it.
 - Confirmation is by voice ("confirm"), and the request expires after a few seconds.
 - A spoken "stop" or "cancel", or pressing push-to-talk, immediately halts any sequence and releases every held key.
 - Every action is logged with what was pressed and why, so the user can review it and say "undo that" where possible.
-- If the internet or an outside service fails, the fast path keeps working, and Ultimo says plainly that the rest is unavailable instead of hanging.
+- If the internet or an outside service fails, the fast path keeps working, and Tycho says plainly that the rest is unavailable instead of hanging.
 
 ### 4.8 Persona and voice
 
 The persona is configurable: name, voice, tone and how chatty it is. It keeps replies short in combat and talks more when idle. There's one default persona, kept as an editable text file.
 
-The default draws on the lore. In Star Citizen's universe, humanity distrusts AI after Janus, the AI core blamed for the loss of the *Artemis*. Ultimo's default persona knows this. It's careful, a little defensive about not being Janus, and always reads back what it's about to do.
+The default draws on the lore. In Star Citizen's universe, humanity distrusts AI after Janus, the AI core blamed for the loss of the *Artemis*. Tycho's default persona knows this. It's careful, a little defensive about not being Janus, and always reads back what it's about to do.
 
 ## 5. Delivery stages
 
@@ -163,14 +163,14 @@ Settings (one schema, voice and file editing) arrive in stage 1. The settings GU
   - under 300 ms on the fast path;
   - under 1.5 s when thinking without vision;
   - under 4 s with vision.
-- **Hands-off test:** a full session (startup, travel, a mission, landing) without touching the keyboard for any action Ultimo supports.
+- **Hands-off test:** a full session (startup, travel, a mission, landing) without touching the keyboard for any action Tycho supports.
 - **Game impact:** a measured, published frame-rate cost.
 - **Cost:** a published cost per hour of play for each provider setup, including a free or local one.
 
 ## 7. Open questions
 
 1. Which default voice and persona tone tests best over long sessions?
-2. Should Ultimo ever speak unprompted, for example to warn about low fuel? If so, how do we keep it from becoming noise?
+2. Should Tycho ever speak unprompted, for example to warn about low fuel? If so, how do we keep it from becoming noise?
 3. How much does `Game.log` record in the current patch? This sets how much the state tracker must rely on vision.
 4. Can local speech-to-text run alongside the game without a noticeable frame-rate cost? **(to measure)**
 5. What will CIG say when asked directly about a user-triggered voice keybind tool? See [ADR 3](adr/0003-staying-within-cig-rules.md).

@@ -5,7 +5,7 @@ from collections.abc import Callable, Iterable, Sequence
 from enum import Enum, auto
 from typing import Protocol
 
-from ultimo.ptt.binding import Binding
+from tycho.ptt.binding import Binding
 
 
 class InputSource(Protocol):

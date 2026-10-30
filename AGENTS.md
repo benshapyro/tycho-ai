@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Instructions for AI coding agents working on Ultimo, an unofficial voice co-pilot for Star Citizen. Read [docs/architecture.md](docs/architecture.md) for what we're building, and [docs/adr](docs/adr) for why.
+Instructions for AI coding agents working on Tycho, an unofficial voice co-pilot for Star Citizen. Read [docs/architecture.md](docs/architecture.md) for what we're building, and [docs/adr](docs/adr) for why.
 
 ## Commands
 
@@ -18,7 +18,7 @@ All four of these pass: `ruff format --check`, `ruff check`, `pyright`, and `pyt
 
 ## Hard rules
 
-- Never copy or port code from GPL-licensed projects, including Wingman AI. Ultimo is Apache-2.0.
+- Never copy or port code from GPL-licensed projects, including Wingman AI. Tycho is Apache-2.0.
 - Never read or write game memory, inject into the game process, or hook DirectX.
 - Every action must go through the safety gate, be started by the user and have a fixed end. No loops or timers acting alone.
 - Never write API keys to files or logs. Use the `keyring` wrapper.

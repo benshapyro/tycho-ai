@@ -7,7 +7,7 @@ So game terms are also checked on their own, ignoring spaces.
 
 from dataclasses import dataclass
 
-from ultimo.text import edit_distance, normalize
+from tycho.text import edit_distance, normalize
 
 __all__ = ["ClipScore", "normalize", "score_clip", "word_errors"]
 

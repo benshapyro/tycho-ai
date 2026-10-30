@@ -1,6 +1,6 @@
 from tests.fakes.fake_input import FakeInputSource
-from ultimo.ptt.binding import Binding, DeviceKind
-from ultimo.ptt.monitor import Edge, PushToTalk, capture_binding
+from tycho.ptt.binding import Binding, DeviceKind
+from tycho.ptt.monitor import Edge, PushToTalk, capture_binding
 
 SIDE = Binding(DeviceKind.MOUSE, 0x05)
 LEFT = Binding(DeviceKind.MOUSE, 0x01)

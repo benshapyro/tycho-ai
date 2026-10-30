@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from ultimo.lexicon import Lexicon, sound_key
+from tycho.lexicon import Lexicon, sound_key
 
 LEXICON = Lexicon(["ArcCorp", "mobiGlas", "Cutlass", "QT", "Ita", "Hurston", "quantum"])
 

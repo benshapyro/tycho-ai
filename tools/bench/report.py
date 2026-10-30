@@ -14,8 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ultimo.eval import ClipScore, score_clip
-from ultimo.lexicon import Lexicon
+from tycho.eval import ClipScore, score_clip
+from tycho.lexicon import Lexicon
 
 # Game words a generic model is likely to get wrong. Matched ignoring spaces and case.
 GAME_TERMS = frozenset(

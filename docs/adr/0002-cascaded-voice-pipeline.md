@@ -10,7 +10,7 @@ Realtime speech-to-speech APIs exist, but they make tool calls less deterministi
 
 Use separate stages: speech-to-text, then the fast path or Claude, then text-to-speech. Each provider sits behind a small typed interface.
 
-Public benchmarks such as the Open ASR Leaderboard score long-form read speech. Ultimo hears two-second commands, full of jargon, over game noise. So speech-to-text is chosen by recording the user's phrases once and running every candidate against them.
+Public benchmarks such as the Open ASR Leaderboard score long-form read speech. Tycho hears two-second commands, full of jargon, over game noise. So speech-to-text is chosen by recording the user's phrases once and running every candidate against them.
 
 Speech-to-text candidates for the spike:
 

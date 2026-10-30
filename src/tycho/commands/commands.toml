@@ -5,7 +5,7 @@
 # is the fallback when the specific one has no key bound, and pressing a toggle
 # without knowing the current state can do the opposite of what was asked.
 #
-# confirm = true means Ultimo asks before acting (see docs/architecture.md, 4.7).
+# confirm = true means Tycho asks before acting (see docs/architecture.md, 4.7).
 # Anything not matched here goes to the language model, so this list only
 # needs the commands people say most and want instantly.
 

@@ -32,13 +32,13 @@ def parse_args(default_model: str) -> argparse.Namespace:
 
 
 def models_dir() -> Path:
-    """Where model files go: $ULTIMO_MODELS, else %LOCALAPPDATA%/ultimo/models.
+    """Where model files go: $TYCHO_MODELS, else %LOCALAPPDATA%/tycho/models.
 
     Models are downloaded as plain files rather than through the Hugging Face
     cache, whose links ONNX Runtime refuses to follow.
     """
-    default = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ultimo" / "models"
-    return Path(os.environ.get("ULTIMO_MODELS", default))
+    default = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "tycho" / "models"
+    return Path(os.environ.get("TYCHO_MODELS", default))
 
 
 def run(args: argparse.Namespace, engine: str, load: Callable[[], Transcribe]) -> None:

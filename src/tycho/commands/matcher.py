@@ -14,13 +14,13 @@ from dataclasses import dataclass
 from importlib import resources
 from typing import Any
 
-from ultimo.text import normalize, similarity
+from tycho.text import normalize, similarity
 
 _LEADING_FILLER = (
     ("okay",),
     ("ok",),
     ("hey",),
-    ("ultimo",),
+    ("tycho",),
     ("please",),
     ("can", "you"),
     ("could", "you"),
@@ -91,7 +91,7 @@ class CommandMatcher:
 
     @classmethod
     def default(cls) -> CommandMatcher:
-        text = resources.files("ultimo.commands").joinpath("commands.toml").read_text("utf-8")
+        text = resources.files("tycho.commands").joinpath("commands.toml").read_text("utf-8")
         return cls(_parse(tomllib.loads(text)))
 
     def match(self, text: str) -> Match | Defer:

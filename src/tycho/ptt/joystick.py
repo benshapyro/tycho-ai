@@ -11,7 +11,7 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 import pygame
 
-from ultimo.ptt.binding import Binding, DeviceKind
+from tycho.ptt.binding import Binding, DeviceKind
 
 
 class JoystickSource:

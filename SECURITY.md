@@ -1,6 +1,6 @@
 # Security policy
 
-Ultimo handles API keys, sends keypresses and can capture your screen, so we take security reports seriously.
+Tycho handles API keys, sends keypresses and can capture your screen, so we take security reports seriously.
 
 ## Reporting a vulnerability
 
@@ -10,10 +10,10 @@ Include what you found, how to reproduce it, and what an attacker could do with 
 
 ## Supported versions
 
-Ultimo is pre-alpha. Only the latest commit on `main` is supported.
+Tycho is pre-alpha. Only the latest commit on `main` is supported.
 
 ## Design commitments
 
 - API keys are stored in Windows Credential Manager, never in config files or logs.
 - Any local server binds to `127.0.0.1` only and requires a per-session token.
-- Ultimo never reads or writes game memory, and never injects into the game process.
+- Tycho never reads or writes game memory, and never injects into the game process.

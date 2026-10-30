@@ -2,9 +2,9 @@
 
 Never in files, environment files or logs. To store or remove a key, run one of:
 
-    uv run python -m ultimo.credentials set anthropic
-    uv run python -m ultimo.credentials delete anthropic
-    uv run python -m ultimo.credentials check anthropic
+    uv run python -m tycho.credentials set anthropic
+    uv run python -m tycho.credentials delete anthropic
+    uv run python -m tycho.credentials check anthropic
 """
 
 import argparse
@@ -14,7 +14,7 @@ import sys
 import keyring
 import keyring.errors
 
-SERVICE = "ultimo"
+SERVICE = "tycho"
 KNOWN = ("anthropic", "cerebras")
 
 
@@ -42,7 +42,7 @@ def masked(value: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m ultimo.credentials", description=__doc__)
+    parser = argparse.ArgumentParser(prog="python -m tycho.credentials", description=__doc__)
     parser.add_argument("command", choices=["set", "delete", "check"])
     parser.add_argument("name", choices=KNOWN)
     args = parser.parse_args(argv)

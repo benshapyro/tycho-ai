@@ -10,7 +10,7 @@ from typing import Any, Self
 import numpy as np
 import sounddevice as sd
 
-from ultimo.audio.clip import ClipBuffer, Samples
+from tycho.audio.clip import ClipBuffer, Samples
 
 SAMPLE_RATE = 16_000
 BLOCK_FRAMES = 320  # 20 ms

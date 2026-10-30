@@ -4,7 +4,7 @@ Date: 2026-10-30 · Status: accepted
 
 ## Context
 
-Ultimo should work for any Star Citizen player, not just its author. Players differ in controls (keyboard and mouse, HOTAS, dual sticks), install locations and game channels, keybinds, hardware, accents and languages.
+Tycho should work for any Star Citizen player, not just its author. Players differ in controls (keyboard and mouse, HOTAS, dual sticks), install locations and game channels, keybinds, hardware, accents and languages.
 
 ## Decision
 

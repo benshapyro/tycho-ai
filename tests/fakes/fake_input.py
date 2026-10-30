@@ -1,4 +1,4 @@
-from ultimo.ptt.binding import Binding
+from tycho.ptt.binding import Binding
 
 
 class FakeInputSource:

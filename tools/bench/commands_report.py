@@ -13,10 +13,10 @@ import time
 import tomllib
 from pathlib import Path
 
-from ultimo.commands import CommandMatcher, Defer, Match, resolve
-from ultimo.game.install import GameInstall
-from ultimo.game.store import KeybindStore
-from ultimo.lexicon import Lexicon
+from tycho.commands import CommandMatcher, Defer, Match, resolve
+from tycho.game.install import GameInstall
+from tycho.game.store import KeybindStore
+from tycho.lexicon import Lexicon
 
 EXPECTED = Path(__file__).resolve().parents[1] / "spike" / "expected.toml"
 

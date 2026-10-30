@@ -1,5 +1,5 @@
 # What should happen for each phrase in phrases.txt, written before the matcher was run.
-# Each value lists acceptable outcomes: a command id from src/ultimo/commands/commands.toml,
+# Each value lists acceptable outcomes: a command id from src/tycho/commands/commands.toml,
 # several joined with "+" for a chain, or "brain" for "hand it to the language model".
 
 "landing gear" = ["landing_gear"]

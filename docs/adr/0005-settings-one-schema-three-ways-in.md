@@ -4,7 +4,7 @@ Date: 2026-10-30 · Status: accepted
 
 ## Context
 
-Players will want to choose their microphone, push-to-talk button, voice, persona, providers and much more, and that list will keep growing. Ultimo is an AI product, so people will expect to change things by asking ("use my headset mic") as well as by clicking. A file is still the right tool for power users, backups and sharing setups.
+Players will want to choose their microphone, push-to-talk button, voice, persona, providers and much more, and that list will keep growing. Tycho is an AI product, so people will expect to change things by asking ("use my headset mic") as well as by clicking. A file is still the right tool for power users, backups and sharing setups.
 
 If the GUI, voice and file each kept their own idea of the settings, they would drift apart, and voice changes would be invisible or impossible to undo.
 

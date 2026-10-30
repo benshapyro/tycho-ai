@@ -6,7 +6,7 @@ the game has focus.
 
 import ctypes
 
-from ultimo.ptt.binding import Binding, DeviceKind
+from tycho.ptt.binding import Binding, DeviceKind
 
 _user32 = ctypes.WinDLL("user32", use_last_error=True)
 

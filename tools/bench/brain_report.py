@@ -7,8 +7,8 @@ whether the decision matches tools/spike/brain_expected.toml. Nothing is pressed
 Models are named by provider: "claude-haiku-5-5" (Anthropic), or
 "cerebras:gpt-oss-120b" (any OpenAI-compatible provider in PROVIDERS).
 API keys come from Windows Credential Manager:
-    uv run python -m ultimo.credentials set anthropic
-    uv run python -m ultimo.credentials set cerebras
+    uv run python -m tycho.credentials set anthropic
+    uv run python -m tycho.credentials set cerebras
 
 Usage: uv run python tools/bench/brain_report.py recordings/<session>
     [--engine onnx-asr:nemo-parakeet-tdt-0.6b-v2:cuda] [--models claude-haiku-5-5 ...]
@@ -29,11 +29,11 @@ import openai
 from anthropic.types.beta import BetaTextBlockParam, BetaToolParam
 from openai.types.chat import ChatCompletionToolParam
 
-from ultimo import credentials
-from ultimo.game.install import GameInstall
-from ultimo.game.keybinds import Keybinds
-from ultimo.game.store import KeybindStore
-from ultimo.lexicon import Lexicon
+from tycho import credentials
+from tycho.game.install import GameInstall
+from tycho.game.keybinds import Keybinds
+from tycho.game.store import KeybindStore
+from tycho.lexicon import Lexicon
 
 EXPECTED = Path(__file__).resolve().parents[1] / "spike" / "brain_expected.toml"
 # Actions that fail any case unless the case lists them under "allow".
@@ -62,7 +62,7 @@ PRICES = {
 }
 
 INSTRUCTIONS = """\
-You are Ultimo, a voice co-pilot inside the space game Star Citizen. The player \
+You are Tycho, a voice co-pilot inside the space game Star Citizen. The player \
 speaks to you mid-flight; you hear a speech-to-text transcript of what they said.
 
 The transcript may contain recognition errors, especially in game names. A note \
@@ -160,7 +160,7 @@ class Call:
     first_ms: float = 0.0
     """Until the first output of any kind (thinking counts). 0 if not measured."""
     decision_ms: float = 0.0
-    """Until the tool call or reply is complete: when Ultimo could act."""
+    """Until the tool call or reply is complete: when Tycho could act."""
     usage: Usage = field(default_factory=Usage)
     verdict: str = ""
 
@@ -272,7 +272,7 @@ def _key(name: str) -> str:
     key = credentials.get(name)
     if key is None:
         raise SystemExit(
-            f"No {name} key stored. Run: uv run python -m ultimo.credentials set {name}"
+            f"No {name} key stored. Run: uv run python -m tycho.credentials set {name}"
         )
     return key
 

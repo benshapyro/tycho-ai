@@ -5,7 +5,7 @@ import keyring.backend
 import keyring.errors
 import pytest
 
-from ultimo import credentials
+from tycho import credentials
 
 
 class MemoryKeyring(keyring.backend.KeyringBackend):
@@ -39,7 +39,7 @@ def test_set_get_delete(memory: MemoryKeyring) -> None:
     assert credentials.get("anthropic") is None
     credentials.set_secret("anthropic", "sk-ant-test-123456789")
     assert credentials.get("anthropic") == "sk-ant-test-123456789"
-    assert memory.store == {("ultimo", "anthropic"): "sk-ant-test-123456789"}
+    assert memory.store == {("tycho", "anthropic"): "sk-ant-test-123456789"}
     assert credentials.delete("anthropic")
     assert not credentials.delete("anthropic")
 

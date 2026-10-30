@@ -1,4 +1,4 @@
-"""Where a Star Citizen install keeps the files Ultimo reads."""
+"""Where a Star Citizen install keeps the files Tycho reads."""
 
 from dataclasses import dataclass
 from pathlib import Path

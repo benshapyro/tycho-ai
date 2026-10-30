@@ -1,13 +1,13 @@
 import pytest
 
-import ultimo
-from ultimo.__main__ import main
+import tycho
+from tycho.__main__ import main
 
 
 def test_version_is_set() -> None:
-    assert ultimo.__version__
+    assert tycho.__version__
 
 
 def test_main_runs(capsys: pytest.CaptureFixture[str]) -> None:
     main()
-    assert "Ultimo" in capsys.readouterr().out
+    assert "Tycho" in capsys.readouterr().out

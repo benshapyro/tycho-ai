@@ -1,6 +1,6 @@
 import pytest
 
-from ultimo.ptt.binding import Binding, DeviceKind
+from tycho.ptt.binding import Binding, DeviceKind
 
 
 @pytest.mark.parametrize(

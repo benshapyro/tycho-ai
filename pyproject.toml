@@ -1,5 +1,5 @@
 [project]
-name = "ultimo"
+name = "tycho-ai"
 version = "0.0.0"
 description = "An unofficial voice co-pilot for Star Citizen."
 readme = "README.md"
@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
-ultimo = "ultimo.__main__:main"
+tycho = "tycho.__main__:main"
 
 [dependency-groups]
 dev = [
@@ -37,6 +37,9 @@ dev = [
 [build-system]
 requires = ["uv_build>=0.13,<0.14"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "tycho"  # the distribution is tycho-ai; the import package is tycho
 
 [tool.ruff]
 line-length = 100
