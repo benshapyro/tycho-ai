@@ -47,9 +47,14 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     ptt = PushToTalk(binding, sources)
 
-    with Microphone(device=args.device) as mic, (out / "manifest.jsonl").open("a") as manifest:
+    manifest_path = out / "manifest.jsonl"
+    # Reusing a folder resumes after the clips already in it, so nothing is overwritten.
+    done = len(manifest_path.read_text("utf-8").splitlines()) if manifest_path.exists() else 0
+    with Microphone(device=args.device) as mic, manifest_path.open("a") as manifest:
         print(f"Microphone: {mic.name}\nSaving to: {out}\n")
-        index = 0
+        if done:
+            print(f"Resuming after {done} clip(s) already recorded here.\n")
+        index = done
         while index < len(phrases):
             phrase = phrases[index]
             print(f'[{index + 1}/{len(phrases)}]  Hold {label} and say:  "{phrase}"')

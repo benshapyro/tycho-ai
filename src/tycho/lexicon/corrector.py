@@ -52,6 +52,11 @@ _FILLER = frozenset(
 )
 
 
+def _is_hint(start: int, end: int, similarity: float) -> bool:
+    """A single word that only sounds like a term is a hint, never a rewrite."""
+    return end - start == 1 and similarity < 1.0
+
+
 def _collapse(text: str) -> str:
     return _NOT_ALNUM.sub("", text.lower())
 
@@ -126,10 +131,15 @@ class Lexicon:
                     term, similarity = match
                     candidates.append((similarity, -(end - start), start, end, term))
 
-        # Best matches first; on a tie, the longer one, so "quantum drive" beats "quantum".
+        # Rewrites claim words before hints (a hint must never block a fixable term),
+        # then best match first; on a tie, the longer one, so "quantum drive" beats "quantum".
+        def rank(c: tuple[float, int, int, int, _Term]) -> tuple[bool, float, int]:
+            similarity, negative_length, start, end, _ = c
+            return (_is_hint(start, end, similarity), -similarity, negative_length)
+
         chosen: list[tuple[int, int, _Term, float]] = []
         taken: set[int] = set()
-        for similarity, _, start, end, term in sorted(candidates, key=lambda c: (-c[0], c[1])):
+        for similarity, _, start, end, term in sorted(candidates, key=rank):
             span = set(range(start, end))
             if not span & taken:
                 taken |= span
@@ -143,7 +153,7 @@ class Lexicon:
             begin, finish = words[start].start(), words[end - 1].end()
             heard = text[begin:finish]
             change = Replacement(heard, term.spelling, round(similarity, 3))
-            if end - start == 1 and similarity < 1.0:
+            if _is_hint(start, end, similarity):
                 hints.append(change)
                 continue
             out += [text[cursor:begin], term.spelling]
@@ -154,6 +164,7 @@ class Lexicon:
         return Corrected("".join(out), tuple(replacements), tuple(hints))
 
     def _match(self, heard: list[str]) -> tuple[_Term, float] | None:
+        """The closest term to these words, if close enough."""
         collapsed = _collapse("".join(heard))
         key = sound_key(collapsed)
         spelled_out = all(len(w) == 1 for w in heard)  # "Q T" for QT

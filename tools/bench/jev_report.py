@@ -208,7 +208,7 @@ def main() -> None:
     if key is None:
         raise SystemExit("No TypeSafe key. Run: uv run python -m tycho.credentials set typesafe")
     cases, _ = load_cases(args.cases, engine="")
-    keybinds = KeybindStore(GameInstall.find()).keybinds
+    keybinds = KeybindStore.load(GameInstall.find()).keybinds
     bound = [a for a in keybinds if a.bound and a.label]
     questions, home = build_questions(bound)
     valid = set(home)

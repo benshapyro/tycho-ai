@@ -21,9 +21,19 @@ def is_cryxml(data: bytes) -> bool:
 
 
 def decode(data: bytes) -> ET.Element:
-    """Decode a CryXmlB document into an ElementTree element. Plain XML is parsed as is."""
+    """Decode a CryXmlB document into an ElementTree element. Plain XML is parsed as is.
+
+    Raises ValueError for a malformed document.
+    """
     if not is_cryxml(data):
-        return ET.fromstring(data)  # noqa: S314 - local game files, not untrusted input
+        return ET.fromstring(data)  # noqa: S314 - local game files; expat guards entity expansion
+    try:
+        return _decode(data)
+    except (struct.error, IndexError, UnicodeDecodeError) as e:
+        raise ValueError(f"malformed CryXmlB document ({e})") from e
+
+
+def _decode(data: bytes) -> ET.Element:
     (
         _size,
         node_pos,
@@ -35,6 +45,14 @@ def decode(data: bytes) -> ET.Element:
         string_pos,
         string_size,
     ) = _HEADER.unpack_from(data, len(MAGIC))
+    tables = (
+        (node_pos, node_count * _NODE.size),
+        (attr_pos, _attr_count * _ATTRIBUTE.size),
+        (child_pos, _child_count * 4),
+        (string_pos, string_size),
+    )
+    if any(start + length > len(data) for start, length in tables):
+        raise ValueError("CryXmlB table runs past the end of the data")
     strings = data[string_pos : string_pos + string_size]
 
     def text(offset: int) -> str:
@@ -51,9 +69,13 @@ def decode(data: bytes) -> ET.Element:
         element.text = text(content) or None
         elements.append(element)
 
+    adopted: set[int] = set()
     for element, (_, _, _, n_children, _, _, first_child, _) in zip(elements, nodes, strict=True):
         for c in range(first_child, first_child + n_children):
             (index,) = struct.unpack_from("<I", data, child_pos + c * 4)
+            if index in adopted or elements[index] is element:
+                raise ValueError("CryXmlB node has more than one parent, or is its own child")
+            adopted.add(index)
             element.append(elements[index])
     roots = [e for e, node in zip(elements, nodes, strict=True) if node[4] < 0]
     if len(roots) != 1:

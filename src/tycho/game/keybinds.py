@@ -39,8 +39,9 @@ class KeyInput:
         keys = [p for p in parts if p not in MODIFIERS]
         if len(keys) > 1:
             return None  # chords of two ordinary keys aren't something Tycho will press
-        if not keys:  # a modifier bound on its own, e.g. "lctrl"
-            return cls(parts[-1], tuple(parts[:-1]))
+        if not keys:  # only modifiers, e.g. "lctrl"; sorted so "lalt+lctrl" == "lctrl+lalt"
+            ordered = sorted(parts)
+            return cls(ordered[-1], tuple(ordered[:-1]))
         return cls(keys[0], tuple(sorted(p for p in parts if p in MODIFIERS)))
 
     @property
@@ -68,10 +69,19 @@ class Action:
     """How the game reads the key: "press", "tap", "hold", "double_tap"... "" for the default."""
     customized: bool = False
     """The player changed this binding from the game's default."""
+    multi_tap: int = 0
+    """Presses needed, from a multiTap attribute; 0 when the binding doesn't say."""
 
     @property
     def bound(self) -> bool:
         return any(i.pressable for i in self.inputs)
+
+    @property
+    def taps(self) -> int:
+        """How many times to press the key to trigger the action."""
+        if self.multi_tap > 0:
+            return self.multi_tap
+        return 2 if self.activation.startswith("double_tap") else 1
 
 
 class Keybinds:
@@ -101,14 +111,16 @@ def parse_defaults(root: ET.Element, strings: Mapping[str, str]) -> list[Action]
         for element in actionmap.iter("action"):
             inputs: list[KeyInput] = []
             activation = element.get("activationMode") or element.get("ActivationMode") or ""
+            multi_tap = _int(element.get("multiTap"))
             for device in ("keyboard", "mouse"):
                 for text in _default_inputs(element, device):
                     parsed = KeyInput.parse(text)
                     if parsed is not None:
                         inputs.append(parsed)
                 child = element.find(device)
-                if child is not None and not activation:
-                    activation = child.get("activationMode", "")
+                if child is not None:
+                    activation = activation or child.get("activationMode", "")
+                    multi_tap = multi_tap or _int(child.get("multiTap"))
             actions.append(
                 Action(
                     name=element.get("name", ""),
@@ -116,6 +128,7 @@ def parse_defaults(root: ET.Element, strings: Mapping[str, str]) -> list[Action]
                     label=resolve(element.get("UILabel", ""), strings),
                     inputs=tuple(inputs),
                     activation=activation,
+                    multi_tap=multi_tap,
                 )
             )
     return actions
@@ -125,6 +138,7 @@ def apply_profile(defaults: Iterable[Action], profile: ET.Element) -> list[Actio
     """Apply the player's actionmaps.xml on top of the defaults."""
     rebinds: dict[tuple[str, str], dict[str, list[KeyInput]]] = {}
     activations: dict[tuple[str, str], str] = {}
+    multi_taps: dict[tuple[str, str], int] = {}
     for actionmap in profile.iter("actionmap"):
         for action in actionmap.iter("action"):
             key = (actionmap.get("name", ""), action.get("name", ""))
@@ -139,6 +153,8 @@ def apply_profile(defaults: Iterable[Action], profile: ET.Element) -> list[Actio
                     per_device.append(parsed)
                 if mode := rebind.get("activationMode"):
                     activations[key] = mode
+                if taps := _int(rebind.get("multiTap")):
+                    multi_taps[key] = taps
 
     result: list[Action] = []
     for action in defaults:
@@ -148,9 +164,20 @@ def apply_profile(defaults: Iterable[Action], profile: ET.Element) -> list[Actio
             continue
         kept = [i for i in action.inputs if i.device not in changes]
         inputs = tuple(kept + [i for device in changes.values() for i in device])
-        mode = activations.get((action.actionmap, action.name), action.activation)
-        result.append(replace(action, inputs=inputs, activation=mode, customized=True))
+        key = (action.actionmap, action.name)
+        mode = activations.get(key, action.activation)
+        taps = multi_taps.get(key, action.multi_tap)
+        result.append(
+            replace(action, inputs=inputs, activation=mode, multi_tap=taps, customized=True)
+        )
     return result
+
+
+def _int(text: str | None) -> int:
+    try:
+        return int(text) if text else 0
+    except ValueError:
+        return 0
 
 
 def _default_inputs(action: ET.Element, device: str) -> list[str]:

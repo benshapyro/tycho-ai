@@ -44,10 +44,8 @@ def main() -> None:
     args = parser.parse_args()
 
     os.environ["OMP_NUM_THREADS"] = str(args.threads)
-    models = (
-        Path(os.environ.get("TYCHO_MODELS", Path(os.environ["LOCALAPPDATA"]) / "tycho" / "models"))
-        / "kokoro"
-    )
+    app_data = Path(os.environ.get("LOCALAPPDATA", Path.home()))
+    models = Path(os.environ.get("TYCHO_MODELS", app_data / "tycho" / "models")) / "kokoro"
     models.mkdir(parents=True, exist_ok=True)
     for name, url in FILES.items():
         if not (models / name).exists():

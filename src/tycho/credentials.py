@@ -16,15 +16,27 @@ import keyring.errors
 
 SERVICE = "tycho"
 KNOWN = ("anthropic", "cerebras", "typesafe", "elevenlabs")
+# Public prefixes that say which provider a key is for, and are safe to show.
+_PUBLIC_PREFIXES = ("sk-ant-", "csk-", "sk_")
+
+
+class CredentialStoreError(Exception):
+    """The operating system's credential store is unavailable or refused the request."""
 
 
 def get(name: str) -> str | None:
     """The stored key, or None if there isn't one."""
-    return keyring.get_password(SERVICE, name)
+    try:
+        return keyring.get_password(SERVICE, name)
+    except keyring.errors.KeyringError as e:
+        raise CredentialStoreError(_explain(e)) from e
 
 
 def set_secret(name: str, value: str) -> None:
-    keyring.set_password(SERVICE, name, value)
+    try:
+        keyring.set_password(SERVICE, name, value)
+    except keyring.errors.KeyringError as e:
+        raise CredentialStoreError(_explain(e)) from e
 
 
 def delete(name: str) -> bool:
@@ -33,12 +45,27 @@ def delete(name: str) -> bool:
         keyring.delete_password(SERVICE, name)
     except keyring.errors.PasswordDeleteError:
         return False
+    except keyring.errors.KeyringError as e:
+        raise CredentialStoreError(_explain(e)) from e
     return True
 
 
 def masked(value: str) -> str:
-    """Enough of a key to tell which one it is, never the whole thing."""
-    return f"{value[:7]}...{value[-4:]}" if len(value) > 16 else "***"
+    """Enough of a key to tell which one it is, never the whole thing.
+
+    Shows a known public prefix (e.g. "sk-ant-") and the last four characters.
+    """
+    if len(value) <= 12:
+        return "***"
+    prefix = next((p for p in _PUBLIC_PREFIXES if value.startswith(p)), "")
+    return f"{prefix}...{value[-4:]}"
+
+
+def _explain(error: Exception) -> str:
+    return (
+        "Couldn't use Windows Credential Manager to store or read API keys "
+        f"({type(error).__name__}). Check that you're signed in to Windows normally."
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -46,18 +73,25 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("command", choices=["set", "delete", "check"])
     parser.add_argument("name", choices=KNOWN)
     args = parser.parse_args(argv)
+    try:
+        return _run(args.command, args.name)
+    except CredentialStoreError as e:
+        print(e, file=sys.stderr)
+        return 2
 
-    if args.command == "set":
-        value = getpass.getpass(f"Paste your {args.name} API key (input is hidden): ").strip()
+
+def _run(command: str, name: str) -> int:
+    if command == "set":
+        value = getpass.getpass(f"Paste your {name} API key (input is hidden): ").strip()
         if not value:
             print("Nothing entered; no key stored.")
             return 1
-        set_secret(args.name, value)
-        print(f"Stored {args.name} key {masked(value)} in Windows Credential Manager.")
-    elif args.command == "delete":
-        print("Removed." if delete(args.name) else "No key was stored.")
+        set_secret(name, value)
+        print(f"Stored {name} key {masked(value)} in Windows Credential Manager.")
+    elif command == "delete":
+        print("Removed." if delete(name) else "No key was stored.")
     else:
-        value = get(args.name)
+        value = get(name)
         print(f"Stored: {masked(value)}" if value else "No key stored.")
         return 0 if value else 1
     return 0

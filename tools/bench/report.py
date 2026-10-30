@@ -61,9 +61,13 @@ def load(path: Path, lexicon: Lexicon) -> EngineResult:
     clips: list[Clip] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         row: dict[str, Any] = json.loads(line)
-        if row["type"] == "meta":
+        if row.get("type") == "meta":
             meta = row
             continue
+        if row.get("type") != "clip":
+            return EngineResult(
+                {}, []
+            )  # not a speech-to-text results file (e.g. the brain eval log)
         phrase, text = row["phrase"], row["text"]
         corrected = lexicon.correct(text).text
         clips.append(

@@ -33,6 +33,14 @@ _LEADING_FILLER = (
 )
 _TRAILING_FILLER = (("please",), ("now",), ("thanks",), ("thank", "you"))
 _JOINERS = frozenset({"and", "then"})
+# Any of these anywhere means "not the fast path": "don't target the nearest hostile"
+# must never match "target the nearest hostile". (normalize() turns "don't" into "dont".)
+_NEGATIONS = frozenset(
+    {
+        *("dont", "not", "no", "never", "nope", "cant", "wont", "shouldnt"),
+        *("stop", "cancel", "abort", "belay", "wait", "hold", "undo", "nevermind"),
+    }
+)
 # Words whose difference flips or redirects a command. A fuzzy match must agree on all of them.
 _MEANING_WORDS = frozenset(
     {
@@ -69,7 +77,7 @@ class Defer:
 
     heard: str
     reason: str
-    """"empty", "no_match" or "ambiguous"."""
+    """"empty", "negation", "no_match" or "ambiguous"."""
 
 
 class CommandMatcher:
@@ -84,6 +92,8 @@ class CommandMatcher:
         for command in self.commands:
             for phrase in command.say:
                 words = tuple(normalize(phrase))
+                if problem := _phrase_problem(words):
+                    raise ValueError(f"{phrase!r} in {command.id} can never match: {problem}")
                 other = self._exact.setdefault(words, command)
                 if other is not command:
                     raise ValueError(f"{' '.join(words)!r} is in both {other.id} and {command.id}")
@@ -98,6 +108,8 @@ class CommandMatcher:
         words = _strip_filler(normalize(text))
         if not words:
             return Defer(text, "empty")
+        if _NEGATIONS.intersection(words):
+            return Defer(text, "negation")
         parts = _split(words)
         found: list[Command] = []
         weakest = 1.0
@@ -115,19 +127,34 @@ class CommandMatcher:
             return exact, 1.0
         meaning = _MEANING_WORDS.intersection(words)
         heard = "".join(words)
-        scored: dict[str, tuple[float, Command]] = {}
+        # Each command's best score, whether or not it clears the threshold: a close
+        # runner-up makes the winner uncertain even when the runner-up itself is too weak.
+        best: dict[str, tuple[float, Command]] = {}
         for phrase, command in self._phrases:
             if _MEANING_WORDS.intersection(phrase) != meaning:
                 continue
             score = similarity(heard, "".join(phrase))
-            if score >= self._threshold and score > scored.get(command.id, (0.0, command))[0]:
-                scored[command.id] = (score, command)
-        ranked = sorted(scored.values(), key=lambda s: -s[0])
-        if not ranked:
+            if score > best.get(command.id, (-1.0, command))[0]:
+                best[command.id] = (score, command)
+        ranked = sorted(best.values(), key=lambda s: -s[0])
+        if not ranked or ranked[0][0] < self._threshold:
             return "no_match"
         if len(ranked) > 1 and ranked[0][0] - ranked[1][0] < self._margin:
             return "ambiguous"
         return ranked[0][1], ranked[0][0]
+
+
+def _phrase_problem(words: tuple[str, ...]) -> str | None:
+    """Why a command phrase could never be matched, or None if it's fine."""
+    if not words:
+        return "it's empty"
+    if _JOINERS.intersection(words):
+        return 'it contains "and" or "then", which split a request into parts'
+    if _NEGATIONS.intersection(words):
+        return "it contains a negation, which always defers"
+    if _strip_filler(list(words)) != words:
+        return "it starts or ends with a filler word, which is stripped"
+    return None
 
 
 def _strip_filler(words: list[str]) -> tuple[str, ...]:

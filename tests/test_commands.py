@@ -58,6 +58,63 @@ def test_never_flips_meaning(text: str, never: str) -> None:
     assert never not in _ids(text).split("+")
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "don't target the nearest hostile",
+        "dont request landing permission",
+        "do not open the doors",
+        "no, lights on",
+        "never mind, gear down",
+        "cancel landing gear",
+        "stop, eject",
+    ],
+)
+def test_negations_always_defer(text: str) -> None:
+    result = MATCHER.match(text)
+    assert isinstance(result, Defer)
+    assert result.reason == "negation"
+
+
+def test_a_close_runner_up_below_the_threshold_still_makes_it_ambiguous() -> None:
+    matcher = CommandMatcher(
+        [
+            Command("a", ("open hangar alpha",), ("x",)),
+            Command("b", ("open hangar beta",), ("y",)),
+        ],
+        threshold=0.85,
+        margin=0.3,
+    )
+    # "alphb" scores 0.93 against alpha and 0.67 against beta: beta is below the
+    # threshold, but within the margin, so the winner isn't trusted.
+    result = matcher.match("open hangar alphb")
+    assert isinstance(result, Defer)
+    assert result.reason == "ambiguous"
+
+
+def test_a_runner_up_outside_the_margin_does_not_block_the_winner() -> None:
+    matcher = CommandMatcher(
+        [
+            Command("a", ("open hangar alpha",), ("x",)),
+            Command("b", ("open hangar beta",), ("y",)),
+        ],
+        threshold=0.85,
+        margin=0.2,
+    )
+    result = matcher.match("open hangar alphb")
+    assert isinstance(result, Match)
+    assert result.commands[0].id == "a"
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    ["gear and lights", "please gear down", "gear down now", "don't eject", ""],
+)
+def test_phrases_that_could_never_match_are_rejected(phrase: str) -> None:
+    with pytest.raises(ValueError, match="can never match"):
+        CommandMatcher([Command("x", (phrase,), ("a",))])
+
+
 def test_near_misses_with_opposite_words_do_not_match() -> None:
     matcher = CommandMatcher([Command("on", ("lights on",), ("v_lights_on",))])
     assert isinstance(matcher.match("lights off"), Defer)

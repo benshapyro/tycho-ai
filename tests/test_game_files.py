@@ -1,4 +1,5 @@
 import os
+import struct
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
@@ -11,7 +12,7 @@ from tycho.game.install import GameInstall
 from tycho.game.keybinds import Keybinds, KeyInput, apply_profile, parse_defaults
 from tycho.game.localization import parse_global_ini, resolve
 from tycho.game.p4k import P4kArchive
-from tycho.game.store import KeybindStore
+from tycho.game.store import GameDataError, KeybindStore
 
 DEFAULTS = """<profile>
   <actionmap name="spaceship_movement">
@@ -140,7 +141,7 @@ def test_store_loads_caches_and_reloads_on_change(tmp_path: Path) -> None:
     install.actionmaps.write_text(PROFILE, encoding="utf-8")
     cache = tmp_path / "cache"
 
-    store = KeybindStore(install, cache_dir=cache)
+    store = KeybindStore.load(install, cache_dir=cache)
     doors = store.keybinds.get("v_toggle_all_doors")
     assert doors is not None
     assert str(doors.inputs[0]) == "ralt+i"
@@ -158,7 +159,7 @@ def test_store_loads_caches_and_reloads_on_change(tmp_path: Path) -> None:
 
 
 def test_store_works_without_a_player_profile(tmp_path: Path) -> None:
-    store = KeybindStore(_fake_install(tmp_path), cache_dir=tmp_path / "cache")
+    store = KeybindStore.load(_fake_install(tmp_path), cache_dir=tmp_path / "cache")
     gear = store.keybinds.get("v_toggle_landing_system")
     assert gear is not None
     assert str(gear.inputs[0]) == "n"
@@ -168,15 +169,128 @@ def test_store_keeps_old_keybinds_if_the_profile_is_half_written(tmp_path: Path)
     install = _fake_install(tmp_path)
     install.actionmaps.parent.mkdir(parents=True)
     install.actionmaps.write_text(PROFILE, encoding="utf-8")
-    store = KeybindStore(install, cache_dir=tmp_path / "cache")
+    store = KeybindStore.load(install, cache_dir=tmp_path / "cache")
     install.actionmaps.write_text(PROFILE[:40], encoding="utf-8")
     assert not store.refresh()
     assert store.keybinds.get("v_toggle_all_doors") is not None
 
 
 def test_find_install_reports_where_it_looked(tmp_path: Path) -> None:
-    with pytest.raises(FileNotFoundError, match="LIVE"):
+    with pytest.raises(FileNotFoundError, match="TYCHO_SC_ROOT"):
         GameInstall.find(roots=(tmp_path,))
+
+
+def test_find_install_honours_the_root_variable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install = _fake_install(tmp_path)
+    monkeypatch.setenv("TYCHO_SC_ROOT", str(tmp_path))
+    assert GameInstall.find() == install
+
+
+def test_truncated_archive_raises_instead_of_hanging(tmp_path: Path) -> None:
+    install = _fake_install(tmp_path)
+    data = install.data_p4k.read_bytes()
+    eocd = data.rfind(b"PK\x05\x06")
+    # Point the central directory past the end of the file, as a half-patched archive might.
+    broken = data[: eocd + 16] + (len(data) + 1000).to_bytes(4, "little") + data[eocd + 20 :]
+    install.data_p4k.write_bytes(broken)
+    with pytest.raises(ValueError, match="past the end"):
+        P4kArchive(install.data_p4k).find(["Data/Libs/Config/defaultProfile.xml"])
+
+
+def test_cut_off_central_directory_raises(tmp_path: Path) -> None:
+    install = _fake_install(tmp_path)
+    data = install.data_p4k.read_bytes()
+    eocd = data.rfind(b"PK\x05\x06")
+    cd_size = int.from_bytes(data[eocd + 12 : eocd + 16], "little")
+    # Claim a smaller directory than there is: the last record is cut off part way.
+    broken = data[: eocd + 12] + (cd_size - 10).to_bytes(4, "little") + data[eocd + 16 :]
+    install.data_p4k.write_bytes(broken)
+    with pytest.raises(ValueError, match="truncated"):
+        P4kArchive(install.data_p4k).find(["missing.xml"])
+
+
+def test_corrupt_cache_is_rebuilt(tmp_path: Path) -> None:
+    install = _fake_install(tmp_path)
+    cache = tmp_path / "cache"
+    KeybindStore.load(install, cache_dir=cache)
+    (cached,) = cache.glob("defaultProfile-*.xml")
+    cached.write_text("<profile><actionmap", encoding="utf-8")  # cut off mid-write
+    store = KeybindStore.load(install, cache_dir=cache)
+    assert store.keybinds.get("v_toggle_landing_system") is not None
+
+
+def test_caches_from_old_builds_are_pruned(tmp_path: Path) -> None:
+    install = _fake_install(tmp_path)
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    old = cache / "defaultProfile-1-2.xml"
+    old.write_text("<profile/>", encoding="utf-8")
+    KeybindStore.load(install, cache_dir=cache)
+    assert not old.exists()
+
+
+def test_missing_game_data_is_a_clear_error(tmp_path: Path) -> None:
+    install = GameInstall(tmp_path / "LIVE")
+    with pytest.raises(GameDataError, match="not found"):
+        KeybindStore.load(install, cache_dir=tmp_path / "cache")
+
+
+def test_refresh_keeps_last_good_keybinds_when_the_game_files_vanish(tmp_path: Path) -> None:
+    install = _fake_install(tmp_path)
+    store = KeybindStore.load(install, cache_dir=tmp_path / "cache")
+    install.data_p4k.unlink()  # e.g. mid-patch
+    assert not store.refresh()
+    assert store.last_error is not None
+    assert store.keybinds.get("v_toggle_landing_system") is not None
+
+
+def test_double_tap_bindings_say_how_many_presses() -> None:
+    defaults = """<profile><actionmap name="m">
+      <action name="a" keyboard="x" activationMode="double_tap"/>
+      <action name="b" keyboard="y" multiTap="3"/>
+      <action name="c" keyboard="z"/>
+    </actionmap></profile>"""
+    profile = """<ActionMaps><ActionProfiles><actionmap name="m">
+      <action name="c"><rebind input="kb1_q" multiTap="2"/></action>
+    </actionmap></ActionProfiles></ActionMaps>"""
+    keybinds = Keybinds(
+        apply_profile(parse_defaults(ET.fromstring(defaults), {}), ET.fromstring(profile))  # noqa: S314
+    )
+    taps = {name: keybinds.get(name).taps for name in "abc"}  # type: ignore[union-attr]
+    assert taps == {"a": 2, "b": 3, "c": 2}
+
+
+def test_mouse_rebinds_and_activation_overrides() -> None:
+    defaults = """<profile><actionmap name="m">
+      <action name="fire" keyboard="f" mouse="mouse1" activationMode="press"/>
+    </actionmap></profile>"""
+    profile = """<ActionMaps><ActionProfiles><actionmap name="m">
+      <action name="fire"><rebind input="mo1_mouse4" activationMode="hold"/></action>
+    </actionmap></ActionProfiles></ActionMaps>"""
+    action = Keybinds(
+        apply_profile(parse_defaults(ET.fromstring(defaults), {}), ET.fromstring(profile))  # noqa: S314
+    ).get("fire")
+    assert action is not None
+    assert [str(i) for i in action.inputs] == ["f", "mouse4"]
+    assert action.activation == "hold"
+
+
+def test_modifier_only_bindings_are_canonical() -> None:
+    assert KeyInput.parse("lalt+lctrl") == KeyInput.parse("lctrl+lalt")
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        b"CryXmlB\x00" + b"\x00" * 10,  # header cut short
+        b"CryXmlB\x00" + struct.pack("<9I", 0, 9999, 5, 0, 0, 0, 0, 0, 0),  # table past the end
+    ],
+)
+def test_malformed_cryxml_raises_value_error(data: bytes) -> None:
+    with pytest.raises(ValueError, match="CryXmlB"):
+        cryxml.decode(data)
 
 
 def _without_whitespace(element: ET.Element) -> ET.Element:

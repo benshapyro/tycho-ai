@@ -11,23 +11,33 @@ import numpy as np
 import sounddevice as sd
 
 from tycho.audio.clip import ClipBuffer, Samples
+from tycho.audio.source import AudioError
 
 SAMPLE_RATE = 16_000
 BLOCK_FRAMES = 320  # 20 ms
 
 
 class Microphone:
+    """The real microphone. Satisfies ``AudioSource``."""
+
     def __init__(self, device: int | str | None = None, preroll_seconds: float = 0.2) -> None:
         self._buffer = ClipBuffer(SAMPLE_RATE, preroll_seconds)
         self.overflows = 0
-        self._stream = sd.InputStream(
-            samplerate=SAMPLE_RATE,
-            blocksize=BLOCK_FRAMES,
-            channels=1,
-            dtype="float32",
-            device=device,
-            callback=self._on_audio,
-        )
+        try:
+            self._stream = sd.InputStream(
+                samplerate=SAMPLE_RATE,
+                blocksize=BLOCK_FRAMES,
+                channels=1,
+                dtype="float32",
+                device=device,
+                callback=self._on_audio,
+            )
+        except (sd.PortAudioError, ValueError) as e:
+            which = f'"{device}"' if device is not None else "the default microphone"
+            raise AudioError(
+                f"Couldn't open {which}: {e}. Check it's plugged in, not muted, and that "
+                "Windows allows desktop apps to use the microphone."
+            ) from e
 
     @property
     def name(self) -> str:
@@ -35,7 +45,10 @@ class Microphone:
         return str(info["name"])
 
     def __enter__(self) -> Self:
-        self._stream.start()
+        try:
+            self._stream.start()
+        except sd.PortAudioError as e:
+            raise AudioError(f"Couldn't start the microphone: {e}") from e
         return self
 
     def __exit__(

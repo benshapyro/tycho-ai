@@ -46,10 +46,12 @@ def main() -> None:
     sources: dict[str, dict[str, str]] = {"phrases as written": {p: p for p in expected}}
     for path in sorted((args.session / "results").glob("*.jsonl")):
         rows = [json.loads(line) for line in path.read_text("utf-8").splitlines()]
-        clips = {r["phrase"]: r["text"] for r in rows if r["type"] == "clip"}
+        # Only speech-to-text results: other tools (the brain eval) log here in other formats.
+        if not rows or rows[0].get("type") != "meta":
+            continue
+        clips = {r["phrase"]: r["text"] for r in rows if r.get("type") == "clip"}
         if clips:
-            label = next(r["label"] for r in rows if r["type"] == "meta")
-            sources[label] = clips
+            sources[rows[0]["label"]] = clips
 
     print(f"{'source':42} {'right':>6} {'slow':>5} {'wrong':>6}  ms/phrase")
     problems: list[str] = []
@@ -69,7 +71,7 @@ def main() -> None:
         print("\nNot right:")
         print("\n".join(problems))
 
-    store = KeybindStore(GameInstall.find(args.channel))
+    store = KeybindStore.load(GameInstall.find(args.channel))
     print(f"\nWith your keybinds ({len(store.keybinds)} actions):")
     seen: set[str] = set()
     for acceptable in expected.values():

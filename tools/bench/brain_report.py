@@ -166,7 +166,9 @@ class Call:
 
     @property
     def cost(self) -> float:
-        price_in, price_out, price_read, price_write = PRICES.get(self.model, (0, 0, 0, 0))
+        if self.model not in PRICES:
+            return float("nan")  # unknown price: shown as nan rather than a misleading $0
+        price_in, price_out, price_read, price_write = PRICES[self.model]
         u = self.usage
         return (
             u.input * price_in
@@ -291,21 +293,31 @@ def classify(call: Call, reply: Reply, valid: set[str]) -> None:
     if reply.refused:
         call.kind, call.detail = "error", "refusal"
         return
+    # Grade every tool call, not just the first: a forbidden action in a second
+    # run_actions call must still fail the case.
+    actions: list[str] = []
+    sayings: list[str] = []
+    lookups: list[str] = []
     for name, tool_input in reply.tool_calls:
         if name == "run_actions":
             names = _string_list(tool_input.get("actions"))
             if names is None:
                 call.kind, call.detail = "error", f"invalid input {json.dumps(tool_input)}"
                 return
-            call.kind, call.actions = "actions", names
-            call.detail = str(tool_input.get("say", ""))
-            if unknown := [a for a in names if a not in valid]:
-                call.detail = f"UNKNOWN ACTIONS {unknown}; {call.detail}"
-            return
-        if name == "look_up":
-            call.kind, call.detail = "look_up", json.dumps(tool_input)
-            return
-    call.kind, call.detail = "reply", reply.text
+            actions += names
+            sayings.append(str(tool_input.get("say", "")))
+        elif name == "look_up":
+            lookups.append(json.dumps(tool_input))
+    if actions:
+        # Pressing anything counts as acting, even alongside a look-up.
+        call.kind, call.actions = "actions", actions
+        call.detail = "; ".join(s for s in sayings if s)
+        if unknown := [a for a in actions if a not in valid]:
+            call.detail = f"UNKNOWN ACTIONS {unknown}; {call.detail}"
+    elif lookups:
+        call.kind, call.detail = "look_up", "; ".join(lookups)
+    else:
+        call.kind, call.detail = "reply", reply.text
 
 
 def _string_list(value: object) -> list[str] | None:
@@ -348,6 +360,9 @@ def load_cases(source: Path, engine: str) -> tuple[list[Case], Path]:
         data: dict[str, Any] = tomllib.loads(source.read_text("utf-8"))
         raw: list[dict[str, Any]] = data["case"]
         cases = [Case(c["heard"], c["heard"], c, str(c.get("tag", ""))) for c in raw]
+        heard = [c.key for c in cases]
+        if duplicates := sorted({h for h in heard if heard.count(h) > 1}):
+            raise SystemExit(f"Duplicate cases in {source}: {duplicates}")
         results = Path(__file__).resolve().parents[2] / "recordings"  # gitignored
         results.mkdir(exist_ok=True)
         return cases, results / f"{source.stem}.results.jsonl"
@@ -355,8 +370,8 @@ def load_cases(source: Path, engine: str) -> tuple[list[Case], Path]:
     transcripts: dict[str, str] = {}
     for path in (source / "results").glob("*.jsonl"):
         rows = [json.loads(line) for line in path.read_text("utf-8").splitlines()]
-        if rows and rows[0].get("label") == engine:
-            transcripts = {r["phrase"]: r["text"] for r in rows if r["type"] == "clip"}
+        if rows and rows[0].get("type") == "meta" and rows[0].get("label") == engine:
+            transcripts = {r["phrase"]: r["text"] for r in rows if r.get("type") == "clip"}
     if not transcripts:
         raise SystemExit(f"No transcripts from {engine} in {source / 'results'}")
     cases = [Case(p, transcripts.get(p, p), rule, "recorded") for p, rule in expected.items()]
@@ -369,13 +384,16 @@ def main() -> None:
     parser.add_argument("--engine", default="onnx-asr:nemo-parakeet-tdt-0.6b-v2:cuda")
     parser.add_argument("--models", nargs="+", default=list(MODELS))
     parser.add_argument(
-        "--runs", type=int, default=2, help="the first run per model warms the cache"
+        "--runs",
+        type=int,
+        default=2,
+        help="runs per case; only the very first request per model is a cold cache",
     )
     parser.add_argument("--effort", default="low", choices=["low", "medium", "high"])
     args = parser.parse_args()
 
     cases, out = load_cases(args.source, args.engine)
-    keybinds = KeybindStore(GameInstall.find()).keybinds
+    keybinds = KeybindStore.load(GameInstall.find()).keybinds
     actions = action_list(keybinds)
     valid = {line.split(" | ")[0] for line in actions.splitlines()}
     system = INSTRUCTIONS + actions

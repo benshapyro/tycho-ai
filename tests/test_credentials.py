@@ -50,6 +50,25 @@ def test_masked_never_shows_the_whole_key() -> None:
     assert shown == "sk-ant-...wxyz"
     assert key not in shown
     assert credentials.masked("short") == "***"
+    # A key with no known prefix shows only its last four characters.
+    assert credentials.masked("0123456789abcdef0123456789abcdef") == "...cdef"
+
+
+class BrokenKeyring(MemoryKeyring):
+    def get_password(self, service: str, username: str) -> str | None:
+        raise keyring.errors.KeyringLocked("locked")
+
+
+def test_an_unavailable_store_is_a_clear_error(capsys: pytest.CaptureFixture[str]) -> None:
+    previous = keyring.get_keyring()
+    keyring.set_keyring(BrokenKeyring())
+    try:
+        with pytest.raises(credentials.CredentialStoreError, match="Credential Manager"):
+            credentials.get("anthropic")
+        assert credentials.main(["check", "anthropic"]) == 2
+        assert "Credential Manager" in capsys.readouterr().err
+    finally:
+        keyring.set_keyring(previous)
 
 
 def test_cli_set_reads_hidden_input(
