@@ -10,7 +10,7 @@ Findings:
 - The author clearly preferred ElevenLabs to Kokoro.
 - ElevenLabs Flash v2.5 started speaking in about 0.19 s, v4 Turbo in about 0.3 s. Both cost 0.5 credits per character; full v4 costs 1.0.
 - A chatty hour of play is about 8,000 characters, so about 4,000 credits on Flash or v4 Turbo.
-- Kokoro took about 6 s per short line on the CPU (2 threads) with Star Citizen running, far slower than published figures (issue #18).
+- Kokoro took about 6 s per short line on the CPU (2 threads) with Star Citizen running, far slower than published figures ([#18](https://github.com/benshapyro/tycho-ai/issues/18)).
 - Character, the Jarvis-like quality, comes mostly from how lines are written: dry wit, understatement, composure. The voice matters less.
 
 ## Decision
@@ -26,7 +26,7 @@ Findings:
   - George (British male)
   - The Old Spacer (designed: wry American veteran)
 - **Designed voices must be shared to ElevenLabs' public Voice Library** before other players can use them. This must happen before release for The Ship's Mind to be the default. Until then, or if it ever becomes unavailable, players get George, the stock British male voice closest to it.
-- **Kokoro is the free fallback** for players without an ElevenLabs key, or offline, once its speed is fixed (issue #18).
+- **Kokoro is the free fallback** for players without an ElevenLabs key, or offline, once its speed is fixed ([#18](https://github.com/benshapyro/tycho-ai/issues/18)). kokoro-onnx phonemises some words through espeak-ng, which is GPL, so the shipped fallback must not bundle espeak-ng (use a dictionary plus Tycho's own lexicon, or another model).
 - **Personality lives in the persona pack's writing guidance** (ADR 8), not only in the voice choice.
 
 ## Consequences

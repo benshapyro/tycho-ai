@@ -15,11 +15,24 @@ Speech-to-text is different. In the latency spike, Parakeet TDT 0.6B v2 transcri
 **The language model runs in the cloud, with the player's own API key.**
 - Setup asks for a key once and stores it in Windows Credential Manager.
 - Providers sit behind one interface (ADR 4). Claude is the first; OpenAI-compatible providers such as Cerebras use one shared adapter. The default is chosen by the benchmark: accuracy first, then latency, then cost.
-- Only text is sent: the transcript, a few hints, and the player's action list. Audio never leaves the PC.
+- Audio never leaves the PC. What text goes to which provider is listed in the README ("What leaves your PC").
 
 **Speech-to-text runs locally, and Tycho manages it.** Tycho downloads the model on first run, picks GPU or CPU, and updates it. The player never sees a model file.
 
 **Local language models are an optional extra, not a design target.** They may come later for players who want them, behind the same interface.
+
+## Result (2026-10-30)
+
+The benchmark ([#1](https://github.com/benshapyro/tycho-ai/issues/1)) chose **Claude Haiku 5.5 at effort low** as the default brain:
+- 97% (159 of 164 decisions) on the 82-case typed eval;
+- 1.2 s typical, 2.1 s at p90;
+- about $0.0002 per request with the cached briefing;
+- no dangerous actions.
+
+Compared:
+- Medium effort scored the same and was slightly slower.
+- Cerebras gpt-oss-120b (84%) and qwen-3.8-27b (93%) were 3 to 5 times faster, but pressed actions that must be confirmed (quantum, jump drive, missiles) without being asked.
+- Claude Sonnet 5.5 and Opus 5.5 matched Haiku on the first 11 requests at higher cost and latency.
 
 ## Consequences
 

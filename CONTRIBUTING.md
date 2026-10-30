@@ -25,7 +25,9 @@ CI runs the same checks on Windows.
 - **Respect CIG's rules.** No reading game memory, no injection, no unattended automation. Every action must start from the user and have a fixed end.
 - **Every hardware boundary sits behind an interface,** so it can be tested with fakes.
 - **Commits** follow [Conventional Commits](https://www.conventionalcommits.org/), e.g. `feat(input): add scancode sender`.
-- **Big decisions** get a short record in `docs/adr/`.
+- **Big decisions** get a short record in `docs/adr/` (see the [index](docs/adr/README.md)).
+- **Recordings are personal.** Your voice clips and benchmark results live in `recordings/`, which git ignores. Audio is only committed under `tests/fixtures/`, on purpose, with the speaker's consent.
+- **Benchmarks can cost money.** Tools in `tools/bench/` that call paid APIs use your own keys and print their cost; see [its README](tools/bench/README.md).
 
 ## Licence
 

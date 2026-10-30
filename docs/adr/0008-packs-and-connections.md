@@ -1,6 +1,6 @@
 # 8. Packs and connections
 
-Date: 2026-10-30 · Status: proposed
+Date: 2026-10-30 · Status: proposed. Pending: the author's sign-off, and a first game-pack interface extracted from the Star Citizen code.
 
 ## Context
 
