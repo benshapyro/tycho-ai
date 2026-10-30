@@ -55,7 +55,7 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "ASYNC", "PT", "S"]
 include = ["src", "tests", "tools"]
 extraPaths = ["src", "tools/bench"]  # bench scripts import each other
 # Engine scripts run in their own environments (PEP 723), so their imports aren't installed here.
-exclude = ["tools/bench/engines"]
+exclude = ["tools/bench/engines", "tools/bench/tts/kokoro_tts.py"]
 typeCheckingMode = "strict"
 pythonVersion = "3.14"
 

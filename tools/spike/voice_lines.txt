@@ -1,0 +1,25 @@
+# Lines for the voice listening test: what Tycho says most, plus game names it must pronounce.
+# One line per row. Lines starting with # are ignored.
+Gear down, requesting landing.
+Doors closed.
+Lights on.
+Flight ready. All systems green.
+Quantum drive spooling. Destination: Hurston.
+Quantum to ArcCorp? Say confirm.
+Decoys away.
+Targeting the nearest hostile.
+Shields to front. Power to weapons.
+Landing permission granted, hangar zero three.
+I can't lock the doors: that action has no key bound.
+I didn't catch that. What should I do again?
+Fuel at ten percent. You should refuel soon.
+Hostile contact, bearing two seven zero. Three ships.
+The best place to sell quantanium right now is CRU-L1, at about two hundred and eighty aUEC per unit.
+The nearest refinery is at ARC-L1, about four minutes away by quantum.
+Your Cutlass Black has three size-three gun mounts. Its shields are on the light side for bounty hunting.
+Welcome back to Lorville, Commander.
+Microtech, New Babbage, and Orison are all within one jump.
+Eject? Say confirm eject.
+Done. Anything else?
+Relax, Commander. I'm not Janus.
+We're flight ready and the hangar request is sent. The best route for gold is ArcCorp to Crusader, which will make you 1 million per hour. I recommend you upgrade all 4 Size5 hardpoints on your Constellation to the Deadbolts. You can buy those at the Crusader Showroom in Orison.
