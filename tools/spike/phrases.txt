@@ -1,0 +1,32 @@
+# One phrase per line. Lines starting with # are ignored.
+# A mix of short commands, loose wording, chained requests, questions and jargon.
+landing gear
+lower the landing gear
+open the doors
+close all doors
+lights on
+request landing
+power on
+flight ready
+engines on
+spool the quantum drive
+shields to front
+max power to weapons
+balance power
+pips to engines
+target the nearest hostile
+deploy countermeasures
+launch a decoy
+exit seat
+open mobiglas
+get us ready to leave and call the tower
+we're done here, power everything down
+okay drop the gear and ask for a landing pad
+do that again
+no, the other one
+QT to ArcCorp
+set a route to microTech
+where's the best place to sell quantanium right now
+what's the nearest refinery
+how long is the quantum jump to Hurston
+is my Cutlass loadout any good

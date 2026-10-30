@@ -13,7 +13,12 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Games/Entertainment",
 ]
-dependencies = []
+dependencies = [
+    "numpy>=2.5.4",
+    "pygame-ce>=2.5.8",
+    "sounddevice>=0.5.6",
+    "soundfile>=0.14.0",
+]
 
 [project.scripts]
 ultimo = "ultimo.__main__:main"
@@ -41,7 +46,7 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "ASYNC", "PT", "S"]
 "tests/**" = ["S101"]
 
 [tool.pyright]
-include = ["src", "tests"]
+include = ["src", "tests", "tools"]
 typeCheckingMode = "strict"
 pythonVersion = "3.14"
 
