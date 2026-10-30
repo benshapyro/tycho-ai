@@ -1,11 +1,14 @@
-"""Time and grade the language model on requests the fast path hands over.
+"""Time and grade language models on requests the fast path hands over.
 
-Sends each transcript (after the game lexicon) to Claude with the player's bound
-actions and two tools, then records how long it takes to decide and whether
-the decision matches tools/spike/brain_expected.toml. Nothing is pressed.
+Sends each transcript (after the game lexicon) to a model with the player's
+bound actions and two tools, then records how long it takes to decide and
+whether the decision matches tools/spike/brain_expected.toml. Nothing is pressed.
 
-The API key comes from Windows Credential Manager:
+Models are named by provider: "claude-haiku-5-5" (Anthropic), or
+"cerebras:gpt-oss-120b" (any OpenAI-compatible provider in PROVIDERS).
+API keys come from Windows Credential Manager:
     uv run python -m ultimo.credentials set anthropic
+    uv run python -m ultimo.credentials set cerebras
 
 Usage: uv run python tools/bench/brain_report.py recordings/<session>
     [--engine onnx-asr:nemo-parakeet-tdt-0.6b-v2:cuda] [--models claude-haiku-5-5 ...]
@@ -22,7 +25,9 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import anthropic
-from anthropic.types.beta import BetaMessage, BetaTextBlockParam, BetaToolParam
+import openai
+from anthropic.types.beta import BetaTextBlockParam, BetaToolParam
+from openai.types.chat import ChatCompletionToolParam
 
 from ultimo import credentials
 from ultimo.game.install import GameInstall
@@ -32,14 +37,19 @@ from ultimo.lexicon import Lexicon
 
 EXPECTED = Path(__file__).resolve().parents[1] / "spike" / "brain_expected.toml"
 MODELS = ("claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5")
-# Models with server-side refusal fallback ("default" form); Haiku has none.
+# Claude models with server-side refusal fallback ("default" form); Haiku has none.
 FALLBACK_MODELS = frozenset({"claude-sonnet-5-5", "claude-opus-5-5"})
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
-# USD per million tokens: input, output, cache read. Cache writes cost 1.25x input.
+# OpenAI-compatible providers: name -> (base URL, credential name).
+PROVIDERS = {"cerebras": ("https://api.cerebras.ai/v1", "cerebras")}
+# USD per million tokens: input, output, cache read, cache write.
+# Cerebras rates are from third-party listings (Oct 2026); check the provider's page.
 PRICES = {
-    "claude-haiku-5-5": (0.10, 0.50, 0.01),
-    "claude-sonnet-5-5": (2.00, 10.00, 0.20),
-    "claude-opus-5-5": (4.00, 20.00, 0.20),
+    "claude-haiku-5-5": (0.10, 0.50, 0.01, 0.125),
+    "claude-sonnet-5-5": (2.00, 10.00, 0.20, 2.50),
+    "claude-opus-5-5": (4.00, 20.00, 0.20, 5.00),
+    "cerebras:gpt-oss-120b": (0.35, 0.75, 0.35, 0.35),
+    "cerebras:qwen-3.8-27b": (0.99, 1.49, 0.99, 0.99),
 }
 
 INSTRUCTIONS = """\
@@ -66,43 +76,64 @@ anything you say under 15 words: the player is flying.
 The player's bound actions (name | what it does | key):
 """
 
-TOOLS: list[BetaToolParam] = [
-    {
-        "name": "run_actions",
-        "description": "Press one or more game actions, in order, using the player's own keys.",
-        "eager_input_streaming": True,
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "actions": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Action names from the list, e.g. v_flightready.",
-                },
-                "say": {"type": "string", "description": "A short spoken confirmation."},
-            },
-            "required": ["actions", "say"],
+RUN_ACTIONS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "actions": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Action names from the list, e.g. v_flightready.",
         },
+        "say": {"type": "string", "description": "A short spoken confirmation."},
     },
-    {
-        "name": "look_up",
-        "description": "Look up live game data that you don't know reliably.",
-        "eager_input_streaming": True,
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "topic": {
-                    "type": "string",
-                    "enum": ["trade", "location", "route", "ship", "mining", "other"],
-                },
-                "query": {"type": "string", "description": "What to look up, in plain words."},
-            },
-            "required": ["topic", "query"],
+    "required": ["actions", "say"],
+}
+LOOK_UP_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "topic": {
+            "type": "string",
+            "enum": ["trade", "location", "route", "ship", "mining", "other"],
         },
+        "query": {"type": "string", "description": "What to look up, in plain words."},
     },
+    "required": ["topic", "query"],
+}
+TOOL_SPECS = (
+    ("run_actions", "Press one or more game actions, in order, using the player's own keys.",
+     RUN_ACTIONS_SCHEMA),
+    ("look_up", "Look up live game data that you don't know reliably.", LOOK_UP_SCHEMA),
+)  # fmt: skip
+CLAUDE_TOOLS: list[BetaToolParam] = [
+    {"name": n, "description": d, "input_schema": s, "eager_input_streaming": True}
+    for n, d, s in TOOL_SPECS
+]
+OPENAI_TOOLS: list[ChatCompletionToolParam] = [
+    {"type": "function", "function": {"name": n, "description": d, "parameters": s}}
+    for n, d, s in TOOL_SPECS
 ]
 
 type Kind = Literal["actions", "look_up", "reply", "error"]
+
+
+@dataclass
+class Usage:
+    input: int = 0
+    output: int = 0
+    cache_read: int = 0
+    cache_write: int = 0
+
+
+@dataclass
+class Reply:
+    """A provider's answer, normalised."""
+
+    tool_calls: list[tuple[str, dict[str, Any]]]
+    text: str
+    refused: bool
+    first_ms: float
+    total_ms: float
+    usage: Usage
 
 
 @dataclass
@@ -114,23 +145,124 @@ class Call:
     kind: Kind = "error"
     actions: list[str] = field(default_factory=list[str])
     detail: str = ""
-    first_block_ms: float = 0.0
-    """Until the first content block of any kind (thinking counts)."""
+    first_ms: float = 0.0
+    """Until the first output of any kind (thinking counts). 0 if not measured."""
     decision_ms: float = 0.0
     """Until the tool call or reply is complete: when Ultimo could act."""
-    usage: dict[str, int] = field(default_factory=dict[str, int])
+    usage: Usage = field(default_factory=Usage)
     verdict: str = ""
 
     @property
     def cost(self) -> float:
-        price_in, price_out, price_cache = PRICES[self.model]
+        price_in, price_out, price_read, price_write = PRICES.get(self.model, (0, 0, 0, 0))
         u = self.usage
         return (
-            u.get("input_tokens", 0) * price_in
-            + u.get("cache_creation_input_tokens", 0) * price_in * 1.25
-            + u.get("cache_read_input_tokens", 0) * price_cache
-            + u.get("output_tokens", 0) * price_out
+            u.input * price_in
+            + u.cache_write * price_write
+            + u.cache_read * price_read
+            + u.output * price_out
         ) / 1_000_000
+
+
+class Brains:
+    """One client per provider, created on first use."""
+
+    def __init__(self) -> None:
+        self._anthropic: anthropic.Anthropic | None = None
+        self._openai: dict[str, openai.OpenAI] = {}
+
+    def ask(self, model: str, system: str, text: str, effort: str) -> Reply:
+        if ":" in model:
+            provider, name = model.split(":", 1)
+            return self._ask_openai(provider, name, system, text, effort)
+        return self._ask_claude(model, system, text, effort)
+
+    def _ask_claude(self, model: str, system: str, text: str, effort: str) -> Reply:
+        if self._anthropic is None:
+            self._anthropic = anthropic.Anthropic(api_key=_key("anthropic"))
+        system_blocks: list[BetaTextBlockParam] = [
+            {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+        ]
+        fallback = model in FALLBACK_MODELS
+        started = time.perf_counter()
+        first = 0.0
+        with self._anthropic.beta.messages.stream(
+            model=model,
+            max_tokens=2048,
+            system=system_blocks,
+            tools=CLAUDE_TOOLS,
+            messages=[{"role": "user", "content": text}],
+            output_config={"effort": effort},  # pyright: ignore[reportArgumentType]
+            betas=[FALLBACK_BETA] if fallback else anthropic.omit,
+            fallbacks="default" if fallback else anthropic.omit,  # pyright: ignore[reportArgumentType]
+        ) as stream:
+            for event in stream:
+                if event.type == "content_block_start" and not first:
+                    first = time.perf_counter() - started
+            message = stream.get_final_message()
+        total = time.perf_counter() - started
+        calls = [
+            (b.name, cast(dict[str, Any], b.input)) for b in message.content if b.type == "tool_use"
+        ]
+        text_out = " ".join(b.text for b in message.content if b.type == "text").strip()
+        u = message.usage
+        usage = Usage(
+            input=u.input_tokens,
+            output=u.output_tokens,
+            cache_read=u.cache_read_input_tokens or 0,
+            cache_write=u.cache_creation_input_tokens or 0,
+        )
+        refused = message.stop_reason == "refusal"
+        return Reply(calls, text_out, refused, first * 1000, total * 1000, usage)
+
+    def _ask_openai(self, provider: str, model: str, system: str, text: str, effort: str) -> Reply:
+        if provider not in self._openai:
+            base_url, credential = PROVIDERS[provider]
+            self._openai[provider] = openai.OpenAI(api_key=_key(credential), base_url=base_url)
+        client = self._openai[provider]
+        started = time.perf_counter()
+        response = client.chat.completions.create(
+            model=model,
+            max_completion_tokens=2048,
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": text}],
+            tools=OPENAI_TOOLS,
+            parallel_tool_calls=False,
+            reasoning_effort=cast(Any, effort) if "gpt-oss" in model else openai.omit,
+        )
+        total = time.perf_counter() - started
+        choice = response.choices[0]
+        calls: list[tuple[str, dict[str, Any]]] = []
+        for tool_call in choice.message.tool_calls or []:
+            if tool_call.type != "function":
+                continue
+            try:
+                parsed: object = json.loads(tool_call.function.arguments or "{}")
+            except json.JSONDecodeError:
+                parsed = {"_unparseable": tool_call.function.arguments}
+            arguments = cast(dict[str, Any], parsed) if isinstance(parsed, dict) else {}
+            calls.append((tool_call.function.name, arguments))
+        u = response.usage
+        cached = 0
+        if u is not None and u.prompt_tokens_details is not None:
+            cached = u.prompt_tokens_details.cached_tokens or 0
+        usage = Usage(
+            input=(u.prompt_tokens - cached) if u else 0,
+            output=u.completion_tokens if u else 0,
+            cache_read=cached,
+        )
+        refused = choice.finish_reason == "content_filter"
+        return Reply(
+            calls, (choice.message.content or "").strip(), refused, 0.0, total * 1000, usage
+        )
+
+
+def _key(name: str) -> str:
+    key = credentials.get(name)
+    if key is None:
+        raise SystemExit(
+            f"No {name} key stored. Run: uv run python -m ultimo.credentials set {name}"
+        )
+    return key
 
 
 def action_list(keybinds: Keybinds) -> str:
@@ -142,58 +274,26 @@ def action_list(keybinds: Keybinds) -> str:
     return "\n".join(sorted(lines.values()))
 
 
-def ask(
-    client: anthropic.Anthropic, model: str, system: str, text: str, effort: str
-) -> tuple[BetaMessage, float, float]:
-    system_blocks: list[BetaTextBlockParam] = [
-        {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
-    ]
-    fallback = model in FALLBACK_MODELS
-    started = time.perf_counter()
-    first_block = 0.0
-    with client.beta.messages.stream(
-        model=model,
-        max_tokens=2048,
-        system=system_blocks,
-        tools=TOOLS,
-        messages=[{"role": "user", "content": text}],
-        output_config={"effort": effort},  # pyright: ignore[reportArgumentType]
-        betas=[FALLBACK_BETA] if fallback else anthropic.omit,
-        fallbacks="default" if fallback else anthropic.omit,  # pyright: ignore[reportArgumentType]
-    ) as stream:
-        for event in stream:
-            if event.type == "content_block_start" and not first_block:
-                first_block = time.perf_counter() - started
-        message = stream.get_final_message()
-    return message, first_block * 1000, (time.perf_counter() - started) * 1000
-
-
-def classify(call: Call, message: BetaMessage, valid: set[str]) -> None:
-    if message.stop_reason == "refusal":
+def classify(call: Call, reply: Reply, valid: set[str]) -> None:
+    """Turn a reply into a kind of response. Tool input is untrusted model output."""
+    if reply.refused:
         call.kind, call.detail = "error", "refusal"
         return
-    for block in message.content:
-        if block.type != "tool_use":
-            continue
-        # Tool input is untrusted model output (and unvalidated, with eager streaming).
-        tool_input: dict[str, Any] = cast(dict[str, Any], block.input)
-        if block.name == "run_actions":
+    for name, tool_input in reply.tool_calls:
+        if name == "run_actions":
             names = _string_list(tool_input.get("actions"))
             if names is None:
                 call.kind, call.detail = "error", f"invalid input {json.dumps(tool_input)}"
                 return
             call.kind, call.actions = "actions", names
-            unknown = [a for a in names if a not in valid]
             call.detail = str(tool_input.get("say", ""))
-            if unknown:
+            if unknown := [a for a in names if a not in valid]:
                 call.detail = f"UNKNOWN ACTIONS {unknown}; {call.detail}"
             return
-        if block.name == "look_up":
-            call.kind = "look_up"
-            call.detail = json.dumps(tool_input)
+        if name == "look_up":
+            call.kind, call.detail = "look_up", json.dumps(tool_input)
             return
-    call.kind = "reply"
-    call.detail = " ".join(b.text for b in message.content if b.type == "text").strip()
+    call.kind, call.detail = "reply", reply.text
 
 
 def _string_list(value: object) -> list[str] | None:
@@ -233,13 +333,6 @@ def main() -> None:
     parser.add_argument("--effort", default="low", choices=["low", "medium", "high"])
     args = parser.parse_args()
 
-    key = credentials.get("anthropic")
-    if key is None:
-        raise SystemExit(
-            "No Anthropic key stored. Run: uv run python -m ultimo.credentials set anthropic"
-        )
-    client = anthropic.Anthropic(api_key=key)
-
     expected: dict[str, dict[str, Any]] = tomllib.loads(EXPECTED.read_text("utf-8"))
     transcripts: dict[str, str] = {}
     for path in (args.session / "results").glob("*.jsonl"):
@@ -253,7 +346,7 @@ def main() -> None:
     actions = action_list(keybinds)
     valid = {line.split(" | ")[0] for line in actions.splitlines()}
     system = INSTRUCTIONS + actions
-    lexicon = Lexicon.default()
+    lexicon, brains = Lexicon.default(), Brains()
     print(f"{len(valid)} bound actions in the briefing; transcripts from {args.engine}\n")
 
     calls: list[Call] = []
@@ -269,50 +362,45 @@ def main() -> None:
                         text += f"\n\n(Note: {notes}.)"
                     call = Call(model, phrase, corrected.text, run)
                     try:
-                        message, call.first_block_ms, call.decision_ms = ask(
-                            client, model, system, text, args.effort
+                        reply = brains.ask(model, system, text, args.effort)
+                        call.first_ms, call.decision_ms, call.usage = (
+                            reply.first_ms,
+                            reply.total_ms,
+                            reply.usage,
                         )
-                        call.usage = {
-                            k: int(v or 0)
-                            for k, v in message.usage.model_dump().items()
-                            if k.endswith("tokens") and isinstance(v, int | None)
-                        }
-                        classify(call, message, valid)
-                    except anthropic.APIStatusError as e:
+                        classify(call, reply, valid)
+                    except (anthropic.APIStatusError, openai.APIStatusError) as e:
                         call.kind, call.detail = "error", f"{e.status_code} {e.message}"
-                    except anthropic.APIConnectionError as e:
+                    except (anthropic.APIConnectionError, openai.APIConnectionError) as e:
                         call.kind, call.detail = "error", f"connection: {e}"
                     call.verdict = grade(call, rule, valid)
                     calls.append(call)
-                    log.write(json.dumps(call.__dict__ | {"cost": call.cost}) + "\n")
+                    record = call.__dict__ | {"usage": call.usage.__dict__, "cost": call.cost}
+                    log.write(json.dumps(record) + "\n")
                     mark = "ok " if call.verdict == "pass" else "BAD"
                     print(
-                        f"{mark} {model:18} run{run} {call.decision_ms:6.0f} ms  {phrase[:40]:40}"
+                        f"{mark} {model:22} run{run} {call.decision_ms:6.0f} ms  {phrase[:38]:38}"
                         f" -> {call.kind}: {call.actions or call.detail[:60]}"
                         + ("" if call.verdict == "pass" else f"  [{call.verdict}]")
                     )
 
     print(
-        f"\n{'model':18} {'pass':>6} {'cold ms':>8} {'warm p50':>9} {'warm p90':>9}"
-        f" {'1st block':>9} {'cache hit':>9} {'$/request':>10}"
+        f"\n{'model':22} {'pass':>6} {'cold ms':>8} {'warm p50':>9} {'warm p90':>9}"
+        f" {'cache hit':>9} {'$/request':>10}"
     )
     for model in args.models:
         mine = [c for c in calls if c.model == model]
         warm = sorted(c.decision_ms for c in mine if c.run > 0) or [0.0]
         cold = [c.decision_ms for c in mine if c.run == 0]
-        cached = sum(c.usage.get("cache_read_input_tokens", 0) for c in mine)
-        prompt = cached + sum(
-            c.usage.get("input_tokens", 0) + c.usage.get("cache_creation_input_tokens", 0)
-            for c in mine
-        )
+        cached = sum(c.usage.cache_read for c in mine)
+        prompt = cached + sum(c.usage.input + c.usage.cache_write for c in mine)
         print(
-            f"{model:18} {sum(c.verdict == 'pass' for c in mine):>3}/{len(mine):<2}"
+            f"{model:22} {sum(c.verdict == 'pass' for c in mine):>3}/{len(mine):<2}"
             f" {statistics.median(cold or [0.0]):8.0f} {statistics.median(warm):9.0f}"
             f" {warm[min(len(warm) - 1, round(0.9 * (len(warm) - 1)))]:9.0f}"
-            f" {statistics.median(c.first_block_ms for c in mine):9.0f}"
             f" {cached / max(prompt, 1):9.0%} {statistics.mean(c.cost for c in mine):10.5f}"
         )
-    print(f"\nTotal spent: ${sum(c.cost for c in calls):.3f}. Log: {out}")
+    print(f"\nTotal spent: ${sum(c.cost for c in calls):.3f} (estimated). Log: {out}")
 
 
 if __name__ == "__main__":
