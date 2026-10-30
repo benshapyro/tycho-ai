@@ -15,7 +15,7 @@ import keyring
 import keyring.errors
 
 SERVICE = "tycho"
-KNOWN = ("anthropic", "cerebras")
+KNOWN = ("anthropic", "cerebras", "typesafe", "elevenlabs")
 
 
 def get(name: str) -> str | None:
