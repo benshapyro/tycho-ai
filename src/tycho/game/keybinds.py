@@ -84,10 +84,31 @@ class Action:
         return 2 if self.activation.startswith("double_tap") else 1
 
 
-class Keybinds:
-    """Every action and its effective key, looked up by name."""
+@dataclass(frozen=True, slots=True)
+class ActivationMode:
+    """How the game interprets presses for an action, from defaultProfile's ActivationModes.
 
-    def __init__(self, actions: Iterable[Action]) -> None:
+    Thresholds are seconds; -1 means "not used".
+    """
+
+    name: str
+    on_press: bool = True
+    on_hold: bool = False
+    on_release: bool = False
+    multi_tap: int = 1
+    press_threshold: float = -1.0
+    """Hold at least this long before it counts (delayed_press)."""
+    release_threshold: float = -1.0
+    """Release within this long for it to count (tap)."""
+
+
+class Keybinds:
+    """Every action and its effective key, looked up by name, plus the game's activation modes."""
+
+    def __init__(
+        self, actions: Iterable[Action], modes: Mapping[str, ActivationMode] | None = None
+    ) -> None:
+        self.modes: dict[str, ActivationMode] = dict(modes or {})
         self._by_name: dict[str, list[Action]] = {}
         for action in actions:
             self._by_name.setdefault(action.name, []).append(action)
@@ -134,6 +155,25 @@ def parse_defaults(root: ET.Element, strings: Mapping[str, str]) -> list[Action]
     return actions
 
 
+def parse_activation_modes(root: ET.Element) -> dict[str, ActivationMode]:
+    """The game's activation modes (tap, hold, delayed_press...) with their timings."""
+    modes: dict[str, ActivationMode] = {}
+    for element in root.iter("ActivationMode"):
+        name = element.get("name", "")
+        if not name:
+            continue
+        modes[name] = ActivationMode(
+            name=name,
+            on_press=element.get("onPress", "1") == "1",
+            on_hold=element.get("onHold", "0") == "1",
+            on_release=element.get("onRelease", "0") == "1",
+            multi_tap=_int(element.get("multiTap")) or 1,
+            press_threshold=_float(element.get("pressTriggerThreshold")),
+            release_threshold=_float(element.get("releaseTriggerThreshold")),
+        )
+    return modes
+
+
 def apply_profile(defaults: Iterable[Action], profile: ET.Element) -> list[Action]:
     """Apply the player's actionmaps.xml on top of the defaults."""
     rebinds: dict[tuple[str, str], dict[str, list[KeyInput]]] = {}
@@ -178,6 +218,13 @@ def _int(text: str | None) -> int:
         return int(text) if text else 0
     except ValueError:
         return 0
+
+
+def _float(text: str | None) -> float:
+    try:
+        return float(text) if text else -1.0
+    except ValueError:
+        return -1.0
 
 
 def _default_inputs(action: ET.Element, device: str) -> list[str]:

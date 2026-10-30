@@ -16,7 +16,15 @@ from pathlib import Path
 
 from tycho.game import cryxml, localization
 from tycho.game.install import GameInstall
-from tycho.game.keybinds import DEFAULTS_P4K_PATH, Action, Keybinds, apply_profile, parse_defaults
+from tycho.game.keybinds import (
+    DEFAULTS_P4K_PATH,
+    Action,
+    ActivationMode,
+    Keybinds,
+    apply_profile,
+    parse_activation_modes,
+    parse_defaults,
+)
 from tycho.game.p4k import P4kArchive
 
 type _Stamp = tuple[int, int] | None
@@ -46,6 +54,7 @@ class KeybindStore:
         self.loaded = False
         self.last_error: str | None = None
         self._defaults: list[Action] = []
+        self._modes: dict[str, ActivationMode] = {}
         self._defaults_stamp: _Stamp = None
         self._profile_stamp: _Stamp = None
         self._ini_stamp: _Stamp = None
@@ -82,7 +91,7 @@ class KeybindStore:
             self.last_error = f"{type(e).__name__}: {e}"
             return False
         self._profile_stamp = profile
-        self.keybinds = Keybinds(actions)
+        self.keybinds = Keybinds(actions, self._modes)
         self.loaded = True
         self.last_error = None
         return True
@@ -115,6 +124,7 @@ class KeybindStore:
 
         ini_path = loose_ini if loose_ini.is_file() else ini_cache
         strings = localization.parse_global_ini(ini_path.read_text("utf-8-sig", errors="replace"))
+        self._modes = parse_activation_modes(root)
         return parse_defaults(root, strings)
 
     def _prune(self, keep: str) -> None:

@@ -32,6 +32,7 @@ All four of these pass: `ruff format --check`, `ruff check`, `pyright`, and `pyt
 - `src/tycho/game/`: the game install, `Data.p4k` and CryXmlB readers, keybinds, and the keybind store.
 - `src/tycho/lexicon/`: the game-term corrector and its term list.
 - `src/tycho/commands/`: the fast-path command matcher and its command list.
+- `src/tycho/input/`: the hands. Key codes, press planning from the game's activation modes, the presser (focus-guarded, cancellable, always releases), and the Windows sender.
 - `src/tycho/eval/`: scoring for benchmarks.
 - `src/tycho/credentials.py`: API keys.
 - `tools/bench/`: benchmarks (see its README). `tools/spike/`: the recorder, phrase lists and expected results.
