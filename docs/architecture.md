@@ -143,6 +143,8 @@ Every action passes through one safety gate, which can refuse it.
 
 The persona is configurable: name, voice, tone and how chatty it is. It keeps replies short in combat and talks more when idle. There's one default persona, kept as an editable text file.
 
+**How Tycho addresses the player** is a setting too. The default is "Commander". Players can set a name, nickname, callsign or rank, or choose to be called nothing, by voice ("call me Ace"), in the settings screen, or in the file. A pronunciation hint covers names text-to-speech would get wrong. Setup can suggest the player's in-game handle but never uses it without asking. Tycho uses the form of address sparingly, in greetings, warnings and confirmations of big actions, not in every sentence.
+
 The default draws on the lore. In Star Citizen's universe, humanity distrusts AI after Janus, the AI core blamed for the loss of the *Artemis*. Tycho's default persona knows this. It's careful, a little defensive about not being Janus, and always reads back what it's about to do.
 
 ## 5. Delivery stages
