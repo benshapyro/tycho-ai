@@ -1,0 +1,157 @@
+# Star Citizen words that general speech-to-text models get wrong.
+# One term per line, in its canonical spelling. Lines starting with # are ignored.
+# A seed list: the plan is to generate this from the Star Citizen Wiki and UEX APIs.
+
+# Systems, planets and moons
+Stanton
+Pyro
+Nyx
+Hurston
+Crusader
+ArcCorp
+microTech
+Aberdeen
+Arial
+Ita
+Magda
+Cellin
+Daymar
+Yela
+Lyria
+Wala
+Calliope
+Clio
+Euterpe
+Bloom
+Terminus
+Monox
+Ignis
+Vatra
+Adir
+Fairo
+Fuego
+Vuur
+
+# Cities, stations and landmarks
+Lorville
+Area18
+Orison
+New Babbage
+Everus Harbor
+Baijini Point
+Seraphim Station
+Port Tressler
+Grim HEX
+Ruin Station
+Checkmate
+Orbituary
+Levski
+Klescher
+Lagrange
+Jump Point
+
+# Manufacturers
+Aegis
+Anvil
+Argo
+Banu
+Drake
+Esperia
+Greycat
+MISC
+Origin
+RSI
+Tumbril
+Consolidated Outland
+Crusader Industries
+
+# Ships and vehicles
+Aurora
+Mustang
+Avenger
+Gladius
+Arrow
+Hornet
+Sabre
+Vanguard
+Constellation
+Freelancer
+Caterpillar
+Prospector
+MOLE
+Vulture
+Reclaimer
+Carrack
+Hammerhead
+Hercules
+Starfarer
+Polaris
+Idris
+Javelin
+Corsair
+Cutlass
+Cutter
+Zeus
+Nomad
+Pisces
+Redeemer
+Valkyrie
+Retaliator
+Eclipse
+Terrapin
+Scorpius
+Hurricane
+Buccaneer
+Taurus
+Andromeda
+Aquila
+Phoenix
+Spirit
+Starlancer
+Ursa
+Cyclone
+Nox
+Dragonfly
+
+# Mining, salvage and trade
+Quantanium
+Laranite
+Agricium
+Hadanite
+Bexalite
+Taranite
+Borase
+Beryl
+Tungsten
+Hephaestanite
+Aphorite
+Dolivine
+Janalite
+Riccite
+Stileron
+Savrilium
+Lindinium
+Ouratite
+Recycled Material Composite
+Construction Materials
+refinery
+aUEC
+
+# Ship systems and interface
+mobiGlas
+quantum
+quantum drive
+QT
+pips
+HUD
+MFD
+VTOL
+IFCS
+ATC
+countermeasures
+decoupled
+Starmap
+hangar
+kiosk
+salvage
+tractor beam

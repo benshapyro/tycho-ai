@@ -4,14 +4,19 @@ from ultimo.eval import normalize, score_clip, word_errors
 
 
 def test_normalize_drops_case_punctuation_and_apostrophes() -> None:
-    assert normalize("We're done here, power everything DOWN!") == [
-        "were",
+    assert normalize("Done here, Cutlass' power... DOWN!") == [
         "done",
         "here",
+        "cutlass",
         "power",
-        "everything",
         "down",
     ]
+
+
+def test_normalize_expands_contractions() -> None:
+    assert normalize("Where\N{RIGHT SINGLE QUOTATION MARK}s the pad? We're late") == normalize(
+        "where is the pad we are late"
+    )
 
 
 @pytest.mark.parametrize(

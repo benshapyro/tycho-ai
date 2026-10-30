@@ -1,0 +1,63 @@
+# Everyday and in-game sentences with no misheard game terms. The lexicon must
+# leave every one unchanged. Add any false alarm found in real use here.
+can you hear me
+hang on a second
+that was close
+I need to go grab a drink
+okay we're back
+what time is it
+let me think about that
+turn the volume down a bit
+the horizon looks amazing from up here
+I can't see anything out there
+are you ready
+follow me to the next waypoint
+watch your six
+there's someone behind us
+I'm almost out of ammo
+check the cargo hold
+how much money do we have
+we should head back soon
+that ship is massive
+look at that view
+open the ramp please
+close the ramp
+I think we're being followed
+keep an eye on the radar
+it's a good day for mining
+did you see that
+go faster
+slow down a little
+stop right there
+park it over there
+we have incoming
+drop the cargo
+grab the box
+I'm going to log off after this
+read me the last message
+what's my balance
+where did we park
+is anyone else around
+set the waypoint
+the station is right ahead
+can you repeat that
+I didn't catch that
+cancel that
+never mind
+good job
+thanks for the help
+the market price dropped again
+I want to buy a new ship
+we need more fuel
+where can I refuel
+take me home
+the drive is overheating
+call for backup
+the hangar door is stuck
+mark that target
+lock on to him
+fire at will
+cease fire
+hold position
+roger that
+copy that
