@@ -1,0 +1,44 @@
+# Voice Design prompts for Tycho, following ElevenLabs' prompting guide:
+# language and region first; describe the sound (timbre, pitch, pacing), not just categories;
+# a quality phrase; no effect words (radio, echo, reverb): Tycho's own filters add those later.
+# Each design returns three options. Preview text must be 100-1000 characters, in character.
+
+[[design]]
+id = "ships-mind"
+name = "The Ship's Mind"
+description = """British English, Southern English Received Pronunciation. A man in his mid-forties, \
+studio quality. He is a ship's onboard intelligence: calm, measured and quietly confident, with a dry wit. \
+Warm, smooth baritone with precise diction and very even pacing; never rushed, never raises his voice."""
+text = """Gear down, requesting landing at Lorville. Shields are holding at ninety percent. \
+I'd recommend topping up on fuel before the next jump, Commander. And no, I am not Janus. \
+I'll always tell you what I'm about to do before I do it."""
+
+[[design]]
+id = "flight-officer"
+name = "Flight Officer"
+description = """American English, General American. A woman in her early thirties, broadcast quality. \
+A sharp, experienced flight officer: alert, composed and supportive under pressure. \
+Clear, bright alto with crisp consonants and a brisk, clipped cadence that slows down for warnings."""
+text = """Flight ready, all systems green. Quantum drive spooling, destination Hurston. \
+Hostile contact, bearing two seven zero, three ships. Decoys away. \
+Shields to front, power to weapons. Stay on them, Commander, I've got your six."""
+
+[[design]]
+id = "old-spacer"
+name = "The Old Spacer"
+description = """American English, with a relaxed Southwestern drawl. A man in his late fifties, studio quality. \
+A weathered veteran pilot who has seen everything: unhurried, wry and reassuring. \
+Deep, slightly gravelly voice with a slow, steady rhythm and a hint of a smile in it."""
+text = """Easy now, we've got plenty of time. The nearest refinery's at ARC-L1, about four minutes out. \
+Quantanium's selling well at CRU-L1 right now. Fuel's at ten percent though, \
+so let's not get greedy. I've flown worse with less, Commander."""
+
+[[design]]
+id = "synthetic"
+name = "Synthetic Companion"
+description = """English with a neutral Mid-Atlantic intonation. An adult voice of indeterminate age, \
+gently androgynous, studio quality. An artificial companion that is serene, precise and kind. \
+Smooth, airy timbre with perfectly even pitch and unhurried, exact pacing; every word placed with care."""
+text = """Good evening, Commander. I have plotted three routes to microTech. The fastest takes eleven minutes. \
+Your Cutlass has three size three gun mounts. I can confirm that before I act, \
+I will always ask. That is a promise I intend to keep."""
