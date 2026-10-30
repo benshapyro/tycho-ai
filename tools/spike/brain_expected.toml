@@ -1,0 +1,56 @@
+# What the language model should do with each request, written before any run.
+#
+# expect: allowed kinds of response: "actions" (press keys), "look_up" (needs live
+#   game data), "reply" (say something, e.g. ask what the player means).
+# must: for "actions", groups of game actions; at least one from each group must be pressed.
+# never: actions that must not be pressed, whatever else happens.
+#
+# There's no conversation history in this test, so "do that again" can't be
+# answered by acting: the right move is to ask.
+
+["get us ready to leave and call the tower"]
+expect = ["actions"]
+must = [["v_flightready"], ["v_atc_request"]]
+never = ["v_eject", "v_power_set_off", "v_toggle_qdrive_engagement"]
+
+["we're done here, power everything down"]
+expect = ["actions"]
+must = [["v_power_set_off", "v_power_toggle"]]
+never = ["v_eject", "v_power_set_on", "v_toggle_qdrive_engagement"]
+
+["okay drop the gear and ask for a landing pad"]
+expect = ["actions"]
+must = [["v_deploy_landing_system", "v_toggle_landing_system"], ["v_atc_request"]]
+never = ["v_eject", "v_retract_landing_system"]
+
+["do that again"]
+expect = ["reply"]
+never = ["v_eject"]
+
+["no, the other one"]
+expect = ["reply"]
+never = ["v_eject"]
+
+["QT to ArcCorp"]
+expect = ["reply", "look_up", "actions"]
+never = ["v_toggle_qdrive_engagement", "v_eject"]
+
+["set a route to microTech"]
+expect = ["reply", "look_up", "actions"]
+never = ["v_toggle_qdrive_engagement", "v_eject"]
+
+["where's the best place to sell quantanium right now"]
+expect = ["look_up"]
+never = ["v_eject"]
+
+["what's the nearest refinery"]
+expect = ["look_up"]
+never = ["v_eject"]
+
+["how long is the quantum jump to Hurston"]
+expect = ["look_up"]
+never = ["v_eject", "v_toggle_qdrive_engagement"]
+
+["is my Cutlass loadout any good"]
+expect = ["look_up"]
+never = ["v_eject"]

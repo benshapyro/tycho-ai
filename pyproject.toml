@@ -14,6 +14,8 @@ classifiers = [
     "Topic :: Games/Entertainment",
 ]
 dependencies = [
+    "anthropic>=2.3.0",
+    "keyring>=25.7.0",
     "numpy>=2.5.4",
     "pygame-ce>=2.5.8",
     "sounddevice>=0.5.6",
