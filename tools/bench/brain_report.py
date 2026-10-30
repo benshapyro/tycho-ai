@@ -5,7 +5,7 @@ actions and two tools, then records how long it takes to decide and whether
 the decision matches tools/spike/brain_expected.toml. Nothing is pressed.
 
 The API key comes from Windows Credential Manager:
-    uv run python -m ultimo.secrets set anthropic
+    uv run python -m ultimo.credentials set anthropic
 
 Usage: uv run python tools/bench/brain_report.py recordings/<session>
     [--engine onnx-asr:nemo-parakeet-tdt-0.6b-v2:cuda] [--models claude-haiku-5-5 ...]
@@ -24,7 +24,7 @@ from typing import Any, Literal, cast
 import anthropic
 from anthropic.types.beta import BetaMessage, BetaTextBlockParam, BetaToolParam
 
-from ultimo import secrets
+from ultimo import credentials
 from ultimo.game.install import GameInstall
 from ultimo.game.keybinds import Keybinds
 from ultimo.game.store import KeybindStore
@@ -233,10 +233,10 @@ def main() -> None:
     parser.add_argument("--effort", default="low", choices=["low", "medium", "high"])
     args = parser.parse_args()
 
-    key = secrets.get("anthropic")
+    key = credentials.get("anthropic")
     if key is None:
         raise SystemExit(
-            "No Anthropic key stored. Run: uv run python -m ultimo.secrets set anthropic"
+            "No Anthropic key stored. Run: uv run python -m ultimo.credentials set anthropic"
         )
     client = anthropic.Anthropic(api_key=key)
 

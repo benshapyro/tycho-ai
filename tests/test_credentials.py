@@ -5,7 +5,7 @@ import keyring.backend
 import keyring.errors
 import pytest
 
-from ultimo import secrets
+from ultimo import credentials
 
 
 class MemoryKeyring(keyring.backend.KeyringBackend):
@@ -36,20 +36,20 @@ def memory() -> Iterator[MemoryKeyring]:
 
 
 def test_set_get_delete(memory: MemoryKeyring) -> None:
-    assert secrets.get("anthropic") is None
-    secrets.set_secret("anthropic", "sk-ant-test-123456789")
-    assert secrets.get("anthropic") == "sk-ant-test-123456789"
+    assert credentials.get("anthropic") is None
+    credentials.set_secret("anthropic", "sk-ant-test-123456789")
+    assert credentials.get("anthropic") == "sk-ant-test-123456789"
     assert memory.store == {("ultimo", "anthropic"): "sk-ant-test-123456789"}
-    assert secrets.delete("anthropic")
-    assert not secrets.delete("anthropic")
+    assert credentials.delete("anthropic")
+    assert not credentials.delete("anthropic")
 
 
 def test_masked_never_shows_the_whole_key() -> None:
     key = "sk-ant-api03-abcdefghijklmnopqrstuvwxyz"
-    shown = secrets.masked(key)
+    shown = credentials.masked(key)
     assert shown == "sk-ant-...wxyz"
     assert key not in shown
-    assert secrets.masked("short") == "***"
+    assert credentials.masked("short") == "***"
 
 
 def test_cli_set_reads_hidden_input(
@@ -59,8 +59,8 @@ def test_cli_set_reads_hidden_input(
         return "  sk-ant-api03-secretsecret1234  "
 
     monkeypatch.setattr("getpass.getpass", fake_getpass)
-    assert secrets.main(["set", "anthropic"]) == 0
-    assert secrets.get("anthropic") == "sk-ant-api03-secretsecret1234"
+    assert credentials.main(["set", "anthropic"]) == 0
+    assert credentials.get("anthropic") == "sk-ant-api03-secretsecret1234"
     output = capsys.readouterr().out
     assert "secretsecret" not in output
-    assert secrets.main(["check", "anthropic"]) == 0
+    assert credentials.main(["check", "anthropic"]) == 0
