@@ -1,0 +1,235 @@
+# Spoken shortcuts: the fast path, handled on the player's PC without the language model.
+#
+# Each command lists ways players say it, and the game actions that do it, best
+# first. Put a specific action ("Open All Doors") before a toggle: the toggle
+# is the fallback when the specific one has no key bound, and pressing a toggle
+# without knowing the current state can do the opposite of what was asked.
+#
+# confirm = true means Ultimo asks before acting (see docs/architecture.md, 4.7).
+# Anything not matched here goes to the language model, so this list only
+# needs the commands people say most and want instantly.
+
+# Landing gear
+[[command]]
+id = "landing_gear"
+say = ["landing gear", "gear", "toggle landing gear", "toggle the gear", "toggle the landing gear"]
+actions = ["v_toggle_landing_system"]
+
+[[command]]
+id = "landing_gear_down"
+say = ["lower the landing gear", "lower landing gear", "lower the gear", "gear down", "landing gear down", "deploy landing gear", "deploy the landing gear", "deploy the gear", "drop the gear", "drop the landing gear"]
+actions = ["v_deploy_landing_system", "v_toggle_landing_system"]
+
+[[command]]
+id = "landing_gear_up"
+say = ["raise the landing gear", "raise landing gear", "raise the gear", "gear up", "landing gear up", "retract landing gear", "retract the landing gear", "retract the gear"]
+actions = ["v_retract_landing_system", "v_toggle_landing_system"]
+
+[[command]]
+id = "request_landing"
+say = ["request landing", "request landing permission", "request a landing pad", "ask for a landing pad", "call the tower", "contact the tower", "request docking"]
+actions = ["v_atc_request"]
+
+# Doors
+[[command]]
+id = "doors_open"
+say = ["open the doors", "open doors", "open all doors", "open all the doors"]
+actions = ["v_open_all_doors", "v_toggle_all_doors"]
+
+[[command]]
+id = "doors_close"
+say = ["close the doors", "close doors", "close all doors", "close all the doors", "shut the doors"]
+actions = ["v_close_all_doors", "v_toggle_all_doors"]
+
+[[command]]
+id = "doors_lock"
+say = ["lock the doors", "lock doors", "lock all doors"]
+actions = ["v_lock_all_doors", "v_toggle_all_doorlocks"]
+
+[[command]]
+id = "doors_unlock"
+say = ["unlock the doors", "unlock doors", "unlock all doors"]
+actions = ["v_unlock_all_doors", "v_toggle_all_doorlocks"]
+
+# Lights
+[[command]]
+id = "lights"
+say = ["lights", "headlights", "toggle lights", "toggle the lights", "toggle headlights"]
+actions = ["v_lights"]
+
+[[command]]
+id = "lights_on"
+say = ["lights on", "headlights on", "turn on the lights", "turn the lights on", "turn on the headlights"]
+actions = ["v_lights_on", "v_lights"]
+
+[[command]]
+id = "lights_off"
+say = ["lights off", "headlights off", "turn off the lights", "turn the lights off", "kill the lights"]
+actions = ["v_lights_off", "v_lights"]
+
+# Power
+[[command]]
+id = "flight_ready"
+say = ["flight ready", "systems ready", "flight systems ready", "make it flight ready"]
+actions = ["v_flightready"]
+
+[[command]]
+id = "power_on"
+say = ["power on", "power up", "turn the power on", "turn on the power", "power on the ship"]
+actions = ["v_power_set_on", "v_power_toggle"]
+
+[[command]]
+id = "power_off"
+say = ["power off", "power down", "turn the power off", "turn off the power", "power down the ship", "power everything down"]
+actions = ["v_power_set_off", "v_power_toggle"]
+
+[[command]]
+id = "engines_on"
+say = ["engines on", "thrusters on", "turn on the engines", "turn the engines on", "start the engines"]
+actions = ["v_power_set_thrusters_on", "v_power_toggle_thrusters"]
+
+[[command]]
+id = "engines_off"
+say = ["engines off", "thrusters off", "turn off the engines", "turn the engines off", "kill the engines"]
+actions = ["v_power_set_thrusters_off", "v_power_toggle_thrusters"]
+
+[[command]]
+id = "shields_on"
+say = ["shields on", "shields up", "turn on the shields", "raise shields"]
+actions = ["v_power_set_shields_on", "v_power_toggle_shields"]
+
+[[command]]
+id = "shields_off"
+say = ["shields off", "shields down", "turn off the shields", "drop shields"]
+actions = ["v_power_set_shields_off", "v_power_toggle_shields"]
+
+[[command]]
+id = "weapons_on"
+say = ["weapons on", "guns on", "turn on the weapons", "power up weapons", "weapons hot"]
+actions = ["v_power_set_weapons_on", "v_power_toggle_weapons"]
+
+[[command]]
+id = "weapons_off"
+say = ["weapons off", "guns off", "turn off the weapons", "power down weapons", "weapons cold"]
+actions = ["v_power_set_weapons_off", "v_power_toggle_weapons"]
+
+# Power distribution
+[[command]]
+id = "power_to_engines"
+say = ["pips to engines", "power to engines", "more power to engines", "pip to engines"]
+actions = ["v_engineering_assignment_engine_increase"]
+
+[[command]]
+id = "power_to_shields"
+say = ["pips to shields", "power to shields", "more power to shields", "pip to shields"]
+actions = ["v_engineering_assignment_shields_increase"]
+
+[[command]]
+id = "power_to_weapons"
+say = ["pips to weapons", "power to weapons", "more power to weapons", "pip to weapons"]
+actions = ["v_engineering_assignment_weapons_increase"]
+
+[[command]]
+id = "max_power_engines"
+say = ["max power to engines", "full power to engines", "engines to max", "maximum power to engines"]
+actions = ["v_engineering_assignment_engine_max"]
+
+[[command]]
+id = "max_power_shields"
+say = ["max power to shields", "full power to shields", "shields to max", "maximum power to shields"]
+actions = ["v_engineering_assignment_shields_max"]
+
+[[command]]
+id = "max_power_weapons"
+say = ["max power to weapons", "full power to weapons", "weapons to max", "maximum power to weapons"]
+actions = ["v_engineering_assignment_weapons_max"]
+
+[[command]]
+id = "balance_power"
+say = ["balance power", "reset power", "reset power distribution", "even out the power", "reset pips"]
+actions = ["v_engineering_assignment_reset"]
+
+# Shield faces
+[[command]]
+id = "shields_front"
+say = ["shields to front", "front shields", "shields forward", "shields to the front", "angle shields forward"]
+actions = ["v_shield_raise_level_forward"]
+
+[[command]]
+id = "shields_back"
+say = ["shields to back", "back shields", "rear shields", "shields to the back", "shields to rear", "shields to the rear"]
+actions = ["v_shield_raise_level_back"]
+
+[[command]]
+id = "shields_left"
+say = ["shields to left", "left shields", "shields to the left"]
+actions = ["v_shield_raise_level_left"]
+
+[[command]]
+id = "shields_right"
+say = ["shields to right", "right shields", "shields to the right"]
+actions = ["v_shield_raise_level_right"]
+
+[[command]]
+id = "shields_reset"
+say = ["reset shields", "balance shields", "even out the shields", "equalize shields"]
+actions = ["v_shield_reset_level"]
+
+# Quantum travel
+[[command]]
+id = "quantum_mode"
+say = ["spool the quantum drive", "spool quantum", "spool the quantum", "quantum mode", "spool up the quantum drive", "quantum drive"]
+actions = ["v_set_quantum_mode", "v_toggle_quantum_mode"]
+
+[[command]]
+id = "quantum_engage"
+say = ["engage quantum", "engage the quantum drive", "jump", "punch it"]
+actions = ["v_toggle_qdrive_engagement"]
+
+# Targeting and defence
+[[command]]
+id = "target_nearest_hostile"
+say = ["target the nearest hostile", "target nearest hostile", "target the nearest enemy", "target nearest enemy", "target the closest hostile", "target closest enemy"]
+actions = ["v_target_cycle_hostile_reset"]
+
+[[command]]
+id = "target_next_hostile"
+say = ["next hostile", "next target", "next enemy", "cycle hostiles"]
+actions = ["v_target_cycle_hostile_fwd"]
+
+[[command]]
+id = "decoys"
+say = ["launch a decoy", "launch decoys", "decoy", "decoys", "fire decoys", "flares", "pop flares", "deploy countermeasures", "countermeasures"]
+actions = ["v_weapon_countermeasure_decoy_launch"]
+
+[[command]]
+id = "noise"
+say = ["deploy noise", "launch noise", "noise", "chaff", "pop chaff"]
+actions = ["v_weapon_countermeasure_noise_launch"]
+
+[[command]]
+id = "gimbals_toggle"
+say = ["toggle gimbals", "gimbal lock", "gimbals"]
+actions = ["v_weapon_gimbals_state_toggle"]
+
+# Seat and interface
+[[command]]
+id = "exit_seat"
+say = ["exit seat", "exit the seat", "get out of the seat", "leave the seat", "get up"]
+actions = ["pl_exit"]
+
+[[command]]
+id = "eject"
+say = ["eject", "eject eject eject", "punch out", "bail out"]
+actions = ["v_eject"]
+confirm = true
+
+[[command]]
+id = "mobiglas"
+say = ["open mobiglas", "close mobiglas", "mobiglas", "toggle mobiglas", "open the mobiglas"]
+actions = ["mobiglas"]
+
+[[command]]
+id = "map"
+say = ["open the map", "open map", "star map", "open the star map", "open starmap", "show the map"]
+actions = ["v_starmap"]

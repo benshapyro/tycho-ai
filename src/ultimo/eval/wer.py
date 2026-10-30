@@ -5,38 +5,11 @@ matcher downstream would still get it right, while "arc court" it wouldn't.
 So game terms are also checked on their own, ignoring spaces.
 """
 
-import re
 from dataclasses import dataclass
 
-from ultimo.text import edit_distance
+from ultimo.text import edit_distance, normalize
 
-_CONTRACTIONS = {
-    "what's": "what is",
-    "where's": "where is",
-    "how's": "how is",
-    "it's": "it is",
-    "that's": "that is",
-    "there's": "there is",
-    "we're": "we are",
-    "you're": "you are",
-    "they're": "they are",
-    "i'm": "i am",
-    "let's": "let us",
-}
-_APOSTROPHES = re.compile("['\N{RIGHT SINGLE QUOTATION MARK}]")
-_NON_WORD = re.compile(r"[^a-z0-9]+")
-
-
-def normalize(text: str) -> list[str]:
-    """Lowercase words with punctuation removed and common contractions expanded.
-
-    "We're done, QT!" -> ["we", "are", "done", "qt"]. Expanding contractions
-    stops "where's" and "where is" from counting as a mistake.
-    """
-    text = _APOSTROPHES.sub("'", text.lower())
-    words = (_CONTRACTIONS.get(word, word) for word in text.split())
-    text = _APOSTROPHES.sub("", " ".join(words))
-    return _NON_WORD.sub(" ", text).split()
+__all__ = ["ClipScore", "normalize", "score_clip", "word_errors"]
 
 
 def word_errors(reference: list[str], hypothesis: list[str]) -> int:

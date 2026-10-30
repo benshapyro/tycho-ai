@@ -14,7 +14,10 @@ uv run --script tools/bench/engines/onnx_asr_engine.py $r --device cpu
 uv run --script tools/bench/engines/faster_whisper_engine.py $r              # Whisper large-v3-turbo
 uv run --script tools/bench/engines/qwen_asr_engine.py $r                    # Qwen3-ASR-1.7B
 uv run python tools/bench/report.py $r --misses
+uv run python tools/bench/commands_report.py $r      # what each transcript would do, with your keys
 ```
+
+`commands_report.py` scores every transcript against [`tools/spike/expected.toml`](../spike/expected.toml): **right**, **slow** (handed to the language model when the fast path should have caught it) or **wrong** (the wrong action, or acting when it should have asked). Wrong must stay at zero. It then lists the key each command would press with your own keybinds, read from your game install.
 
 Models go to `%LOCALAPPDATA%\ultimo\models`. Set `ULTIMO_MODELS` to put them elsewhere, and `UV_CACHE_DIR` and `HF_HOME` to move the package and download caches.
 

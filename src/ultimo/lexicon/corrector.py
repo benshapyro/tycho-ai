@@ -15,7 +15,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from importlib import resources
 
-from ultimo.text import edit_distance
+from ultimo.text import similarity
 
 _WORD = re.compile(r"[A-Za-z0-9']+")
 _NOT_ALNUM = re.compile(r"[^a-z0-9]")
@@ -171,14 +171,10 @@ class Lexicon:
                 continue
             if abs(len(key) - len(term.key)) > 2:
                 continue
-            similarity = _similarity(key, term.key)
-            if similarity < self._threshold or (best is not None and similarity <= best[1]):
+            sounds = similarity(key, term.key)
+            if sounds < self._threshold or (best is not None and sounds <= best[1]):
                 continue
             # Sounding alike isn't enough on its own: "ready to" and Riccite do.
-            if _similarity(collapsed, term.collapsed) >= self._min_spelling_similarity:
-                best = (term, similarity)
+            if similarity(collapsed, term.collapsed) >= self._min_spelling_similarity:
+                best = (term, sounds)
         return best
-
-
-def _similarity(a: str, b: str) -> float:
-    return 1 - edit_distance(a, b) / max(len(a), len(b), 1)
