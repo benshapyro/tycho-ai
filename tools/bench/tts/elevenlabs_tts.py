@@ -30,7 +30,19 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("out", type=Path)
     parser.add_argument("--lines", type=Path, default=Path("tools/spike/voice_lines.txt"))
+    parser.add_argument(
+        "--voice", action="append", help="NAME=VOICE_ID; repeatable. Default: the stock set"
+    )
+    parser.add_argument("--model", default="eleven_v4_turbo", help="with --voice")
+    parser.add_argument("--suffix", default="", help="added to folder names, e.g. -character")
+    parser.add_argument("--max-line", type=int, default=0, help="only the first N lines")
     args = parser.parse_args()
+    runs: tuple[tuple[str, tuple[str, ...]], ...] = RUNS
+    if args.voice:
+        for item in args.voice:
+            name, _, voice_id = item.partition("=")
+            VOICES[name] = voice_id
+        runs = ((args.model, tuple(v.partition("=")[0] for v in args.voice)),)
 
     key = credentials.get("elevenlabs")
     if key is None:
@@ -39,12 +51,16 @@ def main() -> None:
         )
     text = args.lines.read_text("utf-8").splitlines()
     lines = [line.strip() for line in text if line.strip() and not line.startswith("#")]
+    if args.max_line:
+        lines = lines[: args.max_line]
     characters = 0
 
     with httpx2.Client(headers={"xi-api-key": key}, timeout=60) as client:
-        for model, voices in RUNS:
+        for model, voices in runs:
             for voice in voices:
-                folder = args.out / f"elevenlabs-{model.removeprefix('eleven_')}-{voice}"
+                folder = (
+                    args.out / f"elevenlabs-{model.removeprefix('eleven_')}-{voice}{args.suffix}"
+                )
                 folder.mkdir(parents=True, exist_ok=True)
                 timings: list[dict[str, object]] = []
                 done = _done(folder)
