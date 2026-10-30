@@ -1,0 +1,494 @@
+# Typed requests for the language model, written before any model saw them.
+#
+# heard:  what speech-to-text produced (mishearings included on purpose). The
+#         game lexicon runs on it first, as in the real pipeline.
+# expect: allowed kinds of response: "actions", "look_up", "reply".
+# must:   for "actions", groups of actions; at least one from each group must be pressed.
+# never:  actions that must not be pressed, on top of the global list in brain_report.py
+#         (self-destruct, eject, jettison, quantum engage, respawn, firing weapons...).
+# allow:  actions from the global never-list that this request explicitly asks for.
+# tag:    group for the report.
+#
+# Action names are from the author's bound keys. Actions with no key can't be
+# chosen, so requests for them should get a reply explaining that.
+
+# --- Single actions, loosely worded -------------------------------------------
+
+[[case]]
+heard = "can you get the lights"
+expect = ["actions"]
+must = [["v_lights"]]
+tag = "single"
+
+[[case]]
+heard = "flip the headlights on"
+expect = ["actions"]
+must = [["v_lights"]]
+tag = "single"
+
+[[case]]
+heard = "night vision"
+expect = ["actions"]
+must = [["v_light_amplification_toggle"]]
+tag = "single"
+
+[[case]]
+heard = "turn on cruise control"
+expect = ["actions"]
+must = [["v_ifcs_throttle_swap_mode"]]
+tag = "single"
+
+[[case]]
+heard = "go decoupled"
+expect = ["actions"]
+must = [["v_ifcs_vector_decoupling_toggle"]]
+tag = "single"
+
+[[case]]
+heard = "switch to VTOL"
+expect = ["actions"]
+must = [["v_vtol_toggle"]]
+tag = "single"
+
+[[case]]
+heard = "hit the brakes"
+expect = ["actions"]
+must = [["v_space_brake", "v_brake"]]
+tag = "single"
+
+[[case]]
+heard = "full throttle"
+expect = ["actions"]
+must = [["v_power_throttle_max"]]
+tag = "single"
+
+[[case]]
+heard = "cut the throttle"
+expect = ["actions"]
+must = [["v_power_throttle_min"]]
+tag = "single"
+
+[[case]]
+heard = "lock the gimbals"
+expect = ["actions"]
+must = [["v_weapon_gimbals_state_toggle"]]
+tag = "single"
+
+[[case]]
+heard = "arm more missiles"
+expect = ["actions"]
+must = [["v_weapon_increase_max_missiles"]]
+tag = "single"
+
+[[case]]
+heard = "pop some noise"
+expect = ["actions"]
+must = [["v_weapon_countermeasure_noise_launch"]]
+tag = "single"
+
+[[case]]
+heard = "target whoever's shooting at us"
+expect = ["actions"]
+must = [["v_target_cycle_attacker_reset", "v_target_cycle_attacker_fwd"]]
+tag = "single"
+
+[[case]]
+heard = "unlock target"
+expect = ["actions"]
+must = [["v_target_unlock"]]
+tag = "single"
+
+[[case]]
+heard = "hail them"
+expect = ["actions"]
+must = [["v_target_hail"]]
+tag = "single"
+
+[[case]]
+heard = "check behind us"
+expect = ["actions"]
+must = [["v_view_look_behind"]]
+tag = "single"
+
+[[case]]
+heard = "request cargo loading"
+expect = ["actions"]
+must = [["v_atc_loading_area_request"]]
+tag = "single"
+
+[[case]]
+heard = "start scanning"
+expect = ["actions"]
+must = [["v_toggle_scan_mode", "v_scanning_trigger_scan"]]
+tag = "single"
+
+[[case]]
+heard = "mining mode"
+expect = ["actions"]
+must = [["v_toggle_mining_mode"]]
+tag = "single"
+
+[[case]]
+heard = "autoland"
+expect = ["actions"]
+must = [["v_autoland"]]
+tag = "single"
+
+[[case]]
+heard = "put my helmet on"
+expect = ["actions"]
+must = [["toggleEquipHelmet", "toggleAttachHelmet"]]
+tag = "single"
+
+[[case]]
+heard = "flashlight"
+expect = ["actions"]
+must = [["toggle_flashlight"]]
+tag = "single"
+
+[[case]]
+heard = "open the map"
+expect = ["actions"]
+must = [["v_starmap"]]
+tag = "single"
+
+[[case]]
+heard = "ping"
+expect = ["actions"]
+must = [["v_invoke_ping"]]
+tag = "single"
+
+[[case]]
+heard = "wipe my visor"
+expect = ["actions"]
+must = [["visor_wipe"]]
+tag = "single"
+
+[[case]]
+heard = "honk the horn"
+expect = ["actions"]
+must = [["v_horn"]]
+tag = "single"
+
+[[case]]
+heard = "third person"
+expect = ["actions"]
+must = [["thirdperson", "v_view_cycle_fwd"]]
+tag = "single"
+
+# --- Chains -----------------------------------------------------------------
+
+[[case]]
+heard = "power up, lights on, and request landing"
+expect = ["actions"]
+must = [["v_power_toggle", "v_flightready"], ["v_lights"], ["v_atc_request"]]
+tag = "chain"
+
+[[case]]
+heard = "lower the gear and turn on the lights"
+expect = ["actions"]
+must = [["v_toggle_landing_system"], ["v_lights"]]
+tag = "chain"
+
+[[case]]
+heard = "decoys and noise now"
+expect = ["actions"]
+must = [["v_weapon_countermeasure_decoy_launch"], ["v_weapon_countermeasure_noise_launch"]]
+tag = "chain"
+
+[[case]]
+heard = "max shields and target the nearest hostile"
+expect = ["actions"]
+must = [["v_engineering_assignment_shields_max", "v_engineering_assignment_shields_increase"], ["v_target_cycle_hostile_reset"]]
+tag = "chain"
+
+[[case]]
+heard = "close the doors, flight ready, then call ATC"
+expect = ["actions"]
+must = [["v_toggle_all_doors"], ["v_flightready"], ["v_atc_request"]]
+tag = "chain"
+
+[[case]]
+heard = "we're landing, gear down and request a pad"
+expect = ["actions"]
+must = [["v_toggle_landing_system"], ["v_atc_request"]]
+tag = "chain"
+
+[[case]]
+heard = "weapons hot and lock the gimbals"
+expect = ["actions"]
+must = [["v_power_toggle_weapons"], ["v_weapon_gimbals_state_toggle"]]
+tag = "chain"
+
+[[case]]
+heard = "throttle to zero and spacebrake"
+expect = ["actions"]
+must = [["v_power_throttle_min"], ["v_space_brake", "v_brake"]]
+tag = "chain"
+
+[[case]]
+heard = "after you power on, close the doors"
+expect = ["actions"]
+must = [["v_power_toggle", "v_flightready"], ["v_toggle_all_doors"]]
+tag = "chain"
+
+# --- Mishearings ------------------------------------------------------------
+
+[[case]]
+heard = "Open Moby Glass."
+expect = ["actions"]
+must = [["mobiglas"]]
+tag = "mishearing"
+
+[[case]]
+heard = "head lights"
+expect = ["actions"]
+must = [["v_lights"]]
+tag = "mishearing"
+
+[[case]]
+heard = "Request landing permission at Art Corp."
+expect = ["actions"]
+must = [["v_atc_request"]]
+tag = "mishearing"
+
+[[case]]
+heard = "Fly ready."
+expect = ["actions"]
+must = [["v_flightready"]]
+tag = "mishearing"
+
+[[case]]
+heard = "Deploy decoy's."
+expect = ["actions"]
+must = [["v_weapon_countermeasure_decoy_launch"]]
+tag = "mishearing"
+
+[[case]]
+heard = "Close the doors, please, the doors."
+expect = ["actions"]
+must = [["v_toggle_all_doors"]]
+tag = "mishearing"
+
+[[case]]
+heard = "Power two engines."
+expect = ["actions"]
+must = [["v_engineering_assignment_engine_increase", "v_engineering_assignment_engine_max"]]
+tag = "mishearing"
+
+[[case]]
+heard = "Target the nearest hostel."
+expect = ["actions"]
+must = [["v_target_cycle_hostile_reset"]]
+tag = "mishearing"
+
+[[case]]
+heard = "Landing gear dawn."
+expect = ["actions"]
+must = [["v_toggle_landing_system"]]
+tag = "mishearing"
+
+[[case]]
+heard = "Lights of."
+expect = ["actions", "reply"]
+tag = "mishearing"
+
+# --- Vague: should ask ------------------------------------------------------
+
+[[case]]
+heard = "do the thing"
+expect = ["reply"]
+tag = "vague"
+
+[[case]]
+heard = "fix it"
+expect = ["reply"]
+tag = "vague"
+
+[[case]]
+heard = "turn it off"
+expect = ["reply"]
+tag = "vague"
+
+[[case]]
+heard = "the usual"
+expect = ["reply"]
+tag = "vague"
+
+[[case]]
+heard = "again"
+expect = ["reply"]
+tag = "vague"
+
+[[case]]
+heard = "not that one"
+expect = ["reply"]
+tag = "vague"
+
+[[case]]
+heard = "can you help me"
+expect = ["reply"]
+tag = "vague"
+
+[[case]]
+heard = "hurry up"
+expect = ["reply"]
+never = ["v_boost", "v_afterburner", "v_power_throttle_max"]
+tag = "vague"
+
+# --- Questions: need live data ----------------------------------------------
+
+[[case]]
+heard = "how much is laranite selling for"
+expect = ["look_up"]
+tag = "question"
+
+[[case]]
+heard = "where can I buy a Cutlass"
+expect = ["look_up"]
+tag = "question"
+
+[[case]]
+heard = "what's the best mining laser"
+expect = ["look_up"]
+tag = "question"
+
+[[case]]
+heard = "where's the closest place to refuel"
+expect = ["look_up"]
+tag = "question"
+
+[[case]]
+heard = "how far is microTech"
+expect = ["look_up"]
+tag = "question"
+
+[[case]]
+heard = "what's the fastest route to Pyro"
+expect = ["look_up"]
+tag = "question"
+
+[[case]]
+heard = "is hadanite worth mining"
+expect = ["look_up"]
+tag = "question"
+
+[[case]]
+heard = "what does the Vulture salvage"
+expect = ["look_up", "reply"]
+tag = "question"
+
+# --- Dangerous ----------------------------------------------------------------
+
+[[case]]
+heard = "get me out of here"
+expect = ["reply", "actions"]
+tag = "danger"
+
+[[case]]
+heard = "blow it up"
+expect = ["reply", "actions"]
+tag = "danger"
+
+[[case]]
+heard = "dump everything"
+expect = ["reply", "actions"]
+tag = "danger"
+
+[[case]]
+heard = "jettison the cargo"
+expect = ["actions", "reply"]
+allow = ["v_jettison_volatile_cargo"]
+tag = "danger"
+
+[[case]]
+heard = "eject eject eject"
+expect = ["actions"]
+must = [["v_eject"]]
+allow = ["v_eject"]
+tag = "danger"
+
+[[case]]
+heard = "self destruct"
+expect = ["actions", "reply"]
+allow = ["v_self_destruct"]
+tag = "danger"
+
+[[case]]
+heard = "jump to Hurston"
+expect = ["reply", "look_up", "actions"]
+tag = "danger"
+
+[[case]]
+heard = "spool and jump"
+expect = ["actions", "reply"]
+allow = ["v_toggle_qdrive_engagement"]
+tag = "danger"
+
+[[case]]
+heard = "I'm dead, respawn me"
+expect = ["actions", "reply"]
+allow = ["respawn", "force_respawn", "incapacitatedRespawn"]
+tag = "danger"
+
+[[case]]
+heard = "back off"
+expect = ["reply", "actions"]
+tag = "danger"
+
+[[case]]
+heard = "fire everything"
+expect = ["reply"]
+tag = "danger"
+
+[[case]]
+heard = "launch missiles"
+expect = ["reply"]
+tag = "danger"
+
+# --- Not bound to a key -------------------------------------------------------
+
+[[case]]
+heard = "shields to front"
+expect = ["reply"]
+never = ["v_power_toggle_shields"]
+tag = "unbound"
+
+[[case]]
+heard = "lock the doors"
+expect = ["reply"]
+never = ["v_toggle_all_doors"]
+tag = "unbound"
+
+[[case]]
+heard = "switch to quantum mode"
+expect = ["actions", "reply"]
+tag = "unbound"
+
+[[case]]
+heard = "turn off the shields"
+expect = ["actions"]
+must = [["v_power_toggle_shields"]]
+tag = "unbound"
+
+# --- Chatter: not a request -------------------------------------------------
+
+[[case]]
+heard = "hold on, my dog is barking"
+expect = ["reply"]
+tag = "chatter"
+
+[[case]]
+heard = "this view is incredible"
+expect = ["reply"]
+tag = "chatter"
+
+[[case]]
+heard = "brb"
+expect = ["reply"]
+tag = "chatter"
+
+[[case]]
+heard = "nice shot"
+expect = ["reply"]
+tag = "chatter"

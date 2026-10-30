@@ -36,6 +36,15 @@ from ultimo.game.store import KeybindStore
 from ultimo.lexicon import Lexicon
 
 EXPECTED = Path(__file__).resolve().parents[1] / "spike" / "brain_expected.toml"
+# Actions that fail any case unless the case lists them under "allow".
+GLOBAL_NEVER = frozenset(
+    {
+        *("v_self_destruct", "v_eject", "v_emergency_exit", "v_jettison_volatile_cargo"),
+        *("v_toggle_qdrive_engagement", "v_toggle_jump_request"),
+        *("respawn", "force_respawn", "incapacitatedRespawn"),
+        *("v_weapon_preset_attack", "v_weapon_toggle_launch_missile", "attack1"),
+    }
+)
 MODELS = ("claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5")
 # Claude models with server-side refusal fallback ("default" form); Haiku has none.
 FALLBACK_MODELS = frozenset({"claude-sonnet-5-5", "claude-opus-5-5"})
@@ -69,8 +78,10 @@ distances, ship and item stats.
 player means. You have no memory of earlier requests in this session, so \
 "do that again" or "the other one" can't be acted on; ask.
 
-Never guess at actions for an unclear request. Never eject, self-destruct, or \
-engage quantum travel unless the player clearly asked for exactly that. Keep \
+Never guess at actions for an unclear request. Never eject, self-destruct, \
+jettison cargo, respawn, or engage quantum travel unless the player clearly asked \
+for exactly that. Don't fire weapons or launch missiles: the player does the \
+shooting. If something isn't a request (chatter, exclamations), just reply. Keep \
 anything you say under 15 words: the player is flying.
 
 The player's bound actions (name | what it does | key):
@@ -142,6 +153,7 @@ class Call:
     phrase: str
     heard: str
     run: int
+    tag: str = ""
     kind: Kind = "error"
     actions: list[str] = field(default_factory=list[str])
     detail: str = ""
@@ -306,7 +318,7 @@ def _string_list(value: object) -> list[str] | None:
 
 
 def grade(call: Call, rule: dict[str, Any], valid: set[str]) -> str:
-    never = set(rule.get("never", []))
+    never = (GLOBAL_NEVER | set(rule.get("never", []))) - set(rule.get("allow", []))
     if call.kind == "error":
         return "error"
     if bad := never.intersection(call.actions):
@@ -322,9 +334,38 @@ def grade(call: Call, rule: dict[str, Any], valid: set[str]) -> str:
     return "pass"
 
 
+@dataclass(frozen=True)
+class Case:
+    key: str
+    heard: str
+    rule: dict[str, Any]
+    tag: str
+
+
+def load_cases(source: Path, engine: str) -> tuple[list[Case], Path]:
+    """Cases from a typed case file, or from a recording session's transcripts."""
+    if source.is_file():
+        data: dict[str, Any] = tomllib.loads(source.read_text("utf-8"))
+        raw: list[dict[str, Any]] = data["case"]
+        cases = [Case(c["heard"], c["heard"], c, str(c.get("tag", ""))) for c in raw]
+        results = Path(__file__).resolve().parents[2] / "recordings"  # gitignored
+        results.mkdir(exist_ok=True)
+        return cases, results / f"{source.stem}.results.jsonl"
+    expected: dict[str, dict[str, Any]] = tomllib.loads(EXPECTED.read_text("utf-8"))
+    transcripts: dict[str, str] = {}
+    for path in (source / "results").glob("*.jsonl"):
+        rows = [json.loads(line) for line in path.read_text("utf-8").splitlines()]
+        if rows and rows[0].get("label") == engine:
+            transcripts = {r["phrase"]: r["text"] for r in rows if r["type"] == "clip"}
+    if not transcripts:
+        raise SystemExit(f"No transcripts from {engine} in {source / 'results'}")
+    cases = [Case(p, transcripts.get(p, p), rule, "recorded") for p, rule in expected.items()]
+    return cases, source / "results" / "brain.jsonl"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("session", type=Path)
+    parser.add_argument("source", type=Path, help="a case file (.toml) or a recordings/<session>")
     parser.add_argument("--engine", default="onnx-asr:nemo-parakeet-tdt-0.6b-v2:cuda")
     parser.add_argument("--models", nargs="+", default=list(MODELS))
     parser.add_argument(
@@ -333,34 +374,26 @@ def main() -> None:
     parser.add_argument("--effort", default="low", choices=["low", "medium", "high"])
     args = parser.parse_args()
 
-    expected: dict[str, dict[str, Any]] = tomllib.loads(EXPECTED.read_text("utf-8"))
-    transcripts: dict[str, str] = {}
-    for path in (args.session / "results").glob("*.jsonl"):
-        rows = [json.loads(line) for line in path.read_text("utf-8").splitlines()]
-        if rows and rows[0].get("label") == args.engine:
-            transcripts = {r["phrase"]: r["text"] for r in rows if r["type"] == "clip"}
-    if not transcripts:
-        raise SystemExit(f"No transcripts from {args.engine} in {args.session / 'results'}")
-
+    cases, out = load_cases(args.source, args.engine)
     keybinds = KeybindStore(GameInstall.find()).keybinds
     actions = action_list(keybinds)
     valid = {line.split(" | ")[0] for line in actions.splitlines()}
     system = INSTRUCTIONS + actions
     lexicon, brains = Lexicon.default(), Brains()
-    print(f"{len(valid)} bound actions in the briefing; transcripts from {args.engine}\n")
+    print(f"{len(cases)} cases, {len(valid)} bound actions in the briefing\n")
 
     calls: list[Call] = []
-    out = args.session / "results" / "brain.jsonl"
     with out.open("a", encoding="utf-8") as log:
         for model in args.models:
             for run in range(args.runs):
-                for phrase, rule in expected.items():
-                    corrected = lexicon.correct(transcripts.get(phrase, phrase))
+                for case in cases:
+                    phrase, rule = case.key, case.rule
+                    corrected = lexicon.correct(case.heard)
                     text = corrected.text
                     if corrected.hints:
                         notes = "; ".join(f'"{h.heard}" may mean {h.term}' for h in corrected.hints)
                         text += f"\n\n(Note: {notes}.)"
-                    call = Call(model, phrase, corrected.text, run)
+                    call = Call(model, phrase, corrected.text, run, tag=case.tag)
                     try:
                         reply = brains.ask(model, system, text, args.effort)
                         call.first_ms, call.decision_ms, call.usage = (
@@ -400,7 +433,34 @@ def main() -> None:
             f" {warm[min(len(warm) - 1, round(0.9 * (len(warm) - 1)))]:9.0f}"
             f" {cached / max(prompt, 1):9.0%} {statistics.mean(c.cost for c in mine):10.5f}"
         )
+    tags = sorted({c.tag for c in calls})
+    print(f"\n{'by group':22} " + " ".join(f"{t[:10]:>10}" for t in tags) + f" {'same twice':>11}")
+    for model in args.models:
+        mine = [c for c in calls if c.model == model]
+        cells: list[str] = []
+        for tag in tags:
+            group = [c for c in mine if c.tag == tag]
+            cells.append(f"{sum(c.verdict == 'pass' for c in group)}/{len(group)}".rjust(10))
+        print(f"{model:22} " + " ".join(cells) + f" {_consistency(mine):>11}")
+
+    failures = [c for c in calls if c.verdict != "pass"]
+    if failures:
+        print("\nFailures:")
+        for c in failures:
+            got = c.actions or c.detail[:70]
+            print(
+                f"  {c.model:22} run{c.run} [{c.tag}] {c.phrase!r} -> {c.kind}: {got} ({c.verdict})"
+            )
     print(f"\nTotal spent: ${sum(c.cost for c in calls):.3f} (estimated). Log: {out}")
+
+
+def _consistency(calls: list[Call]) -> str:
+    """How often a model gave the same kind of answer, with the same actions, on every run."""
+    answers: dict[str, set[tuple[str, tuple[str, ...]]]] = {}
+    for c in calls:
+        answers.setdefault(c.phrase, set()).add((c.kind, tuple(sorted(c.actions))))
+    same = sum(len(a) == 1 for a in answers.values())
+    return f"{same}/{len(answers)}"
 
 
 if __name__ == "__main__":
