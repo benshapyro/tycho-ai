@@ -38,6 +38,16 @@ Existing tools in this space, for Star Citizen and other games, share the same f
 - Capturing the screen without permission, or keeping captures the user didn't ask to keep.
 - Being so slow or unreliable that the user goes back to pressing keys.
 
+### AI-native principles
+
+Ultimo is an AI product, not traditional software with a chatbot added. In practice:
+
+- **Setup is a conversation.** First run finds your mics and controllers, has you say something to check your level, and has you press your push-to-talk button. The settings screen shows the result.
+- **Ask or click, same result.** Every setting can be changed by voice or in the GUI, and both edit the same settings. See [ADR 5](adr/0005-settings-one-schema-three-ways-in.md).
+- **It explains itself.** When something is wrong, such as a silent mic, a missing keybind or a service that's down, Ultimo says what and why in plain words, instead of just failing.
+- **It learns where you can see it.** Ship names, places and shorthand it picks up are listed where you can review, edit and delete them. Nothing is learned in secret.
+- **Quality is measured.** Speech, understanding and actions are scored against recorded speech on every change. See section 6.
+
 ## 3. Constraints
 
 - **Windows only.** The game runs only on Windows, and Ultimo sends keypresses and captures the screen there.
@@ -142,6 +152,8 @@ The default draws on the lore. In Star Citizen's universe, humanity distrusts AI
 2. **Eyes.** The vision trigger, state tracker, log reader and check-before-toggle. Done when "turn on shields" never turns them off in the test set.
 3. **Knowledge.** UEX Corp, the Wiki API and fleet memory. Done when trade, loadout and location questions are answered with a cited source.
 4. **Polish.** Persona, standing vision permission, control panel, sequence editor and patch-change reports.
+
+Settings (one schema, voice and file editing) arrive in stage 1. The settings GUI and conversational onboarding follow once the voice pipeline is proven.
 
 ## 6. How we'll know it's world-class
 
