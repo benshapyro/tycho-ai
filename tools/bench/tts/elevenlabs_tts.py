@@ -72,18 +72,7 @@ def main() -> None:
                         f"https://api.elevenlabs.io/v1/text-to-speech/{VOICES[voice]}/stream"
                         "?output_format=mp3_44100_128"
                     )
-                    started = time.perf_counter()
-                    first = 0.0
-                    audio = bytearray()
-                    with client.stream("POST", url, json={"text": line, "model_id": model}) as r:
-                        if r.status_code != 200:
-                            r.read()
-                            raise SystemExit(f"{model}/{voice}: {r.status_code} {r.text[:200]}")
-                        for chunk in r.iter_bytes():
-                            if not first:
-                                first = time.perf_counter() - started
-                            audio.extend(chunk)
-                    total = time.perf_counter() - started
+                    first, total, audio = _speak(client, url, {"text": line, "model_id": model})
                     (folder / f"{i:02d}.mp3").write_bytes(audio)
                     characters += len(line)
                     timings.append(
@@ -95,9 +84,41 @@ def main() -> None:
                         }
                     )
                     print(f"{model:18} {voice:7} {i:02d} first {first * 1000:5.0f} ms", flush=True)
-                meta = {"engine": "elevenlabs", "model": model, "voice": voice, "lines": timings}
-                (folder / "timings.json").write_text(json.dumps(meta, indent=1))
+                    # Save after every line, so an interrupted run never pays twice.
+                    meta = {
+                        "engine": "elevenlabs",
+                        "model": model,
+                        "voice": voice,
+                        "lines": timings,
+                    }
+                    (folder / "timings.json").write_text(json.dumps(meta, indent=1))
     print(f"\n{characters} characters sent")
+
+
+def _speak(client: httpx2.Client, url: str, body: dict[str, str]) -> tuple[float, float, bytes]:
+    """Stream one line; return seconds to first audio, total seconds, and the audio.
+
+    Retries dropped connections, which happen on long streams.
+    """
+    for attempt in range(3):
+        started = time.perf_counter()
+        first = 0.0
+        audio = bytearray()
+        try:
+            with client.stream("POST", url, json=body) as r:
+                if r.status_code != 200:
+                    r.read()
+                    raise SystemExit(f"{r.status_code} {r.text[:200]}")
+                for chunk in r.iter_bytes():
+                    if not first:
+                        first = time.perf_counter() - started
+                    audio.extend(chunk)
+            return first, time.perf_counter() - started, bytes(audio)
+        except httpx2.RemoteProtocolError, httpx2.ReadError, httpx2.ConnectError:
+            if attempt == 2:
+                raise
+            time.sleep(1 + attempt)
+    raise AssertionError("unreachable")
 
 
 def _done(folder: Path) -> dict[int, dict[str, object]]:

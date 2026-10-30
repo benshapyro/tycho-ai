@@ -16,19 +16,22 @@ Findings:
 ## Decision
 
 - **ElevenLabs is the recommended voice provider**, using the player's own ElevenLabs key.
-- **The default voice is George on Eleven Flash v2.5.** It is a stock voice every player can use, the fastest tested, and calm enough to wear well over hours.
-- **The persona picker offers the shortlist:**
+- **All voices run on Eleven Flash v2.5**, the fastest model, at the same price as v4 Turbo. Designed voices work on Flash: The Ship's Mind started speaking in about 0.17 s, George in about 0.20 s.
+- **Defaults:**
+  - **The Ship's Mind** (designed for Tycho: British, calm, dry wit) is the default voice overall and the default male voice.
+  - **Sarah** (American) is the default female voice.
+- **The persona picker offers the rest of the shortlist:**
   - Lily (British female)
-  - Sarah (American female)
   - Brian (American male)
-  - The Ship's Mind (designed: British, dry wit)
+  - George (British male)
   - The Old Spacer (designed: wry American veteran)
-- **Designed voices must be shared to ElevenLabs' public Voice Library** before other players can use them; until then they work only on the author's account.
+- **Designed voices must be shared to ElevenLabs' public Voice Library** before other players can use them. This must happen before release for The Ship's Mind to be the default. Until then, or if it ever becomes unavailable, players get George, the stock British male voice closest to it.
 - **Kokoro is the free fallback** for players without an ElevenLabs key, or offline, once its speed is fixed (issue #18).
 - **Personality lives in the persona pack's writing guidance** (ADR 8), not only in the voice choice.
 
 ## Consequences
 
 - **This amends ADR 6.** A player provides a Claude key and, for the recommended voice, an ElevenLabs key. Setup must explain what each is for. A free or no-key path still exists through the local fallback.
+- A default that lives in one person's ElevenLabs account is a dependency: if it is unshared or deleted, every player falls back to George. Keep the voice's design prompt (tools/spike/voice_designs.toml) so it can be recreated.
 - The ElevenLabs free plan is non-commercial and requires attribution. Players use their own keys, so this is their plan's terms, but setup should mention it.
 - Text-to-speech is behind the provider interface (ADR 4), so other cloud voices can be added without changing the rest.
