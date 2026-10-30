@@ -23,7 +23,7 @@ Existing tools in this space, for Star Citizen and other games, share the same f
 - Answer game-knowledge questions from live sources: UEX Corp, the Star Citizen Wiki API, and starcitizen.tools.
 - Have a voice and persona worth listening to for hours, configurable by the user.
 - Be measurable: a test set of real spoken commands, with accuracy and latency tracked on every change.
-- Cheap to run, with no technical setup: an API key is all a player provides. Speech-to-text runs locally and Tycho manages it; the language model runs in the cloud. See [ADR 6](adr/0006-cloud-brain-local-ears.md).
+- Cheap to run, with no technical setup: API keys are all a player provides (Claude, plus ElevenLabs for the recommended voice). Speech-to-text runs locally and Tycho manages it; the language model and the recommended voice run in the cloud, with a free local voice as the fallback. See [ADR 6](adr/0006-cloud-brain-local-ears.md) and [ADR 9](adr/0009-voice.md).
 
 **Non-goals (for now)**
 - Playing the game for you: flying, fighting, mining loops.

@@ -1,6 +1,6 @@
 # 6. Cloud brain, local ears
 
-Date: 2026-10-30 · Status: accepted
+Date: 2026-10-30 · Status: accepted, amended by [ADR 9](0009-voice.md) (the recommended voice also needs an ElevenLabs key)
 
 ## Context
 
