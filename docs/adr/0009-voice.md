@@ -16,7 +16,11 @@ Findings:
 ## Decision
 
 - **ElevenLabs is the recommended voice provider**, using the player's own ElevenLabs key.
-- **All voices run on Eleven Flash v2.5**, the fastest model, at the same price as v4 Turbo. Designed voices work on Flash: The Ship's Mind started speaking in about 0.17 s, George in about 0.20 s.
+- **The default model is Eleven v4 Turbo** for every voice, with **Flash v2.5 as an optional "fastest" setting**.
+  - Flash is about 0.1 s quicker to first audio (The Ship's Mind 0.17 s, George 0.20 s, versus about 0.3 s on v4 Turbo), at the same price.
+  - In the listening test Flash rushed and mispronounced some words in Sarah's lines.
+  - That 0.1 s is small next to the brain's ~1.2 s, and the most frequent short confirmations are pre-rendered anyway.
+  - Speaking speed is a separate per-voice setting (ElevenLabs allows about 0.7× to 1.2×), so a quicker pace doesn't need Flash.
 - **Defaults:**
   - **The Ship's Mind** (designed for Tycho: British, calm, dry wit) is the default voice overall and the default male voice.
   - **Sarah** (American) is the default female voice.
