@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.egg-info/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.pyright/
+.coverage
+htmlcov/
+
+# Local config and secrets: API keys live in Windows Credential Manager, never in files
+.env
+*.local.toml
+secrets.*
+
+# Recorded audio and captures stay local unless added to tests/fixtures on purpose
+recordings/
+captures/
+
+# Editors and OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

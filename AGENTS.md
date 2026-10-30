@@ -1,0 +1,33 @@
+# AGENTS.md
+
+Instructions for AI coding agents working on Ultimo, an unofficial voice co-pilot for Star Citizen. Read [docs/architecture.md](docs/architecture.md) for what we're building, and [docs/adr](docs/adr) for why.
+
+## Commands
+
+- Install: `uv sync`
+- Test: `uv run pytest`
+- Lint: `uv run ruff check`
+- Format: `uv run ruff format`
+- Type check: `uv run pyright` (strict mode)
+
+Use `uv`. Never use `pip` or a bare `python`.
+
+## Done means
+
+All four of these pass: `ruff format --check`, `ruff check`, `pyright`, and `pytest`. New behaviour has tests.
+
+## Hard rules
+
+- Never copy or port code from GPL-licensed projects, including Wingman AI. Ultimo is Apache-2.0.
+- Never read or write game memory, inject into the game process, or hook DirectX.
+- Every action must go through the safety gate, be started by the user and have a fixed end. No loops or timers acting alone.
+- Never write API keys to files or logs. Use the `keyring` wrapper.
+- Any local server binds to `127.0.0.1` and requires a token.
+
+## Conventions
+
+- Python 3.14, `src/` layout, `asyncio`. Never block the event loop: use `asyncio.to_thread` for blocking calls.
+- Every hardware boundary (audio, input, capture, joystick) and every outside service (speech-to-text, LLM, text-to-speech) is a `typing.Protocol`, with a fake in `tests/fakes/`.
+- Key sequences must be cancellable and must release every held key in a `finally` block.
+- Commits follow Conventional Commits: `feat(input): ...`, `fix(stt): ...`.
+- Significant decisions get an ADR in `docs/adr/`, using the next free number.
