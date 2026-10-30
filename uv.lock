@@ -839,17 +839,21 @@ wheels = [
 name = "tycho-ai"
 version = "0.0.0"
 source = { editable = "." }
+default-groups = ["bench", "dev"]
 dependencies = [
-    { name = "anthropic" },
     { name = "keyring" },
     { name = "numpy" },
-    { name = "openai" },
     { name = "pygame-ce" },
     { name = "sounddevice" },
-    { name = "soundfile" },
 ]
 
 [package.dev-dependencies]
+bench = [
+    { name = "anthropic" },
+    { name = "httpx2" },
+    { name = "openai" },
+    { name = "soundfile" },
+]
 dev = [
     { name = "pre-commit" },
     { name = "pyright" },
@@ -859,16 +863,19 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "anthropic", specifier = ">=2.3.0" },
     { name = "keyring", specifier = ">=25.7.0" },
     { name = "numpy", specifier = ">=2.5.4" },
-    { name = "openai", specifier = ">=3.41.0" },
     { name = "pygame-ce", specifier = ">=2.5.8" },
     { name = "sounddevice", specifier = ">=0.5.6" },
-    { name = "soundfile", specifier = ">=0.14.0" },
 ]
 
 [package.metadata.requires-dev]
+bench = [
+    { name = "anthropic", specifier = ">=2.3.0" },
+    { name = "httpx2", specifier = ">=2.16.0" },
+    { name = "openai", specifier = ">=3.41.0" },
+    { name = "soundfile", specifier = ">=0.14.0" },
+]
 dev = [
     { name = "pre-commit", specifier = ">=4" },
     { name = "pyright", specifier = ">=1.1.414" },

@@ -14,13 +14,23 @@ dist/
 htmlcov/
 
 # Local config and secrets: API keys live in Windows Credential Manager, never in files
+# (anchored to the repo root, so it can't hide source files like a secrets.py module)
 .env
+.env.*
 *.local.toml
-secrets.*
+/secrets.*
+*.secret.*
 
-# Recorded audio and captures stay local unless added to tests/fixtures on purpose
+# Recorded audio, captures and benchmark output stay local, unless a file is added to
+# tests/fixtures on purpose
 recordings/
 captures/
+*.wav
+*.mp3
+*.ogg
+*.flac
+*.jsonl
+!tests/fixtures/**
 
 # Editors and OS
 .vscode/

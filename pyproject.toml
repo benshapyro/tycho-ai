@@ -14,13 +14,10 @@ classifiers = [
     "Topic :: Games/Entertainment",
 ]
 dependencies = [
-    "anthropic>=2.3.0",
     "keyring>=25.7.0",
     "numpy>=2.5.4",
-    "openai>=3.41.0",
     "pygame-ce>=2.5.8",
     "sounddevice>=0.5.6",
-    "soundfile>=0.14.0",
 ]
 
 [project.scripts]
@@ -33,6 +30,16 @@ dev = [
     "pytest>=8",
     "ruff>=0.17",
 ]
+# Only the measurement tools in tools/ use these; the app doesn't depend on them yet.
+bench = [
+    "anthropic>=2.3.0",
+    "httpx2>=2.16.0",
+    "openai>=3.41.0",
+    "soundfile>=0.14.0",
+]
+
+[tool.uv]
+default-groups = ["dev", "bench"]
 
 [build-system]
 requires = ["uv_build>=0.13,<0.14"]
