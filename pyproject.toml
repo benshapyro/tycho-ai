@@ -47,6 +47,8 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "ASYNC", "PT", "S"]
 
 [tool.pyright]
 include = ["src", "tests", "tools"]
+# Engine scripts run in their own environments (PEP 723), so their imports aren't installed here.
+exclude = ["tools/bench/engines"]
 typeCheckingMode = "strict"
 pythonVersion = "3.14"
 
