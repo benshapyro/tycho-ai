@@ -1,5 +1,6 @@
 import hashlib
 import http.server
+import os
 import threading
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -75,7 +76,10 @@ def test_a_file_changed_on_disk_is_fetched_again(tmp_path: Path) -> None:
     spec = _spec()
     store = ModelStore(tmp_path, FakeDownloader())
     folder = store.ensure(spec)
-    (folder / "vocab.txt").write_bytes(b"HELLO\nWORLD\n")  # same size, new content and time
+    vocab = folder / "vocab.txt"
+    before = vocab.stat().st_mtime_ns
+    vocab.write_bytes(b"HELLO\nWORLD\n")  # same size, new content
+    os.utime(vocab, ns=(before + 1_000_000_000, before + 1_000_000_000))  # and a new time
     assert not store.ready(spec)
     assert [f.name for f in store.missing(spec)] == ["vocab.txt"]
     downloader = FakeDownloader()
