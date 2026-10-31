@@ -68,6 +68,11 @@ class KeybindStore:
             raise GameDataError(store.last_error or "keybinds could not be loaded")
         return store
 
+    @property
+    def defaults(self) -> list[Action]:
+        """The game's default bindings, before the player's changes."""
+        return list(self._defaults)
+
     def refresh(self) -> bool:
         """Reload whatever changed on disk. Returns True if the keybinds changed."""
         game, profile = _stamp(self.install.data_p4k), _stamp(self.install.actionmaps)

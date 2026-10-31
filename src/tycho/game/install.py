@@ -38,6 +38,11 @@ class GameInstall:
         return self.folder / "user" / "client" / "0" / "Profiles" / "default" / "actionmaps.xml"
 
     @property
+    def control_profiles(self) -> Path:
+        """Where "save/load control settings" keeps exported profiles."""
+        return self.folder / "user" / "client" / "0" / "Controls" / "Mappings"
+
+    @property
     def loose_global_ini(self) -> Path:
         """A language override, e.g. from a community pack. Usually absent."""
         return self.folder / "Data" / "Localization" / "english" / "global.ini"
