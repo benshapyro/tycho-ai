@@ -215,3 +215,14 @@ def test_opposites_and_neighbours_never_cross(text: str, expected: str) -> None:
     from tycho.lexicon import Lexicon
 
     assert _ids(Lexicon.default().correct(text).text) == expected
+
+
+def test_setup_and_requirements_are_ones_the_gate_knows() -> None:
+    from tycho import safety
+
+    for command in CommandMatcher.default().commands:
+        for name in command.setup:
+            assert not safety.is_confirm_grade(name), (command.id, name)
+        for fact in command.requires:
+            assert fact in safety.known_facts(), (command.id, fact)
+        assert 0 <= command.settle_seconds <= 3, command.id

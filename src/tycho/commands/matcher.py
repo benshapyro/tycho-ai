@@ -66,6 +66,14 @@ class Command:
     actions: tuple[str, ...]
     """Game actions that do this, best first. Later ones are fallbacks, usually toggles."""
     confirm: bool = False
+    setup: tuple[str, ...] = ()
+    """Actions pressed first, in order, to put the game in a known mode. No fallbacks:
+    each needs its own key, since a toggle could leave the wrong mode."""
+    settle_seconds: float = 0.0
+    """How long to wait after setup for the game to change mode."""
+    requires: tuple[str, ...] = ()
+    """Facts the game state must show (e.g. ``tycho.game.gamelog.QUANTUM_CALIBRATED``),
+    or nothing is pressed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,6 +209,9 @@ def _parse(data: dict[str, Any]) -> list[Command]:
                 say=tuple(str(s) for s in entry["say"]),
                 actions=tuple(str(a) for a in entry["actions"]),
                 confirm=bool(entry.get("confirm", False)),
+                setup=tuple(str(a) for a in entry.get("setup", ())),
+                settle_seconds=float(entry.get("settle_seconds", 0.0)),
+                requires=tuple(str(r) for r in entry.get("requires", ())),
             )
         )
     return commands

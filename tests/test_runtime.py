@@ -14,9 +14,10 @@ import pytest
 from tests.fakes.fake_audio import FakeAudioSource
 from tests.fakes.fake_input import FakeInputSource
 from tests.fakes.fake_keys import FakeFocus, FakeKeySender
-from tests.fakes.fake_runtime import FakeFeedback, FakeTranscriber
+from tests.fakes.fake_runtime import FakeFeedback, FakeGameState, FakeTranscriber
 from tycho import safety
 from tycho.commands import CommandMatcher
+from tycho.game.gamelog import QUANTUM_CALIBRATED
 from tycho.game.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.input import Presser, code_for
 from tycho.lexicon import Lexicon
@@ -34,10 +35,10 @@ MODES = {
 }
 
 
-def _action(name: str, keys: str, activation: str = "") -> Action:
+def _action(name: str, keys: str, activation: str = "", actionmap: str = "m") -> Action:
     key = KeyInput.parse(keys)
     assert key is not None
-    return Action(name=name, actionmap="m", label=name, inputs=(key,), activation=activation)
+    return Action(name=name, actionmap=actionmap, label=name, inputs=(key,), activation=activation)
 
 
 KEYBINDS = Keybinds(
@@ -46,6 +47,8 @@ KEYBINDS = Keybinds(
         _action("v_atc_request", "lalt+n"),
         _action("v_eject", "ralt+y"),
         _action("v_toggle_qdrive_engagement", "b"),
+        _action("v_master_mode_set_nav", "ralt+b"),
+        _action("v_set_quantum_mode", "rctrl+q"),
     ],
     MODES,
 )
@@ -80,6 +83,7 @@ def rig(
     hold: threading.Event | None = None,
     log_transcripts: bool = False,
     sources: list[FakeInputSource] | None = None,
+    game_state: FakeGameState | None = None,
 ) -> Rig:
     audio, keys, feedback = FakeAudioSource(RATE), FakeKeySender(), FakeFeedback()
     transcriber = FakeTranscriber(*lines, hold=hold)
@@ -93,6 +97,7 @@ def rig(
         keybinds=lambda: keybinds,
         presser=Presser(keys, focus or FakeFocus(True)),
         feedback=feedback,
+        game_state=game_state,
         samplerate=RATE,
         log_transcripts=log_transcripts,
         on_result=results.append,
@@ -417,35 +422,72 @@ def test_only_one_tycho_runs_at_a_time() -> None:
         pass
 
 
-def test_quantum_engage_is_routine_not_confirm_grade() -> None:
+def _engage(game_state: FakeGameState | None, keybinds: Keybinds = KEYBINDS) -> Rig:
+    async def scenario() -> Rig:
+        r = rig("engage quantum", keybinds=keybinds, game_state=game_state)
+        r.say()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    return run(scenario)
+
+
+def test_quantum_engage_sets_nav_and_quantum_mode_then_engages() -> None:
     assert not safety.is_confirm_grade("v_toggle_qdrive_engagement")
-
-    async def scenario() -> Rig:
-        r = rig("engage quantum")
-        r.say()
-        await r.session.idle()
-        await r.session.close()
-        return r
-
-    r = run(scenario)
+    started = time.monotonic()
+    r = _engage(FakeGameState(QUANTUM_CALIBRATED))
     assert r.results[0].status == "done"
-    assert r.results[0].pressed == ("v_toggle_qdrive_engagement",)
-
-
-def test_a_key_shared_with_firing_is_never_pressed() -> None:
-    # Left mouse engages the quantum drive in quantum mode, but fires in combat mode.
-    keybinds = Keybinds(
-        [_action("v_toggle_qdrive_engagement", "mouse1"), _action("attack1", "mouse1")], MODES
+    assert r.results[0].pressed == (
+        "v_master_mode_set_nav",
+        "v_set_quantum_mode",
+        "v_toggle_qdrive_engagement",
     )
+    assert r.pressed()[-2:] == _down_up("b")
+    assert time.monotonic() - started >= 1.2  # waited for the switch to NAV
 
-    async def scenario() -> Rig:
-        r = rig("engage quantum", keybinds=keybinds)
-        r.say()
-        await r.session.idle()
-        await r.session.close()
-        return r
 
-    r = run(scenario)
+def test_jumps_are_routine_not_confirm_grade() -> None:
+    assert not safety.is_confirm_grade("v_toggle_jump_request")
+
+
+@pytest.mark.parametrize("game_state", [None, FakeGameState()], ids=["no log", "not calibrated"])
+def test_quantum_engage_waits_for_calibration(game_state: FakeGameState | None) -> None:
+    r = _engage(game_state)
     assert r.results[0].status == "refused"
-    assert "attack1" in r.results[0].detail
+    assert "calibrated" in r.results[0].detail
+    assert r.keys.events == []
+
+
+# Left click engages the quantum drive in quantum mode, but also fires.
+LEFT_CLICK = [
+    _action("v_toggle_qdrive_engagement", "mouse1", actionmap="spaceship_quantum"),
+    _action("v_master_mode_set_nav", "ralt+b", actionmap="spaceship_movement"),
+    _action("v_set_quantum_mode", "rctrl+q", actionmap="seat_general"),
+    _action("attack1", "mouse1", actionmap="player"),
+    _action("v_weapon_preset_attack", "mouse1", actionmap="spaceship_weapons"),
+    _action("v_toggle_mining_laser_fire", "mouse1", actionmap="spaceship_mining"),
+    _action("v_toggle_jump_request", "mouse1", actionmap="spaceship_movement"),
+]
+
+
+def test_left_click_is_safe_once_nav_quantum_mode_and_the_seat_rule_out_firing() -> None:
+    r = _engage(FakeGameState(QUANTUM_CALIBRATED), Keybinds(LEFT_CLICK, MODES))
+    assert r.results[0].status == "done"
+    assert r.pressed()[-2:] == _down_up("mouse1")
+
+
+def test_a_shared_key_still_dangerous_after_setup_is_never_pressed() -> None:
+    eject = _action("v_eject", "mouse1", actionmap="spaceship_general")
+    r = _engage(FakeGameState(QUANTUM_CALIBRATED), Keybinds([*LEFT_CLICK, eject], MODES))
+    assert r.results[0].status == "refused"
+    assert "v_eject" in r.results[0].detail
+    assert r.keys.events == []
+
+
+def test_setup_needs_its_own_keys() -> None:
+    keybinds = Keybinds([_action("v_toggle_qdrive_engagement", "b")], MODES)
+    r = _engage(FakeGameState(QUANTUM_CALIBRATED), keybinds)
+    assert r.results[0].status == "no_key"
+    assert "v_master_mode_set_nav" in r.results[0].detail
     assert r.keys.events == []

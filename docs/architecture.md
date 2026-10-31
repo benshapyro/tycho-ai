@@ -34,7 +34,7 @@ Existing tools in this space, for Star Citizen and other games, share the same f
 **Anti-goals: Tycho fails if it does any of these, even if everything else works**
 - Reading or writing game memory, injecting into the game process, or anything else that could trip Easy Anti-Cheat or break CIG's terms. See [ADR 3](adr/0003-staying-within-cig-rules.md).
 - Unattended automation that amounts to botting.
-- An irreversible, costly or dangerous action (self-destruct, eject, a jump-point jump, jettisoning cargo, firing weapons or missiles, accepting or abandoning a contract, buying or selling) without explicit confirmation.
+- An irreversible, costly or dangerous action (self-destruct, eject, jettisoning cargo, firing weapons or missiles, accepting or abandoning a contract, buying or selling) without explicit confirmation.
 - Capturing the screen without permission, or keeping captures the user didn't ask to keep.
 - Being so slow or unreliable that the user goes back to pressing keys.
 
@@ -131,9 +131,9 @@ Every action passes through one safety gate, which can refuse it. The gate is in
 
 - Actions are graded:
   - **Free:** gear, lights, doors.
-  - **Announce:** power off, flight ready, quantum engage. Quantum travel is routine, so it isn't confirm-grade (the author's call, 2026-10-30); the brain still never engages it unasked.
-  - **Confirm:** self-destruct, eject, a jump-point jump, jettisoning cargo, firing weapons or missiles, accepting or abandoning a contract, purchases.
-  - **Shared keys:** a key that a confirm-grade action also uses is never pressed. Left mouse engages the quantum drive in quantum mode but fires in combat mode, and Tycho can't yet see the mode.
+  - **Announce:** power off, flight ready, quantum engage, jump-point jumps. Travel is routine, so it isn't confirm-grade (the author's calls, 2026-10-30 and 2026-10-31); the brain still never engages it unasked.
+  - **Confirm:** self-destruct, eject, jettisoning cargo, firing weapons or missiles, accepting or abandoning a contract, purchases.
+  - **Shared keys:** a key that a confirm-grade action also uses is pressed only when the command first makes every such use impossible: it sets a mode that switches those controls off, and requires a logged fact that rules out the rest. Quantum engage on left click sets NAV and quantum mode, and requires Game.log to show the drive calibrated with the player still seated ([ADR 12](adr/0012-modes-before-shared-keys.md)). Otherwise the key is never pressed.
 
   Users can move actions between grades, but nothing leaves the confirm grade without a deliberate settings change.
 - Confirmation is by voice ("confirm"), and the request expires after a few seconds.

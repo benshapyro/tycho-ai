@@ -199,9 +199,16 @@ id = "quantum_mode"
 say = ["spool the quantum drive", "spool quantum", "spool the quantum", "quantum mode", "spool up the quantum drive", "quantum drive"]
 actions = ["v_set_quantum_mode", "v_toggle_quantum_mode"]
 
+# Engaging is usually on left click, which also fires guns, missiles, mining and
+# salvage lasers, and a handgun on foot. So Tycho sets NAV (ship weapons offline)
+# and quantum mode first, and only clicks when Game.log shows the drive calibrated
+# with you still in the pilot seat. Leaving NAV takes about a second.
 [[command]]
 id = "quantum_engage"
 say = ["engage quantum", "engage the quantum drive", "jump", "punch it"]
+setup = ["v_master_mode_set_nav", "v_set_quantum_mode"]
+settle_seconds = 1.2
+requires = ["quantum_calibrated"]
 actions = ["v_toggle_qdrive_engagement"]
 
 # Targeting and defence

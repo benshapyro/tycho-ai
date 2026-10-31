@@ -6,7 +6,10 @@ named profile in the game's export format (as written by "Save control
 settings"), which the player loads in game when they choose.
 
 A profile starts from the player's current bindings and only adds keyboard
-bindings for actions that have none, on key combinations nothing else uses.
+bindings for actions that have no keyboard key or mouse button, on key
+combinations nothing else uses. The game keeps keyboard and mouse in one slot
+per action, so adding a key to an action on a mouse button would take the
+button away.
 """
 
 import copy
@@ -40,6 +43,15 @@ def used_keys(actions: Iterable[Action]) -> dict[str, list[str]]:
             if key.device == "keyboard":
                 used.setdefault(str(key), []).append(action.name)
     return used
+
+
+def already_bound(additions: Iterable[Addition], actions: Iterable[Action]) -> list[Addition]:
+    """Additions for actions the player can already press, which Tycho leaves alone.
+
+    Pass the result's complement to ``build``; these are the ones to report as skipped.
+    """
+    pressable = {a.name for a in actions if a.inputs}
+    return [addition for addition in additions if addition.action in pressable]
 
 
 def outstanding(additions: Iterable[Addition], actions: Iterable[Action]) -> list[Addition]:
@@ -81,7 +93,9 @@ def check(additions: Iterable[Addition], actions: Iterable[Action]) -> None:
     """Refuse additions that clash with existing bindings, each other, or bound actions."""
     actions = list(actions)
     used = used_keys(actions)
-    by_name = {a.name: a for a in actions}
+    inputs: dict[str, list[str]] = {}
+    for action in actions:  # an action can be in several contexts: any binding counts
+        inputs.setdefault(action.name, []).extend(map(str, action.inputs))
     seen: dict[str, str] = {}
     for addition in additions:
         key = KeyInput.parse(addition.key)
@@ -90,10 +104,11 @@ def check(additions: Iterable[Addition], actions: Iterable[Action]) -> None:
         canonical = str(key)
         if reason := reserved_by_windows(key):
             raise LayoutError(f"{canonical} is a Windows shortcut ({reason})")
-        if addition.action not in by_name:
+        if addition.action not in inputs:
             raise LayoutError(f"{addition.action} isn't an action in this game build")
-        if any(i.device == "keyboard" for i in by_name[addition.action].inputs):
-            raise LayoutError(f"{addition.action} already has a keyboard binding")
+        if bound := inputs[addition.action]:
+            on = ", ".join(dict.fromkeys(bound))
+            raise LayoutError(f"{addition.action} is already on {on}, which it would replace")
         if canonical in used:
             raise LayoutError(f"{canonical} is already used by {', '.join(used[canonical])}")
         if canonical in seen:
@@ -109,11 +124,15 @@ def build(
     actions: Iterable[Action],
     name: str,
     description: str = "",
+    *,
+    restore: Iterable[str] = (),
 ) -> ET.Element:
     """A new profile: the player's current bindings (from actionmaps.xml) plus ``additions``.
 
     ``actions`` are the effective keybinds, used to check for clashes and to find
-    every control context (actionmap) each action appears in.
+    every control context (actionmap) each action appears in. ``restore`` names
+    actions whose keyboard and mouse rebinds are dropped, giving them back their
+    game defaults; joystick bindings stay.
     """
     actions = list(actions)
     additions = list(additions)
@@ -140,6 +159,7 @@ def build(
 
     for child in source:
         root.append(copy.deepcopy(child))
+    _restore_defaults(root, set(restore))
 
     maps = {m.get("name", ""): m for m in root.iter("actionmap")}
     contexts: dict[str, list[str]] = {}
@@ -170,6 +190,18 @@ def write(root: ET.Element, folder: Path) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     path.write_bytes(ET.tostring(root, encoding="utf-8", xml_declaration=False) + b"\n")
     return path
+
+
+def _restore_defaults(root: ET.Element, names: set[str]) -> None:
+    for actionmap in root.iter("actionmap"):
+        for action in list(actionmap.iter("action")):
+            if action.get("name") not in names:
+                continue
+            for rebind in list(action.iter("rebind")):
+                if rebind.get("input", "")[:2] in ("kb", "mo"):
+                    action.remove(rebind)
+            if not len(action):
+                actionmap.remove(action)
 
 
 def _joysticks_used(source: ET.Element) -> set[int]:

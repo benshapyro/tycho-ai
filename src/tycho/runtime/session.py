@@ -22,12 +22,12 @@ from tycho import safety
 from tycho.audio.clip import Samples
 from tycho.audio.source import AudioError, AudioSource
 from tycho.commands import CommandMatcher, Defer, resolve
-from tycho.game.keybinds import Keybinds
+from tycho.game.keybinds import Action, Keybinds
 from tycho.input import NotPressable, Press, Presser, UnsupportedKey, plan
 from tycho.lexicon import Lexicon
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime.messages import Result, Status, Trace
-from tycho.runtime.ports import Feedback, Transcriber
+from tycho.runtime.ports import Feedback, GameState, Transcriber
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +58,7 @@ class Session:
         keybinds: Callable[[], Keybinds],
         presser: Presser,
         feedback: Feedback,
+        game_state: GameState | None = None,
         samplerate: int = 16_000,
         log_transcripts: bool = False,
         on_result: Callable[[Result], None] | None = None,
@@ -75,6 +76,7 @@ class Session:
         self._keybinds = keybinds
         self._presser = presser
         self._feedback = feedback
+        self._game_state = game_state
         self._samplerate = samplerate
         self._log_transcripts = log_transcripts
         self._on_result = on_result
@@ -223,25 +225,38 @@ class Session:
         # Plan the whole chain before pressing anything: if any part can't be done,
         # none of it is, so the ship is never left half-way through a request.
         keybinds = self._keybinds()
-        presses: list[Press] = []
+        facts: frozenset[str] = frozenset()
+        if self._game_state is not None and any(c.requires for c in decision.commands):
+            facts = await asyncio.to_thread(self._game_state.facts)
+        steps: list[tuple[float, Press]] = []  # each press, and how long to wait before it
         for command in decision.commands:
             resolved = resolve(command, keybinds)
             if resolved.action is None:
                 return end(
                     "no_key", f"{command.id}: none of {', '.join(command.actions)} has a key"
                 )
-            verdict = safety.check(command, resolved.action, keybinds)
-            if not verdict.allowed:
-                return end("refused", verdict.reason)
+            setup: list[Action] = []
+            for name in command.setup:
+                action = keybinds.get(name)
+                if action is None or not action.bound:
+                    return end("no_key", f"{command.id}: {name} needs a key of its own first")
+                setup.append(action)
+            for action in (*setup, resolved.action):
+                verdict = safety.check(command, action, keybinds, facts)
+                if not verdict.allowed:
+                    return end("refused", verdict.reason)
             try:
-                presses.append(plan(resolved.action, keybinds.modes))
+                for position, action in enumerate((*setup, resolved.action)):
+                    settle = command.settle_seconds if setup and position == len(setup) else 0.0
+                    beat = max(settle, CHAIN_BEAT_SECONDS) if steps else 0.0
+                    steps.append((beat, plan(action, keybinds.modes)))
             except (NotPressable, UnsupportedKey) as e:
                 return end("no_key", str(e))
         trace.mark("gate")
 
-        for position, press in enumerate(presses):
-            if position:
-                await asyncio.sleep(CHAIN_BEAT_SECONDS)
+        for wait, press in steps:
+            if wait:
+                await asyncio.sleep(wait)
             receipt = await loop.run_in_executor(self._keys, self._presser.press, press, cancel)
             if not receipt.done:
                 trace.mark("press")

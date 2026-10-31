@@ -31,7 +31,7 @@ All four of these pass: `ruff format --check`, `ruff check`, `pyright`, and `pyt
 
 - `src/tycho/ptt/`: push-to-talk on keyboard, mouse and joystick buttons.
 - `src/tycho/audio/`: microphone capture and push-to-talk clips.
-- `src/tycho/game/`: the game install, `Data.p4k` and CryXmlB readers, keybinds, and the keybind store.
+- `src/tycho/game/`: the game install, `Data.p4k` and CryXmlB readers, keybinds, the keybind store, profile building, and the `Game.log` reader.
 - `src/tycho/lexicon/`: the game-term corrector and its term list.
 - `src/tycho/commands/`: the fast-path command matcher and its command list.
 - `src/tycho/input/`: the hands. Key codes, press planning from the game's activation modes, the presser (focus-guarded, cancellable, always releases), and the Windows sender.

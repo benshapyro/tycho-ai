@@ -43,3 +43,15 @@ class FakeFeedback:
 
     def not_done(self) -> None:
         self.played.append("not_done")
+
+
+class FakeGameState:
+    """Satisfies ``GameState``. Reports whatever facts the test sets."""
+
+    def __init__(self, *facts: str) -> None:
+        self.current = frozenset(facts)
+        self.calls = 0
+
+    def facts(self) -> frozenset[str]:
+        self.calls += 1
+        return self.current

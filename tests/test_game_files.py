@@ -262,6 +262,21 @@ def test_double_tap_bindings_say_how_many_presses() -> None:
     assert taps == {"a": 2, "b": 3, "c": 2}
 
 
+def test_keyboard_and_mouse_share_one_slot() -> None:
+    # Seen in game: a keyboard rebind took quantum engage off its default left click.
+    defaults = """<profile><actionmap name="m">
+      <action name="engage" mouse="mouse1"/>
+    </actionmap></profile>"""
+    profile = """<ActionMaps><ActionProfiles><actionmap name="m">
+      <action name="engage"><rebind input="kb1_ralt+q"/><rebind input="js1_button3"/></action>
+    </actionmap></ActionProfiles></ActionMaps>"""
+    action = Keybinds(
+        apply_profile(parse_defaults(ET.fromstring(defaults), {}), ET.fromstring(profile))  # noqa: S314
+    ).get("engage")
+    assert action is not None
+    assert [str(i) for i in action.inputs] == ["ralt+q"]
+
+
 def test_mouse_rebinds_and_activation_overrides() -> None:
     defaults = """<profile><actionmap name="m">
       <action name="fire" keyboard="f" mouse="mouse1" activationMode="press"/>
@@ -273,7 +288,7 @@ def test_mouse_rebinds_and_activation_overrides() -> None:
         apply_profile(parse_defaults(ET.fromstring(defaults), {}), ET.fromstring(profile))  # noqa: S314
     ).get("fire")
     assert action is not None
-    assert [str(i) for i in action.inputs] == ["f", "mouse4"]
+    assert [str(i) for i in action.inputs] == ["mouse4"]  # the default "f" goes with it
     assert action.activation == "hold"
 
 

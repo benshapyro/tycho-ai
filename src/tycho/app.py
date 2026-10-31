@@ -25,7 +25,7 @@ from tycho.stt import PARAKEET_V2, DeviceChoice, ModelError, ModelStore
 if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when running
     from tycho.audio.source import AudioSource
     from tycho.input import FocusCheck, KeySender
-    from tycho.runtime import Feedback, Result, Session, Transcriber
+    from tycho.runtime import Feedback, GameState, Result, Session, Transcriber
     from tycho.stt.parakeet import ParakeetTranscriber
 
 log = logging.getLogger("tycho")
@@ -152,14 +152,22 @@ def build_session(
     sender: KeySender,
     focus: FocusCheck,
     feedback: Feedback,
+    game_state: GameState | None = None,
     on_result: Callable[[Result], None] | None = None,
 ) -> Session:
     """The talking loop, wired the way ``tycho run`` wires it."""
+    from tycho.game.gamelog import GameLog
     from tycho.input import Presser
     from tycho.lexicon import Lexicon
     from tycho.ptt.monitor import PushToTalk
     from tycho.runtime import Session
 
+    if game_state is None:
+        game_log = GameLog(store.install.game_log)
+        game_log.facts()  # read the session so far now, not on the first command
+        if not game_log.readable:
+            log.info("No Game.log yet; quantum engage waits until the game writes one")
+        game_state = game_log
     return Session(
         audio=audio,
         push_to_talk=PushToTalk(binding, input_sources(binding)),
@@ -169,6 +177,7 @@ def build_session(
         keybinds=lambda: store.keybinds,
         presser=Presser(sender, focus),
         feedback=feedback,
+        game_state=game_state,
         log_transcripts=current.keep_transcripts,
         on_result=on_result,
     )
@@ -288,6 +297,11 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
             )
         else:
             yield Finding("ok", "Keybinds", f"{detail}; every voice command has a key")
+        log_file = install.game_log
+        if log_file.exists():
+            yield Finding("ok", "Game.log", f"{log_file} (quantum engage checks it)")
+        else:
+            yield Finding("warn", "Game.log", f"not found at {log_file}; quantum engage needs it")
     except FileNotFoundError as e:
         yield Finding("fail", "Star Citizen", str(e))
     except GameDataError as e:

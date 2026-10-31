@@ -1,4 +1,4 @@
-"""The runtime's boundaries to speech recognition and sound (ADR 4: every service is a Protocol)."""
+"""The runtime's boundaries: speech recognition, sound, game state (ADR 4: each a Protocol)."""
 
 from typing import Protocol
 
@@ -17,3 +17,12 @@ class Feedback(Protocol):
     def done(self) -> None: ...
 
     def not_done(self) -> None: ...
+
+
+class GameState(Protocol):
+    """Facts about the player's situation that commands can require, e.g. from Game.log.
+
+    Blocking (it may read a file); the session calls it off the event loop.
+    """
+
+    def facts(self) -> frozenset[str]: ...

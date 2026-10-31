@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from tycho.game.keybinds import Keybinds, KeyInput, apply_profile, parse_defaults
-from tycho.game.layout import Addition, LayoutError, build, outstanding, write
+from tycho.game.keybinds import Action, Keybinds, KeyInput, apply_profile, parse_defaults
+from tycho.game.layout import Addition, LayoutError, already_bound, build, outstanding, write
 
 DEFAULTS = """<profile>
   <actionmap name="spaceship_general">
@@ -19,6 +19,9 @@ DEFAULTS = """<profile>
     <action name="v_lights" keyboard="l"/>
     <action name="v_lights_on" keyboard=" "/>
   </actionmap>
+  <actionmap name="spaceship_weapons">
+    <action name="v_fire" keyboard=" " mouse="mouse1"/>
+  </actionmap>
 </profile>"""
 
 PROFILE = """<ActionMaps>
@@ -32,13 +35,13 @@ PROFILE = """<ActionMaps>
 </ActionProfiles></ActionMaps>"""
 
 
-def _actions() -> list[object]:
+def _actions() -> list[Action]:
     defaults = parse_defaults(ET.fromstring(DEFAULTS), {})  # noqa: S314
     return list(apply_profile(defaults, ET.fromstring(PROFILE)))  # noqa: S314
 
 
-def _build(*additions: Addition) -> ET.Element:
-    return build(ET.fromstring(PROFILE), additions, _actions(), "Tycho_test")  # type: ignore[arg-type]  # noqa: S314
+def _build(*additions: Addition, restore: tuple[str, ...] | list[str] = ()) -> ET.Element:
+    return build(ET.fromstring(PROFILE), additions, _actions(), "Tycho_test", restore=restore)  # noqa: S314
 
 
 def _reread(root: ET.Element) -> Keybinds:
@@ -105,7 +108,8 @@ def test_profile_is_in_the_export_format() -> None:
     [
         ([Addition("v_lights_on", "l")], "already used by v_lights"),
         ([Addition("v_lights_on", "ralt+i")], "already used"),
-        ([Addition("v_toggle_all_doors", "rctrl+j")], "already has a keyboard binding"),
+        ([Addition("v_toggle_all_doors", "rctrl+j")], r"already on ralt\+i"),
+        ([Addition("v_fire", "rctrl+j")], "already on mouse1, which it would replace"),
         ([Addition("v_lights_on", "rctrl+k"), Addition("v_open_all_doors", "rctrl+k")], "both"),
         ([Addition("v_made_up", "rctrl+z")], "isn't an action"),
     ],
@@ -113,6 +117,26 @@ def test_profile_is_in_the_export_format() -> None:
 def test_clashes_are_refused(additions: list[Addition], message: str) -> None:
     with pytest.raises(LayoutError, match=message):
         _build(*additions)
+
+
+def test_actions_on_a_key_or_mouse_button_are_left_alone() -> None:
+    wanted = [
+        Addition("v_fire", "rctrl+f"),  # left click by default
+        Addition("v_toggle_all_doors", "rctrl+t"),  # the player's Right Alt+I
+        Addition("v_lights_on", "rctrl+l"),
+    ]
+    assert [a.action for a in already_bound(wanted, _actions())] == ["v_fire", "v_toggle_all_doors"]
+
+
+def test_restore_gives_an_action_back_its_defaults() -> None:
+    root = _build(restore=["v_toggle_all_doors", "v_close_all_doors"])
+    keybinds = _reread(root)
+    toggle = keybinds.get("v_toggle_all_doors")
+    assert toggle is not None
+    assert not toggle.inputs  # the player's Right Alt+I is gone; the default is unbound
+    text = ET.tostring(root, encoding="unicode")
+    assert "kb1_ralt+i" not in text
+    assert 'input="js2_button25"' in text  # stick bindings stay
 
 
 def test_write_never_overwrites(tmp_path: Path) -> None:

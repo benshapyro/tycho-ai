@@ -5,7 +5,10 @@ The player's changes live in actionmaps.xml, which lists only what they rebound,
 per device: "kb1_" keyboard, "mo1_" mouse, "js1_"... joysticks, "gp1_" gamepad.
 
 Tycho presses keyboard keys and mouse buttons, so only those inputs are kept.
-Rebinding an action on a joystick leaves its keyboard key in place.
+Keyboard and mouse share one slot per action: a keyboard rebind replaces the
+default mouse button too, and the other way round (seen in game: binding Right
+Alt+Q to quantum engage took it off left click). Rebinding an action on a
+joystick leaves its keyboard key in place.
 """
 
 import re
@@ -177,7 +180,7 @@ def parse_activation_modes(root: ET.Element) -> dict[str, ActivationMode]:
 
 def apply_profile(defaults: Iterable[Action], profile: ET.Element) -> list[Action]:
     """Apply the player's actionmaps.xml on top of the defaults."""
-    rebinds: dict[tuple[str, str], dict[str, list[KeyInput]]] = {}
+    rebinds: dict[tuple[str, str], list[KeyInput]] = {}
     activations: dict[tuple[str, str], str] = {}
     multi_taps: dict[tuple[str, str], int] = {}
     for actionmap in profile.iter("actionmap"):
@@ -185,13 +188,11 @@ def apply_profile(defaults: Iterable[Action], profile: ET.Element) -> list[Actio
             key = (actionmap.get("name", ""), action.get("name", ""))
             for rebind in action.iter("rebind"):
                 text = rebind.get("input", "")
-                device = _PRESSABLE_DEVICES.get(text[:2])
-                if device is None:
+                if text[:2] not in _PRESSABLE_DEVICES:
                     continue  # joystick or gamepad
-                per_device = rebinds.setdefault(key, {}).setdefault(device, [])
-                parsed = KeyInput.parse(text)
-                if parsed is not None:
-                    per_device.append(parsed)
+                slot = rebinds.setdefault(key, [])  # a blank rebind ("kb1_ ") clears it
+                if (parsed := KeyInput.parse(text)) is not None:
+                    slot.append(parsed)
                 if mode := rebind.get("activationMode"):
                     activations[key] = mode
                 if taps := _int(rebind.get("multiTap")):
@@ -199,13 +200,11 @@ def apply_profile(defaults: Iterable[Action], profile: ET.Element) -> list[Actio
 
     result: list[Action] = []
     for action in defaults:
-        changes = rebinds.get((action.actionmap, action.name))
-        if not changes:
+        key = (action.actionmap, action.name)
+        if key not in rebinds:
             result.append(action)
             continue
-        kept = [i for i in action.inputs if i.device not in changes]
-        inputs = tuple(kept + [i for device in changes.values() for i in device])
-        key = (action.actionmap, action.name)
+        inputs = tuple(rebinds[key])  # replaces every default keyboard key and mouse button
         mode = activations.get(key, action.activation)
         taps = multi_taps.get(key, action.multi_tap)
         result.append(
