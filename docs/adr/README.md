@@ -14,3 +14,4 @@ Each record explains one decision: the context, what was decided, and what follo
 | [8](0008-packs-and-connections.md) | Packs and connections | Proposed |
 | [9](0009-voice.md) | Tycho's voice | Accepted |
 | [10](0010-interaction-modes-and-routing.md) | Interaction modes and routing | Accepted |
+| [11](0011-runtime-architecture.md) | Runtime architecture | Accepted |
