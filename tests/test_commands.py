@@ -227,3 +227,14 @@ def test_setup_and_requirements_are_ones_the_gate_knows() -> None:
             assert fact in safety.known_facts(), (command.id, fact)
         assert 0 <= command.settle_seconds <= 3, command.id
         assert set(command.accepted_risks) <= safety.ACCEPTABLE_RISKS, command.id
+
+
+def test_no_command_uses_a_reply_to_a_question_as_a_phrase() -> None:
+    from tycho.runtime.session import CANCEL_WORDS, CONFIRM_WORDS, reply_to_question
+
+    for command in CommandMatcher.default().commands:
+        for phrase in command.say:
+            assert phrase not in CONFIRM_WORDS | CANCEL_WORDS, (command.id, phrase)
+    assert reply_to_question("Confirm.") == "confirm"
+    assert reply_to_question("never mind") == "cancel"
+    assert reply_to_question("confirm landing") is None  # whole utterances only

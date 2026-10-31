@@ -11,6 +11,7 @@ type Status = Literal[
     "not_understood",  # the fast path deferred; the brain arrives in 0.3
     "no_key",  # no key bound, or one Tycho can't press
     "refused",  # the safety gate said no
+    "asking",  # confirm-grade: waiting for the player to say "confirm" (ADR 13)
     "no_focus",  # Star Citizen wasn't in front, so nothing was pressed
     "cancelled",  # push-to-talk was pressed again, or Tycho is shutting down
     "failed",  # something broke; the loop carries on
@@ -50,6 +51,8 @@ class Result:
     detail: str = ""
     commands: tuple[str, ...] = ()
     """The commands the fast path matched, one per part of the request."""
+    confirmed: bool = False
+    """The player said "confirm" to a question Tycho asked about this request."""
     timings: dict[str, float] = field(default_factory=dict[str, float])
     total_ms: float = 0.0
 

@@ -18,6 +18,16 @@ class Feedback(Protocol):
 
     def not_done(self) -> None: ...
 
+    def ask(self) -> None:
+        """Tycho wants the player to say "confirm" before it acts."""
+        ...
+
+
+class ActionLog(Protocol):
+    """A record of every request that matched a command, for the player to review (ADR 13)."""
+
+    def record(self, entry: dict[str, object]) -> None: ...
+
 
 class GameState(Protocol):
     """Facts about the player's situation that commands can require, e.g. from Game.log.

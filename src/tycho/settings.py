@@ -49,6 +49,12 @@ class Settings(BaseModel):
     feedback_volume: float = Field(
         default=0.5, ge=0.0, le=1.0, description="Volume of Tycho's done and not-done sounds."
     )
+    confirm_seconds: float = Field(
+        default=5.0,
+        ge=2.0,
+        le=15.0,
+        description='How long you have to say "confirm" after Tycho asks, in seconds.',
+    )
     keep_transcripts: bool = Field(
         default=False, description="Keep a local record of what you said. Off by default."
     )

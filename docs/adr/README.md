@@ -16,3 +16,4 @@ Each record explains one decision: the context, what was decided, and what follo
 | [10](0010-interaction-modes-and-routing.md) | Interaction modes and routing | Accepted |
 | [11](0011-runtime-architecture.md) | Runtime architecture | Accepted |
 | [12](0012-modes-before-shared-keys.md) | Keep the player's bindings; set the mode before a shared key | Accepted |
+| [13](0013-spoken-confirmation-and-action-log.md) | Spoken confirmation and the action log | Accepted |
