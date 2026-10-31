@@ -127,7 +127,7 @@ def test_a_command_presses_the_players_key_and_plays_done() -> None:
     assert result is not None
     assert result.status == "done"
     assert result.pressed == ("v_toggle_landing_system",)
-    assert set(result.timings) == {"transcribe", "correct", "match", "gate", "press"}
+    assert set(result.timings) == {"tail", "transcribe", "correct", "match", "gate", "press"}
     assert result.total_ms >= sum(result.timings.values()) - 0.01
 
 
@@ -235,7 +235,38 @@ def test_a_failure_is_reported_and_the_loop_carries_on() -> None:
     assert r.feedback.played == ["not_done", "done"]
 
 
+def test_audio_just_after_release_is_kept() -> None:
+    async def scenario() -> Rig:
+        r = rig("landing gear")
+        r.session.handle(Edge.PRESSED)
+        r.audio.hear(SPEECH)
+        r.session.handle(Edge.RELEASED)
+        r.audio.hear(SPEECH[: RATE // 10])  # the end of the last word, still arriving
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert r.transcriber.seconds == [pytest.approx(0.6)]
+
+
 # --- Barge-in and shutdown --------------------------------------------------------------
+
+
+def test_pressing_again_during_the_tail_starts_afresh() -> None:
+    async def scenario() -> Rig:
+        r = rig("request landing")
+        r.say()
+        r.session.handle(Edge.PRESSED)  # straight away, before the tail is over
+        r.audio.hear(SPEECH)
+        r.session.handle(Edge.RELEASED)
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert [x.status for x in r.results] == ["done"]  # the first never got started
+    assert r.transcriber.seconds == [pytest.approx(0.5)]  # only the second request's audio
 
 
 def test_pressing_again_cancels_the_request_being_transcribed() -> None:

@@ -16,10 +16,13 @@ class FakeTranscriber:
         self._lines = list(lines)
         self.hold = hold
         self.calls = 0
+        self.seconds: list[float] = []
+        """How much audio each call was given."""
         self.started = threading.Event()
 
     def transcribe(self, samples: Samples, samplerate: int) -> str:
         self.calls += 1
+        self.seconds.append(len(samples) / samplerate)
         self.started.set()
         if self.hold is not None:
             self.hold.wait(5)

@@ -10,6 +10,7 @@ Instructions for AI coding agents working on Tycho, an unofficial voice co-pilot
 - Format: `uv run ruff format`
 - Type check: `uv run pyright` (strict mode)
 - Replay test (needs the speech model and local recordings; not in CI): `uv run pytest -m replay -s`
+- End-to-end self-test through real Windows input, without the game (only when nobody is using the PC): `uv run python tools/spike/selftest.py`
 
 Use `uv`. Never use `pip` or a bare `python`.
 

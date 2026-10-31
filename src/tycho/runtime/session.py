@@ -35,6 +35,9 @@ MIN_CLIP_SECONDS = 0.25
 """Shorter than this is a slip of the finger, not a command."""
 CHAIN_BEAT_SECONDS = 0.15
 """A pause between the actions of a chain, so the game registers each one."""
+TAIL_SECONDS = 0.15
+"""Audio kept after release: people let go as they finish the last word, and the
+microphone delivers audio in blocks. The benchmark recordings were made this way."""
 
 _RECEIPT_STATUS: dict[str, Status] = {
     "cancelled": "cancelled",
@@ -59,8 +62,11 @@ class Session:
         log_transcripts: bool = False,
         on_result: Callable[[Result], None] | None = None,
         poll_interval: float = 0.005,
+        tail_seconds: float = TAIL_SECONDS,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
+        self._tail_seconds = tail_seconds
+        self._tail_pending = False
         self._audio = audio
         self._ptt = push_to_talk
         self._transcriber = transcriber
@@ -103,6 +109,10 @@ class Session:
         if self._closed:
             return
         if edge is Edge.PRESSED:
+            if self._tail_pending:  # the last release is still recording its tail: drop it
+                self._tail_pending = False
+                with contextlib.suppress(AudioError):
+                    self._audio.stop()
             self._cancel_current()
             try:
                 self._audio.start()
@@ -113,13 +123,8 @@ class Session:
             self._listening = True
         elif self._listening:
             self._listening = False
-            try:
-                clip = self._audio.stop()
-            except AudioError as e:
-                log.error("The microphone stopped working: %s", e)
-                self._feedback.not_done()
-                return
-            self._current = asyncio.create_task(self._serve(next(self._ids), clip))
+            self._tail_pending = True
+            self._current = asyncio.create_task(self._serve(next(self._ids)))
 
     async def idle(self) -> Result | None:
         """Wait for the request in flight, if any, and return how it ended."""
@@ -134,8 +139,8 @@ class Session:
         if self._closed:
             return
         self._closed = True
-        if self._listening:
-            self._listening = False
+        if self._listening or self._tail_pending:
+            self._listening = self._tail_pending = False
             with contextlib.suppress(AudioError):
                 self._audio.stop()
         self._cancel_current()
@@ -143,6 +148,7 @@ class Session:
         # The key worker returns within ~10 ms of a cancel, having let go of every key.
         await asyncio.to_thread(self._keys.shutdown, True)
         self._stt.shutdown(wait=False, cancel_futures=True)
+        log.info("Stopped. No keys are held.")
 
     def _poll(self, loop: asyncio.AbstractEventLoop, halt: threading.Event) -> None:
         while not halt.wait(self._poll_interval):
@@ -162,15 +168,23 @@ class Session:
         if self._current is not None and not self._current.done():
             self._current.cancel()
 
-    async def _serve(self, request: int, clip: Samples) -> Result:
+    async def _serve(self, request: int) -> Result:
         trace = Trace(self._clock)
         cancel = self._cancel = threading.Event()
         try:
+            # Keep listening briefly after release, so a last word still in flight isn't cut.
+            await asyncio.sleep(self._tail_seconds)
+            self._tail_pending = False
+            clip = self._audio.stop()
+            trace.mark("tail")
             result = await self._process(request, clip, trace, cancel)
         except asyncio.CancelledError:
             cancel.set()
             self._report(self._result(request, "cancelled", trace))
             raise
+        except AudioError as e:
+            log.error("The microphone stopped working: %s", e)
+            result = self._result(request, "failed", trace, detail=str(e))
         except Exception as e:  # one request's failure never stops the loop
             log.exception("Request %d failed", request)
             result = self._result(request, "failed", trace, detail=f"{type(e).__name__}: {e}")

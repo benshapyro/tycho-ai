@@ -2,15 +2,12 @@
 
 import argparse
 import asyncio
-import contextlib
 import logging
-import signal
 import sys
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from types import FrameType
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
@@ -26,7 +23,10 @@ from tycho.settings import Settings, SettingsError
 from tycho.stt import PARAKEET_V2, DeviceChoice, ModelError, ModelStore
 
 if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when running
-    from tycho.runtime import Session
+    from tycho.audio.source import AudioSource
+    from tycho.input import FocusCheck, KeySender
+    from tycho.runtime import Feedback, Result, Session, Transcriber
+    from tycho.stt.parakeet import ParakeetTranscriber
 
 log = logging.getLogger("tycho")
 
@@ -89,12 +89,7 @@ def run_command(current: Settings, *, verbose: bool = False) -> int:
 def _run(current: Settings, log_file: Path) -> int:
     from tycho.audio.microphone import Microphone
     from tycho.feedback import SoundDevicePlayer, SoundFeedback
-    from tycho.input import Presser
     from tycho.input.windows import WindowsFocusCheck, WindowsKeySender
-    from tycho.lexicon import Lexicon
-    from tycho.ptt.monitor import PushToTalk
-    from tycho.runtime import Session
-    from tycho.stt.parakeet import ParakeetTranscriber
 
     log.info("Tycho %s. Log file: %s", __version__, log_file)
     binding = current.push_to_talk_binding
@@ -105,11 +100,38 @@ def _run(current: Settings, log_file: Path) -> int:
             return 1
         current = rebound
 
+    store = load_keybinds(current, binding)
+    transcriber = load_transcriber(current)
+    with Microphone(device=microphone_device(current.microphone)) as mic:
+        log.info("Microphone: %s", mic.name)
+        session = build_session(
+            current,
+            binding,
+            store,
+            transcriber,
+            audio=mic,
+            sender=WindowsKeySender(),
+            focus=WindowsFocusCheck(),
+            feedback=SoundFeedback(SoundDevicePlayer(), current.feedback_volume),
+        )
+        log.info("Listening. Hold %s and speak; press Ctrl+C to stop.", describe(binding))
+        asyncio.run(serve(session, store))
+    if mic.overflows:
+        log.warning("The microphone dropped audio %d time(s)", mic.overflows)
+    return 0
+
+
+def load_keybinds(current: Settings, binding: Binding) -> KeybindStore:
     install = find_install(current)
     store = KeybindStore.load(install)
     log.info("Keybinds: %d actions from %s", len(store.keybinds), install.folder)
     for warning in conflict_warnings(binding, store):
         log.warning("%s", warning)
+    return store
+
+
+def load_transcriber(current: Settings) -> ParakeetTranscriber:
+    from tycho.stt.parakeet import ParakeetTranscriber
 
     folder = ModelStore(paths.models_dir()).ensure(PARAKEET_V2, _download_progress())
     choice = device_choice(current)
@@ -117,43 +139,58 @@ def _run(current: Settings, log_file: Path) -> int:
     started = time.monotonic()
     transcriber = ParakeetTranscriber.load(folder, choice.device)
     log.info("Speech model ready in %.1f s", time.monotonic() - started)
-
-    with Microphone(device=microphone_device(current.microphone)) as mic:
-        log.info("Microphone: %s", mic.name)
-        session = Session(
-            audio=mic,
-            push_to_talk=PushToTalk(binding, input_sources(binding)),
-            transcriber=transcriber,
-            lexicon=Lexicon.default(),
-            matcher=CommandMatcher.default(),
-            keybinds=lambda: store.keybinds,
-            presser=Presser(WindowsKeySender(), WindowsFocusCheck()),
-            feedback=SoundFeedback(SoundDevicePlayer(), current.feedback_volume),
-            log_transcripts=current.keep_transcripts,
-        )
-        log.info("Listening. Hold %s and speak; press Ctrl+C to stop.", describe(binding))
-        asyncio.run(_serve(session, store))
-    if mic.overflows:
-        log.warning("The microphone dropped audio %d time(s)", mic.overflows)
-    return 0
+    return transcriber
 
 
-async def _serve(session: Session, store: KeybindStore) -> None:
-    stop = asyncio.Event()
+def build_session(
+    current: Settings,
+    binding: Binding,
+    store: KeybindStore,
+    transcriber: Transcriber,
+    *,
+    audio: AudioSource,
+    sender: KeySender,
+    focus: FocusCheck,
+    feedback: Feedback,
+    on_result: Callable[[Result], None] | None = None,
+) -> Session:
+    """The talking loop, wired the way ``tycho run`` wires it."""
+    from tycho.input import Presser
+    from tycho.lexicon import Lexicon
+    from tycho.ptt.monitor import PushToTalk
+    from tycho.runtime import Session
+
+    return Session(
+        audio=audio,
+        push_to_talk=PushToTalk(binding, input_sources(binding)),
+        transcriber=transcriber,
+        lexicon=Lexicon.default(),
+        matcher=CommandMatcher.default(),
+        keybinds=lambda: store.keybinds,
+        presser=Presser(sender, focus),
+        feedback=feedback,
+        log_transcripts=current.keep_transcripts,
+        on_result=on_result,
+    )
+
+
+async def serve(session: Session, store: KeybindStore, stop: asyncio.Event | None = None) -> None:
+    """Run the session until ``stop``, Ctrl+C, or the console window closing."""
+    from tycho.runtime.console import CloseGuard
+
+    stop = stop or asyncio.Event()
     loop = asyncio.get_running_loop()
+    refresher = asyncio.create_task(_refresh_keybinds(store))
 
-    def on_close(signum: int, frame: FrameType | None) -> None:
+    def request_stop() -> None:
         loop.call_soon_threadsafe(stop.set)
 
-    # Closing the console window sends CTRL_CLOSE_EVENT, which Python sees as SIGBREAK.
-    with contextlib.suppress(AttributeError, ValueError):
-        signal.signal(signal.SIGBREAK, on_close)
-    refresher = asyncio.create_task(_refresh_keybinds(store))
-    try:
-        await session.run(stop)
-    finally:
-        refresher.cancel()
-        await asyncio.gather(refresher, return_exceptions=True)
+    with CloseGuard(request_stop):
+        try:
+            await session.run(stop)
+        finally:
+            refresher.cancel()
+            await asyncio.gather(refresher, return_exceptions=True)
 
 
 async def _refresh_keybinds(store: KeybindStore) -> None:
