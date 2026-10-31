@@ -17,7 +17,7 @@ from tests.fakes.fake_keys import FakeFocus, FakeKeySender
 from tests.fakes.fake_runtime import FakeFeedback, FakeGameState, FakeTranscriber
 from tycho import safety
 from tycho.commands import CommandMatcher
-from tycho.game.gamelog import QUANTUM_CALIBRATED
+from tycho.game.gamelog import QUANTUM_ROUTE
 from tycho.game.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.input import Presser, code_for
 from tycho.lexicon import Lexicon
@@ -436,7 +436,7 @@ def _engage(game_state: FakeGameState | None, keybinds: Keybinds = KEYBINDS) -> 
 def test_quantum_engage_sets_nav_and_quantum_mode_then_engages() -> None:
     assert not safety.is_confirm_grade("v_toggle_qdrive_engagement")
     started = time.monotonic()
-    r = _engage(FakeGameState(QUANTUM_CALIBRATED))
+    r = _engage(FakeGameState(QUANTUM_ROUTE))
     assert r.results[0].status == "done"
     assert r.results[0].pressed == (
         "v_master_mode_set_nav",
@@ -451,11 +451,11 @@ def test_jumps_are_routine_not_confirm_grade() -> None:
     assert not safety.is_confirm_grade("v_toggle_jump_request")
 
 
-@pytest.mark.parametrize("game_state", [None, FakeGameState()], ids=["no log", "not calibrated"])
-def test_quantum_engage_waits_for_calibration(game_state: FakeGameState | None) -> None:
+@pytest.mark.parametrize("game_state", [None, FakeGameState()], ids=["no log", "no route"])
+def test_quantum_engage_waits_for_a_route(game_state: FakeGameState | None) -> None:
     r = _engage(game_state)
     assert r.results[0].status == "refused"
-    assert "calibrated" in r.results[0].detail
+    assert "route" in r.results[0].detail
     assert r.keys.events == []
 
 
@@ -472,14 +472,14 @@ LEFT_CLICK = [
 
 
 def test_left_click_is_safe_once_nav_quantum_mode_and_the_seat_rule_out_firing() -> None:
-    r = _engage(FakeGameState(QUANTUM_CALIBRATED), Keybinds(LEFT_CLICK, MODES))
+    r = _engage(FakeGameState(QUANTUM_ROUTE), Keybinds(LEFT_CLICK, MODES))
     assert r.results[0].status == "done"
     assert r.pressed()[-2:] == _down_up("mouse1")
 
 
 def test_a_shared_key_still_dangerous_after_setup_is_never_pressed() -> None:
     eject = _action("v_eject", "mouse1", actionmap="spaceship_general")
-    r = _engage(FakeGameState(QUANTUM_CALIBRATED), Keybinds([*LEFT_CLICK, eject], MODES))
+    r = _engage(FakeGameState(QUANTUM_ROUTE), Keybinds([*LEFT_CLICK, eject], MODES))
     assert r.results[0].status == "refused"
     assert "v_eject" in r.results[0].detail
     assert r.keys.events == []
@@ -487,7 +487,7 @@ def test_a_shared_key_still_dangerous_after_setup_is_never_pressed() -> None:
 
 def test_setup_needs_its_own_keys() -> None:
     keybinds = Keybinds([_action("v_toggle_qdrive_engagement", "b")], MODES)
-    r = _engage(FakeGameState(QUANTUM_CALIBRATED), keybinds)
+    r = _engage(FakeGameState(QUANTUM_ROUTE), keybinds)
     assert r.results[0].status == "no_key"
     assert "v_master_mode_set_nav" in r.results[0].detail
     assert r.keys.events == []

@@ -48,3 +48,13 @@ A cancelled calibration isn't logged.
 - "Calibrated" can be stale after a cancelled calibration. The click then happens in NAV and quantum mode with nothing to engage, which is harmless.
 - The guard tables in `safety.py` are game knowledge, kept by hand. A patch that makes NAV fire weapons would make them wrong. They're short, and each entry has its reason.
 - Other context-dependent keys can use the same pattern: set a mode that switches off the danger, then press.
+
+## Correction, 2026-10-31: a plotted route, not calibration
+
+The first in-game test refused every "engage quantum": Game.log never showed the drive calibrated. The calibration notifications found earlier were all "… By SpaceEdd", another player's ship. The game doesn't log the player's own calibration at all. That should have been checked against the player's handle before deciding.
+
+The fact is now `quantum_route_set`:
+- set by "Successfully calculated route to …", which the game logs when the player plots a route;
+- cleared by "Arrived at Final Destination", leaving the pilot seat, or a game restart.
+
+It rules out on foot for the same reason as before, and the setup still switches off the ship's weapons. Clicking before calibration finishes, or with a stale route, happens in NAV and quantum mode, where it engages nothing. Replaying the author's log, all five refused attempts would have been allowed.

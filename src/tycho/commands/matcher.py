@@ -72,7 +72,7 @@ class Command:
     settle_seconds: float = 0.0
     """How long to wait after setup for the game to change mode."""
     requires: tuple[str, ...] = ()
-    """Facts the game state must show (e.g. ``tycho.game.gamelog.QUANTUM_CALIBRATED``),
+    """Facts the game state must show (e.g. ``tycho.game.gamelog.QUANTUM_ROUTE``),
     or nothing is pressed."""
 
 
