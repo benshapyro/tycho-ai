@@ -83,3 +83,12 @@ key = "rctrl+g"
 [[add]]
 action = "v_weapon_gimbals_state_set_unlocked"
 key = "rctrl+v"
+
+# Master modes: specific keys next to B (the game's master-mode key), so "nav mode"
+# never cycles you back to SCM.
+[[add]]
+action = "v_master_mode_set_nav"
+key = "ralt+b"
+[[add]]
+action = "v_master_mode_set_scm"
+key = "ralt+v"

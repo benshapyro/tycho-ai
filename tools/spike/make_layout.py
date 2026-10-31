@@ -17,7 +17,7 @@ from pathlib import Path
 
 from tycho.game.install import GameInstall
 from tycho.game.keybinds import Keybinds, KeyInput, apply_profile
-from tycho.game.layout import Addition, LayoutError, build, write
+from tycho.game.layout import Addition, LayoutError, build, outstanding, write
 from tycho.game.store import KeybindStore
 
 HERE = Path(__file__).resolve().parent
@@ -37,8 +37,14 @@ def main() -> int:
 
     install = GameInstall.find()
     store = KeybindStore.load(install)
-    entries = tomllib.loads(args.plan.read_text("utf-8"))["add"]
-    additions = [Addition(str(e["action"]), str(e["key"])) for e in entries]
+    entries = tomllib.loads(args.plan.read_text("utf-8-sig"))["add"]
+    planned = [Addition(str(e["action"]), str(e["key"])) for e in entries]
+    additions = outstanding(planned, store.keybinds)
+    if done := len(planned) - len(additions):
+        print(f"{done} of the {len(planned)} recommended bindings are already in your layout.")
+    if not additions:
+        print("Nothing to add.")
+        return 0
     profile = ET.parse(install.actionmaps).getroot()  # noqa: S314 - the player's own file
     try:
         root = build(

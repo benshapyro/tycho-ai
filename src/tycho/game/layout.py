@@ -42,6 +42,16 @@ def used_keys(actions: Iterable[Action]) -> dict[str, list[str]]:
     return used
 
 
+def outstanding(additions: Iterable[Addition], actions: Iterable[Action]) -> list[Addition]:
+    """The additions not already in place, so a grown list can be applied again safely."""
+    bound = {(a.name, str(i)) for a in actions for i in a.inputs}
+    return [
+        addition
+        for addition in additions
+        if (key := KeyInput.parse(addition.key)) is None or (addition.action, str(key)) not in bound
+    ]
+
+
 def check(additions: Iterable[Addition], actions: Iterable[Action]) -> None:
     """Refuse additions that clash with existing bindings, each other, or bound actions."""
     actions = list(actions)

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from tycho.game.keybinds import Keybinds, apply_profile, parse_defaults
-from tycho.game.layout import Addition, LayoutError, build, write
+from tycho.game.layout import Addition, LayoutError, build, outstanding, write
 
 DEFAULTS = """<profile>
   <actionmap name="spaceship_general">
@@ -57,6 +57,14 @@ def test_adds_bindings_and_keeps_existing_ones() -> None:
     assert [str(i) for i in toggle.inputs] == ["ralt+i"]
     # The stick binding survives alongside the new keyboard key.
     assert 'input="js2_button25"' in ET.tostring(root, encoding="unicode")
+
+
+def test_additions_already_in_place_are_skipped() -> None:
+    first = Addition("v_lights_on", "rctrl+l")
+    later = Addition("v_close_all_doors", "rctrl+u")
+    applied = list(_reread(_build(first)))
+    assert outstanding([first, later], applied) == [later]  # a grown list applies again safely
+    assert outstanding([Addition("v_lights_on", "rctrl+k")], applied)  # a different key isn't
 
 
 def test_an_action_in_several_contexts_is_bound_in_all_of_them() -> None:
