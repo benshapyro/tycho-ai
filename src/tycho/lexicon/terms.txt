@@ -150,6 +150,7 @@ IFCS
 ATC
 countermeasures
 decoupled
+coupled
 Starmap
 hangar
 kiosk

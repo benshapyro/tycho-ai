@@ -11,7 +11,7 @@ import logging
 import logging.handlers
 import re
 import threading
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 
 from tycho import paths
@@ -74,7 +74,9 @@ class ConsoleFormatter(logging.Formatter):
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         entry: dict[str, object] = {
-            "time": datetime.fromtimestamp(record.created, UTC).isoformat(timespec="milliseconds"),
+            "time": datetime.fromtimestamp(record.created)
+            .astimezone()
+            .isoformat(timespec="milliseconds"),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),

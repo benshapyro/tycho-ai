@@ -97,3 +97,68 @@ key = "ralt+v"
 [[add]]
 action = "v_toggle_qdrive_engagement"
 key = "ralt+q"
+
+# Flight assists: specific on/off keys instead of toggles.
+[[add]]
+action = "v_ifcs_throttle_set_sticky"
+key = "rctrl+c"
+[[add]]
+action = "v_ifcs_throttle_set_normal"
+key = "rctrl+z"
+[[add]]
+action = "v_ifcs_vector_decoupling_on"
+key = "rctrl+d"
+[[add]]
+action = "v_ifcs_vector_decoupling_off"
+key = "rctrl+e"
+[[add]]
+action = "v_vtol_on"
+key = "ralt+t"
+[[add]]
+action = "v_vtol_off"
+key = "ralt+u"
+[[add]]
+action = "v_ifcs_gravity_compensation_on"
+key = "rctrl+w"
+[[add]]
+action = "v_ifcs_gravity_compensation_off"
+key = "ralt+e"
+[[add]]
+action = "v_ifcs_proximity_assist_on"
+key = "ralt+8"
+[[add]]
+action = "v_ifcs_proximity_assist_off"
+key = "ralt+9"
+
+# Night vision.
+[[add]]
+action = "v_light_amplification_on"
+key = "ralt+o"
+[[add]]
+action = "v_light_amplification_off"
+key = "ralt+p"
+
+# Operator modes (flight and quantum are above).
+[[add]]
+action = "v_set_mining_mode"
+key = "ralt+m"
+[[add]]
+action = "v_set_salvage_mode"
+key = "rctrl+s"
+[[add]]
+action = "v_set_scan_mode"
+key = "rctrl+r"
+[[add]]
+action = "v_set_missile_mode"
+key = "ralt+j"
+[[add]]
+action = "v_set_guns_mode"
+key = "ralt+f"
+
+# Shields to top and bottom (front, back, left and right are above).
+[[add]]
+action = "v_shield_raise_level_up"
+key = "ralt+6"
+[[add]]
+action = "v_shield_raise_level_down"
+key = "ralt+7"

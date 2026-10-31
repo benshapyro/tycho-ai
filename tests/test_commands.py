@@ -177,3 +177,41 @@ def test_resolve_reports_no_key() -> None:
     assert (
         resolve(command, Keybinds([_action("v_shield_raise_level_forward", None)])).action is None
     )
+
+
+def test_no_two_commands_are_confusable() -> None:
+    """A fuzzy match could cross between phrases this close, so none may exist."""
+    from tycho.commands.matcher import _MEANING_WORDS  # pyright: ignore[reportPrivateUsage]
+    from tycho.text import normalize, similarity
+
+    phrases = [(tuple(normalize(p)), c.id) for c in MATCHER.commands for p in c.say]
+    close = [
+        f"{' '.join(a)!r} [{ca}] vs {' '.join(b)!r} [{cb}]"
+        for i, (a, ca) in enumerate(phrases)
+        for b, cb in phrases[i + 1 :]
+        if ca != cb
+        and _MEANING_WORDS.intersection(a) == _MEANING_WORDS.intersection(b)
+        and similarity("".join(a), "".join(b)) >= 0.85
+    ]
+    assert not close, close
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("go coupled", "decoupled_off"),  # the lexicon once "corrected" this to decoupled
+        ("go decoupled", "decoupled_on"),
+        ("min power to engines", "min_power_engines"),  # one letter from max
+        ("max power to engines", "max_power_engines"),
+        ("disable cruise control", "cruise_off"),  # 85% like "enable cruise control"
+        ("enable cruise control", "cruise_on"),
+        ("option two", "option_2"),
+        ("option for", "brain"),  # a number misheard is never guessed
+        ("request loading", "brain"),  # not a landing request
+        ("request docking", "request_docking"),  # was wrongly a landing request
+    ],
+)
+def test_opposites_and_neighbours_never_cross(text: str, expected: str) -> None:
+    from tycho.lexicon import Lexicon
+
+    assert _ids(Lexicon.default().correct(text).text) == expected

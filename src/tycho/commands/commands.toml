@@ -27,7 +27,7 @@ actions = ["v_retract_landing_system", "v_toggle_landing_system"]
 
 [[command]]
 id = "request_landing"
-say = ["request landing", "request landing permission", "request a landing pad", "ask for a landing pad", "call the tower", "contact the tower", "request docking", "request a hangar", "request hangar", "hangar request", "make a hangar request", "send a hangar request", "ask for a hangar", "get us a hangar"]
+say = ["request landing", "request landing permission", "request a landing pad", "ask for a landing pad", "call the tower", "contact the tower", "request a hangar", "request hangar", "hangar request", "make a hangar request", "send a hangar request", "ask for a hangar", "get us a hangar"]
 actions = ["v_atc_request"]
 
 # The same air traffic control key asks to leave when parked at a pad or in a hangar.
@@ -251,3 +251,190 @@ actions = ["mobiglas"]
 id = "map"
 say = ["open the map", "open map", "star map", "open the star map", "open starmap", "show the map"]
 actions = ["v_starmap"]
+
+# Landing and docking
+[[command]]
+id = "autoland"
+say = ["autoland", "auto land", "land the ship", "land us", "land automatically", "start autoland"]
+actions = ["v_autoland"]
+
+[[command]]
+id = "request_docking"
+say = ["request docking", "dock", "dock the ship", "initiate docking", "start docking", "dock with them"]
+actions = ["v_toggle_docking_request"]
+
+[[command]]
+id = "request_cargo_loading"
+say = ["request cargo loading", "cargo loading", "request a loading area", "request freight elevator"]
+actions = ["v_atc_loading_area_request"]
+
+# Comms and sensors
+[[command]]
+id = "hail"
+say = ["hail target", "hail them", "hail the target", "hail", "open a channel"]
+actions = ["v_target_hail"]
+
+[[command]]
+id = "ping"
+say = ["ping", "radar ping", "send a ping", "activate ping", "run a ping"]
+actions = ["v_invoke_ping"]
+
+# Less power, and the minimum
+[[command]]
+id = "less_power_engines"
+say = ["less power to engines", "less power to the engines", "reduce power to engines", "reduce engine power"]
+actions = ["v_engineering_assignment_engine_decrease"]
+
+[[command]]
+id = "less_power_shields"
+say = ["less power to shields", "less power to the shields", "reduce power to shields", "reduce shield power"]
+actions = ["v_engineering_assignment_shields_decrease"]
+
+[[command]]
+id = "less_power_weapons"
+say = ["less power to weapons", "less power to the weapons", "reduce power to weapons", "reduce weapon power"]
+actions = ["v_engineering_assignment_weapons_decrease"]
+
+[[command]]
+id = "min_power_engines"
+say = ["minimum power to engines", "min power to engines", "engines to minimum", "engine power to minimum"]
+actions = ["v_engineering_assignment_engine_min"]
+
+[[command]]
+id = "min_power_shields"
+say = ["minimum power to shields", "min power to shields", "shields to minimum", "shield power to minimum"]
+actions = ["v_engineering_assignment_shields_min"]
+
+[[command]]
+id = "min_power_weapons"
+say = ["minimum power to weapons", "min power to weapons", "weapons to minimum", "weapon power to minimum"]
+actions = ["v_engineering_assignment_weapons_min"]
+
+# Shields to top and bottom
+[[command]]
+id = "shields_top"
+say = ["shields to top", "shields to the top", "top shields", "raise top shields"]
+actions = ["v_shield_raise_level_up"]
+
+[[command]]
+id = "shields_bottom"
+say = ["shields to bottom", "shields to the bottom", "bottom shields", "raise bottom shields"]
+actions = ["v_shield_raise_level_down"]
+
+# Flight assists. Each toggle is the fallback for players without the recommended keys.
+[[command]]
+id = "cruise_on"
+say = ["cruise control on", "cruise control", "enable cruise control", "cruise mode on", "engage cruise control"]
+actions = ["v_ifcs_throttle_set_sticky", "v_ifcs_throttle_swap_mode"]
+
+[[command]]
+id = "cruise_off"
+say = ["cruise control off", "disable cruise control", "cruise mode off"]
+actions = ["v_ifcs_throttle_set_normal", "v_ifcs_throttle_swap_mode"]
+
+[[command]]
+id = "decoupled_on"
+say = ["decoupled mode on", "decoupled mode", "go decoupled", "decouple", "enable decoupled mode"]
+actions = ["v_ifcs_vector_decoupling_on", "v_ifcs_vector_decoupling_toggle"]
+
+[[command]]
+id = "decoupled_off"
+say = ["decoupled mode off", "coupled mode", "recouple", "go coupled", "disable decoupled mode"]
+actions = ["v_ifcs_vector_decoupling_off", "v_ifcs_vector_decoupling_toggle"]
+
+[[command]]
+id = "vtol_on"
+say = ["vtol on", "vtol mode on", "enable vtol", "vtol mode", "engage vtol"]
+actions = ["v_vtol_on", "v_vtol_toggle"]
+
+[[command]]
+id = "vtol_off"
+say = ["vtol off", "vtol mode off", "disable vtol"]
+actions = ["v_vtol_off", "v_vtol_toggle"]
+
+[[command]]
+id = "gravity_compensation_on"
+say = ["gravity compensation on", "enable gravity compensation", "gravity comp on"]
+actions = ["v_ifcs_gravity_compensation_on", "v_ifcs_gravity_compensation_toggle"]
+
+[[command]]
+id = "gravity_compensation_off"
+say = ["gravity compensation off", "disable gravity compensation", "gravity comp off"]
+actions = ["v_ifcs_gravity_compensation_off", "v_ifcs_gravity_compensation_toggle"]
+
+[[command]]
+id = "proximity_assist_on"
+say = ["proximity assist on", "enable proximity assist"]
+actions = ["v_ifcs_proximity_assist_on", "v_ifcs_proximity_assist_toggle"]
+
+[[command]]
+id = "proximity_assist_off"
+say = ["proximity assist off", "disable proximity assist"]
+actions = ["v_ifcs_proximity_assist_off", "v_ifcs_proximity_assist_toggle"]
+
+[[command]]
+id = "night_vision_on"
+say = ["night vision on", "night vision", "enable night vision", "light amplification on"]
+actions = ["v_light_amplification_on", "v_light_amplification_toggle"]
+
+[[command]]
+id = "night_vision_off"
+say = ["night vision off", "disable night vision", "light amplification off"]
+actions = ["v_light_amplification_off", "v_light_amplification_toggle"]
+
+# Operator modes (quantum mode is above)
+[[command]]
+id = "flight_mode"
+say = ["flight mode", "flight operator mode", "back to flight mode", "pilot mode"]
+actions = ["v_set_flight_mode", "v_toggle_flight_mode"]
+
+[[command]]
+id = "mining_mode"
+say = ["mining mode", "mining operator mode", "switch to mining mode", "start mining mode"]
+actions = ["v_set_mining_mode", "v_toggle_mining_mode"]
+
+[[command]]
+id = "salvage_mode"
+say = ["salvage mode", "salvage operator mode", "switch to salvage mode"]
+actions = ["v_set_salvage_mode", "v_toggle_salvage_mode"]
+
+[[command]]
+id = "scan_mode"
+say = ["scan mode", "scanning mode", "scanning operator mode", "switch to scanning mode"]
+actions = ["v_set_scan_mode", "v_toggle_scan_mode"]
+
+[[command]]
+id = "missile_mode"
+say = ["missile mode", "missile operator mode", "switch to missiles", "switch to missile mode"]
+actions = ["v_set_missile_mode", "v_toggle_missile_mode"]
+
+[[command]]
+id = "guns_mode"
+say = ["guns mode", "gun mode", "guns operator mode", "switch to guns", "switch to guns mode"]
+actions = ["v_set_guns_mode", "v_toggle_guns_mode"]
+
+# Conversation choices with characters in the world.
+[[command]]
+id = "option_1"
+say = ["option one", "option 1", "first option", "choose option one", "pick option one"]
+actions = ["pc_conversation_option1"]
+
+[[command]]
+id = "option_2"
+say = ["option two", "option 2", "second option", "choose option two", "pick option two"]
+actions = ["pc_conversation_option2"]
+
+[[command]]
+id = "option_3"
+say = ["option three", "option 3", "third option", "choose option three", "pick option three"]
+actions = ["pc_conversation_option3"]
+
+[[command]]
+id = "option_4"
+say = ["option four", "option 4", "fourth option", "choose option four", "pick option four"]
+actions = ["pc_conversation_option4"]
+
+[[command]]
+id = "option_5"
+say = ["option five", "option 5", "fifth option", "choose option five", "pick option five"]
+actions = ["pc_conversation_option5"]

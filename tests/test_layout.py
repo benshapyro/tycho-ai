@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from tycho.game.keybinds import Keybinds, apply_profile, parse_defaults
+from tycho.game.keybinds import Keybinds, KeyInput, apply_profile, parse_defaults
 from tycho.game.layout import Addition, LayoutError, build, outstanding, write
 
 DEFAULTS = """<profile>
@@ -57,6 +57,16 @@ def test_adds_bindings_and_keeps_existing_ones() -> None:
     assert [str(i) for i in toggle.inputs] == ["ralt+i"]
     # The stick binding survives alongside the new keyboard key.
     assert 'input="js2_button25"' in ET.tostring(root, encoding="unicode")
+
+
+@pytest.mark.parametrize("key", ["ralt+f4", "lalt+f4", "ralt+tab", "rctrl+escape", "ralt+space"])
+def test_windows_shortcuts_are_refused(key: str) -> None:
+    with pytest.raises(LayoutError, match="Windows shortcut"):
+        _build(Addition("v_lights_on", key))
+
+
+def test_key_names_ignore_case() -> None:
+    assert KeyInput.parse("ralt+K") == KeyInput.parse("RAlt+k")
 
 
 def test_additions_already_in_place_are_skipped() -> None:

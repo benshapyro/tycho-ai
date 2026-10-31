@@ -52,6 +52,31 @@ def outstanding(additions: Iterable[Addition], actions: Iterable[Action]) -> lis
     ]
 
 
+_WINDOWS_SHORTCUTS = {
+    ("alt", "f4"): "closes the game",
+    ("alt", "tab"): "switches windows",
+    ("alt", "escape"): "switches windows",
+    ("alt", "space"): "opens the window menu",
+    ("alt", "enter"): "toggles full screen",
+    ("ctrl", "escape"): "opens the Start menu",
+}
+
+
+def reserved_by_windows(key: KeyInput) -> str | None:
+    """What Windows does with this combination, if it takes it before the game sees it.
+
+    Windows doesn't care which side's Alt or Ctrl is held, so Right Alt+F4 still closes
+    the game.
+    """
+    sides = {m.removeprefix("l").removeprefix("r") for m in key.modifiers}
+    if any(m.endswith("win") for m in key.modifiers) or key.key.endswith("win"):
+        return "the Windows key"
+    for modifier in sides:
+        if reason := _WINDOWS_SHORTCUTS.get((modifier, key.key)):
+            return reason
+    return None
+
+
 def check(additions: Iterable[Addition], actions: Iterable[Action]) -> None:
     """Refuse additions that clash with existing bindings, each other, or bound actions."""
     actions = list(actions)
@@ -63,6 +88,8 @@ def check(additions: Iterable[Addition], actions: Iterable[Action]) -> None:
         if key is None:
             raise LayoutError(f"{addition.key!r} isn't a key")
         canonical = str(key)
+        if reason := reserved_by_windows(key):
+            raise LayoutError(f"{canonical} is a Windows shortcut ({reason})")
         if addition.action not in by_name:
             raise LayoutError(f"{addition.action} isn't an action in this game build")
         if any(i.device == "keyboard" for i in by_name[addition.action].inputs):

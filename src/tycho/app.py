@@ -207,13 +207,18 @@ async def _refresh_keybinds(store: KeybindStore) -> None:
 
 
 def _download_progress() -> Callable[[str, int, int], None]:
+    """One line per file, updated in place, ending when the file is complete."""
     shown: dict[str, int] = {}
 
     def show(name: str, done: int, total: int) -> None:
-        step = 100 * done // total if total else 0
-        if shown.get(name) != step // 10:
-            shown[name] = step // 10
-            print(f"  Downloading the speech model: {name} {step}% ({done / 1e9:.2f} GB)")
+        percent = 100 * done // total if total else 0
+        if shown.get(name) == percent:
+            return
+        shown[name] = percent
+        size = f"{done / 1e9:.2f} of {total / 1e9:.2f} GB" if total > 1e8 else ""
+        end = "\n" if done >= total else ""
+        line = f"  Downloading the speech model: {name} {percent:3d}% {size}"
+        print("\r" + line, end=end, flush=True)  # \r: overwrite the line in place
 
     return show
 

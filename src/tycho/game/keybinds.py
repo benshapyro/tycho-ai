@@ -32,7 +32,8 @@ class KeyInput:
     @classmethod
     def parse(cls, text: str) -> KeyInput | None:
         """Parse "ralt+r", "f6+lalt" or "kb1_ralt+i". Returns None for an empty binding."""
-        text = _DEVICE_PREFIX.sub("", text.strip()).strip()  # "kb1_ " is a cleared binding
+        # Key names are case-insensitive: the game itself writes both "ralt+k" and "ralt+K".
+        text = _DEVICE_PREFIX.sub("", text.strip()).strip().lower()  # "kb1_ " is cleared
         if not text:
             return None
         parts = [p.strip() for p in text.split("+") if p.strip()]

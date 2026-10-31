@@ -49,6 +49,12 @@ _MEANING_WORDS = frozenset(
         *("front", "forward", "back", "rear", "left", "right", "top", "bottom"),
         *("engines", "engine", "thrusters", "shields", "shield", "weapons", "weapon", "guns"),
         *("max", "maximum", "full", "more", "reset", "next", "nearest", "closest"),
+        *("min", "minimum", "less", "least"),
+        *("enable", "disable", "engage", "disengage", "activate", "deactivate"),
+        *("coupled", "decoupled", "couple", "decouple", "recouple"),
+        *("1", "2", "3", "4", "5", "one", "two", "three", "four", "five"),
+        *("first", "second", "third", "fourth", "fifth"),
+        "loading",  # cargo loading is not landing
     }
 )
 
