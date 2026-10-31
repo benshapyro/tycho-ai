@@ -9,14 +9,14 @@ command makes every such use impossible first. Keys mean different things in
 different modes: left mouse engages the quantum drive in quantum mode, but fires
 the guns in guns mode, and a handgun on foot. "Engage quantum" may click it
 because it first sets NAV (ship weapons offline) and quantum mode (no guns,
-missiles, mining or salvage), and requires Game.log to show quantum calibrated
-with the player still in the pilot seat (so not on foot).
+missiles, mining or salvage). That leaves on foot, a risk the author accepted
+for that command, since Tycho only hears what the player says to it on purpose.
 """
 
 from dataclasses import dataclass
 
 from tycho.commands.matcher import Command
-from tycho.game.gamelog import QUANTUM_CALIBRATED
+from tycho.game.gamelog import QUANTUM_ROUTE
 from tycho.game.keybinds import Action, Keybinds
 from tycho.input.plan import pressable_input
 
@@ -54,13 +54,16 @@ _MODE_GUARDS: dict[str, frozenset[str]] = {
 """Setup actions, and the control contexts (actionmaps) they switch off."""
 
 _STATE_GUARDS: dict[str, frozenset[str]] = {
-    # Calibrating takes the pilot seat, and leaving it clears the fact: not on foot.
-    QUANTUM_CALIBRATED: frozenset({"player"}),
+    # Plotting a route takes the pilot seat, and leaving it clears the fact: not on foot.
+    QUANTUM_ROUTE: frozenset({"player"}),
 }
 """Required facts, and the control contexts they rule out."""
 
+ACCEPTABLE_RISKS = frozenset({"player"})
+"""Contexts a command may accept the risk of. Ship contexts aren't: a mode switches those off."""
+
 _REQUIREMENTS = {
-    QUANTUM_CALIBRATED: "the quantum drive isn't calibrated (from Game.log)",
+    QUANTUM_ROUTE: "no quantum route is plotted (from Game.log)",
 }
 
 
@@ -134,6 +137,7 @@ def switched_off(command: Command) -> frozenset[str]:
         off |= _MODE_GUARDS.get(name, frozenset())
     for fact in command.requires:
         off |= _STATE_GUARDS.get(fact, frozenset())
+    off |= ACCEPTABLE_RISKS & set(command.accepted_risks)
     return frozenset(off)
 
 

@@ -226,3 +226,4 @@ def test_setup_and_requirements_are_ones_the_gate_knows() -> None:
         for fact in command.requires:
             assert fact in safety.known_facts(), (command.id, fact)
         assert 0 <= command.settle_seconds <= 3, command.id
+        assert set(command.accepted_risks) <= safety.ACCEPTABLE_RISKS, command.id
