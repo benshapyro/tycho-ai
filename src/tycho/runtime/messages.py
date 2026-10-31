@@ -48,6 +48,8 @@ class Result:
     pressed: tuple[str, ...] = ()
     """Game actions actually pressed, in order. Partial if a chain stopped part way."""
     detail: str = ""
+    commands: tuple[str, ...] = ()
+    """The commands the fast path matched, one per part of the request."""
     timings: dict[str, float] = field(default_factory=dict[str, float])
     total_ms: float = 0.0
 

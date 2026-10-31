@@ -198,6 +198,14 @@ class Session:
         if isinstance(decision, Defer):
             return self._result(request, "not_understood", trace, heard, text, decision.reason)
 
+        ids = tuple(command.id for command in decision.commands)
+        pressed: list[str] = []
+
+        def end(status: Status, detail: str = "") -> Result:
+            return self._result(
+                request, status, trace, heard, text, detail, tuple(pressed), commands=ids
+            )
+
         # Plan the whole chain before pressing anything: if any part can't be done,
         # none of it is, so the ship is never left half-way through a request.
         keybinds = self._keybinds()
@@ -205,31 +213,28 @@ class Session:
         for command in decision.commands:
             resolved = resolve(command, keybinds)
             if resolved.action is None:
-                detail = f"{command.id}: none of {', '.join(command.actions)} has a key"
-                return self._result(request, "no_key", trace, heard, text, detail)
+                return end(
+                    "no_key", f"{command.id}: none of {', '.join(command.actions)} has a key"
+                )
             verdict = safety.check(command, resolved.action)
             if not verdict.allowed:
-                return self._result(request, "refused", trace, heard, text, verdict.reason)
+                return end("refused", verdict.reason)
             try:
                 presses.append(plan(resolved.action, keybinds.modes))
             except (NotPressable, UnsupportedKey) as e:
-                return self._result(request, "no_key", trace, heard, text, str(e))
+                return end("no_key", str(e))
         trace.mark("gate")
 
-        pressed: list[str] = []
         for position, press in enumerate(presses):
             if position:
                 await asyncio.sleep(CHAIN_BEAT_SECONDS)
             receipt = await loop.run_in_executor(self._keys, self._presser.press, press, cancel)
             if not receipt.done:
                 trace.mark("press")
-                status = _RECEIPT_STATUS.get(receipt.outcome, "failed")
-                return self._result(
-                    request, status, trace, heard, text, receipt.detail, tuple(pressed)
-                )
+                return end(_RECEIPT_STATUS.get(receipt.outcome, "failed"), receipt.detail)
             pressed.append(press.action)
         trace.mark("press")
-        return self._result(request, "done", trace, heard, text, pressed=tuple(pressed))
+        return end("done")
 
     def _result(
         self,
@@ -240,18 +245,29 @@ class Session:
         text: str = "",
         detail: str = "",
         pressed: tuple[str, ...] = (),
+        *,
+        commands: tuple[str, ...] = (),
     ) -> Result:
         return Result(
-            request, status, heard, text, pressed, detail, dict(trace.stages), trace.total_ms
+            request=request,
+            status=status,
+            heard=heard,
+            text=text,
+            pressed=pressed,
+            detail=detail,
+            commands=commands,
+            timings=dict(trace.stages),
+            total_ms=trace.total_ms,
         )
 
     def _report(self, result: Result) -> None:
         stages = ", ".join(f"{name} {ms:.0f}" for name, ms in result.timings.items())
         said = f' "{result.text}"' if self._log_transcripts and result.text else ""
         log.info(
-            "#%d%s: %s%s in %.0f ms (%s)",
+            "#%d%s: %s%s%s in %.0f ms (%s)",
             result.request,
             said,
+            "+".join(result.commands) + " " if result.commands else "",
             result.status,
             f" ({result.detail})" if result.detail else "",
             result.total_ms,
