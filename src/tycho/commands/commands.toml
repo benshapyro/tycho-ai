@@ -185,6 +185,7 @@ actions = ["v_set_quantum_mode", "v_toggle_quantum_mode"]
 id = "quantum_engage"
 say = ["engage quantum", "engage the quantum drive", "jump", "punch it"]
 actions = ["v_toggle_qdrive_engagement"]
+confirm = true
 
 # Targeting and defence
 [[command]]

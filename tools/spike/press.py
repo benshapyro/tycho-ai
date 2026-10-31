@@ -20,16 +20,7 @@ from tycho.game.keybinds import Action
 from tycho.game.store import KeybindStore
 from tycho.input import NotPressable, Press, Presser, UnsupportedKey, plan
 from tycho.input.windows import WindowsFocusCheck, WindowsKeySender, foreground_executable
-
-# Confirm-grade actions (docs/architecture.md 4.7). The safety gate will own this list.
-DANGEROUS = frozenset(
-    {
-        *("v_eject", "v_emergency_exit", "v_self_destruct", "v_jettison_volatile_cargo"),
-        *("v_toggle_qdrive_engagement", "v_toggle_jump_request"),
-        *("v_weapon_preset_attack", "v_weapon_toggle_launch_missile", "v_weapon_launch_missile"),
-        *("attack1", "respawn", "force_respawn", "incapacitatedRespawn"),
-    }
-)
+from tycho.safety import is_confirm_grade
 
 
 def main() -> int:
@@ -75,7 +66,7 @@ def main() -> int:
 
     presses: list[Press] = []
     for action in actions:
-        if action.name in DANGEROUS:
+        if is_confirm_grade(action.name):
             name = action.label or action.name
             print(f"Refusing {name}: confirm-grade, and the safety gate isn't built yet.")
             return 1

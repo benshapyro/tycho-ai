@@ -33,6 +33,9 @@ All four of these pass: `ruff format --check`, `ruff check`, `pyright`, and `pyt
 - `src/tycho/lexicon/`: the game-term corrector and its term list.
 - `src/tycho/commands/`: the fast-path command matcher and its command list.
 - `src/tycho/input/`: the hands. Key codes, press planning from the game's activation modes, the presser (focus-guarded, cancellable, always releases), and the Windows sender.
+- `src/tycho/runtime/`: the talking loop (ADR 11). The session that joins every stage, the messages and per-stage timings, the transcriber and feedback boundaries, and the single-instance lock.
+- `src/tycho/safety.py`: the safety gate. Every press goes through `safety.check`; the confirm-grade list lives here.
+- `src/tycho/settings.py` and `src/tycho/paths.py`: the settings schema, and the only place file locations are decided.
 - `src/tycho/eval/`: scoring for benchmarks.
 - `src/tycho/credentials.py`: API keys.
 - `tools/bench/`: benchmarks (see its README). `tools/spike/`: the recorder, phrase lists and expected results.
