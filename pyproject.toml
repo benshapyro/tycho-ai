@@ -16,6 +16,7 @@ classifiers = [
 dependencies = [
     "keyring>=25.7.0",
     "numpy>=2.5.4",
+    "pydantic>=2.14.2",
     "pygame-ce>=2.5.8",
     "sounddevice>=0.5.6",
 ]

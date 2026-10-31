@@ -14,6 +14,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from tycho import paths
 from tycho.game import cryxml, localization
 from tycho.game.install import GameInstall
 from tycho.game.keybinds import (
@@ -35,7 +36,7 @@ class GameDataError(Exception):
 
 
 def default_cache_dir() -> Path:
-    return Path(os.environ.get("LOCALAPPDATA", Path.home())) / "tycho" / "cache"
+    return paths.cache_dir()
 
 
 class KeybindStore:
