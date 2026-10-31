@@ -201,12 +201,12 @@ actions = ["v_set_quantum_mode", "v_toggle_quantum_mode"]
 
 # Engaging is usually on left click, which also fires guns, missiles, mining and
 # salvage lasers, and a handgun on foot. Tycho sets NAV (ship weapons offline) and
-# quantum mode first, which leaves only on foot. The author accepts that: nobody
-# says "engage quantum" on foot by accident (2026-10-31). Everyday words like
-# "jump" aren't phrases here for that reason. Leaving NAV takes about a second.
+# quantum mode first, which leaves only on foot. The author accepts that: Tycho only
+# hears what the player says on purpose, by push-to-talk or wake word (2026-10-31).
+# Leaving NAV takes about a second.
 [[command]]
 id = "quantum_engage"
-say = ["engage quantum", "engage the quantum drive"]
+say = ["engage quantum", "engage the quantum drive", "jump", "punch it"]
 setup = ["v_master_mode_set_nav", "v_set_quantum_mode"]
 settle_seconds = 1.2
 accepted_risks = ["player"]

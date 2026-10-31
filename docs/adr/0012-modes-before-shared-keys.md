@@ -61,8 +61,7 @@ It rules out on foot for the same reason as before, and the setup still switches
 
 ## Second correction, 2026-10-31: no log check at all
 
-Requiring a plotted route meant plotting one before every voice jump. The author ruled that out: "engage quantum" is a phrase nobody says on foot by accident. So `quantum_engage` requires nothing from Game.log. Instead it lists `accepted_risks = ["player"]`: the author accepts that left click could fire a drawn handgun on foot.
+Requiring a plotted route meant plotting one before every voice jump. The author ruled that out: Tycho never has an open mic. It hears only what the player says on purpose, by push-to-talk or a wake word, so a jump command on foot would be deliberate. So `quantum_engage` requires nothing from Game.log. Instead it lists `accepted_risks = ["player"]`: the author accepts that left click could fire a drawn handgun on foot.
 
-Only `player` can be accepted (`safety.ACCEPTABLE_RISKS`). Ship weapons, missiles, mining and salvage must still be switched off by the setup, and any other confirm-grade action on the key still refuses the press. Everyday phrases ("jump", "punch it") were removed, so only the deliberate ones are left.
-
+Only `player` can be accepted (`safety.ACCEPTABLE_RISKS`). Ship weapons, missiles, mining and salvage must still be switched off by the setup, and any other confirm-grade action on the key still refuses the press. 
 The Game.log reader and its `quantum_route_set` fact stay, for later commands.

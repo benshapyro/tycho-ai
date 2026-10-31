@@ -10,7 +10,7 @@ different modes: left mouse engages the quantum drive in quantum mode, but fires
 the guns in guns mode, and a handgun on foot. "Engage quantum" may click it
 because it first sets NAV (ship weapons offline) and quantum mode (no guns,
 missiles, mining or salvage). That leaves on foot, a risk the author accepted
-for that command: its phrases aren't ones anyone says on foot.
+for that command, since Tycho only hears what the player says to it on purpose.
 """
 
 from dataclasses import dataclass
