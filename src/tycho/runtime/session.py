@@ -230,7 +230,7 @@ class Session:
                 return end(
                     "no_key", f"{command.id}: none of {', '.join(command.actions)} has a key"
                 )
-            verdict = safety.check(command, resolved.action)
+            verdict = safety.check(command, resolved.action, keybinds)
             if not verdict.allowed:
                 return end("refused", verdict.reason)
             try:

@@ -167,7 +167,6 @@ def test_the_lexicon_corrects_what_was_heard_before_matching() -> None:
     ("heard", "status"),
     [
         ("eject", "refused"),  # confirm-grade: refused until spoken confirmation (0.2)
-        ("engage quantum", "refused"),
         ("gear down and eject", "refused"),  # one refused part stops the whole chain
         ("sing me a song", "not_understood"),  # for the brain, which arrives in 0.3
         ("don't lower the gear", "not_understood"),  # negations always defer
@@ -397,9 +396,56 @@ def test_the_gate_catches_dangerous_actions_it_has_never_seen() -> None:
     assert not safety.is_confirm_grade("v_lights")
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        "weapon_change_firemode",  # choosing a fire mode isn't firing
+        "v_weapon_staggered_fire_on",
+        "v_weapon_launch_missile_cinematic",  # the missile camera
+        "v_target_cycle_attacker_fwd",  # targeting whoever attacks you
+    ],
+)
+def test_the_backstop_spares_harmless_lookalikes(name: str) -> None:
+    assert not safety.is_confirm_grade(name)
+
+
 def test_only_one_tycho_runs_at_a_time() -> None:
     name = rf"Local\tycho-ai-test-{time.monotonic_ns()}"
     with SingleInstance(name), pytest.raises(AlreadyRunning), SingleInstance(name):
         pass
     with SingleInstance(name):  # released on exit, so it can be taken again
         pass
+
+
+def test_quantum_engage_is_routine_not_confirm_grade() -> None:
+    assert not safety.is_confirm_grade("v_toggle_qdrive_engagement")
+
+    async def scenario() -> Rig:
+        r = rig("engage quantum")
+        r.say()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert r.results[0].status == "done"
+    assert r.results[0].pressed == ("v_toggle_qdrive_engagement",)
+
+
+def test_a_key_shared_with_firing_is_never_pressed() -> None:
+    # Left mouse engages the quantum drive in quantum mode, but fires in combat mode.
+    keybinds = Keybinds(
+        [_action("v_toggle_qdrive_engagement", "mouse1"), _action("attack1", "mouse1")], MODES
+    )
+
+    async def scenario() -> Rig:
+        r = rig("engage quantum", keybinds=keybinds)
+        r.say()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert r.results[0].status == "refused"
+    assert "attack1" in r.results[0].detail
+    assert r.keys.events == []

@@ -49,7 +49,7 @@ def plan(
     action: Action, modes: dict[str, ActivationMode], hold_seconds: float | None = None
 ) -> Press:
     """How to press ``action``. ``hold_seconds`` overrides how long a hold action is held."""
-    key = _first_pressable(action)
+    key = pressable_input(action)
     if key is None:
         raise NotPressable(f"{action.label or action.name} has no key Tycho can press")
     codes = tuple(code_for(name) for name in (*key.modifiers, key.key))
@@ -63,7 +63,7 @@ def plan(
     )
 
 
-def _first_pressable(action: Action) -> KeyInput | None:
+def pressable_input(action: Action) -> KeyInput | None:
     """The first binding Tycho can press, preferring the keyboard over the mouse."""
     usable = [i for i in action.inputs if i.pressable]
     return next((i for i in usable if i.device == "keyboard"), usable[0] if usable else None)

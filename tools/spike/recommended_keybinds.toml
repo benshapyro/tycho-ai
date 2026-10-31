@@ -92,3 +92,8 @@ key = "ralt+b"
 [[add]]
 action = "v_master_mode_set_scm"
 key = "ralt+v"
+
+# Quantum engage: on its own key, because left mouse also fires and requests a jump-point jump.
+[[add]]
+action = "v_toggle_qdrive_engagement"
+key = "ralt+q"

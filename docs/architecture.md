@@ -34,7 +34,7 @@ Existing tools in this space, for Star Citizen and other games, share the same f
 **Anti-goals: Tycho fails if it does any of these, even if everything else works**
 - Reading or writing game memory, injecting into the game process, or anything else that could trip Easy Anti-Cheat or break CIG's terms. See [ADR 3](adr/0003-staying-within-cig-rules.md).
 - Unattended automation that amounts to botting.
-- An irreversible, costly or dangerous action (self-destruct, eject, quantum or jump engage, jettisoning cargo, firing weapons or missiles, accepting or abandoning a contract, buying or selling) without explicit confirmation.
+- An irreversible, costly or dangerous action (self-destruct, eject, a jump-point jump, jettisoning cargo, firing weapons or missiles, accepting or abandoning a contract, buying or selling) without explicit confirmation.
 - Capturing the screen without permission, or keeping captures the user didn't ask to keep.
 - Being so slow or unreliable that the user goes back to pressing keys.
 
@@ -131,8 +131,9 @@ Every action passes through one safety gate, which can refuse it. The gate is in
 
 - Actions are graded:
   - **Free:** gear, lights, doors.
-  - **Announce:** power off, flight ready.
-  - **Confirm:** self-destruct, eject, quantum or jump engage, jettisoning cargo, firing weapons or missiles, accepting or abandoning a contract, purchases.
+  - **Announce:** power off, flight ready, quantum engage. Quantum travel is routine, so it isn't confirm-grade (the author's call, 2026-10-30); the brain still never engages it unasked.
+  - **Confirm:** self-destruct, eject, a jump-point jump, jettisoning cargo, firing weapons or missiles, accepting or abandoning a contract, purchases.
+  - **Shared keys:** a key that a confirm-grade action also uses is never pressed. Left mouse engages the quantum drive in quantum mode but fires in combat mode, and Tycho can't yet see the mode.
 
   Users can move actions between grades, but nothing leaves the confirm grade without a deliberate settings change.
 - Confirmation is by voice ("confirm"), and the request expires after a few seconds.
