@@ -1,11 +1,8 @@
-"""Command-line entry point."""
+"""Command-line entry point: ``tycho run``, ``tycho check``, ``tycho bind``, ``tycho sounds``."""
 
-from tycho import __version__
+import sys
 
-
-def main() -> None:
-    print(f"Tycho {__version__}: nothing to run yet.")
-
+from tycho.app import main
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

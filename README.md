@@ -6,7 +6,18 @@
 
 Tycho turns natural speech into in-game actions, using your own keybinds. It checks the game's state before flipping a switch, says what it did, and asks before doing anything you can't undo. It answers trade, loadout and location questions from live community data.
 
-**Status: pre-alpha.** The latency spike is done ([#1](https://github.com/benshapyro/tycho-ai/issues/1), [ADR 2](docs/adr/0002-cascaded-voice-pipeline.md)). Push-to-talk, keybind reading, game-term correction and the fast-path command matcher work in code and benchmarks. There is no end-to-end app yet: next come key presses, the safety gate and voice.
+**Status: pre-alpha, working towards 0.1.** The talking loop runs end to end: hold push-to-talk, say a common command such as "gear down and request landing", and Tycho presses your keys. It works on the fast path only for now. Actions you can't undo are refused until spoken confirmation arrives in 0.2, Claude handles everything else from 0.3, and spoken replies arrive in 0.4 ([ADR 11](docs/adr/0011-runtime-architecture.md)).
+
+## Trying it
+
+```sh
+uv sync
+uv run tycho check   # finds the game, reads your keybinds, tests the microphone
+uv run tycho bind    # choose the push-to-talk button (a mouse side button works well)
+uv run tycho run     # downloads the speech model the first time (2.5 GB)
+```
+
+Tycho only presses keys while Star Citizen is the window in front. You hear a click when a command was done, and a low tone when it wasn't; `uv run tycho sounds` plays both. Settings live in `%APPDATA%\tycho\settings.toml`, and logs in `%LOCALAPPDATA%\tycho\logs`. Set `TYCHO_MODELS` to keep the speech model on another drive.
 
 ## Principles
 

@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
-tycho = "tycho.__main__:main"
+tycho = "tycho.app:main"
 
 [dependency-groups]
 dev = [

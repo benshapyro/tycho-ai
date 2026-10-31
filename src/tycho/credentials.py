@@ -14,6 +14,8 @@ import sys
 import keyring
 import keyring.errors
 
+from tycho import logs
+
 SERVICE = "tycho"
 KNOWN = ("anthropic", "cerebras", "typesafe", "elevenlabs")
 # Public prefixes that say which provider a key is for, and are safe to show.
@@ -25,11 +27,14 @@ class CredentialStoreError(Exception):
 
 
 def get(name: str) -> str | None:
-    """The stored key, or None if there isn't one."""
+    """The stored key, or None if there isn't one. Registered with the log redactor."""
     try:
-        return keyring.get_password(SERVICE, name)
+        value = keyring.get_password(SERVICE, name)
     except keyring.errors.KeyringError as e:
         raise CredentialStoreError(_explain(e)) from e
+    if value:
+        logs.register_secret(value)
+    return value
 
 
 def set_secret(name: str, value: str) -> None:

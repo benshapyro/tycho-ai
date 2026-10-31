@@ -85,7 +85,8 @@ def load(path: Path | None = None) -> Settings:
     if not path.exists():
         return Settings()
     try:
-        data = tomllib.loads(path.read_text("utf-8"))
+        # utf-8-sig: Notepad and PowerShell can save a byte-order mark, which TOML rejects.
+        data = tomllib.loads(path.read_text("utf-8-sig"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
         raise SettingsError(f"Couldn't read {path}: {e}") from e
     data = _migrate(data)

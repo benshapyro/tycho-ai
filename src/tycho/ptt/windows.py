@@ -24,6 +24,7 @@ _get_key_name_text.restype = ctypes.c_int
 
 _HELD = 0x8000
 _MAPVK_VK_TO_VSC = 0
+_MAPVK_VK_TO_VSC_EX = 4
 # Generic Shift, Ctrl and Alt. Their left and right variants are reported instead.
 _GENERIC_MODIFIERS = frozenset({0x10, 0x11, 0x12})
 
@@ -62,6 +63,12 @@ def describe(binding: Binding) -> str:
     if scan_code and _get_key_name_text(scan_code << 16, buffer, len(buffer)):
         return buffer.value
     return f"Key {binding.code:#04x}"
+
+
+def scan_code(vk: int) -> tuple[int, bool]:
+    """A virtual key's scan code, and whether it's an extended key (e.g. right Alt)."""
+    code = _map_virtual_key(vk, _MAPVK_VK_TO_VSC_EX)
+    return code & 0xFF, (code >> 8) in (0xE0, 0xE1)
 
 
 def _binding_for(vk: int) -> Binding:

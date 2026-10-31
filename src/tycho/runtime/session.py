@@ -90,7 +90,7 @@ class Session:
             target=self._poll, args=(loop, halt), name="tycho-ptt", daemon=True
         )
         poller.start()
-        log.info("Listening. Hold %s to talk.", self._ptt.binding)
+        log.debug("Listening for push-to-talk on %s", self._ptt.binding)
         try:
             await stop.wait()
         finally:

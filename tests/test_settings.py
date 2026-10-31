@@ -57,6 +57,12 @@ def test_files_without_a_version_are_treated_as_version_1(tmp_path: Path) -> Non
     assert settings.load(path).version == 1
 
 
+def test_a_file_saved_with_a_byte_order_mark_still_loads(tmp_path: Path) -> None:
+    path = tmp_path / "settings.toml"
+    path.write_bytes(b'\xef\xbb\xbfpush_to_talk = "mouse:0x06"\n')  # as Notepad may save it
+    assert settings.load(path).push_to_talk == "mouse:0x06"
+
+
 def test_push_to_talk_parses_to_a_binding() -> None:
     binding = Settings(push_to_talk="mouse:0x06").push_to_talk_binding
     assert binding is not None
