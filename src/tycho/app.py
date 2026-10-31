@@ -25,7 +25,7 @@ from tycho.stt import PARAKEET_V2, DeviceChoice, ModelError, ModelStore
 if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when running
     from tycho.audio.source import AudioSource
     from tycho.input import FocusCheck, KeySender
-    from tycho.runtime import Feedback, GameState, Result, Session, Transcriber
+    from tycho.runtime import ActionLog, Feedback, GameState, Result, Session, Transcriber
     from tycho.stt.parakeet import ParakeetTranscriber
 
 log = logging.getLogger("tycho")
@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     check = commands.add_parser("check", help="check the setup, in plain words")
     check.add_argument("--quick", action="store_true", help="skip the microphone and focus tests")
     commands.add_parser("bind", help="choose the push-to-talk button")
-    commands.add_parser("sounds", help="play the done and not-done sounds")
+    commands.add_parser("sounds", help="play the done, not-done and asking sounds")
     args = parser.parse_args(argv)
 
     try:
@@ -90,6 +90,7 @@ def _run(current: Settings, log_file: Path) -> int:
     from tycho.audio.microphone import Microphone
     from tycho.feedback import SoundDevicePlayer, SoundFeedback
     from tycho.input.windows import WindowsFocusCheck, WindowsKeySender
+    from tycho.runtime.actionlog import FileActionLog
 
     log.info("Tycho %s. Log file: %s", __version__, log_file)
     binding = current.push_to_talk_binding
@@ -102,6 +103,8 @@ def _run(current: Settings, log_file: Path) -> int:
 
     store = load_keybinds(current, binding)
     transcriber = load_transcriber(current)
+    action_log = FileActionLog()
+    log.info("Action log: %s", action_log.path)
     with Microphone(device=microphone_device(current.microphone)) as mic:
         log.info("Microphone: %s", mic.name)
         session = build_session(
@@ -113,9 +116,13 @@ def _run(current: Settings, log_file: Path) -> int:
             sender=WindowsKeySender(),
             focus=WindowsFocusCheck(),
             feedback=SoundFeedback(SoundDevicePlayer(), current.feedback_volume),
+            action_log=action_log,
         )
         log.info("Listening. Hold %s and speak; press Ctrl+C to stop.", describe(binding))
-        asyncio.run(serve(session, store))
+        try:
+            asyncio.run(serve(session, store))
+        finally:
+            action_log.close()
     if mic.overflows:
         log.warning("The microphone dropped audio %d time(s)", mic.overflows)
     return 0
@@ -153,6 +160,7 @@ def build_session(
     focus: FocusCheck,
     feedback: Feedback,
     game_state: GameState | None = None,
+    action_log: ActionLog | None = None,
     on_result: Callable[[Result], None] | None = None,
 ) -> Session:
     """The talking loop, wired the way ``tycho run`` wires it."""
@@ -178,6 +186,8 @@ def build_session(
         presser=Presser(sender, focus),
         feedback=feedback,
         game_state=game_state,
+        action_log=action_log,
+        confirm_seconds=current.confirm_seconds,
         log_transcripts=current.keep_transcripts,
         on_result=on_result,
     )
@@ -409,7 +419,12 @@ def sounds_command(current: Settings) -> int:
     feedback = SoundFeedback(SoundDevicePlayer(), current.feedback_volume)
     print(f"Volume {current.feedback_volume:.0%}. Change it with feedback_volume in")
     print(f"{paths.settings_file()}\n")
-    for name, play in (("Done", feedback.done), ("Not done", feedback.not_done)):
+    sounds = (
+        ("Done", feedback.done),
+        ("Not done", feedback.not_done),
+        ('Asking (say "confirm" to go ahead)', feedback.ask),
+    )
+    for name, play in sounds:
         print(f"  {name}...")
         play()
         time.sleep(1.2)

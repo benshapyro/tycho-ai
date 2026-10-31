@@ -37,6 +37,7 @@ def test_the_file_explains_each_setting(tmp_path: Path) -> None:
     ("content", "message"),
     [
         ("feedback_volume = 3.0", "feedback_volume"),
+        ("confirm_seconds = 60", "confirm_seconds"),  # a question must not linger
         ('transcription_device = "tpu"', "transcription_device"),
         ('push_to_talk = "elbow:1"', "push_to_talk"),
         ("volume = 0.5", "volume"),  # unknown key: probably a typo

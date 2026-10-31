@@ -15,7 +15,12 @@ import pytest
 from tests.fakes.fake_audio import FakeAudioSource
 from tests.fakes.fake_input import FakeInputSource
 from tests.fakes.fake_keys import FakeFocus, FakeKeySender
-from tests.fakes.fake_runtime import FakeFeedback, FakeGameState, FakeTranscriber
+from tests.fakes.fake_runtime import (
+    FakeActionLog,
+    FakeFeedback,
+    FakeGameState,
+    FakeTranscriber,
+)
 from tycho import safety
 from tycho.commands import CommandMatcher
 from tycho.game.gamelog import QUANTUM_ROUTE
@@ -66,6 +71,7 @@ class Rig:
     feedback: FakeFeedback
     transcriber: FakeTranscriber
     results: list[Result] = field(default_factory=list[Result])
+    actions: FakeActionLog = field(default_factory=FakeActionLog)
 
     def say(self) -> None:
         """Hold push-to-talk, speak, let go."""
@@ -85,8 +91,11 @@ def rig(
     log_transcripts: bool = False,
     sources: list[FakeInputSource] | None = None,
     game_state: FakeGameState | None = None,
+    keybinds_now: Callable[[], Keybinds] | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> Rig:
     audio, keys, feedback = FakeAudioSource(RATE), FakeKeySender(), FakeFeedback()
+    actions = FakeActionLog()
     transcriber = FakeTranscriber(*lines, hold=hold)
     results: list[Result] = []
     session = Session(
@@ -95,16 +104,18 @@ def rig(
         transcriber=transcriber,
         lexicon=_LEXICON,
         matcher=_MATCHER,
-        keybinds=lambda: keybinds,
+        keybinds=keybinds_now or (lambda: keybinds),
         presser=Presser(keys, focus or FakeFocus(True)),
         feedback=feedback,
         game_state=game_state,
+        action_log=actions,
         samplerate=RATE,
         log_transcripts=log_transcripts,
         on_result=results.append,
         poll_interval=0.001,
+        clock=clock,
     )
-    return Rig(session, audio, keys, feedback, transcriber, results)
+    return Rig(session, audio, keys, feedback, transcriber, results, actions)
 
 
 def run[T](test: Callable[[], Coroutine[Any, Any, T]]) -> T:
@@ -166,14 +177,161 @@ def test_the_lexicon_corrects_what_was_heard_before_matching() -> None:
     assert result.status == "not_understood"  # navigation is the brain's job
 
 
+# --- Asking first: confirm-grade requests (ADR 13) -------------------------------------
+
+
+def _conversation(*lines: str, **options: Any) -> Rig:
+    """Say each line on its own push-to-talk, waiting for each to finish."""
+
+    async def scenario() -> Rig:
+        r = rig(*lines, **options)
+        for _ in lines:
+            r.say()
+            await r.session.idle()
+        await r.session.close()
+        return r
+
+    return run(scenario)
+
+
+def test_eject_asks_first_and_presses_nothing() -> None:
+    r = _conversation("eject")
+    assert r.results[0].status == "asking"
+    assert 'say "confirm"' in r.results[0].detail
+    assert r.keys.events == []
+    assert r.feedback.played == ["ask"]
+
+
+def test_confirm_carries_out_the_request() -> None:
+    r = _conversation("eject", "confirm")
+    assert [x.status for x in r.results] == ["asking", "done"]
+    assert r.results[1].pressed == ("v_eject",)
+    assert r.results[1].confirmed
+    alt, y = code_for("ralt"), code_for("y")
+    assert r.pressed() == [f"down:{alt}", f"down:{y}", f"up:{y}", f"up:{alt}"]
+    assert r.feedback.played == ["ask", "done"]
+
+
+def test_a_chain_with_a_confirm_grade_part_waits_as_a_whole() -> None:
+    r = _conversation("gear down and eject", "affirmative")
+    assert r.results[0].status == "asking"
+    assert r.results[1].pressed == ("v_toggle_landing_system", "v_eject")
+
+
+@pytest.mark.parametrize("reply", ["cancel", "negative", "belay that", "never mind"])
+def test_cancel_drops_the_question(reply: str) -> None:
+    r = _conversation("eject", reply, "confirm")
+    assert [x.status for x in r.results] == ["asking", "done", "not_understood"]
+    assert r.results[2].detail == "nothing to confirm"
+    assert r.keys.events == []
+    assert r.feedback.played == ["ask", "done", "not_done"]
+    assert r.results[1].commands == ("cancel",)
+    assert r.results[1].detail == "cancelled #1 (eject)"
+
+
+def test_saying_anything_else_drops_the_question() -> None:
+    r = _conversation("eject", "landing gear", "confirm")
+    assert [x.status for x in r.results] == ["asking", "done", "not_understood"]
+    assert r.pressed() == _down_up("n")  # the gear, never the eject
+
+
+def test_a_slip_of_the_button_keeps_the_question() -> None:
+    r = _conversation("eject", "", "confirm")
+    assert [x.status for x in r.results] == ["asking", "empty", "done"]
+
+
+def _ask_then_confirm_after(seconds: float) -> Rig:
+    now = [100.0]
+
+    async def scenario() -> Rig:
+        r = rig("eject", "confirm", clock=lambda: now[0])
+        r.say()
+        await r.session.idle()
+        now[0] += seconds
+        r.say()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    return run(scenario)
+
+
+def test_the_question_expires() -> None:
+    assert _ask_then_confirm_after(4.9).results[1].status == "done"
+    late = _ask_then_confirm_after(5.1)
+    assert late.results[1].status == "not_understood"
+    assert late.results[1].detail == "the question expired"
+    assert late.keys.events == []
+
+
+def test_confirm_with_nothing_asked_does_nothing() -> None:
+    r = _conversation("confirm")
+    assert r.results[0].status == "not_understood"
+    assert r.results[0].detail == "nothing to confirm"
+    assert r.keys.events == []
+
+
+def test_a_confirmation_checks_the_keybinds_again() -> None:
+    # Between the question and "confirm", the player puts another dangerous action on eject's key.
+    later = Keybinds([*KEYBINDS, _action("v_self_destruct", "ralt+y")], MODES)
+    current = [KEYBINDS]
+
+    async def scenario() -> Rig:
+        r = rig("eject", "confirm", keybinds_now=lambda: current[0])
+        r.say()
+        await r.session.idle()
+        current[0] = later
+        r.say()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert r.results[1].status == "refused"
+    assert "v_self_destruct" in r.results[1].detail
+    assert r.keys.events == []
+
+
+def test_every_request_that_matched_is_in_the_action_log() -> None:
+    r = _conversation("eject", "confirm", "sing me a song", "landing gear")
+    assert r.actions.entries == [
+        {
+            "request": 1,
+            "commands": ["eject"],
+            "status": "asking",
+            "pressed": [],
+            "confirmed": False,
+            "detail": r.results[0].detail,
+        },
+        {
+            "request": 2,
+            "commands": ["eject"],
+            "status": "done",
+            "pressed": ["v_eject"],
+            "confirmed": True,
+        },
+        {
+            "request": 4,
+            "commands": ["landing_gear"],
+            "status": "done",
+            "pressed": ["v_toggle_landing_system"],
+            "confirmed": False,
+        },
+    ]  # "sing me a song" matched nothing, so it isn't an action
+
+
+def test_the_action_log_says_what_was_said_only_if_transcripts_are_kept() -> None:
+    assert "said" not in _conversation("landing gear").actions.entries[0]
+    kept = _conversation("landing gear", log_transcripts=True)
+    assert kept.actions.entries[0]["said"] == "landing gear"
+
+
 # --- Requests that must not press anything ----------------------------------------------
 
 
 @pytest.mark.parametrize(
     ("heard", "status"),
     [
-        ("eject", "refused"),  # confirm-grade: refused until spoken confirmation (0.2)
-        ("gear down and eject", "refused"),  # one refused part stops the whole chain
         ("sing me a song", "not_understood"),  # for the brain, which arrives in 0.3
         ("don't lower the gear", "not_understood"),  # negations always defer
         ("open the doors", "no_key"),  # neither door action is bound here
@@ -504,3 +662,15 @@ def test_setup_needs_its_own_keys() -> None:
     assert r.results[0].status == "no_key"
     assert "v_master_mode_set_nav" in r.results[0].detail
     assert r.keys.events == []
+
+
+def test_confirming_never_unlocks_a_shared_dangerous_key() -> None:
+    eject = next(c for c in CommandMatcher.default().commands if c.id == "eject")
+    keybinds = Keybinds([_action("v_eject", "ralt+y"), _action("v_self_destruct", "ralt+y")])
+    action = keybinds.get("v_eject")
+    assert action is not None
+    assert safety.check(eject, action, Keybinds([action])).ask
+    assert safety.check(eject, action, Keybinds([action]), confirmed=True).allowed
+    shared = safety.check(eject, action, keybinds, confirmed=True)
+    assert not shared.allowed
+    assert not shared.ask

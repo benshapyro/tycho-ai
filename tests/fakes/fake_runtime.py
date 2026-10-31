@@ -33,7 +33,7 @@ class FakeTranscriber:
 
 
 class FakeFeedback:
-    """Satisfies ``Feedback``. Records "done" and "not_done" in order."""
+    """Satisfies ``Feedback``. Records "done", "not_done" and "ask" in order."""
 
     def __init__(self) -> None:
         self.played: list[str] = []
@@ -43,6 +43,19 @@ class FakeFeedback:
 
     def not_done(self) -> None:
         self.played.append("not_done")
+
+    def ask(self) -> None:
+        self.played.append("ask")
+
+
+class FakeActionLog:
+    """Satisfies ``ActionLog``. Keeps the entries in a list."""
+
+    def __init__(self) -> None:
+        self.entries: list[dict[str, object]] = []
+
+    def record(self, entry: dict[str, object]) -> None:
+        self.entries.append(entry)
 
 
 class FakeGameState:

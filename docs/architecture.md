@@ -136,9 +136,9 @@ Every action passes through one safety gate, which can refuse it. The gate is in
   - **Shared keys:** a key that a confirm-grade action also uses is pressed only when the command first makes every such use impossible: it sets a mode that switches those controls off, and requires a logged fact that rules out the rest. Quantum engage on left click sets NAV and quantum mode, and accepts the remaining on-foot risk because Tycho only hears what the player says on purpose ([ADR 12](adr/0012-modes-before-shared-keys.md)). Otherwise the key is never pressed.
 
   Users can move actions between grades, but nothing leaves the confirm grade without a deliberate settings change.
-- Confirmation is by voice ("confirm"), and the request expires after a few seconds.
+- Confirmation is by voice. Tycho plays a question sound, and acts only if the next thing the player says on push-to-talk is "confirm", within 5 seconds (a setting). "Cancel", or saying anything else, drops the question ([ADR 13](adr/0013-spoken-confirmation-and-action-log.md)).
 - A spoken "stop" or "cancel", or pressing push-to-talk, immediately halts any sequence and releases every held key.
-- Every action is logged with what was pressed and why, so the user can review it and say "undo that" where possible.
+- Every action is logged with what was pressed and why, so the user can review it and say "undo that" where possible. The action log is `actions.jsonl` beside the other logs (ADR 13).
 - If the internet or an outside service fails, the fast path keeps working, and Tycho says plainly that the rest is unavailable instead of hanging.
 
 ### 4.8 Persona and voice

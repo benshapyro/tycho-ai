@@ -5,6 +5,7 @@ and quiet on purpose: they confirm, they don't announce.
 - Done: a radio-style click, a crisp blip with a breath of static.
 - Not done: a soft, low, falling tone (didn't understand, refused, no key, or
   the game wasn't in front).
+- Ask: two short rising notes, a question. Tycho wants "confirm" before acting.
 """
 
 import logging
@@ -40,6 +41,15 @@ def not_done_sound(rate: int = SAMPLERATE) -> Samples:
     return _finish(tone * envelope, rate)
 
 
+def ask_sound(rate: int = SAMPLERATE) -> Samples:
+    """About 260 ms: two soft notes, 660 Hz then 880 Hz, like a question."""
+    t = _time(0.11, rate)
+    envelope = np.minimum(1, t / 0.01) * np.minimum(1, (t[-1] - t) / 0.03)
+    gap = np.zeros(_frames(0.04, rate))
+    notes = [np.sin(2 * np.pi * f * t) * envelope for f in (660, 880)]
+    return _finish(np.concatenate([notes[0], gap, notes[1]]), rate)
+
+
 class Player(Protocol):
     """Plays a sound and returns at once."""
 
@@ -64,6 +74,7 @@ class SoundFeedback:
         gain = LOUDEST * min(1.0, max(0.0, volume)) ** 1.5  # gentler at the low end of the slider
         self._done = (done_sound(rate) * gain).astype(np.float32)
         self._not_done = (not_done_sound(rate) * gain).astype(np.float32)
+        self._ask = (ask_sound(rate) * gain).astype(np.float32)
         self._silent = gain == 0
 
     def done(self) -> None:
@@ -71,6 +82,9 @@ class SoundFeedback:
 
     def not_done(self) -> None:
         self._play(self._not_done)
+
+    def ask(self) -> None:
+        self._play(self._ask)
 
     def _play(self, samples: Samples) -> None:
         if self._silent:

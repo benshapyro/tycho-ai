@@ -1,8 +1,8 @@
 """The safety gate: the only way from a decision to the hands (architecture 4.7, ADR 10, ADR 11).
 
 It's independent of every model. Nothing a router, brain or fast-path match says
-can skip it. In 0.1 it refuses confirm-grade actions outright; asking out loud
-and acting on "confirm" arrives in 0.2 (issue #19).
+can skip it. Confirm-grade actions are asked about: the session plays a question
+sound and acts only on a spoken "confirm" (ADR 13).
 
 It also refuses to press a key that a confirm-grade action shares, unless the
 command makes every such use impossible first. Keys mean different things in
@@ -71,6 +71,8 @@ _REQUIREMENTS = {
 class Verdict:
     allowed: bool
     reason: str = ""
+    ask: bool = False
+    """Not allowed yet, but the player may confirm it. Refusals for any other reason can't be."""
 
 
 def check(
@@ -78,14 +80,16 @@ def check(
     action: Action,
     keybinds: Keybinds | None = None,
     facts: frozenset[str] = frozenset(),
+    *,
+    confirmed: bool = False,
 ) -> Verdict:
-    """Whether ``action`` may be pressed for ``command`` without asking first.
+    """Whether ``action`` may be pressed for ``command`` now.
 
     ``facts`` is what the game state shows now; the command's ``requires`` must be in it.
+    ``confirmed`` means the player has said "confirm" to this request; every other
+    check still applies.
     """
     name = action.label or action.name
-    if command.confirm or is_confirm_grade(action.name):
-        return Verdict(False, f"{name} needs your confirmation, which Tycho can't ask for yet")
     if missing := [fact for fact in command.requires if fact not in facts]:
         return Verdict(False, "; ".join(_REQUIREMENTS.get(fact, fact) for fact in missing))
     if keybinds is not None and (risky := shares_key_with_danger(action, keybinds, command)):
@@ -95,6 +99,8 @@ def check(
             f"{name} is on {key}, which is also {risky.label or risky.name}. "
             "Give it a key of its own (the recommended keybinds do).",
         )
+    if not confirmed and (command.confirm or is_confirm_grade(action.name)):
+        return Verdict(False, f"{name} needs your confirmation", ask=True)
     return Verdict(True)
 
 
