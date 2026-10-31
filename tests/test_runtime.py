@@ -1,6 +1,7 @@
 """The whole talking loop with fake hardware: real lexicon, matcher, gate and presser (ADR 11)."""
 
 import asyncio
+import dataclasses
 import logging
 import threading
 import time
@@ -451,12 +452,24 @@ def test_jumps_are_routine_not_confirm_grade() -> None:
     assert not safety.is_confirm_grade("v_toggle_jump_request")
 
 
-@pytest.mark.parametrize("game_state", [None, FakeGameState()], ids=["no log", "no route"])
-def test_quantum_engage_waits_for_a_route(game_state: FakeGameState | None) -> None:
-    r = _engage(game_state)
-    assert r.results[0].status == "refused"
-    assert "route" in r.results[0].detail
-    assert r.keys.events == []
+@pytest.mark.parametrize("game_state", [None, FakeGameState()], ids=["no log", "nothing logged"])
+def test_quantum_engage_needs_nothing_from_the_log(game_state: FakeGameState | None) -> None:
+    r = _engage(game_state, Keybinds(LEFT_CLICK, MODES))
+    assert r.results[0].status == "done"
+    assert r.pressed()[-2:] == _down_up("mouse1")
+
+
+def test_on_foot_firing_is_refused_unless_the_command_accepts_it() -> None:
+    engage = next(c for c in CommandMatcher.default().commands if c.id == "quantum_engage")
+    assert engage.accepted_risks == ("player",)
+    keybinds = Keybinds(LEFT_CLICK, MODES)
+    click = keybinds.get("v_toggle_qdrive_engagement")
+    assert click is not None
+    assert safety.check(engage, click, keybinds).allowed
+    unaccepted = dataclasses.replace(engage, accepted_risks=())
+    verdict = safety.check(unaccepted, click, keybinds)
+    assert not verdict.allowed
+    assert "attack1" in verdict.reason
 
 
 # Left click engages the quantum drive in quantum mode, but also fires.

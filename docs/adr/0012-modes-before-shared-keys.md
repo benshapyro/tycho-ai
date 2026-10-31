@@ -58,3 +58,11 @@ The fact is now `quantum_route_set`:
 - cleared by "Arrived at Final Destination", leaving the pilot seat, or a game restart.
 
 It rules out on foot for the same reason as before, and the setup still switches off the ship's weapons. Clicking before calibration finishes, or with a stale route, happens in NAV and quantum mode, where it engages nothing. Replaying the author's log, all five refused attempts would have been allowed.
+
+## Second correction, 2026-10-31: no log check at all
+
+Requiring a plotted route meant plotting one before every voice jump. The author ruled that out: "engage quantum" is a phrase nobody says on foot by accident. So `quantum_engage` requires nothing from Game.log. Instead it lists `accepted_risks = ["player"]`: the author accepts that left click could fire a drawn handgun on foot.
+
+Only `player` can be accepted (`safety.ACCEPTABLE_RISKS`). Ship weapons, missiles, mining and salvage must still be switched off by the setup, and any other confirm-grade action on the key still refuses the press. Everyday phrases ("jump", "punch it") were removed, so only the deliberate ones are left.
+
+The Game.log reader and its `quantum_route_set` fact stay, for later commands.

@@ -133,7 +133,7 @@ Every action passes through one safety gate, which can refuse it. The gate is in
   - **Free:** gear, lights, doors.
   - **Announce:** power off, flight ready, quantum engage, jump-point jumps. Travel is routine, so it isn't confirm-grade (the author's calls, 2026-10-30 and 2026-10-31); the brain still never engages it unasked.
   - **Confirm:** self-destruct, eject, jettisoning cargo, firing weapons or missiles, accepting or abandoning a contract, purchases.
-  - **Shared keys:** a key that a confirm-grade action also uses is pressed only when the command first makes every such use impossible: it sets a mode that switches those controls off, and requires a logged fact that rules out the rest. Quantum engage on left click sets NAV and quantum mode, and requires Game.log to show a quantum route plotted with the player still seated ([ADR 12](adr/0012-modes-before-shared-keys.md)). Otherwise the key is never pressed.
+  - **Shared keys:** a key that a confirm-grade action also uses is pressed only when the command first makes every such use impossible: it sets a mode that switches those controls off, and requires a logged fact that rules out the rest. Quantum engage on left click sets NAV and quantum mode, and accepts the remaining on-foot risk because only deliberate phrases trigger it ([ADR 12](adr/0012-modes-before-shared-keys.md)). Otherwise the key is never pressed.
 
   Users can move actions between grades, but nothing leaves the confirm grade without a deliberate settings change.
 - Confirmation is by voice ("confirm"), and the request expires after a few seconds.

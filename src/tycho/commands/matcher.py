@@ -74,6 +74,9 @@ class Command:
     requires: tuple[str, ...] = ()
     """Facts the game state must show (e.g. ``tycho.game.gamelog.QUANTUM_ROUTE``),
     or nothing is pressed."""
+    accepted_risks: tuple[str, ...] = ()
+    """Control contexts where the key could still do something dangerous, which the
+    author has decided to accept for this command (e.g. ``"player"``, on foot)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,6 +215,7 @@ def _parse(data: dict[str, Any]) -> list[Command]:
                 setup=tuple(str(a) for a in entry.get("setup", ())),
                 settle_seconds=float(entry.get("settle_seconds", 0.0)),
                 requires=tuple(str(r) for r in entry.get("requires", ())),
+                accepted_risks=tuple(str(c) for c in entry.get("accepted_risks", ())),
             )
         )
     return commands
