@@ -4,11 +4,13 @@ import os
 import threading
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from tycho.stt import ModelError, ModelFile, ModelSpec, ModelStore, choose_device
 from tycho.stt.models import HttpDownloader
+from tycho.stt.parakeet import Device, device_in_use
 
 CONTENT = {"a.onnx": b"weights" * 100, "vocab.txt": b"hello\nworld\n"}
 
@@ -133,6 +135,7 @@ def server() -> Iterator[tuple[str, list[str]]]:
     thread.start()
     yield f"http://127.0.0.1:{httpd.server_port}/a.onnx", ranges
     httpd.shutdown()
+    httpd.server_close()
 
 
 def test_the_downloader_resumes_a_partial_file(
@@ -174,3 +177,23 @@ def test_device_choice(
     choice = choose_device(setting, cuda=cuda, free_mb=free_mb)  # pyright: ignore[reportArgumentType]
     assert choice.device == device
     assert reason in choice.reason
+
+
+@pytest.mark.parametrize(
+    ("providers", "asked", "running"),
+    [
+        (["CUDAExecutionProvider", "CPUExecutionProvider"], "gpu", "gpu"),
+        (["CPUExecutionProvider"], "gpu", "cpu"),  # CUDA silently didn't load
+        (["CPUExecutionProvider"], "cpu", "cpu"),
+    ],
+)
+def test_the_device_reported_is_the_one_really_used(
+    providers: list[str], asked: Device, running: Device
+) -> None:
+    session = SimpleNamespace(get_providers=lambda: providers)
+    model = SimpleNamespace(asr=SimpleNamespace(_encoder=session))
+    assert device_in_use(model, asked) == running
+
+
+def test_an_unrecognised_model_is_taken_at_its_word() -> None:
+    assert device_in_use(object(), "gpu") == "gpu"

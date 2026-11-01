@@ -16,6 +16,8 @@ from typing import Any, Protocol
 import numpy as np
 
 HEAD_START_SECONDS = 0.1
+DRAIN_MARGIN_SECONDS = 2.0
+"""How much longer than the audio itself to wait for the sound card to finish."""
 
 
 class Sink(Protocol):
@@ -54,6 +56,8 @@ class SoundDeviceSink:
         self._started = False
         self._closed = False
         self._head_start = round(head_start * rate) * 2
+        self._rate = rate
+        self._written = 0
         self._gain = gain
         self._stream = sd.RawOutputStream(
             samplerate=rate,
@@ -72,6 +76,7 @@ class SoundDeviceSink:
             data = np.clip(scaled, -32768, 32767).astype(np.int16).tobytes()
         with self._lock:
             self._buffer += data
+            self._written += len(data)
             ready = len(self._buffer) >= self._head_start
         if ready:
             self._start()
@@ -82,8 +87,13 @@ class SoundDeviceSink:
         self._start()
 
     async def drained(self) -> None:
-        if self._started:
-            await self._played.wait()
+        """Wait for the sound card to finish, but never much longer than the audio lasts:
+        a device that stops calling back mustn't leave Tycho waiting for ever."""
+        if not self._started:
+            return
+        limit = self._written / (2 * self._rate) + DRAIN_MARGIN_SECONDS
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(self._played.wait(), limit)
 
     def close(self) -> None:
         if self._closed:

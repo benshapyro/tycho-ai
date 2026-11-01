@@ -152,6 +152,31 @@ def test_an_error_from_windows_still_releases_what_was_pressed() -> None:
     assert sender.held() == set()
 
 
+def test_cancelling_between_taps_never_sends_the_second_tap() -> None:
+    cancel = threading.Event()
+    sender = FakeKeySender()
+    clock = FakeClock()
+
+    def sleep(seconds: float) -> None:
+        clock.sleep(seconds)
+        if clock.now > 0.1:  # part way through the 80 ms gap after the first 60 ms tap
+            cancel.set()
+
+    presser = Presser(sender, FakeFocus(True), sleep=sleep, clock=clock)
+    receipt = presser.press(plan(_action("capslock", "double_tap"), MODES), cancel)
+    assert receipt.outcome == "cancelled"
+    assert receipt.taps_done == 1
+    assert [kind for kind, _ in sender.events] == ["down", "up"]
+
+
+def test_a_key_up_windows_refuses_is_tried_again() -> None:
+    sender = FakeKeySender(fail_on=2)  # releasing N fails; Left Alt is still down too
+    presser, _ = _presser(sender)
+    receipt = presser.press(plan(_action("lalt+n"), MODES))
+    assert receipt.outcome == "failed"
+    assert sender.held() == set()  # N was released on the second try, then Left Alt
+
+
 def test_wheel_actions_send_one_notch() -> None:
     sender = FakeKeySender()
     presser, _ = _presser(sender)

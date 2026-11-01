@@ -78,8 +78,11 @@ class Presser:
                     return Receipt(press.action, "cancelled", taps)
                 if not self._focus.game_has_focus():
                     return Receipt(press.action, "no_focus", taps, "Star Citizen isn't focused")
-                if tap:
-                    self._wait(press.gap_seconds, cancel)
+                if tap:  # between taps: a cancel or lost focus here stops the next tap
+                    if not self._wait(press.gap_seconds, cancel):
+                        return Receipt(press.action, "cancelled", taps)
+                    if not self._focus.game_has_focus():
+                        return Receipt(press.action, "no_focus", taps, "Star Citizen isn't focused")
                 if not self._tap(press, held, cancel):
                     return Receipt(press.action, "cancelled", taps)
                 taps += 1
@@ -102,10 +105,16 @@ class Presser:
             held.append(main)
             if not self._wait(press.hold_seconds, cancel):
                 return False
-            self._sender.up(held.pop())
+            self._release_one(held)
         while held:
-            self._sender.up(held.pop())
+            self._release_one(held)
         return True
+
+    def _release_one(self, held: list[Code]) -> None:
+        """Let go of the newest key. It stays in ``held`` until Windows has taken the
+        key-up, so if that fails the ``finally`` still knows to release it."""
+        self._sender.up(held[-1])
+        held.pop()
 
     def _wait(self, seconds: float, cancel: threading.Event) -> bool:
         """Wait, waking early if cancelled. Returns False if cancelled."""
@@ -117,10 +126,13 @@ class Presser:
         return not cancel.is_set()
 
     def _release(self, held: list[Code]) -> None:
-        """Let go of everything still down, newest first. Keeps going if one release fails."""
+        """Let go of everything still down, newest first. A failed release is tried once
+        more, and a key that still won't release doesn't stop the others."""
         while held:
             code = held.pop()
-            try:
-                self._sender.up(code)
-            except OSError:
-                continue
+            for _ in range(2):
+                try:
+                    self._sender.up(code)
+                    break
+                except OSError:
+                    continue

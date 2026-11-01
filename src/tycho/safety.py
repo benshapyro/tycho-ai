@@ -13,6 +13,7 @@ missiles, mining or salvage). That leaves on foot, a risk the author accepted
 for that command, since Tycho only hears what the player says to it on purpose.
 """
 
+import re
 from dataclasses import dataclass
 
 from tycho.commands.matcher import Command
@@ -86,17 +87,22 @@ def check(
     facts: frozenset[str] = frozenset(),
     *,
     confirmed: bool = False,
+    setup_done: int | None = None,
 ) -> Verdict:
     """Whether ``action`` may be pressed for ``command`` now.
 
     ``facts`` is what the game state shows now; the command's ``requires`` must be in it.
     ``confirmed`` means the player has said "confirm" to this request; every other
-    check still applies.
+    check still applies. ``setup_done`` is how many of the command's setup actions
+    will have been pressed before this one (None: all of them). A setup key is
+    checked in the mode the game is in before it, not after.
     """
     name = action.label or action.name
     if missing := [fact for fact in command.requires if fact not in facts]:
         return Verdict(False, "; ".join(_REQUIREMENTS.get(fact, fact) for fact in missing))
-    if keybinds is not None and (risky := shares_key_with_danger(action, keybinds, command)):
+    if keybinds is not None and (
+        risky := shares_key_with_danger(action, keybinds, command, setup_done)
+    ):
         key = pressable_input(action)
         return Verdict(
             False,
@@ -106,6 +112,12 @@ def check(
     if not confirmed and (command.confirm or is_confirm_grade(action.name)):
         return Verdict(False, f"{name} needs your confirmation", ask=True)
     return Verdict(True)
+
+
+def spoken_name(action: Action) -> str:
+    """How Tycho names an action when asking about it: the game's label, without
+    notes like "(Toggle)"."""
+    return re.sub(r"\s*\([^)]*\)", "", action.label).strip() or action.name
 
 
 def is_travel(command: Command) -> bool:
@@ -122,7 +134,10 @@ def is_confirm_grade(action_name: str) -> bool:
 
 
 def shares_key_with_danger(
-    action: Action, keybinds: Keybinds, command: Command | None = None
+    action: Action,
+    keybinds: Keybinds,
+    command: Command | None = None,
+    setup_done: int | None = None,
 ) -> Action | None:
     """A confirm-grade action bound to the very key Tycho would press for ``action``.
 
@@ -132,7 +147,7 @@ def shares_key_with_danger(
     key = pressable_input(action)
     if key is None:
         return None
-    off = switched_off(command) if command is not None else frozenset[str]()
+    off = switched_off(command, setup_done) if command is not None else frozenset[str]()
     for other in keybinds:
         if (
             other.name != action.name
@@ -144,10 +159,12 @@ def shares_key_with_danger(
     return None
 
 
-def switched_off(command: Command) -> frozenset[str]:
-    """Control contexts that can't act once ``command``'s setup and requirements hold."""
+def switched_off(command: Command, setup_done: int | None = None) -> frozenset[str]:
+    """Control contexts that can't act once ``command``'s requirements hold and the first
+    ``setup_done`` of its setup actions (all of them, if None) have been pressed."""
     off: set[str] = set()
-    for name in command.setup:
+    setup = command.setup if setup_done is None else command.setup[:setup_done]
+    for name in setup:
         off |= _MODE_GUARDS.get(name, frozenset())
     for fact in command.requires:
         off |= _STATE_GUARDS.get(fact, frozenset())

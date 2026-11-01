@@ -14,7 +14,6 @@ from typing import Any
 
 import numpy as np
 import pytest
-import soundfile as sf  # pyright: ignore[reportMissingTypeStubs]
 
 from tests.fakes.fake_audio import FakeAudioSource
 from tests.fakes.fake_keys import FakeFocus, FakeKeySender
@@ -32,6 +31,8 @@ from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime import Result, Session
 from tycho.stt import PARAKEET_V2, ModelStore, choose_device, cuda_available, gpu_free_mb
 from tycho.stt.parakeet import SAMPLERATE, ParakeetTranscriber
+
+sf = pytest.importorskip("soundfile")  # the bench group; the suite must run without it
 
 pytestmark = pytest.mark.replay
 

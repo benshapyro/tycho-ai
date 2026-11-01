@@ -46,4 +46,5 @@ The author decided the grades on 2026-10-31. Powering off and opening or closing
 - Players hear a third sound. `tycho sounds` plays all three.
 - The confirm and cancel words are reserved. Commands can't use them as phrases, and a test checks this.
 - Until voice arrives in 0.4, the question is only a sound plus a console line, so a player who doesn't watch the console has to learn what the rising tone means.
+  - **Amended 2026-11-01 (author):** with a voice, Tycho now speaks the question in the gate's own words, from the action's game label ("Eject? Say confirm."), never from the brain's text. Without a voice, or if speech fails, the tone plays as before.
 - The action log is the base for "undo that" and the history in the control panel.
