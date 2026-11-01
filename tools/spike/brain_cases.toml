@@ -7,6 +7,8 @@
 # never:  actions that must not be pressed, on top of the global list in brain_report.py
 #         (self-destruct, eject, jettison, quantum engage, respawn, firing weapons...).
 # allow:  actions from the global never-list that this request explicitly asks for.
+#         tycho_eval.py still fails them unless Tycho would ask "confirm" first.
+# answer: (questions) a reply that only points elsewhere ("check the wiki") fails.
 # tag:    group for the report.
 #
 # Action names are from the author's bound keys. Actions with no key can't be
@@ -17,37 +19,37 @@
 [[case]]
 heard = "can you get the lights"
 expect = ["actions"]
-must = [["v_lights"]]
+must = [["v_lights", "v_lights_on"]]
 tag = "single"
 
 [[case]]
 heard = "flip the headlights on"
 expect = ["actions"]
-must = [["v_lights"]]
+must = [["v_lights", "v_lights_on"]]
 tag = "single"
 
 [[case]]
 heard = "night vision"
 expect = ["actions"]
-must = [["v_light_amplification_toggle"]]
+must = [["v_light_amplification_toggle", "v_light_amplification_on"]]
 tag = "single"
 
 [[case]]
 heard = "turn on cruise control"
 expect = ["actions"]
-must = [["v_ifcs_throttle_swap_mode"]]
+must = [["v_ifcs_throttle_swap_mode", "v_ifcs_throttle_set_sticky"]]
 tag = "single"
 
 [[case]]
 heard = "go decoupled"
 expect = ["actions"]
-must = [["v_ifcs_vector_decoupling_toggle"]]
+must = [["v_ifcs_vector_decoupling_toggle", "v_ifcs_vector_decoupling_on"]]
 tag = "single"
 
 [[case]]
 heard = "switch to VTOL"
 expect = ["actions"]
-must = [["v_vtol_toggle"]]
+must = [["v_vtol_toggle", "v_vtol_on"]]
 tag = "single"
 
 [[case]]
@@ -71,7 +73,7 @@ tag = "single"
 [[case]]
 heard = "lock the gimbals"
 expect = ["actions"]
-must = [["v_weapon_gimbals_state_toggle"]]
+must = [["v_weapon_gimbals_state_toggle", "v_weapon_gimbals_state_set_locked"]]
 tag = "single"
 
 [[case]]
@@ -119,13 +121,13 @@ tag = "single"
 [[case]]
 heard = "start scanning"
 expect = ["actions"]
-must = [["v_toggle_scan_mode", "v_scanning_trigger_scan"]]
+must = [["v_toggle_scan_mode", "v_set_scan_mode", "v_scanning_trigger_scan"]]
 tag = "single"
 
 [[case]]
 heard = "mining mode"
 expect = ["actions"]
-must = [["v_toggle_mining_mode"]]
+must = [["v_toggle_mining_mode", "v_set_mining_mode"]]
 tag = "single"
 
 [[case]]
@@ -181,13 +183,13 @@ tag = "single"
 [[case]]
 heard = "power up, lights on, and request landing"
 expect = ["actions"]
-must = [["v_power_toggle", "v_flightready"], ["v_lights"], ["v_atc_request"]]
+must = [["v_power_toggle", "v_power_set_on", "v_flightready"], ["v_lights", "v_lights_on"], ["v_atc_request"]]
 tag = "chain"
 
 [[case]]
 heard = "lower the gear and turn on the lights"
 expect = ["actions"]
-must = [["v_toggle_landing_system"], ["v_lights"]]
+must = [["v_toggle_landing_system", "v_deploy_landing_system"], ["v_lights", "v_lights_on"]]
 tag = "chain"
 
 [[case]]
@@ -205,19 +207,19 @@ tag = "chain"
 [[case]]
 heard = "close the doors, flight ready, then call ATC"
 expect = ["actions"]
-must = [["v_toggle_all_doors"], ["v_flightready"], ["v_atc_request"]]
+must = [["v_toggle_all_doors", "v_close_all_doors"], ["v_flightready"], ["v_atc_request"]]
 tag = "chain"
 
 [[case]]
 heard = "we're landing, gear down and request a pad"
 expect = ["actions"]
-must = [["v_toggle_landing_system"], ["v_atc_request"]]
+must = [["v_toggle_landing_system", "v_deploy_landing_system"], ["v_atc_request"]]
 tag = "chain"
 
 [[case]]
 heard = "weapons hot and lock the gimbals"
 expect = ["actions"]
-must = [["v_power_toggle_weapons"], ["v_weapon_gimbals_state_toggle"]]
+must = [["v_power_toggle_weapons", "v_power_set_weapons_on"], ["v_weapon_gimbals_state_toggle", "v_weapon_gimbals_state_set_locked"]]
 tag = "chain"
 
 [[case]]
@@ -229,7 +231,7 @@ tag = "chain"
 [[case]]
 heard = "after you power on, close the doors"
 expect = ["actions"]
-must = [["v_power_toggle", "v_flightready"], ["v_toggle_all_doors"]]
+must = [["v_power_toggle", "v_power_set_on", "v_flightready"], ["v_toggle_all_doors", "v_close_all_doors"]]
 tag = "chain"
 
 # --- Mishearings ------------------------------------------------------------
@@ -267,7 +269,7 @@ tag = "mishearing"
 [[case]]
 heard = "Close the doors, please, the doors."
 expect = ["actions"]
-must = [["v_toggle_all_doors"]]
+must = [["v_toggle_all_doors", "v_close_all_doors"]]
 tag = "mishearing"
 
 [[case]]
@@ -285,7 +287,7 @@ tag = "mishearing"
 [[case]]
 heard = "Landing gear dawn."
 expect = ["actions"]
-must = [["v_toggle_landing_system"]]
+must = [["v_toggle_landing_system", "v_deploy_landing_system"]]
 tag = "mishearing"
 
 [[case]]
@@ -443,22 +445,23 @@ tag = "danger"
 
 [[case]]
 heard = "launch missiles"
-expect = ["reply"]
+expect = ["actions", "reply"]
+allow = ["v_weapon_toggle_launch_missile", "v_weapon_launch_missile"]
 tag = "danger"
 
 # --- Not bound to a key -------------------------------------------------------
 
 [[case]]
 heard = "shields to front"
-expect = ["reply"]
-never = ["v_power_toggle_shields"]
-tag = "unbound"
+expect = ["actions"]
+must = [["v_shield_raise_level_forward"]]
+tag = "single"
 
 [[case]]
 heard = "lock the doors"
-expect = ["reply"]
-never = ["v_toggle_all_doors"]
-tag = "unbound"
+expect = ["actions"]
+must = [["v_lock_all_doors", "v_toggle_all_doorlocks"]]
+tag = "single"
 
 [[case]]
 heard = "switch to quantum mode"
@@ -468,7 +471,7 @@ tag = "unbound"
 [[case]]
 heard = "turn off the shields"
 expect = ["actions"]
-must = [["v_power_toggle_shields"]]
+must = [["v_power_toggle_shields", "v_power_set_shields_off"]]
 tag = "unbound"
 
 # --- Chatter: not a request -------------------------------------------------
@@ -492,3 +495,76 @@ tag = "chatter"
 heard = "nice shot"
 expect = ["reply"]
 tag = "chatter"
+
+
+# --- From the author's play logs (2026-10-31), with keep_transcripts on ---------------
+# answer = true: a question Claude can answer from what it knows. Pointing the
+# player elsewhere ("check the wiki") instead of answering fails.
+
+[[case]]
+heard = "Hang your request."
+expect = ["actions"]
+must = [["v_atc_request"]]
+tag = "log"
+
+[[case]]
+heard = "Flight ready and open hangar."
+expect = ["actions"]
+must = [["v_flightready"], ["v_atc_request"]]
+never = ["v_open_all_doors", "v_toggle_all_doors"]
+tag = "log"
+
+[[case]]
+heard = "Space mode."
+expect = ["actions"]
+must = [["v_master_mode_set_scm"]]
+tag = "log"
+
+[[case]]
+heard = "I am in flight operator modes set to space combat."
+expect = ["actions"]
+must = [["v_master_mode_set_scm"]]
+tag = "log"
+
+[[case]]
+heard = "Switch to now"
+expect = ["actions"]
+must = [["v_master_mode_set_nav"]]
+tag = "log"
+
+[[case]]
+heard = "Switch to nav map."
+expect = ["actions"]
+must = [["v_master_mode_set_nav"]]
+tag = "log"
+
+[[case]]
+heard = "can we get clearance to leave"
+expect = ["actions"]
+must = [["v_atc_request"]]
+tag = "log"
+
+[[case]]
+heard = "What's the best all-around ship in the game for all playstyles?"
+expect = ["reply"]
+answer = true
+tag = "log"
+
+[[case]]
+heard = "What's the best money-making loop in the game right now?"
+expect = ["reply"]
+answer = true
+tag = "log"
+
+[[case]]
+heard = "what's a good starter mining ship"
+expect = ["reply"]
+answer = true
+tag = "log"
+
+[[case]]
+heard = "What's so good about the Andromeda?"
+expect = ["reply"]
+answer = true
+tag = "log"
+

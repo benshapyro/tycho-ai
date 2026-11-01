@@ -17,7 +17,7 @@ from tycho.brain import (
     commands_for,
     parse_tool_call,
 )
-from tycho.brain.briefing import bound_actions, briefing
+from tycho.brain.briefing import bound_actions, briefing, command_phrasings
 from tycho.brain.claude import ClaudeBrain, history
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Action, Keybinds, KeyInput
@@ -134,6 +134,15 @@ def test_the_briefing_is_the_same_every_time_so_the_cache_holds() -> None:
     first = briefing(KEYBINDS, MATCHER)
     assert first == briefing(Keybinds(list(reversed(list(KEYBINDS)))), MATCHER)
     assert "startup | flight_ready, then request_departure" in first
+
+
+def test_the_briefing_tells_claude_how_players_say_each_command() -> None:
+    lines = command_phrasings(KEYBINDS, MATCHER)
+    gear = [line for line in lines if line.startswith("v_toggle_landing_system |")]
+    assert len(gear) == 3  # toggle, down and up all fall back to the toggle here
+    assert any("gear down" in line for line in gear)
+    assert not any("v_lights" in line for line in lines)  # no key, so not offered
+    assert "how it's said" in briefing(KEYBINDS, MATCHER)
 
 
 def test_history_puts_earlier_exchanges_before_the_request() -> None:
