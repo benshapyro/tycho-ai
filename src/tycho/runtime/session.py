@@ -15,6 +15,10 @@ seconds. Expiry is checked when they next speak; no timer acts on its own.
 What the fast path can't match goes to the brain (ADR 14), with the last few
 exchanges if they were recent. What it picks becomes commands, planned and gated
 exactly like the fast path's.
+
+Who speaks when (ADR 14): the fast path keeps its sounds. The brain's replies
+are spoken, and so is its line about what it did, unless the game announces
+that itself. Pressing push-to-talk stops Tycho talking at once.
 """
 
 import asyncio
@@ -37,8 +41,9 @@ from tycho.input import NotPressable, Press, Presser, UnsupportedKey, plan
 from tycho.lexicon import Lexicon
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime.messages import Result, Status, Trace
-from tycho.runtime.ports import ActionLog, Brain, Feedback, GameState, Transcriber
+from tycho.runtime.ports import ActionLog, Brain, Feedback, GameState, Speaker, Transcriber
 from tycho.text import normalize
+from tycho.voice import SpeechError
 
 log = logging.getLogger(__name__)
 
@@ -89,6 +94,7 @@ class _Progress:
     confirmed: bool = False
     by_brain: bool = False
     say: str = ""
+    announced: bool = False
 
 
 def reply_to_question(text: str) -> str | None:
@@ -117,6 +123,7 @@ class Session:
         action_log: ActionLog | None = None,
         brain: Brain | None = None,
         brain_seconds: float = BRAIN_SECONDS,
+        speaker: Speaker | None = None,
         confirm_seconds: float = CONFIRM_SECONDS,
         samplerate: int = 16_000,
         log_transcripts: bool = False,
@@ -139,6 +146,9 @@ class Session:
         self._action_log = action_log
         self._brain = brain
         self._brain_seconds = brain_seconds
+        self._speaker = speaker
+        self._speech: asyncio.Task[None] | None = None
+        self._speech_warming: asyncio.Task[None] | None = None
         self._recent: list[Exchange] = []
         self._recent_at = 0.0
         self._confirm_seconds = confirm_seconds
@@ -168,6 +178,7 @@ class Session:
         warming = None
         if self._brain is not None:
             warming = asyncio.create_task(self._brain.warm(self._keybinds()))
+        self._warm_speaker()
         try:
             await stop.wait()
         finally:
@@ -187,6 +198,7 @@ class Session:
                 with contextlib.suppress(AudioError):
                     self._audio.stop()
             self._cancel_current()
+            self._stop_speaking()  # the player is talking: Tycho stops at once
             try:
                 self._audio.start()
             except AudioError as e:
@@ -200,11 +212,14 @@ class Session:
             self._current = asyncio.create_task(self._serve(next(self._ids)))
 
     async def idle(self) -> Result | None:
-        """Wait for the request in flight, if any, and return how it ended."""
+        """Wait for the request in flight, if any, and for Tycho to finish saying
+        anything about it. Returns how the request ended."""
         task = self._current
         if task is None:
             return None
         await asyncio.gather(task, return_exceptions=True)
+        if self._speech is not None:
+            await asyncio.gather(self._speech, return_exceptions=True)
         return None if task.cancelled() else task.result()
 
     async def close(self) -> None:
@@ -218,6 +233,15 @@ class Session:
                 self._audio.stop()
         self._cancel_current()
         await self.idle()
+        speech = self._speech
+        self._stop_speaking()
+        if speech is not None:
+            await asyncio.gather(speech, return_exceptions=True)
+        if self._speech_warming is not None:
+            self._speech_warming.cancel()
+        if self._speaker is not None:
+            with contextlib.suppress(Exception):
+                await self._speaker.close()
         # The key worker returns within ~10 ms of a cancel, having let go of every key.
         await asyncio.to_thread(self._keys.shutdown, True)
         self._stt.shutdown(wait=False, cancel_futures=True)
@@ -311,6 +335,7 @@ class Session:
                 return self._result(request, "not_understood", trace, heard, text, match.reason)
             else:
                 progress.by_brain = True
+                self._warm_speaker()  # while the brain thinks, so speech starts sooner
                 try:
                     decision = await asyncio.wait_for(
                         self._brain.decide(text, self._follow_ups(), self._keybinds()),
@@ -341,6 +366,7 @@ class Session:
         # confirmation plans again from scratch, with the keybinds as they are now.
         keybinds = self._keybinds()
         parts = [step for command in commands for step in command.expand()]
+        progress.announced = all(part.command.announced for part in parts)
         facts: frozenset[str] = frozenset()
         if self._game_state is not None and any(s.command.requires for s in parts):
             facts = await asyncio.to_thread(self._game_state.facts)
@@ -416,6 +442,7 @@ class Session:
             confirmed=progress.confirmed,
             by_brain=progress.by_brain,
             say=progress.say,
+            announced=progress.announced,
             timings=dict(trace.stages),
             total_ms=trace.total_ms,
         )
@@ -439,7 +466,9 @@ class Session:
         self._remember(result)
         if result.commands and self._action_log is not None:
             self._record(self._action_log, result)
-        if result.done or result.status == "replied":
+        if self._speaker is not None and self._should_speak(result):
+            self._start_speaking(self._speaker, result.say)
+        elif result.done or result.status == "replied":
             self._feedback.done()
         elif result.status == "asking":
             self._feedback.ask()
@@ -447,6 +476,36 @@ class Session:
             self._feedback.not_done()
         if self._on_result is not None:
             self._on_result(result)
+
+    def _should_speak(self, result: Result) -> bool:
+        if self._speaker is None or not result.by_brain or not result.say.strip():
+            return False
+        return result.status == "replied" or (result.done and not result.announced)
+
+    def _start_speaking(self, speaker: Speaker, text: str) -> None:
+        self._stop_speaking()
+        self._speech = asyncio.create_task(self._speak(speaker, text))
+
+    async def _speak(self, speaker: Speaker, text: str) -> None:
+        try:
+            await speaker.speak(text)
+        except SpeechError as e:
+            log.warning("Couldn't speak, so a sound instead: %s", e)
+            self._feedback.done()
+        except Exception:  # speech failing must never stop the loop
+            log.exception("Speaking failed")
+            self._feedback.done()
+
+    def _stop_speaking(self) -> None:
+        if self._speech is not None and not self._speech.done():
+            self._speech.cancel()
+        self._speech = None
+
+    def _warm_speaker(self) -> None:
+        if self._speaker is None or self._closed:
+            return
+        if self._speech_warming is None or self._speech_warming.done():
+            self._speech_warming = asyncio.create_task(self._speaker.warm())
 
     def _record(self, action_log: ActionLog, result: Result) -> None:
         entry: dict[str, object] = {

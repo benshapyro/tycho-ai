@@ -87,7 +87,9 @@ def commands_for(
     An action that is a command's own (first) action runs as that command, with its
     setup, waits and accepted risks, exactly as the fast path would. Any other action
     runs bare, with none: a key it shares with a confirm-grade action stays refused.
-    Travel the brain picked always asks first (the author's call, 2026-10-31).
+    A bare action counts as announced if an announced command uses it, so Tycho
+    doesn't talk over the game. Travel the brain picked always asks first (the
+    author's call, 2026-10-31).
     """
     if isinstance(decision, RunSequence):
         sequence = matcher.get(decision.name)
@@ -96,11 +98,16 @@ def commands_for(
         steps = tuple(replace(s, command=_ask_before_travel(s.command)) for s in sequence.steps)
         return (replace(sequence, steps=steps),)
     own: dict[str, Command] = {}
+    announced: set[str] = set()
     for command in matcher.commands:
         if command.actions and not command.is_sequence:
             own.setdefault(command.actions[0], command)
+            if command.announced:
+                announced.update(command.actions)
     return tuple(
-        _ask_before_travel(own.get(name) or Command(id=name, say=(), actions=(name,)))
+        _ask_before_travel(
+            own.get(name) or Command(id=name, say=(), actions=(name,), announced=name in announced)
+        )
         for name in decision.actions
     )
 

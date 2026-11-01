@@ -249,6 +249,14 @@ def test_no_usable_answer_is_a_brain_error(final: Any, problem: str) -> None:
         _decide(_Client([], final))
 
 
+def test_a_bare_action_an_announced_command_uses_counts_as_announced() -> None:
+    (lights,) = commands_for(RunActions(("v_lights",), ""), MATCHER)
+    assert not lights.announced
+    (toggle,) = commands_for(RunActions(("v_power_toggle",), ""), MATCHER)
+    assert toggle.id == "v_power_toggle"  # not power_on's own first action, so it runs bare
+    assert toggle.announced
+
+
 def test_warming_up_caches_exactly_what_a_real_request_sends() -> None:
     client = _Client([_tool_stop("run_sequence", {"name": "startup", "say": ""})], _final(""))
     brain = ClaudeBrain(MATCHER, client=cast(Any, client))

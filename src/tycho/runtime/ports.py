@@ -42,6 +42,22 @@ class Brain(Protocol):
         ...
 
 
+class Speaker(Protocol):
+    """Speaks what the brain says (ADR 14). Cancelling ``speak`` stops it at once.
+
+    ``speak`` raises ``tycho.voice.SpeechError`` only if nothing could be spoken,
+    so the session can play a sound instead.
+    """
+
+    async def speak(self, text: str) -> None: ...
+
+    async def warm(self) -> None:
+        """Get ready to speak soon, e.g. by opening a connection. Never raises."""
+        ...
+
+    async def close(self) -> None: ...
+
+
 class ActionLog(Protocol):
     """A record of every request that matched a command, for the player to review (ADR 13)."""
 

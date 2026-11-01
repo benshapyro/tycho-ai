@@ -84,6 +84,9 @@ class Command:
     author has decided to accept for this command (e.g. ``"player"``, on foot)."""
     steps: tuple[Step, ...] = ()
     """A sequence: these commands in order, instead of actions of its own."""
+    announced: bool = False
+    """The game itself says when this is done (engines, landing gear, power), so
+    Tycho doesn't talk over it."""
 
     @property
     def is_sequence(self) -> bool:
@@ -335,4 +338,5 @@ def _command(entry: _Entry) -> Command:
         settle_seconds=float(entry.get("settle_seconds", 0.0)),
         requires=tuple(str(r) for r in entry.get("requires", ())),
         accepted_risks=tuple(str(c) for c in entry.get("accepted_risks", ())),
+        announced=bool(entry.get("announced", False)),
     )

@@ -6,6 +6,8 @@
 # without knowing the current state can do the opposite of what was asked.
 #
 # confirm = true means Tycho asks before acting (see docs/architecture.md, 4.7).
+# announced = true means the game itself says when it's done (the ship's computer,
+# or air traffic control), so Tycho stays quiet instead of talking over it.
 # Anything not matched here goes to the language model, so this list only
 # needs the commands people say most and want instantly.
 #
@@ -20,27 +22,32 @@
 id = "landing_gear"
 say = ["landing gear", "gear", "toggle landing gear", "toggle the gear", "toggle the landing gear"]
 actions = ["v_toggle_landing_system"]
+announced = true
 
 [[command]]
 id = "landing_gear_down"
 say = ["lower the landing gear", "lower landing gear", "lower the gear", "gear down", "landing gear down", "deploy landing gear", "deploy the landing gear", "deploy the gear", "drop the gear", "drop the landing gear"]
 actions = ["v_deploy_landing_system", "v_toggle_landing_system"]
+announced = true
 
 [[command]]
 id = "landing_gear_up"
 say = ["raise the landing gear", "raise landing gear", "raise the gear", "gear up", "landing gear up", "retract landing gear", "retract the landing gear", "retract the gear"]
 actions = ["v_retract_landing_system", "v_toggle_landing_system"]
+announced = true
 
 [[command]]
 id = "request_landing"
 say = ["request landing", "request landing permission", "request a landing pad", "ask for a landing pad", "call the tower", "contact the tower", "request a hangar", "request hangar", "hangar request", "make a hangar request", "send a hangar request", "ask for a hangar", "get us a hangar"]
 actions = ["v_atc_request"]
+announced = true
 
 # The same air traffic control key asks to leave when parked at a pad or in a hangar.
 [[command]]
 id = "request_departure"
 say = ["request departure", "request takeoff", "request take off", "request to depart", "request clearance to depart", "request launch", "open the hangar", "open the hangar doors"]
 actions = ["v_atc_request"]
+announced = true
 
 # Doors
 [[command]]
@@ -84,26 +91,31 @@ actions = ["v_lights_off", "v_lights"]
 id = "flight_ready"
 say = ["flight ready", "systems ready", "flight systems ready", "make it flight ready"]
 actions = ["v_flightready"]
+announced = true
 
 [[command]]
 id = "power_on"
 say = ["power on", "power up", "turn the power on", "turn on the power", "power on the ship"]
 actions = ["v_power_set_on", "v_power_toggle"]
+announced = true
 
 [[command]]
 id = "power_off"
 say = ["power off", "power down", "turn the power off", "turn off the power", "power down the ship", "power everything down", "shut down", "shutdown", "shut down the ship", "shut it down", "shut her down"]
 actions = ["v_power_set_off", "v_power_toggle"]
+announced = true
 
 [[command]]
 id = "engines_on"
 say = ["engines on", "thrusters on", "turn on the engines", "turn the engines on", "start the engines"]
 actions = ["v_power_set_thrusters_on", "v_power_toggle_thrusters"]
+announced = true
 
 [[command]]
 id = "engines_off"
 say = ["engines off", "thrusters off", "turn off the engines", "turn the engines off", "kill the engines", "shut down the engines", "shut the engines down", "shut off the engines"]
 actions = ["v_power_set_thrusters_off", "v_power_toggle_thrusters"]
+announced = true
 
 [[command]]
 id = "shields_on"
@@ -119,11 +131,13 @@ actions = ["v_power_set_shields_off", "v_power_toggle_shields"]
 id = "weapons_on"
 say = ["weapons on", "guns on", "turn on the weapons", "power up weapons", "weapons hot"]
 actions = ["v_power_set_weapons_on", "v_power_toggle_weapons"]
+announced = true
 
 [[command]]
 id = "weapons_off"
 say = ["weapons off", "guns off", "turn off the weapons", "power down weapons", "weapons cold"]
 actions = ["v_power_set_weapons_off", "v_power_toggle_weapons"]
+announced = true
 
 # Power distribution
 [[command]]

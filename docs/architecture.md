@@ -83,7 +83,7 @@ Tycho is an AI product, not traditional software with a chatbot added. In practi
 | State tracker | What Tycho believes is true right now (see 4.3) |
 | Safety gate | The single checkpoint every action passes through (see 4.7) |
 | Knowledge | Game data lookups: UEX Corp, the Wiki API, starcitizen.tools |
-| Voice | Streaming text to speech (ElevenLabs, Kokoro as the local fallback), plus pre-rendered short replies ([ADR 9](adr/0009-voice.md)) |
+| Voice | Streaming text to speech (ElevenLabs, Kokoro as the local fallback), plus pre-rendered short replies ([ADR 9](adr/0009-voice.md)). As built ([ADR 14](adr/0014-the-brain-voice-and-sequences.md)): ElevenLabs v4 Turbo as raw PCM, played as it arrives; only the brain speaks, never over what the game announces, and push-to-talk stops it |
 | Memory | User preferences, fleet and habits, in a local file the user can edit |
 | Control panel | Settings, command list, history and privacy controls, served locally |
 

@@ -32,7 +32,7 @@ Tycho only presses keys while Star Citizen is the window in front. You hear a cl
 
 - Windows 10 or 11, and Star Citizen.
 - An NVIDIA GPU makes speech recognition fastest; it also runs on the CPU.
-- An Anthropic API key (for Claude), and an ElevenLabs API key for the recommended voice. A free local voice is the fallback. Store a key with `uv run python -m tycho.credentials set anthropic`; without one, Tycho understands only its built-in phrasings.
+- An Anthropic API key (for Claude), and an ElevenLabs API key for the recommended voice. A free local voice is the fallback. Store a key with `uv run python -m tycho.credentials set anthropic`; without one, Tycho understands only its built-in phrasings. For the voice, `uv run python -m tycho.credentials set elevenlabs` (the key needs text-to-speech permission); without one, Tycho's replies go to the log and it plays its sounds.
 - Development uses [uv](https://docs.astral.sh/uv/).
 
 ## What leaves your PC

@@ -37,6 +37,7 @@ All four of these pass: `ruff format --check`, `ruff check`, `pyright`, and `pyt
 - `src/tycho/input/`: the hands. Key codes, press planning from the game's activation modes, the presser (focus-guarded, cancellable, always releases), and the Windows sender.
 - `src/tycho/stt/`: speech to text. Pinned, checksummed model downloads (`ModelStore`), choosing the GPU or CPU, and the Parakeet transcriber.
 - `src/tycho/brain/`: the brain (ADR 14). What it can decide and the checks on it, its briefing, and the Claude adapter. Its output is untrusted: it becomes commands that the safety gate checks.
+- `src/tycho/voice/`: Tycho's voice (ADR 14). The ElevenLabs speaker, and playing speech as it streams in.
 - `src/tycho/runtime/`: the talking loop (ADR 11). The session that joins every stage, the messages and per-stage timings, the transcriber, feedback and action-log boundaries, the action log file, and the single-instance lock.
 - `src/tycho/safety.py`: the safety gate. Every press goes through `safety.check`, which allows, refuses or asks (ADR 13); the confirm-grade list lives here.
 - `src/tycho/settings.py` and `src/tycho/paths.py`: the settings schema, and the only place file locations are decided.

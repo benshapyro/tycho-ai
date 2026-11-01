@@ -637,6 +637,7 @@ source = { editable = "." }
 default-groups = ["bench", "dev", "gpu"]
 dependencies = [
     { name = "anthropic" },
+    { name = "httpx2" },
     { name = "keyring" },
     { name = "numpy" },
     { name = "onnx-asr" },
@@ -665,6 +666,7 @@ gpu = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic", specifier = ">=2.3.0" },
+    { name = "httpx2", specifier = ">=2.16.0" },
     { name = "keyring", specifier = ">=25.7.0" },
     { name = "numpy", specifier = ">=2.5.4" },
     { name = "onnx-asr", specifier = "==0.12.0" },

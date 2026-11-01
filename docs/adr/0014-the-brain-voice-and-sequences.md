@@ -40,6 +40,7 @@ The author decided the open questions in a design interview (2026-10-31). The de
 - **Who speaks when** *(author)*:
   - Fast-path commands keep the done and not-done sounds: instant and quiet.
   - When Claude acted, it says briefly what it did ("Gear down, lights on"), so the player hears how they were understood. The line is spoken after the press starts, never before.
+  - **Unless the game announces it itself** *(author, 2026-10-31)*. The ship's computer already speaks for power, engines, weapons power, landing gear and flight ready, and air traffic control answers its own requests. Those commands are marked `announced = true` in `commands.toml`, and when everything Claude did is announced, Tycho plays the done sound instead of talking over the game.
   - Replies and questions from Claude are spoken.
 - **Pressing push-to-talk stops Tycho talking at once** (ADR 10). It doesn't cancel the key sequence already running unless the player says "stop" or "cancel".
 - **Without an ElevenLabs key, or offline,** Tycho plays the done or not-done sound, and the reply goes to the log.

@@ -25,7 +25,16 @@ from tycho.stt import PARAKEET_V2, DeviceChoice, ModelError, ModelStore
 if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when running
     from tycho.audio.source import AudioSource
     from tycho.input import FocusCheck, KeySender
-    from tycho.runtime import ActionLog, Brain, Feedback, GameState, Result, Session, Transcriber
+    from tycho.runtime import (
+        ActionLog,
+        Brain,
+        Feedback,
+        GameState,
+        Result,
+        Session,
+        Speaker,
+        Transcriber,
+    )
     from tycho.stt.parakeet import ParakeetTranscriber
 
 log = logging.getLogger("tycho")
@@ -118,6 +127,7 @@ def _run(current: Settings, log_file: Path) -> int:
             feedback=SoundFeedback(SoundDevicePlayer(), current.feedback_volume),
             action_log=action_log,
             make_brain=load_brain,
+            speaker=load_speaker(current),
         )
         log.info("Listening. Hold %s and speak; press Ctrl+C to stop.", describe(binding))
         try:
@@ -177,6 +187,35 @@ def load_brain(matcher: CommandMatcher) -> Brain | None:
     return ClaudeBrain(matcher, api_key=key)
 
 
+VOICE_KEY_HELP = "uv run python -m tycho.credentials set elevenlabs"
+
+
+def elevenlabs_key() -> str | None:
+    from tycho import credentials
+
+    try:
+        return credentials.get("elevenlabs")
+    except credentials.CredentialStoreError as e:
+        log.warning("Couldn't read your ElevenLabs key: %s", e)
+        return None
+
+
+def load_speaker(current: Settings) -> Speaker | None:
+    """ElevenLabs, if the player has stored a key and the voice isn't turned off.
+    Without it, Tycho's replies go to the log and it plays its sounds."""
+    if current.voice_volume == 0:
+        log.info("Voice: off (voice_volume is 0)")
+        return None
+    key = elevenlabs_key()
+    if key is None:
+        log.info("No ElevenLabs key, so Tycho's replies go to the log. Add one: %s", VOICE_KEY_HELP)
+        return None
+    from tycho.voice.elevenlabs import MODEL, ElevenLabsSpeaker
+
+    log.info("Voice: ElevenLabs %s, The Ship's Mind", MODEL)
+    return ElevenLabsSpeaker(api_key=key, volume=current.voice_volume)
+
+
 def load_commands() -> CommandMatcher:
     """The built-in commands plus the player's own file. A broken file is reported
     and skipped, so a typo never stops Tycho starting."""
@@ -200,6 +239,7 @@ def build_session(
     game_state: GameState | None = None,
     action_log: ActionLog | None = None,
     make_brain: Callable[[CommandMatcher], Brain | None] | None = None,
+    speaker: Speaker | None = None,
     on_result: Callable[[Result], None] | None = None,
 ) -> Session:
     """The talking loop, wired the way ``tycho run`` wires it."""
@@ -228,6 +268,7 @@ def build_session(
         game_state=game_state,
         action_log=action_log,
         brain=make_brain(matcher) if make_brain is not None else None,
+        speaker=speaker,
         confirm_seconds=current.confirm_seconds,
         log_transcripts=current.keep_transcripts,
         on_result=on_result,
@@ -335,6 +376,15 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
         )
     else:
         yield Finding("ok", "Brain", "Claude, with your Anthropic key")
+
+    if current.voice_volume == 0:
+        yield Finding("ok", "Voice", "off (voice_volume is 0); Tycho's replies go to the log")
+    elif elevenlabs_key() is None:
+        yield Finding(
+            "warn", "Voice", f"no ElevenLabs key, so replies go to the log: {VOICE_KEY_HELP}"
+        )
+    else:
+        yield Finding("ok", "Voice", "ElevenLabs, with your key")
 
     commands_file = paths.commands_file()
     try:
