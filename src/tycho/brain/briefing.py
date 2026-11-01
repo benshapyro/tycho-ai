@@ -7,9 +7,14 @@ change (today's date) goes with each request instead (see ``claude.history``).
 
 Actions nobody would ask for by voice are left out (#59): fewer options, fewer
 wrong picks, and a smaller briefing.
+
+The game facts (facts.md) are what changed since Claude learned about the game,
+kept by hand: update them each patch. Facts only, never keys: Tycho uses the
+player's own keybinds.
 """
 
 import re
+from importlib import resources
 
 from tycho.commands import CommandMatcher, resolve
 from tycho.game.keybinds import Keybinds
@@ -48,8 +53,10 @@ self-destruct, jettison, respawn or firing unless the player clearly asked for \
 exactly that: an unclear request is never one of those.
 
 Questions: answer Star Citizen questions from what you know. Lead with a real \
-answer: a specific ship, place, item or method. If it may have changed, add one \
-short clause such as "as of the last patch I know". Never tell the player to \
+answer: a specific ship, place, item or method. The game facts below are \
+current: trust them over what you remember, and say "as of" the patch when you \
+use them. For anything else that may have changed, add one short clause such as \
+"as of the last patch I know". Never tell the player to \
 check a wiki, guide or the community instead of answering. Never make up exact \
 prices or numbers; give a rough picture instead.
 
@@ -127,6 +134,11 @@ def command_phrasings(keybinds: Keybinds, matcher: CommandMatcher) -> list[str]:
     return sorted(lines)
 
 
+def game_facts() -> str:
+    """The hand-kept sheet of what's true in the current patch."""
+    return resources.files("tycho.brain").joinpath("facts.md").read_text("utf-8").strip()
+
+
 def briefing(keybinds: Keybinds, matcher: CommandMatcher) -> str:
     actions = offered_actions(keybinds, matcher)
     sequences = sorted(
@@ -136,7 +148,9 @@ def briefing(keybinds: Keybinds, matcher: CommandMatcher) -> str:
     )
     return (
         INSTRUCTIONS
-        + "\nThe player's sequences (name | steps | how it's said):\n"
+        + "\nGame facts:\n"
+        + game_facts()
+        + "\n\nThe player's sequences (name | steps | how it's said):\n"
         + ("\n".join(sequences) or "(none)")
         + "\n\nThe player's commands (the action it presses | how it's said):\n"
         + ("\n".join(command_phrasings(keybinds, matcher)) or "(none)")

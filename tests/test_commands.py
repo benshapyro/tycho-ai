@@ -52,6 +52,9 @@ def test_defers_what_it_cannot_be_sure_of(text: str) -> None:
         ("power off", "power_on"),
         ("lock the doors", "doors_unlock"),
         ("engines off", "engines_on"),
+        ("lock gimbals", "gimbals_unlock"),
+        ("unlock gimbals", "gimbals_lock"),
+        ("gimbal lock", "gimbals_toggle"),  # a toggle could unlock them
     ],
 )
 def test_never_flips_meaning(text: str, never: str) -> None:

@@ -262,8 +262,25 @@ actions = ["v_weapon_countermeasure_noise_launch"]
 
 [[command]]
 id = "gimbals_toggle"
-say = ["toggle gimbals", "gimbal lock", "gimbals"]
+say = ["toggle gimbals", "gimbals", "switch gimbals"]
 actions = ["v_weapon_gimbals_state_toggle"]
+
+# Since 4.3.2, gimbal state (fixed or unlocked) and aim mode (PIP or AUTO, turrets
+# only) are separate controls.
+[[command]]
+id = "gimbals_lock"
+say = ["lock gimbals", "lock the gimbals", "gimbal lock", "fixed gimbals", "fix the gimbals"]
+actions = ["v_weapon_gimbals_state_set_locked", "v_weapon_gimbals_state_toggle"]
+
+[[command]]
+id = "gimbals_unlock"
+say = ["unlock gimbals", "unlock the gimbals", "free gimbals", "free the gimbals", "release the gimbals"]
+actions = ["v_weapon_gimbals_state_set_unlocked", "v_weapon_gimbals_state_toggle"]
+
+[[command]]
+id = "aim_mode"
+say = ["aim mode", "cycle aim mode", "switch aim mode", "change aim mode", "auto aim", "pip aim"]
+actions = ["v_weapon_aim_type_cycle"]
 
 # Seat and interface
 [[command]]

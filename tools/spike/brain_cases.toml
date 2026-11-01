@@ -568,3 +568,29 @@ expect = ["reply"]
 answer = true
 tag = "log"
 
+
+# --- Questions the game facts sheet answers (added 2026-11-01, patch 4.10.2) --------
+
+[[case]]
+heard = "what systems can I fly to right now"
+expect = ["reply"]
+answer = true
+tag = "question"
+
+[[case]]
+heard = "how do I get to Port Olisar"
+expect = ["reply"]
+answer = true
+tag = "question"
+
+[[case]]
+heard = "is the Caterpillar good for solo hauling"
+expect = ["reply"]
+answer = true
+tag = "question"
+
+[[case]]
+heard = "where's the main landing zone in Nyx"
+expect = ["reply"]
+answer = true
+tag = "question"
