@@ -117,7 +117,7 @@ Vision is never on the fast path. It's for questions ("what's this contract wort
 - Tycho reads the game's default bindings from `Data.p4k` (`Data\Libs\Config\defaultProfile.xml`), cached per game build, and applies the user's changes from `actionmaps.xml` (under `LIVE\user\client\0\Profiles\default\`) on top, reloading when that file changes. Readable action names come from the game's `global.ini`.
 - Only keyboard keys and mouse buttons can be pressed. Actions bound only to a joystick, or not bound at all, can't be used; out of the box, many specific actions ("Open All Doors", "Landing System (Deploy)") have no key, so Tycho falls back to toggles ([#13](https://github.com/benshapyro/tycho-ai/issues/13)).
 - It turns them into actions with friendly names and the phrases that trigger them. The user can edit the list.
-- Sequences ("startup", "prepare to land") are named, editable lists of actions with waits between them.
+- Sequences ("startup", "prepare to land") are named, fixed lists of commands with waits between them, in `commands.toml`. The fast path matches their phrasings, and the brain picks one by name for any other wording; the steps always come from the file. Players add or replace commands and sequences in their own `commands.toml` in the settings folder ([ADR 14](adr/0014-the-brain-voice-and-sequences.md)).
 - When an action has no binding, Tycho says so instead of guessing.
 - After a patch, it rereads the file and reports actions that were added, removed or changed.
 

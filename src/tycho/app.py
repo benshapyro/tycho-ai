@@ -14,7 +14,7 @@ import numpy as np
 
 from tycho import __version__, logs, paths, settings
 from tycho.audio.source import AudioError
-from tycho.commands import CommandMatcher, resolve
+from tycho.commands import CommandFileError, CommandMatcher, resolve
 from tycho.game.install import GameInstall, search_roots
 from tycho.game.store import GameDataError, KeybindStore
 from tycho.ptt.binding import Binding, DeviceKind
@@ -149,6 +149,16 @@ def load_transcriber(current: Settings) -> ParakeetTranscriber:
     return transcriber
 
 
+def load_commands() -> CommandMatcher:
+    """The built-in commands plus the player's own file. A broken file is reported
+    and skipped, so a typo never stops Tycho starting."""
+    try:
+        return CommandMatcher.default(paths.commands_file())
+    except CommandFileError as e:
+        log.warning("Your commands file can't be used, so only the built-in ones are: %s", e)
+        return CommandMatcher.default()
+
+
 def build_session(
     current: Settings,
     binding: Binding,
@@ -174,14 +184,14 @@ def build_session(
         game_log = GameLog(store.install.game_log)
         game_log.facts()  # read the session so far now, not on the first command
         if not game_log.readable:
-            log.info("No Game.log yet; quantum engage waits until the game writes one")
+            log.info("No Game.log yet; Tycho reads it once the game writes one")
         game_state = game_log
     return Session(
         audio=audio,
         push_to_talk=PushToTalk(binding, input_sources(binding)),
         transcriber=transcriber,
         lexicon=Lexicon.default(),
-        matcher=CommandMatcher.default(),
+        matcher=load_commands(),
         keybinds=lambda: store.keybinds,
         presser=Presser(sender, focus),
         feedback=feedback,
@@ -288,6 +298,20 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
     if not quick:
         yield microphone_finding(current)
 
+    commands_file = paths.commands_file()
+    try:
+        matcher = CommandMatcher.default(commands_file)
+    except CommandFileError as e:
+        yield Finding("fail", "Your commands", f"{e} (only the built-in ones are used)")
+        matcher = CommandMatcher.default()
+    else:
+        sequences = sum(c.is_sequence for c in matcher.commands)
+        counts = f"{len(matcher.commands) - sequences} commands, {sequences} sequences"
+        if commands_file.exists():
+            yield Finding("ok", "Your commands", f"{counts}, with yours from {commands_file}")
+        else:
+            yield Finding("ok", "Commands", f"{counts}; add your own in {commands_file}")
+
     store: KeybindStore | None = None
     try:
         install = find_install(current)
@@ -295,8 +319,8 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
         store = KeybindStore.load(install)
         unbound = [
             c.id
-            for c in CommandMatcher.default().commands
-            if resolve(c, store.keybinds).action is None
+            for c in matcher.commands
+            if not c.is_sequence and resolve(c, store.keybinds).action is None
         ]
         detail = f"{len(store.keybinds)} actions"
         if unbound:
@@ -309,9 +333,9 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
             yield Finding("ok", "Keybinds", f"{detail}; every voice command has a key")
         log_file = install.game_log
         if log_file.exists():
-            yield Finding("ok", "Game.log", f"{log_file} (quantum engage checks it)")
+            yield Finding("ok", "Game.log", str(log_file))
         else:
-            yield Finding("warn", "Game.log", f"not found at {log_file}; quantum engage needs it")
+            yield Finding("warn", "Game.log", f"not found at {log_file}; the game writes it")
     except FileNotFoundError as e:
         yield Finding("fail", "Star Citizen", str(e))
     except GameDataError as e:

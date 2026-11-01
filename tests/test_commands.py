@@ -145,7 +145,7 @@ def test_eject_needs_confirmation() -> None:
 
 def test_every_command_action_name_is_plausible() -> None:
     for command in MATCHER.commands:
-        assert command.actions, command.id
+        assert bool(command.actions) != command.is_sequence, command.id
         assert all(a == a.strip() and " " not in a for a in command.actions), command.id
 
 

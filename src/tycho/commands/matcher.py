@@ -6,13 +6,18 @@ Rules, in order of importance:
 2. A near match never flips meaning: "lights off" can't match "lights on".
 3. A chain ("drop the gear and ask for a landing pad") runs on the fast path
    only if every part matches; otherwise the whole request is deferred.
+
+Commands come from the built-in ``commands.toml``, and the player's own
+``commands.toml`` can add to them or replace them by id (ADR 14). A sequence is a
+command made of other commands, with waits between them.
 """
 
 import tomllib
 from collections.abc import Iterable
 from dataclasses import dataclass
 from importlib import resources
-from typing import Any
+from pathlib import Path
+from typing import Any, cast
 
 from tycho.text import normalize, similarity
 
@@ -77,6 +82,30 @@ class Command:
     accepted_risks: tuple[str, ...] = ()
     """Control contexts where the key could still do something dangerous, which the
     author has decided to accept for this command (e.g. ``"player"``, on foot)."""
+    steps: tuple[Step, ...] = ()
+    """A sequence: these commands in order, instead of actions of its own."""
+
+    @property
+    def is_sequence(self) -> bool:
+        return bool(self.steps)
+
+    def expand(self) -> tuple[Step, ...]:
+        """What to do, step by step: a sequence's steps, or the command itself."""
+        return self.steps or (Step(self),)
+
+
+@dataclass(frozen=True, slots=True)
+class Step:
+    command: Command
+    wait_seconds: float = 0.0
+    """How long to wait after the previous step (never less than the chain beat)."""
+
+
+MAX_STEP_WAIT = 10.0
+
+
+class CommandFileError(ValueError):
+    """A commands file that can't be used, with a message for the player."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,9 +146,29 @@ class CommandMatcher:
                 self._phrases.append((words, command))
 
     @classmethod
-    def default(cls) -> CommandMatcher:
+    def default(cls, user_file: Path | None = None) -> CommandMatcher:
+        """The built-in commands, plus the player's own file if there is one.
+
+        Raises ``CommandFileError`` if the player's file can't be used; the
+        built-in commands alone always load.
+        """
         text = resources.files("tycho.commands").joinpath("commands.toml").read_text("utf-8")
-        return cls(_parse(tomllib.loads(text)))
+        entries = _entries(tomllib.loads(text), "the built-in commands")
+        source = "the built-in commands"
+        if user_file is not None and user_file.exists():
+            source = str(user_file)
+            try:
+                user = tomllib.loads(user_file.read_text("utf-8"))
+            except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+                raise CommandFileError(f"{source}: {e}") from e
+            entries = _merge(entries, _entries(user, source))
+        try:
+            return cls(_build(entries))
+        except (KeyError, TypeError, ValueError) as e:
+            raise CommandFileError(f"{source}: {e}") from e
+
+    def get(self, command_id: str) -> Command | None:
+        return next((c for c in self.commands if c.id == command_id), None)
 
     def match(self, text: str) -> Match | Defer:
         words = _strip_filler(normalize(text))
@@ -202,20 +251,88 @@ def _split(words: tuple[str, ...]) -> list[tuple[str, ...]]:
     return [p for p in parts if p]
 
 
-def _parse(data: dict[str, Any]) -> list[Command]:
-    commands: list[Command] = []
-    for raw in data.get("command", []):
-        entry: dict[str, Any] = raw
-        commands.append(
-            Command(
-                id=str(entry["id"]),
-                say=tuple(str(s) for s in entry["say"]),
-                actions=tuple(str(a) for a in entry["actions"]),
-                confirm=bool(entry.get("confirm", False)),
-                setup=tuple(str(a) for a in entry.get("setup", ())),
-                settle_seconds=float(entry.get("settle_seconds", 0.0)),
-                requires=tuple(str(r) for r in entry.get("requires", ())),
-                accepted_risks=tuple(str(c) for c in entry.get("accepted_risks", ())),
+# A commands file is a list of [[command]] and [[sequence]] tables. Entries stay
+# raw tables until every file is merged, so a player's sequence can use a player's
+# command, and a replaced command changes every sequence that uses it.
+type _Entry = dict[str, Any]
+
+
+def _entries(data: dict[str, Any], source: str) -> dict[str, _Entry]:
+    entries: dict[str, _Entry] = {}
+    for kind in ("command", "sequence"):
+        raw_list: Any = data.get(kind, [])
+        if not isinstance(raw_list, list):
+            raise CommandFileError(f"{source}: [[{kind}]] must be a list of tables")
+        for raw in raw_list:  # pyright: ignore[reportUnknownVariableType]
+            if not isinstance(raw, dict) or "id" not in raw:
+                raise CommandFileError(f"{source}: every [[{kind}]] needs an id")
+            entry: _Entry = {**raw, "_kind": kind}  # pyright: ignore[reportUnknownArgumentType]
+            entry_id = str(entry["id"])
+            if entry_id in entries:
+                raise CommandFileError(f"{source}: {entry_id!r} is defined twice")
+            entries[entry_id] = entry
+    return entries
+
+
+def _merge(base: dict[str, _Entry], user: dict[str, _Entry]) -> dict[str, _Entry]:
+    """The player's entries replace built-in ones with the same id, and take their
+    phrases: a phrase the player gives an entry is removed from every built-in one."""
+    claimed = {
+        tuple(normalize(str(phrase))) for entry in user.values() for phrase in entry.get("say", ())
+    }
+    merged: dict[str, _Entry] = {}
+    for entry_id, entry in base.items():
+        if entry_id in user:
+            continue
+        say = [s for s in entry.get("say", ()) if tuple(normalize(str(s))) not in claimed]
+        merged[entry_id] = {**entry, "say": say}
+    return merged | user
+
+
+def _build(entries: dict[str, _Entry]) -> list[Command]:
+    commands = {
+        entry_id: _command(entry)
+        for entry_id, entry in entries.items()
+        if entry["_kind"] == "command"
+    }
+    built: list[Command] = list(commands.values())
+    for entry_id, entry in entries.items():
+        if entry["_kind"] == "sequence":
+            built.append(_sequence(entry_id, entry, commands, entries))
+    return built
+
+
+def _sequence(
+    entry_id: str, entry: _Entry, commands: dict[str, Command], entries: dict[str, _Entry]
+) -> Command:
+    steps: list[Step] = []
+    for raw in entry.get("steps", ()):
+        # A step is a command id, or a table with the id and a wait.
+        step = cast(dict[str, Any], raw) if isinstance(raw, dict) else {"command": raw}
+        name = str(step.get("command", ""))
+        if name not in commands:
+            kind = (
+                "a sequence (sequences can't contain sequences)" if name in entries else "unknown"
             )
-        )
-    return commands
+            raise ValueError(f"sequence {entry_id!r}: step {name!r} is {kind}")
+        wait = float(step.get("wait", 0.0))
+        if not 0 <= wait <= MAX_STEP_WAIT:
+            raise ValueError(f"sequence {entry_id!r}: wait {wait} s is not 0 to {MAX_STEP_WAIT} s")
+        steps.append(Step(commands[name], wait))
+    if not steps:
+        raise ValueError(f"sequence {entry_id!r} has no steps")
+    say = tuple(str(s) for s in entry.get("say", ()))
+    return Command(id=entry_id, say=say, actions=(), steps=tuple(steps))
+
+
+def _command(entry: _Entry) -> Command:
+    return Command(
+        id=str(entry["id"]),
+        say=tuple(str(s) for s in entry.get("say", ())),
+        actions=tuple(str(a) for a in entry["actions"]),
+        confirm=bool(entry.get("confirm", False)),
+        setup=tuple(str(a) for a in entry.get("setup", ())),
+        settle_seconds=float(entry.get("settle_seconds", 0.0)),
+        requires=tuple(str(r) for r in entry.get("requires", ())),
+        accepted_risks=tuple(str(c) for c in entry.get("accepted_risks", ())),
+    )

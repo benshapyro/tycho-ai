@@ -33,7 +33,7 @@ All four of these pass: `ruff format --check`, `ruff check`, `pyright`, and `pyt
 - `src/tycho/audio/`: microphone capture and push-to-talk clips.
 - `src/tycho/game/`: the game install, `Data.p4k` and CryXmlB readers, keybinds, the keybind store, profile building, and the `Game.log` reader.
 - `src/tycho/lexicon/`: the game-term corrector and its term list.
-- `src/tycho/commands/`: the fast-path command matcher and its command list.
+- `src/tycho/commands/`: the fast-path command matcher, its command list and sequences, and merging in the player's own `commands.toml` (ADR 14).
 - `src/tycho/input/`: the hands. Key codes, press planning from the game's activation modes, the presser (focus-guarded, cancellable, always releases), and the Windows sender.
 - `src/tycho/stt/`: speech to text. Pinned, checksummed model downloads (`ModelStore`), choosing the GPU or CPU, and the Parakeet transcriber.
 - `src/tycho/runtime/`: the talking loop (ADR 11). The session that joins every stage, the messages and per-stage timings, the transcriber, feedback and action-log boundaries, the action log file, and the single-instance lock.

@@ -326,6 +326,27 @@ def test_the_action_log_says_what_was_said_only_if_transcripts_are_kept() -> Non
     assert kept.actions.entries[0]["said"] == "landing gear"
 
 
+# --- Sequences (ADR 14) -----------------------------------------------------------------
+
+
+def test_a_sequence_presses_its_steps_in_order_after_its_waits() -> None:
+    started = time.monotonic()
+    r = _conversation("prepare for landing")
+    elapsed = time.monotonic() - started
+    result = r.results[0]
+    assert result.status == "done"
+    assert result.commands == ("prepare_to_land",)  # logged as what was asked for
+    assert result.pressed == ("v_atc_request", "v_toggle_landing_system")
+    assert elapsed >= 1.0  # the gear waits a second after the landing request
+
+
+def test_a_sequence_with_a_step_that_has_no_key_presses_nothing() -> None:
+    r = _conversation("startup")  # flight ready has no key in this rig
+    assert r.results[0].status == "no_key"
+    assert "flight_ready" in r.results[0].detail
+    assert r.keys.events == []
+
+
 # --- Requests that must not press anything ----------------------------------------------
 
 

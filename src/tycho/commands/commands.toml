@@ -8,6 +8,12 @@
 # confirm = true means Tycho asks before acting (see docs/architecture.md, 4.7).
 # Anything not matched here goes to the language model, so this list only
 # needs the commands people say most and want instantly.
+#
+# Sequences, at the end, are commands made of other commands (ADR 14).
+#
+# Players can add their own commands and sequences, or replace these by id, in
+# commands.toml in Tycho's settings folder (%APPDATA%\tycho). A phrase given
+# there is taken away from the built-in command that had it.
 
 # Landing gear
 [[command]]
@@ -446,3 +452,32 @@ actions = ["pc_conversation_option4"]
 id = "option_5"
 say = ["option five", "option 5", "fifth option", "choose option five", "pick option five"]
 actions = ["pc_conversation_option5"]
+
+# Sequences: named, fixed lists of the commands above, with waits between them
+# (ADR 14). The fast path matches these phrasings; for any other wording, the
+# brain picks the sequence by name, and the steps still come from here. Every
+# step goes through the safety gate, and the whole sequence is planned before
+# the first press. A step's wait is the time after the previous step, in seconds.
+[[sequence]]
+id = "startup"
+say = ["start up", "startup", "start up the ship", "start the ship", "start her up", "get us ready to fly", "ready for takeoff"]
+steps = [
+    { command = "flight_ready" },
+    { command = "request_departure", wait = 2.0 },
+]
+
+[[sequence]]
+id = "prepare_to_land"
+say = ["prepare to land", "prepare for landing", "landing sequence", "get ready to land", "bring us in"]
+steps = [
+    { command = "request_landing" },
+    { command = "landing_gear_down", wait = 1.0 },
+]
+
+[[sequence]]
+id = "shutdown"
+say = ["shut down", "shutdown", "shut down the ship", "shut it down", "shut her down"]
+steps = [
+    { command = "engines_off" },
+    { command = "power_off", wait = 1.0 },
+]
