@@ -270,11 +270,39 @@ def _entries(data: dict[str, Any], source: str) -> dict[str, _Entry]:
             if not isinstance(raw, dict) or "id" not in raw:
                 raise CommandFileError(f"{source}: every [[{kind}]] needs an id")
             entry: _Entry = {**raw, "_kind": kind}  # pyright: ignore[reportUnknownArgumentType]
+            if problem := _type_problem(entry):
+                raise CommandFileError(f"{source}: {entry['id']!r}: {problem}")
             entry_id = str(entry["id"])
             if entry_id in entries:
                 raise CommandFileError(f"{source}: {entry_id!r} is defined twice")
             entries[entry_id] = entry
     return entries
+
+
+_LISTS = ("say", "actions", "setup", "requires", "accepted_risks")
+_FLAGS = ("confirm", "announced")
+
+
+def _type_problem(entry: _Entry) -> str | None:
+    """What's the wrong type in an entry, or None. Checked before anything uses it: a
+    string where a list belongs would otherwise become one phrase per letter."""
+    if not isinstance(entry["id"], str) or not entry["id"]:
+        return "id must be some text"
+    for name in _LISTS:
+        value: Any = entry.get(name, [])
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):  # pyright: ignore[reportUnknownVariableType]
+            return f'{name} must be a list of text, like {name} = ["..."]'
+    for name in _FLAGS:
+        if not isinstance(entry.get(name, False), bool):
+            return f"{name} must be true or false"
+    settle: Any = entry.get("settle_seconds", 0.0)
+    if isinstance(settle, bool) or not isinstance(settle, int | float):
+        return "settle_seconds must be a number"
+    if not 0 <= settle <= MAX_STEP_WAIT:  # also catches nan
+        return f"settle_seconds must be 0 to {MAX_STEP_WAIT:g}"
+    if not isinstance(entry.get("steps", []), list):
+        return "steps must be a list"
+    return None
 
 
 def _merge(base: dict[str, _Entry], user: dict[str, _Entry]) -> dict[str, _Entry]:

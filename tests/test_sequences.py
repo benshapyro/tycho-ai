@@ -145,6 +145,22 @@ actions = ["v_deploy_landing_system"]
         ('[[command]]\nid = "x"\nsay = ["xyzzy"]', "actions"),
         ('[[command]]\nsay = ["xyzzy"]\nactions = ["a"]', "needs an id"),
         ('[[command]]\nid = "x"\nsay = ["dont xyzzy"]\nactions = ["a"]', "can never match"),
+        ('[[command]]\nid = "x"\nsay = 5\nactions = ["a"]', "say must be a list of text"),
+        ('[[command]]\nid = "x"\nsay = "jump"\nactions = ["a"]', "say must be a list"),
+        ('[[command]]\nid = "x"\nsay = ["xyzzy"]\nactions = "a"', "actions must be a list"),
+        (
+            '[[command]]\nid = "x"\nsay = ["xyzzy"]\nactions = ["a"]\nconfirm = "false"',
+            "true or false",
+        ),
+        (
+            '[[command]]\nid = "x"\nsay = ["xyzzy"]\nactions = ["a"]\nsettle_seconds = 1e9',
+            "0 to 10",
+        ),
+        (
+            '[[command]]\nid = "x"\nsay = ["xyzzy"]\nactions = ["a"]\nsettle_seconds = nan',
+            "0 to 10",
+        ),
+        ('[[command]]\nid = 7\nsay = ["xyzzy"]\nactions = ["a"]', "id must be some text"),
     ],
 )
 def test_a_broken_user_file_says_what_is_wrong(tmp_path: Path, text: str, problem: str) -> None:

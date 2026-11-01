@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Self
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import numpy as np
 
@@ -52,9 +52,28 @@ class ParakeetTranscriber:
         model = onnx_asr.load_model(  # pyright: ignore[reportUnknownMemberType] - ORT's types
             PARAKEET_V2.name, folder, providers=providers
         )
-        return cls(model, device)
+        return cls(model, device_in_use(model, device))
 
     def transcribe(self, samples: Samples, samplerate: int) -> str:
         if samplerate != SAMPLERATE:
             raise ValueError(f"Parakeet needs {SAMPLERATE} Hz audio, not {samplerate}")
         return str(self._model.recognize(samples, sample_rate=SAMPLERATE)).strip()
+
+
+def device_in_use(model: Any, asked: Device) -> Device:
+    """Where the model really runs. ONNX Runtime falls back to the CPU without an
+    error when the CUDA libraries won't load, so "gpu" is only believed if the
+    session's first provider is CUDA. Reads an onnx-asr internal (pinned version);
+    if that changes, the request is taken at its word.
+    """
+    session = getattr(getattr(model, "asr", None), "_encoder", None)
+    get_providers = getattr(session, "get_providers", None)
+    if asked != "gpu" or get_providers is None:
+        return asked
+    providers: list[str] = list(get_providers())
+    if providers and providers[0] != "CUDAExecutionProvider":
+        log.warning(
+            "The graphics card's libraries didn't load, so speech recognition is on the CPU"
+        )
+        return "cpu"
+    return asked

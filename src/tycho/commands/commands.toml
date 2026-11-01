@@ -227,6 +227,10 @@ actions = ["v_set_quantum_mode", "v_toggle_quantum_mode"]
 # quantum mode first, which leaves only on foot. The author accepts that: Tycho only
 # hears what the player says on purpose, by push-to-talk or wake word (2026-10-31).
 # Leaving NAV takes about a second.
+# No route requirement (author, 2026-10-31 and again 2026-11-01): a player often
+# engages without plotting a route first. The accepted risk is "player" (on foot):
+# said on foot with a gun drawn, the final left click fires it. Revisit when Tycho
+# can tell from the game that the player is on foot.
 [[command]]
 id = "quantum_engage"
 say = ["engage quantum", "engage the quantum drive", "jump", "punch it"]

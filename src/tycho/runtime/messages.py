@@ -58,6 +58,8 @@ class Result:
     """What Tycho says about it: the brain's reply, or its line about what it pressed."""
     announced: bool = False
     """The game itself announces everything that was done, so Tycho needn't."""
+    question: str = ""
+    """For "asking": what Tycho asks, from the gate's own words ("Eject? Say confirm.")."""
     confirmed: bool = False
     """The player said "confirm" to a question Tycho asked about this request."""
     timings: dict[str, float] = field(default_factory=dict[str, float])

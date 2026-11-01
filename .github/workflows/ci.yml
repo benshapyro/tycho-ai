@@ -28,3 +28,6 @@ jobs:
       - run: uv run ruff check
       - run: uv run pyright
       - run: uv run pytest
+      # The same checks as the pre-commit hook, for contributors who never installed it.
+      - run: uv run pre-commit run check-added-large-files --all-files
+      - run: uv run pre-commit run detect-private-key --all-files

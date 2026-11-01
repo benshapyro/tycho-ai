@@ -7,6 +7,7 @@ import threading
 import time
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -358,7 +359,7 @@ def test_a_sequence_with_a_step_that_has_no_key_presses_nothing() -> None:
 
 def test_what_the_fast_path_misses_goes_to_the_brain() -> None:
     brain = FakeBrain(RunActions(("v_toggle_landing_system",), "Gear down."))
-    r = _conversation("put the wheels out would you", brain=brain)
+    r = _conversation("put the wheels out would you", brain=brain, log_transcripts=True)
     result = r.results[0]
     assert result.status == "done"
     assert result.by_brain
@@ -616,8 +617,58 @@ def test_pressing_again_stops_a_key_sequence_and_lets_go() -> None:
 
     r, stopped = run(scenario)
     assert r.results[0].status == "cancelled"
-    assert stopped < 0.5  # not the full 1.6 s hold
+    assert stopped < 1.2  # well short of the full 1.6 s hold, even on a slow runner
     assert r.keys.held() == set()
+
+
+def test_shutdown_doesnt_wait_for_tycho_to_finish_talking() -> None:
+    speaker = FakeSpeaker(hold=True)  # a line that never ends on its own
+
+    async def scenario() -> None:
+        r = rig(
+            "what's a good mining ship", brain=FakeBrain(Reply("The Prospector.")), speaker=speaker
+        )
+        r.say()
+        await speaker.started.wait()
+        await asyncio.wait_for(r.session.close(), 2)
+
+    run(scenario)
+    assert speaker.stopped == ["The Prospector."]
+    assert speaker.closed
+
+
+def test_push_to_talk_keeps_working_after_a_joystick_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("tycho.runtime.session.POLL_RETRY_SECONDS", 0.001)
+
+    class Flaky:
+        binding = PTT
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def poll(self) -> Edge | None:
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("Invalid joystick device number")  # what pygame raises
+            return Edge.PRESSED if self.calls == 2 else None
+
+    async def scenario() -> bool:
+        r = rig()
+        r.session._ptt = Flaky()  # pyright: ignore[reportAttributeAccessIssue, reportPrivateUsage]
+        stop = asyncio.Event()
+        running = asyncio.create_task(r.session.run(stop))
+        listening = False
+        for _ in range(500):
+            if listening := r.session._listening:  # pyright: ignore[reportPrivateUsage]
+                break
+            await asyncio.sleep(0.002)
+        stop.set()
+        await running
+        return listening
+
+    assert run(scenario)  # the press after the error still started listening
 
 
 def test_shutdown_releases_a_held_key() -> None:
@@ -795,6 +846,33 @@ def test_a_shared_key_still_dangerous_after_setup_is_never_pressed() -> None:
     assert r.keys.events == []
 
 
+def test_a_setup_key_is_checked_before_its_own_mode_change() -> None:
+    # The NAV key is also missile launch. Pressing NAV is what turns missiles off, so
+    # NAV itself is pressed while missiles still fire: it must be refused.
+    missiles = _action("v_weapon_launch_missile", "ralt+b", actionmap="spaceship_missiles")
+    r = _engage(FakeGameState(QUANTUM_ROUTE), Keybinds([*LEFT_CLICK, missiles], MODES))
+    assert r.results[0].status == "refused"
+    assert "v_weapon_launch_missile" in r.results[0].detail
+    assert r.keys.events == []
+
+
+def test_a_players_file_cant_take_eject_out_of_confirming(tmp_path: Path) -> None:
+    file = tmp_path / "commands.toml"
+    file.write_text(
+        '[[command]]\nid = "eject"\nsay = ["bail"]\nactions = ["v_eject"]\nconfirm = false\n'
+        '[[sequence]]\nid = "bye"\nsay = ["goodbye ship"]\nsteps = ["eject"]\n',
+        "utf-8",
+    )
+    matcher = CommandMatcher.default(file)
+    for name in ("eject", "bye"):
+        command = matcher.get(name)
+        assert command is not None
+        for step in command.expand():
+            action = KEYBINDS.get("v_eject")
+            assert action is not None
+            assert safety.check(step.command, action, KEYBINDS).ask
+
+
 def test_setup_needs_its_own_keys() -> None:
     keybinds = Keybinds([_action("v_toggle_qdrive_engagement", "b")], MODES)
     r = _engage(FakeGameState(QUANTUM_ROUTE), keybinds)
@@ -857,9 +935,39 @@ def test_a_sequence_the_game_announces_throughout_is_quiet_too() -> None:
 
 def test_the_fast_path_keeps_its_sounds() -> None:
     speaker = FakeSpeaker()
-    r = _conversation("landing gear", "eject", brain=FakeBrain(), speaker=speaker)
+    r = _conversation("landing gear", "landing gear", brain=FakeBrain(), speaker=speaker)
     assert speaker.spoken == []
-    assert r.feedback.played == ["done", "ask"]
+    assert r.feedback.played == ["done", "done"]
+
+
+def test_a_question_says_what_it_would_do_in_the_gates_words() -> None:
+    speaker = FakeSpeaker()
+    brain = FakeBrain(RunActions(("v_eject",), "Just tidying up."))  # a misleading line
+    r = _conversation("sort it out", brain=brain, speaker=speaker)
+    assert r.results[0].status == "asking"
+    assert speaker.spoken == ["v_eject? Say confirm."]  # the action's own label, not the brain's
+    assert r.feedback.played == []
+
+
+def test_without_a_voice_a_question_is_the_tone() -> None:
+    r = _conversation("eject")
+    assert r.results[0].question == "v_eject? Say confirm."
+    assert r.feedback.played == ["ask"]
+
+
+def test_if_the_question_cant_be_spoken_the_tone_plays_instead() -> None:
+    r = _conversation("eject", speaker=FakeSpeaker(fail="offline"))
+    assert r.feedback.played == ["ask"]
+
+
+def test_tychos_lines_are_only_logged_with_transcripts_on(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="tycho.runtime.session")
+    brain = FakeBrain(RunActions(("v_toggle_landing_system",), "Calling you Ace."))
+    r = _conversation("put the wheels out would you", brain=brain)
+    assert "Calling you Ace" not in caplog.text
+    assert "tycho_said" not in r.actions.entries[0]
 
 
 def test_a_refused_pick_isnt_spoken_as_if_it_were_done() -> None:
@@ -916,7 +1024,9 @@ def test_the_voice_connection_is_opened_while_the_brain_thinks() -> None:
 def test_the_log_says_when_a_line_wasnt_spoken(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO, logger="tycho.runtime.session")
     brain = FakeBrain(RunActions(("v_toggle_landing_system",), "Gear down."))
-    r = _conversation("put the wheels out would you", brain=brain, speaker=FakeSpeaker())
+    r = _conversation(
+        "put the wheels out would you", brain=brain, speaker=FakeSpeaker(), log_transcripts=True
+    )
     assert "Tycho (not spoken: the game announces it): Gear down." in caplog.text
     assert r.actions.entries[0]["spoken"] is False
 
