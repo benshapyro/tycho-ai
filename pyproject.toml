@@ -14,6 +14,7 @@ classifiers = [
     "Topic :: Games/Entertainment",
 ]
 dependencies = [
+    "anthropic>=2.3.0",
     "keyring>=25.7.0",
     "numpy>=2.5.4",
     "onnx-asr==0.12.0",
@@ -33,9 +34,8 @@ dev = [
     "pytest>=8",
     "ruff>=0.17",
 ]
-# Only the measurement tools in tools/ use these; the app doesn't depend on them yet.
+# Only the measurement tools in tools/ use these.
 bench = [
-    "anthropic>=2.3.0",
     "httpx2>=2.16.0",
     "openai>=3.41.0",
     "soundfile>=0.14.0",

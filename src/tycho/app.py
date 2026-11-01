@@ -25,7 +25,7 @@ from tycho.stt import PARAKEET_V2, DeviceChoice, ModelError, ModelStore
 if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when running
     from tycho.audio.source import AudioSource
     from tycho.input import FocusCheck, KeySender
-    from tycho.runtime import ActionLog, Feedback, GameState, Result, Session, Transcriber
+    from tycho.runtime import ActionLog, Brain, Feedback, GameState, Result, Session, Transcriber
     from tycho.stt.parakeet import ParakeetTranscriber
 
 log = logging.getLogger("tycho")
@@ -117,6 +117,7 @@ def _run(current: Settings, log_file: Path) -> int:
             focus=WindowsFocusCheck(),
             feedback=SoundFeedback(SoundDevicePlayer(), current.feedback_volume),
             action_log=action_log,
+            make_brain=load_brain,
         )
         log.info("Listening. Hold %s and speak; press Ctrl+C to stop.", describe(binding))
         try:
@@ -149,6 +150,33 @@ def load_transcriber(current: Settings) -> ParakeetTranscriber:
     return transcriber
 
 
+BRAIN_KEY_HELP = "uv run python -m tycho.credentials set anthropic"
+
+
+def anthropic_key() -> str | None:
+    from tycho import credentials
+
+    try:
+        return credentials.get("anthropic")
+    except credentials.CredentialStoreError as e:
+        log.warning("Couldn't read your Anthropic key: %s", e)
+        return None
+
+
+def load_brain(matcher: CommandMatcher) -> Brain | None:
+    """Claude, if the player has stored an Anthropic key. Without one, the fast path only."""
+    key = anthropic_key()
+    if key is None:
+        log.info(
+            "No Anthropic key, so only the built-in phrasings work. Add one: %s", BRAIN_KEY_HELP
+        )
+        return None
+    from tycho.brain.claude import MODEL, ClaudeBrain
+
+    log.info("Brain: %s, for anything the built-in phrasings don't cover", MODEL)
+    return ClaudeBrain(matcher, api_key=key)
+
+
 def load_commands() -> CommandMatcher:
     """The built-in commands plus the player's own file. A broken file is reported
     and skipped, so a typo never stops Tycho starting."""
@@ -171,6 +199,7 @@ def build_session(
     feedback: Feedback,
     game_state: GameState | None = None,
     action_log: ActionLog | None = None,
+    make_brain: Callable[[CommandMatcher], Brain | None] | None = None,
     on_result: Callable[[Result], None] | None = None,
 ) -> Session:
     """The talking loop, wired the way ``tycho run`` wires it."""
@@ -186,17 +215,19 @@ def build_session(
         if not game_log.readable:
             log.info("No Game.log yet; Tycho reads it once the game writes one")
         game_state = game_log
+    matcher = load_commands()
     return Session(
         audio=audio,
         push_to_talk=PushToTalk(binding, input_sources(binding)),
         transcriber=transcriber,
         lexicon=Lexicon.default(),
-        matcher=load_commands(),
+        matcher=matcher,
         keybinds=lambda: store.keybinds,
         presser=Presser(sender, focus),
         feedback=feedback,
         game_state=game_state,
         action_log=action_log,
+        brain=make_brain(matcher) if make_brain is not None else None,
         confirm_seconds=current.confirm_seconds,
         log_transcripts=current.keep_transcripts,
         on_result=on_result,
@@ -297,6 +328,13 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
 
     if not quick:
         yield microphone_finding(current)
+
+    if anthropic_key() is None:
+        yield Finding(
+            "warn", "Brain", f"no Anthropic key, so only built-in phrasings work: {BRAIN_KEY_HELP}"
+        )
+    else:
+        yield Finding("ok", "Brain", "Claude, with your Anthropic key")
 
     commands_file = paths.commands_file()
     try:

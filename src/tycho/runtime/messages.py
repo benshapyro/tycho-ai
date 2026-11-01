@@ -8,7 +8,8 @@ from typing import Literal
 type Status = Literal[
     "done",
     "empty",  # too short, or nothing was said
-    "not_understood",  # the fast path deferred; the brain arrives in 0.3
+    "not_understood",  # neither the fast path nor the brain could act on it
+    "replied",  # the brain answered or asked something; nothing was pressed
     "no_key",  # no key bound, or one Tycho can't press
     "refused",  # the safety gate said no
     "asking",  # confirm-grade: waiting for the player to say "confirm" (ADR 13)
@@ -50,7 +51,11 @@ class Result:
     """Game actions actually pressed, in order. Partial if a chain stopped part way."""
     detail: str = ""
     commands: tuple[str, ...] = ()
-    """The commands the fast path matched, one per part of the request."""
+    """The commands matched or picked, one per part of the request."""
+    by_brain: bool = False
+    """The brain chose the commands, or wrote the reply."""
+    say: str = ""
+    """What Tycho says about it: the brain's reply, or its line about what it pressed."""
     confirmed: bool = False
     """The player said "confirm" to a question Tycho asked about this request."""
     timings: dict[str, float] = field(default_factory=dict[str, float])
