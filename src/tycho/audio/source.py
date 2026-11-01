@@ -34,6 +34,10 @@ class AudioSource(Protocol):
         """Start keeping audio, including a short pre-roll from just before."""
         ...
 
+    def quiet_seconds(self) -> float:
+        """How long the audio being kept has been quiet at its end."""
+        ...
+
     def stop(self) -> Samples:
         """Stop keeping audio, and return the clip."""
         ...

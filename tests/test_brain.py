@@ -1,6 +1,7 @@
 """The brain's checks, its briefing, and the Claude adapter against a fake client (ADR 14)."""
 
 import asyncio
+import datetime
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
@@ -17,7 +18,7 @@ from tycho.brain import (
     commands_for,
     parse_tool_call,
 )
-from tycho.brain.briefing import bound_actions, briefing, command_phrasings
+from tycho.brain.briefing import bound_actions, briefed, briefing, command_phrasings
 from tycho.brain.claude import ClaudeBrain, history
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Action, Keybinds, KeyInput
@@ -143,6 +144,29 @@ def test_the_briefing_tells_claude_how_players_say_each_command() -> None:
     assert any("gear down" in line for line in gear)
     assert not any("v_lights" in line for line in lines)  # no key, so not offered
     assert "how it's said" in briefing(KEYBINDS, MATCHER)
+
+
+def test_actions_nobody_says_are_left_out_unless_a_command_presses_them() -> None:
+    assert not briefed("v_pitch_up", "spaceship_movement")  # held steering
+    assert not briefed("emote_cs_yes", "player_emotes")
+    assert briefed("v_strafe_trim_reset_short", "spaceship_movement")
+    assert briefed("v_master_mode_set_scm", "spaceship_movement")
+    camera = Action(
+        name="view_cycle", actionmap="view_director_mode", label="Cycle", inputs=(KeyInput("f4"),)
+    )
+    keybinds = Keybinds([camera])
+    assert bound_actions(keybinds) == {}
+    assert set(bound_actions(keybinds, keep=frozenset({"view_cycle"}))) == {"view_cycle"}
+
+
+def test_each_request_carries_todays_date_outside_the_cached_briefing() -> None:
+    client = _Client([_tool_stop("run_sequence", {"name": "startup", "say": ""})])
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), today=lambda: datetime.date(2026, 11, 1))
+    asyncio.run(brain.decide("start us up", [], KEYBINDS))
+    (request,) = client.requests
+    assert request["messages"][-1]["content"][0] == {"type": "text", "text": "[1 November 2026]"}
+    assert request["messages"][-1]["content"][1]["text"] == "start us up"
+    assert "2026" not in request["system"][0]["text"]
 
 
 def test_history_puts_earlier_exchanges_before_the_request() -> None:

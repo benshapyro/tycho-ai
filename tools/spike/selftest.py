@@ -188,6 +188,9 @@ class Playback:
     def start(self) -> None:
         self._buffer.start()
 
+    def quiet_seconds(self) -> float:
+        return self._buffer.quiet_seconds()
+
     def stop(self) -> Samples:
         return self._buffer.stop()
 
