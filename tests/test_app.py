@@ -145,3 +145,22 @@ def test_a_broken_settings_file_stops_with_its_message(
     (tmp_path / "settings.toml").write_text("feedback_volume = 9\n", encoding="utf-8")
     assert app.main(["check", "--quick"]) == 2
     assert "feedback_volume" in capsys.readouterr().err
+
+
+def test_a_broken_commands_file_never_stops_tycho_starting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path))
+    (tmp_path / "commands.toml").write_text("[[sequence]\n", "utf-8")
+    with caplog.at_level(logging.WARNING, logger="tycho"):
+        matcher = app.load_commands()
+    assert matcher.get("startup") is not None  # the built-in commands still load
+    assert "commands file can't be used" in caplog.text
+
+
+def test_the_players_commands_file_is_used(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path))
+    (tmp_path / "commands.toml").write_text(
+        '[[sequence]]\nid = "wake"\nsay = ["wake up"]\nsteps = ["flight_ready"]\n', "utf-8"
+    )
+    assert app.load_commands().get("wake") is not None

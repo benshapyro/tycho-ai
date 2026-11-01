@@ -291,12 +291,14 @@ class Session:
         # none of it is, so the ship is never left half-way through a request. A
         # confirmation plans again from scratch, with the keybinds as they are now.
         keybinds = self._keybinds()
+        parts = [step for command in commands for step in command.expand()]
         facts: frozenset[str] = frozenset()
-        if self._game_state is not None and any(c.requires for c in commands):
+        if self._game_state is not None and any(s.command.requires for s in parts):
             facts = await asyncio.to_thread(self._game_state.facts)
         steps: list[tuple[float, Press]] = []  # each press, and how long to wait before it
         questions: list[str] = []
-        for command in commands:
+        for part in parts:  # a sequence is planned step by step, like a chain
+            command = part.command
             resolved = resolve(command, keybinds)
             if resolved.action is None:
                 return end(
@@ -317,6 +319,8 @@ class Session:
             try:
                 for position, action in enumerate((*setup, resolved.action)):
                     settle = command.settle_seconds if setup and position == len(setup) else 0.0
+                    if position == 0:
+                        settle = max(settle, part.wait_seconds)
                     beat = max(settle, CHAIN_BEAT_SECONDS) if steps else 0.0
                     steps.append((beat, plan(action, keybinds.modes)))
             except (NotPressable, UnsupportedKey) as e:

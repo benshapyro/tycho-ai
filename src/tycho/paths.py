@@ -29,6 +29,11 @@ def settings_file() -> Path:
     return config_dir() / "settings.toml"
 
 
+def commands_file() -> Path:
+    """The player's own commands and sequences, added to the built-in ones (ADR 14)."""
+    return config_dir() / "commands.toml"
+
+
 def cache_dir() -> Path:
     return data_dir() / "cache"
 
