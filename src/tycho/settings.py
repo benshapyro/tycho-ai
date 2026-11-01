@@ -49,6 +49,9 @@ class Settings(BaseModel):
     feedback_volume: float = Field(
         default=0.5, ge=0.0, le=1.0, description="Volume of Tycho's done and not-done sounds."
     )
+    voice_volume: float = Field(
+        default=0.8, ge=0.0, le=1.0, description="Volume of Tycho's voice. Zero turns it off."
+    )
     confirm_seconds: float = Field(
         default=5.0,
         ge=2.0,

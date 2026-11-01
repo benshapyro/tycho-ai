@@ -2,7 +2,7 @@
 
 from tycho.runtime.instance import AlreadyRunning, SingleInstance
 from tycho.runtime.messages import Result, Status, Trace
-from tycho.runtime.ports import ActionLog, Brain, Feedback, GameState, Transcriber
+from tycho.runtime.ports import ActionLog, Brain, Feedback, GameState, Speaker, Transcriber
 from tycho.runtime.session import Session
 
 __all__ = [
@@ -14,6 +14,7 @@ __all__ = [
     "Result",
     "Session",
     "SingleInstance",
+    "Speaker",
     "Status",
     "Trace",
     "Transcriber",

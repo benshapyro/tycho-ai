@@ -56,6 +56,8 @@ class Result:
     """The brain chose the commands, or wrote the reply."""
     say: str = ""
     """What Tycho says about it: the brain's reply, or its line about what it pressed."""
+    announced: bool = False
+    """The game itself announces everything that was done, so Tycho needn't."""
     confirmed: bool = False
     """The player said "confirm" to a question Tycho asked about this request."""
     timings: dict[str, float] = field(default_factory=dict[str, float])

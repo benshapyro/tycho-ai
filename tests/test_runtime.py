@@ -22,6 +22,7 @@ from tests.fakes.fake_runtime import (
     FakeGameState,
     FakeTranscriber,
 )
+from tests.fakes.fake_speaker import FakeSpeaker
 from tycho import safety
 from tycho.brain import BrainError, Reply, RunActions, RunSequence
 from tycho.commands import CommandMatcher
@@ -97,6 +98,7 @@ def rig(
     clock: Callable[[], float] = time.monotonic,
     brain: FakeBrain | None = None,
     brain_seconds: float = 8.0,
+    speaker: FakeSpeaker | None = None,
 ) -> Rig:
     audio, keys, feedback = FakeAudioSource(RATE), FakeKeySender(), FakeFeedback()
     actions = FakeActionLog()
@@ -115,6 +117,7 @@ def rig(
         action_log=actions,
         brain=brain,
         brain_seconds=brain_seconds,
+        speaker=speaker,
         samplerate=RATE,
         log_transcripts=log_transcripts,
         on_result=results.append,
@@ -810,3 +813,119 @@ def test_confirming_never_unlocks_a_shared_dangerous_key() -> None:
     shared = safety.check(eject, action, keybinds, confirmed=True)
     assert not shared.allowed
     assert not shared.ask
+
+
+# --- The voice (ADR 14) ------------------------------------------------------------------
+
+_WITH_LIGHTS = Keybinds([*KEYBINDS, _action("v_lights", "l")], MODES)
+
+
+def test_the_brains_reply_is_spoken_instead_of_the_done_sound() -> None:
+    speaker = FakeSpeaker()
+    r = _conversation(
+        "what's a good mining ship", brain=FakeBrain(Reply("The Prospector.")), speaker=speaker
+    )
+    assert speaker.spoken == ["The Prospector."]
+    assert r.feedback.played == []
+
+
+def test_what_the_brain_did_is_spoken_after_the_press() -> None:
+    speaker = FakeSpeaker()
+    brain = FakeBrain(RunActions(("v_lights",), "Lights."))
+    r = _conversation("make it dark in here", brain=brain, speaker=speaker, keybinds=_WITH_LIGHTS)
+    assert r.results[0].pressed == ("v_lights",)
+    assert speaker.spoken == ["Lights."]
+    assert r.feedback.played == []
+
+
+def test_tycho_doesnt_talk_over_what_the_game_announces() -> None:
+    speaker = FakeSpeaker()
+    brain = FakeBrain(RunActions(("v_toggle_landing_system",), "Gear down."))
+    r = _conversation("put the wheels out would you", brain=brain, speaker=speaker)
+    assert r.results[0].announced
+    assert speaker.spoken == []
+    assert r.feedback.played == ["done"]
+
+
+def test_a_sequence_the_game_announces_throughout_is_quiet_too() -> None:
+    speaker = FakeSpeaker()
+    brain = FakeBrain(RunSequence("prepare_to_land", "Bringing us in."))
+    r = _conversation("take us down to the pad", brain=brain, speaker=speaker)
+    assert speaker.spoken == []
+    assert r.feedback.played == ["done"]
+
+
+def test_the_fast_path_keeps_its_sounds() -> None:
+    speaker = FakeSpeaker()
+    r = _conversation("landing gear", "eject", brain=FakeBrain(), speaker=speaker)
+    assert speaker.spoken == []
+    assert r.feedback.played == ["done", "ask"]
+
+
+def test_a_refused_pick_isnt_spoken_as_if_it_were_done() -> None:
+    speaker = FakeSpeaker()
+    brain = FakeBrain(RunActions(("v_lights",), "Lights."))
+    r = _conversation("make it dark in here", brain=brain, speaker=speaker)  # no key for lights
+    assert r.results[0].status == "no_key"
+    assert speaker.spoken == []
+    assert r.feedback.played == ["not_done"]
+
+
+def test_when_speech_fails_tycho_plays_the_done_sound() -> None:
+    speaker = FakeSpeaker(fail="out of ElevenLabs credits")
+    r = _conversation(
+        "what's a good mining ship", brain=FakeBrain(Reply("The Prospector.")), speaker=speaker
+    )
+    assert r.feedback.played == ["done"]
+
+
+def test_push_to_talk_stops_tycho_talking() -> None:
+    speaker = FakeSpeaker(hold=True)
+
+    async def scenario() -> None:
+        r = rig(
+            "what's a good mining ship",
+            "landing gear",
+            brain=FakeBrain(Reply("The Prospector is the usual start.")),
+            speaker=speaker,
+        )
+        r.say()
+        await speaker.started.wait()  # idle() would wait for the line to end, and it never does
+        assert speaker.spoken == ["The Prospector is the usual start."]
+        r.session.handle(Edge.PRESSED)
+        await asyncio.sleep(0)
+        assert speaker.stopped == ["The Prospector is the usual start."]
+        r.audio.hear(SPEECH)
+        r.session.handle(Edge.RELEASED)
+        await r.session.idle()
+        assert r.results[1].status == "done"
+        await r.session.close()
+
+    run(scenario)
+    assert speaker.closed
+
+
+def test_the_voice_connection_is_opened_while_the_brain_thinks() -> None:
+    speaker = FakeSpeaker()
+    _conversation(
+        "what's a good mining ship", brain=FakeBrain(Reply("The Prospector.")), speaker=speaker
+    )
+    assert speaker.warmed == 1
+
+
+def test_the_log_says_when_a_line_wasnt_spoken(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, logger="tycho.runtime.session")
+    brain = FakeBrain(RunActions(("v_toggle_landing_system",), "Gear down."))
+    r = _conversation("put the wheels out would you", brain=brain, speaker=FakeSpeaker())
+    assert "Tycho (not spoken: the game announces it): Gear down." in caplog.text
+    assert r.actions.entries[0]["spoken"] is False
+
+
+def test_kept_transcripts_show_what_was_heard_before_correction(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="tycho.runtime.session")
+    r = _conversation("fly to micro tech", log_transcripts=True)
+    result = r.results[0]
+    assert result.text != result.heard  # the lexicon corrected "micro tech"
+    assert f'"{result.text}" (heard "fly to micro tech")' in caplog.text
