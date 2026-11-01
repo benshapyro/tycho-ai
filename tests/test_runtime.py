@@ -911,3 +911,21 @@ def test_the_voice_connection_is_opened_while_the_brain_thinks() -> None:
         "what's a good mining ship", brain=FakeBrain(Reply("The Prospector.")), speaker=speaker
     )
     assert speaker.warmed == 1
+
+
+def test_the_log_says_when_a_line_wasnt_spoken(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, logger="tycho.runtime.session")
+    brain = FakeBrain(RunActions(("v_toggle_landing_system",), "Gear down."))
+    r = _conversation("put the wheels out would you", brain=brain, speaker=FakeSpeaker())
+    assert "Tycho (not spoken: the game announces it): Gear down." in caplog.text
+    assert r.actions.entries[0]["spoken"] is False
+
+
+def test_kept_transcripts_show_what_was_heard_before_correction(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="tycho.runtime.session")
+    r = _conversation("fly to micro tech", log_transcripts=True)
+    result = r.results[0]
+    assert result.text != result.heard  # the lexicon corrected "micro tech"
+    assert f'"{result.text}" (heard "fly to micro tech")' in caplog.text

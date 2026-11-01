@@ -449,7 +449,11 @@ class Session:
 
     def _report(self, result: Result) -> None:
         stages = ", ".join(f"{name} {ms:.0f}" for name, ms in result.timings.items())
-        said = f' "{result.text}"' if self._log_transcripts and result.text else ""
+        said = ""
+        if self._log_transcripts and result.text:
+            said = f' "{result.text}"'
+            if result.heard and result.heard != result.text:  # the lexicon corrected it
+                said += f' (heard "{result.heard}")'
         log.info(
             "#%d%s: %s%s%s%s in %.0f ms (%s)",
             result.request,
@@ -461,12 +465,15 @@ class Session:
             result.total_ms,
             stages or "no stages",
         )
+        speak = self._speaker is not None and self._should_speak(result)
         if result.say:
-            log.info("Tycho: %s", result.say)
+            log.info(
+                "Tycho%s: %s", "" if speak else f" (not spoken: {self._quiet(result)})", result.say
+            )
         self._remember(result)
         if result.commands and self._action_log is not None:
-            self._record(self._action_log, result)
-        if self._speaker is not None and self._should_speak(result):
+            self._record(self._action_log, result, spoken=speak)
+        if self._speaker is not None and speak:
             self._start_speaking(self._speaker, result.say)
         elif result.done or result.status == "replied":
             self._feedback.done()
@@ -507,7 +514,15 @@ class Session:
         if self._speech_warming is None or self._speech_warming.done():
             self._speech_warming = asyncio.create_task(self._speaker.warm())
 
-    def _record(self, action_log: ActionLog, result: Result) -> None:
+    def _quiet(self, result: Result) -> str:
+        """Why a line wasn't spoken, for the log."""
+        if self._speaker is None:
+            return "no voice"
+        if result.done and result.announced:
+            return "the game announces it"
+        return result.status
+
+    def _record(self, action_log: ActionLog, result: Result, *, spoken: bool = False) -> None:
         entry: dict[str, object] = {
             "request": result.request,
             "commands": list(result.commands),
@@ -521,8 +536,11 @@ class Session:
             entry["by"] = "brain"
         if result.say:
             entry["tycho_said"] = result.say
+            entry["spoken"] = spoken
         if self._log_transcripts and result.text:
             entry["said"] = result.text
+            if result.heard and result.heard != result.text:
+                entry["heard"] = result.heard
         try:
             action_log.record(entry)
         except OSError as e:  # a full disk mustn't stop the loop
