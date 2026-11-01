@@ -1,7 +1,7 @@
 Patch: Alpha 4.10.2, live since 9 October 2026. 4.10.3 is in testing. Checked 1 November 2026.
 
 Places
-- Three systems: Stanton, Pyro and Nyx, linked by jump points, with a Gateway station at each end (Pyro Gateway in Stanton, Stanton Gateway in Pyro, and so on).
+- Three systems: Stanton, Pyro and Nyx. Each has a jump point to each of the other two, with a Gateway station at each end (Pyro Gateway in Stanton, Stanton Gateway in Pyro, and so on).
 - Stanton's cities: Area18 (ArcCorp), Lorville (Hurston), New Babbage (microTech), Orison (Crusader). Stations orbit each planet; Grim Hex is the outlaw station near Crusader. Port Olisar is gone: Seraphim Station replaced it.
 - Pyro is lawless. Its stations include Ruin Station, Checkmate, Orbituary and Starlight.
 - Nyx has no planets yet (they're planned for 4.11). Its hub is Levski, inside Delamar in the Glaciem Ring; Breaker Stations are in the Keeger Belt.
@@ -13,7 +13,7 @@ Ships and systems
 - Gimbals (since 4.3.2): gimbal state (fixed or unlocked) is separate from aim mode (PIP or AUTO), and AUTO exists only in turrets.
 - The Drake Caterpillar and Ironclad come with a Drake Command Module: a small detachable ship that docks at the front and flies the main hull. The hull doesn't fly without it, but buying one gets you both.
 - Fuel (since 4.10): smaller hydrogen tanks that burn slower. To refuel from another ship, target it and request docking, then pay in the Vehicle Maintenance Services app.
-- Loadouts are saved at an ASOP terminal, not in the Vehicle Manager app. A claim gives either the free manufacturer loadout (longer wait) or the paid insured loadout.
+- Vehicle loadouts are viewed and changed in the Vehicles tab of the mobiGlas. ASOP terminals are where you retrieve, claim and insure vehicles. A claim gives either the free manufacturer loadout (longer wait) or the paid insured loadout.
 - The star map's quantum routes go around planets and stars by themselves.
 - What you wear changes how many G you can take: flight suits help, heavy armor hurts.
 
