@@ -2,8 +2,14 @@
 
 It is cached on Anthropic's side, so it must be byte-for-byte the same from one
 request to the next: sorted, with nothing that changes per request (no times, no
-state). It changes only when the keybinds or the commands file do.
+state). It changes only when the keybinds or the commands file do. What does
+change (today's date) goes with each request instead (see ``claude.history``).
+
+Actions nobody would ask for by voice are left out (#59): fewer options, fewer
+wrong picks, and a smaller briefing.
 """
+
+import re
 
 from tycho.commands import CommandMatcher, resolve
 from tycho.game.keybinds import Keybinds
@@ -47,6 +53,9 @@ short clause such as "as of the last patch I know". Never tell the player to \
 check a wiki, guide or the community instead of answering. Never make up exact \
 prices or numbers; give a rough picture instead.
 
+Each request starts with today's date in brackets, which isn't part of what the \
+player said. Use it to judge how far the game may have moved on since what you know.
+
 Requests from the last half-minute come first, with what Tycho did. Use them for \
 follow-ups like "do that again" or "no, the other one".
 
@@ -63,15 +72,46 @@ in a few words rather than guess.
 """
 
 
-def bound_actions(keybinds: Keybinds) -> dict[str, str]:
-    """Every action Tycho could press for the player, with its line in the briefing."""
+UNBRIEFED_ACTIONMAPS = frozenset(
+    {
+        "view_director_mode",  # camera director moves
+        "spectator",
+        "player_emotes",
+        "player_input_optical_tracking",  # head tracking, VR, VOIP
+        "prone",
+    }
+)
+"""Action maps of actions nobody asks a co-pilot for."""
+CONTINUOUS = re.compile(
+    r"v_(pitch|yaw|roll)_\w+|v_strafe_(up|down|left|right|forward|back)|v_move_\w+"
+    r"|eva_(strafe|roll)_\w+|zgt_roll_\w+|move(forward|back|left|right)|lean(left|right)"
+)
+"""Steering and movement held down for as long as it should last: one press means nothing."""
+
+
+def briefed(action_name: str, actionmap: str) -> bool:
+    """Whether the brain is offered an action at all."""
+    return actionmap not in UNBRIEFED_ACTIONMAPS and not CONTINUOUS.fullmatch(action_name)
+
+
+def bound_actions(keybinds: Keybinds, keep: frozenset[str] = frozenset()) -> dict[str, str]:
+    """Every action Tycho could press for the player, with its line in the briefing.
+    Actions in ``keep`` (those a command presses) are offered even if they'd be left out."""
     lines: dict[str, str] = {}
     for action in keybinds:
         key = pressable_input(action)
         if key is None or not action.label.strip() or action.name in lines:
             continue
+        if action.name not in keep and not briefed(action.name, action.actionmap):
+            continue
         lines[action.name] = f"{action.name} | {action.label} | {key}"
     return lines
+
+
+def offered_actions(keybinds: Keybinds, matcher: CommandMatcher) -> dict[str, str]:
+    """The actions the brain may pick: what the briefing lists, and nothing else."""
+    keep = frozenset(line.split(" | ", 1)[0] for line in command_phrasings(keybinds, matcher))
+    return bound_actions(keybinds, keep)
 
 
 def command_phrasings(keybinds: Keybinds, matcher: CommandMatcher) -> list[str]:
@@ -88,7 +128,7 @@ def command_phrasings(keybinds: Keybinds, matcher: CommandMatcher) -> list[str]:
 
 
 def briefing(keybinds: Keybinds, matcher: CommandMatcher) -> str:
-    actions = bound_actions(keybinds)
+    actions = offered_actions(keybinds, matcher)
     sequences = sorted(
         f"{c.id} | {', then '.join(s.command.id for s in c.steps)} | {'; '.join(c.say)}"
         for c in matcher.commands

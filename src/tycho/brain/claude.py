@@ -9,15 +9,16 @@ gaps of 5 to 60 minutes are normal, and a cold cache added about 3 s. One warm-u
 request at startup writes it, so the first real request is fast too.
 """
 
+import datetime
 import logging
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import anthropic
 from anthropic.types import MessageParam, TextBlockParam, ToolParam
 
-from tycho.brain.briefing import bound_actions, briefing
+from tycho.brain.briefing import briefing, offered_actions
 from tycho.brain.decisions import BrainError, Decision, Exchange, Reply, parse_tool_call
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Keybinds
@@ -70,13 +71,25 @@ def _tools(sequences: list[str]) -> list[ToolParam]:
     ]
 
 
-def history(recent: Sequence[Exchange], text: str) -> list[MessageParam]:
-    """Earlier exchanges as turns, then this request. What Tycho did is plain text."""
+def history(
+    recent: Sequence[Exchange], text: str, today: datetime.date | None = None
+) -> list[MessageParam]:
+    """Earlier exchanges as turns, then this request, headed by today's date. The
+    date lives here, not in the briefing, so the cached briefing never changes."""
     messages: list[MessageParam] = []
     for exchange in recent:
         messages.append({"role": "user", "content": exchange.said})
         messages.append({"role": "assistant", "content": f"[Tycho] {exchange.outcome}"})
-    messages.append({"role": "user", "content": text})
+    if today is None:
+        messages.append({"role": "user", "content": text})
+    else:
+        date = f"[{today.day} {today:%B %Y}]"
+        messages.append(
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": date}, {"type": "text", "text": text}],
+            }
+        )
     return messages
 
 
@@ -88,6 +101,7 @@ class ClaudeBrain:
         api_key: str | None = None,
         client: anthropic.AsyncAnthropic | None = None,
         model: str = MODEL,
+        today: Callable[[], datetime.date] = datetime.date.today,
     ) -> None:
         # The session gives up after its own deadline; one quick retry fits inside it.
         self._client = client or anthropic.AsyncAnthropic(
@@ -95,6 +109,7 @@ class ClaudeBrain:
         )
         self._matcher = matcher
         self._model = model
+        self._today = today
         self._sequences = sorted(c.id for c in matcher.commands if c.is_sequence)
         self._tools = _tools(self._sequences)
         self._for: Keybinds | None = None
@@ -134,7 +149,7 @@ class ClaudeBrain:
                 tool_choice={"type": "auto", "disable_parallel_tool_use": True},
                 output_config={"effort": EFFORT},
                 max_tokens=MAX_TOKENS,
-                messages=history(recent, text),
+                messages=history(recent, text, self._today()),
             ) as stream:
                 async for event in stream:
                     if (
@@ -167,7 +182,7 @@ class ClaudeBrain:
         if keybinds is self._for:
             return
         self._for = keybinds
-        self._actions = frozenset(bound_actions(keybinds))
+        self._actions = frozenset(offered_actions(keybinds, self._matcher))
         text = briefing(keybinds, self._matcher)
         self._system = [
             {"type": "text", "text": text, "cache_control": {"type": "ephemeral", "ttl": "1h"}}

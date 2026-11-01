@@ -37,7 +37,10 @@ from tycho.runtime import AlreadyRunning, Result, Session, SingleInstance
 
 RATE = 16_000
 PTT = Binding.parse("mouse:0x06")
-SPEECH = np.zeros(RATE // 2, dtype=np.float32)  # half a second; the transcriber is scripted
+# Half a second of steady sound: never quiet, so the tail runs its full length and
+# nothing is trimmed. The transcriber is scripted, so what it says doesn't matter.
+SPEECH = np.full(RATE // 2, 0.1, dtype=np.float32)
+SILENCE = np.zeros(RATE // 10, dtype=np.float32)  # a tenth of a second
 
 MODES = {
     "press": ActivationMode("press"),
@@ -551,6 +554,39 @@ def test_audio_just_after_release_is_kept() -> None:
 
     r = run(scenario)
     assert r.transcriber.seconds == [pytest.approx(0.6)]
+
+
+def test_the_tail_ends_at_once_if_the_player_had_finished() -> None:
+    async def scenario() -> Rig:
+        r = rig("landing gear")
+        r.session.handle(Edge.PRESSED)
+        r.audio.hear(SPEECH)
+        r.audio.hear(SILENCE)  # they stopped talking, then let go
+        r.session.handle(Edge.RELEASED)
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert r.results[0].status == "done"
+    assert r.results[0].timings["tail"] < 50  # not the full 150 ms
+
+
+def test_only_the_speech_is_transcribed() -> None:
+    async def scenario() -> Rig:
+        r = rig("landing gear")
+        r.session.handle(Edge.PRESSED)
+        for _ in range(5):
+            r.audio.hear(SILENCE)  # half a second before they start talking
+        r.audio.hear(SPEECH)
+        r.audio.hear(SILENCE)
+        r.session.handle(Edge.RELEASED)
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert r.transcriber.seconds == [pytest.approx(0.5 + 0.08 + 0.08)]  # plus the margins
 
 
 # --- Barge-in and shutdown --------------------------------------------------------------

@@ -32,7 +32,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from tycho import safety
-from tycho.audio.clip import Samples
+from tycho.audio.clip import Samples, trim_silence
 from tycho.audio.source import AudioError, AudioSource
 from tycho.brain import BrainError, Exchange, Reply, commands_for
 from tycho.commands import Command, CommandMatcher, Defer, resolve
@@ -52,8 +52,12 @@ MIN_CLIP_SECONDS = 0.25
 CHAIN_BEAT_SECONDS = 0.15
 """A pause between the actions of a chain, so the game registers each one."""
 TAIL_SECONDS = 0.15
-"""Audio kept after release: people let go as they finish the last word, and the
-microphone delivers audio in blocks. The benchmark recordings were made this way."""
+"""The most audio kept after release: people let go as they finish the last word, and
+the microphone delivers audio in blocks. The benchmark recordings were made this way."""
+QUIET_TAIL_SECONDS = 0.06
+"""The tail ends early once the clip has been this quiet: the player has finished.
+On the recorded test set this ends most tails at release, saving about 0.12 s (#58)."""
+TAIL_CHECK_SECONDS = 0.01
 
 CONFIRM_SECONDS = 5.0
 """How long a question waits for "confirm", unless the settings say otherwise."""
@@ -253,7 +257,10 @@ class Session:
 
     def _poll(self, loop: asyncio.AbstractEventLoop, halt: threading.Event) -> None:
         failing = ""
-        while not halt.wait(self._poll_interval):
+        while not halt.is_set():
+            # Not halt.wait(interval): on Windows that rounds up to the 15.6 ms timer
+            # tick, adding about 8 ms to every press and release. time.sleep doesn't.
+            time.sleep(self._poll_interval)
             try:
                 edge = self._ptt.poll()
             except Exception as e:  # a joystick error must never silently end push-to-talk
@@ -271,6 +278,16 @@ class Session:
                 except RuntimeError:  # the loop closed underneath us
                     return
 
+    async def _tail(self) -> None:
+        """Wait up to the tail length, ending as soon as the clip goes quiet."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self._tail_seconds
+        while self._audio.quiet_seconds() < QUIET_TAIL_SECONDS:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return
+            await asyncio.sleep(min(TAIL_CHECK_SECONDS, remaining))
+
     def _cancel_current(self) -> None:
         self._cancel.set()
         if self._current is not None and not self._current.done():
@@ -281,8 +298,9 @@ class Session:
         cancel = self._cancel = threading.Event()
         progress = _Progress()
         try:
-            # Keep listening briefly after release, so a last word still in flight isn't cut.
-            await asyncio.sleep(self._tail_seconds)
+            # Keep listening briefly after release, so a last word still in flight isn't
+            # cut, unless the player had already finished.
+            await self._tail()
             self._tail_pending = False
             clip = self._audio.stop()
             trace.mark("tail")
@@ -313,8 +331,11 @@ class Session:
             return self._result(request, "empty", trace, detail="too short")
 
         loop = asyncio.get_running_loop()
+        # Only the speech: the encoder's time grows with the clip, and players often
+        # hold the button half a second before they start talking.
+        speech = trim_silence(clip, self._samplerate)
         heard = await loop.run_in_executor(
-            self._stt, self._transcriber.transcribe, clip, self._samplerate
+            self._stt, self._transcriber.transcribe, speech, self._samplerate
         )
         trace.mark("transcribe")
         if not heard.strip():
