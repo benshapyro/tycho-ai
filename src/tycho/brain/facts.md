@@ -11,7 +11,7 @@ Ships and systems
 - Engineering (since 4.5): each ship has a limited power budget, split between weapons, shields and thrusters with pips. Components make heat, can catch fire and blow fuses, and can be repaired.
 - Shields have smaller pools that recharge faster. Destroyed armor no longer reduces damage. Badly damaged ships are disabled before they explode.
 - Gimbals (since 4.3.2): gimbal state (fixed or unlocked) is separate from aim mode (PIP or AUTO), and AUTO exists only in turrets.
-- The Drake Caterpillar and Ironclad can't fly without a docked Drake Command Module.
+- The Drake Caterpillar and Ironclad come with a Drake Command Module: a small detachable ship that docks at the front and flies the main hull. The hull doesn't fly without it, but buying one gets you both.
 - Fuel (since 4.10): smaller hydrogen tanks that burn slower. To refuel from another ship, target it and request docking, then pay in the Vehicle Maintenance Services app.
 - Loadouts are saved at an ASOP terminal, not in the Vehicle Manager app. A claim gives either the free manufacturer loadout (longer wait) or the paid insured loadout.
 - The star map's quantum routes go around planets and stars by themselves.
