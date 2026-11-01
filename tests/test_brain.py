@@ -2,6 +2,7 @@
 
 import asyncio
 import datetime
+import re
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
@@ -18,7 +19,13 @@ from tycho.brain import (
     commands_for,
     parse_tool_call,
 )
-from tycho.brain.briefing import bound_actions, briefed, briefing, command_phrasings
+from tycho.brain.briefing import (
+    bound_actions,
+    briefed,
+    briefing,
+    command_phrasings,
+    game_facts,
+)
 from tycho.brain.claude import ClaudeBrain, history
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Action, Keybinds, KeyInput
@@ -166,7 +173,17 @@ def test_each_request_carries_todays_date_outside_the_cached_briefing() -> None:
     (request,) = client.requests
     assert request["messages"][-1]["content"][0] == {"type": "text", "text": "[1 November 2026]"}
     assert request["messages"][-1]["content"][1]["text"] == "start us up"
-    assert "2026" not in request["system"][0]["text"]
+    assert "[1 November 2026]" not in request["system"][0]["text"]  # per request only
+
+
+def test_the_briefing_carries_the_current_game_facts_and_no_keys() -> None:
+    text = briefing(KEYBINDS, MATCHER)
+    facts = game_facts()
+    assert facts in text
+    assert facts.startswith("Patch: Alpha ")  # dated, so Claude can say "as of"
+    assert "Port Olisar is gone" in facts
+    # Facts never name keys: Tycho presses the player's own keybinds.
+    assert not re.search(r"\b(alt|ctrl|shift)\s*\+|\bkey(bind)?s?\b", facts, re.IGNORECASE)
 
 
 def test_history_puts_earlier_exchanges_before_the_request() -> None:
