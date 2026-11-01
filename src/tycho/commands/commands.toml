@@ -13,6 +13,9 @@
 #
 # Sequences, at the end, are commands made of other commands (ADR 14).
 #
+# Common mishearings go in say too ("hang your request" for "hangar request"):
+# speech-to-text makes them often, and an exact phrase is instant and certain.
+#
 # Players can add their own commands and sequences, or replace these by id, in
 # commands.toml in Tycho's settings folder (%APPDATA%\tycho). A phrase given
 # there is taken away from the built-in command that had it.
@@ -38,14 +41,14 @@ announced = true
 
 [[command]]
 id = "request_landing"
-say = ["request landing", "request landing permission", "request a landing pad", "ask for a landing pad", "call the tower", "contact the tower", "request a hangar", "request hangar", "hangar request", "make a hangar request", "send a hangar request", "ask for a hangar", "get us a hangar"]
+say = ["request landing", "request landing permission", "request a landing pad", "ask for a landing pad", "call the tower", "contact the tower", "request a hangar", "request hangar", "hangar request", "hang your request", "hang your requests", "make a hangar request", "send a hangar request", "ask for a hangar", "get us a hangar"]
 actions = ["v_atc_request"]
 announced = true
 
 # The same air traffic control key asks to leave when parked at a pad or in a hangar.
 [[command]]
 id = "request_departure"
-say = ["request departure", "request takeoff", "request take off", "request to depart", "request clearance to depart", "request launch", "open the hangar", "open the hangar doors"]
+say = ["request departure", "request takeoff", "request take off", "request to depart", "request clearance to depart", "request launch", "open the hangar", "open the hangar doors", "open hangar", "open hangar doors"]
 actions = ["v_atc_request"]
 announced = true
 
@@ -210,7 +213,7 @@ actions = ["v_master_mode_set_nav", "v_master_mode_cycle_long"]
 
 [[command]]
 id = "scm_mode"
-say = ["scm mode", "s c m mode", "switch to scm", "switch to scm mode", "go to scm mode", "set scm mode", "switch from nav to scm", "switch from nav to scm mode", "master mode scm"]
+say = ["scm mode", "s c m mode", "switch to scm", "switch to scm mode", "go to scm mode", "set scm mode", "switch from nav to scm", "switch from nav to scm mode", "master mode scm", "space combat mode", "combat mode", "space combat maneuvering"]
 actions = ["v_master_mode_set_scm", "v_master_mode_cycle_long"]
 
 # Quantum travel

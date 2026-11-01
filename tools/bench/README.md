@@ -46,6 +46,15 @@ Models go to `%LOCALAPPDATA%\tycho\models`. Set `TYCHO_MODELS` to put them elsew
 
 Results are written next to the clips, in `recordings/<session>/results/`, and stay local.
 
+## The product brain (#45)
+
+```powershell
+uv run python tools/bench/tycho_eval.py                 # every case in tools/spike/brain_cases.toml
+uv run python tools/bench/tycho_eval.py --tag log       # only the cases from play logs
+```
+
+Runs each case through Tycho's own path: the lexicon, the fast path, then `ClaudeBrain` and `commands_for`, with your real keybinds. Grades what Tycho would press (after "confirm"), fails any dangerous press that wouldn't be asked about first, and fails answers to questions marked `answer = true` that only point elsewhere ("check the wiki"). The bar is zero wrong presses and Claude's picks at p50 <= 1.5 s. About 2 cents a run. Add a case whenever a play log shows a miss.
+
 ## Language model
 
 ```powershell
