@@ -1,8 +1,11 @@
 """The runtime's boundaries: speech recognition, sound, game state (ADR 4: each a Protocol)."""
 
+from collections.abc import Sequence
 from typing import Protocol
 
 from tycho.audio.clip import Samples
+from tycho.brain import Decision, Exchange
+from tycho.game.keybinds import Keybinds
 
 
 class Transcriber(Protocol):
@@ -20,6 +23,22 @@ class Feedback(Protocol):
 
     def ask(self) -> None:
         """Tycho wants the player to say "confirm" before it acts."""
+        ...
+
+
+class Brain(Protocol):
+    """Decides what to do with a request the fast path couldn't match (ADR 14).
+
+    Raises ``tycho.brain.BrainError`` when it has no usable answer. Its decision
+    is untrusted: the session turns it into commands and the safety gate checks them.
+    """
+
+    async def decide(
+        self, text: str, recent: Sequence[Exchange], keybinds: Keybinds
+    ) -> Decision: ...
+
+    async def warm(self, keybinds: Keybinds) -> None:
+        """Get ready for the first request, e.g. by caching the briefing. Never raises."""
         ...
 
 

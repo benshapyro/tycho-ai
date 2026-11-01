@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from tests.fakes.fake_audio import FakeAudioSource
+from tests.fakes.fake_brain import FakeBrain
 from tests.fakes.fake_input import FakeInputSource
 from tests.fakes.fake_keys import FakeFocus, FakeKeySender
 from tests.fakes.fake_runtime import (
@@ -22,6 +23,7 @@ from tests.fakes.fake_runtime import (
     FakeTranscriber,
 )
 from tycho import safety
+from tycho.brain import BrainError, Reply, RunActions, RunSequence
 from tycho.commands import CommandMatcher
 from tycho.game.gamelog import QUANTUM_ROUTE
 from tycho.game.keybinds import Action, ActivationMode, Keybinds, KeyInput
@@ -93,6 +95,8 @@ def rig(
     game_state: FakeGameState | None = None,
     keybinds_now: Callable[[], Keybinds] | None = None,
     clock: Callable[[], float] = time.monotonic,
+    brain: FakeBrain | None = None,
+    brain_seconds: float = 8.0,
 ) -> Rig:
     audio, keys, feedback = FakeAudioSource(RATE), FakeKeySender(), FakeFeedback()
     actions = FakeActionLog()
@@ -109,6 +113,8 @@ def rig(
         feedback=feedback,
         game_state=game_state,
         action_log=actions,
+        brain=brain,
+        brain_seconds=brain_seconds,
         samplerate=RATE,
         log_transcripts=log_transcripts,
         on_result=results.append,
@@ -342,6 +348,118 @@ def test_a_sequence_with_a_step_that_has_no_key_presses_nothing() -> None:
     assert r.results[0].status == "no_key"
     assert "flight_ready" in r.results[0].detail
     assert r.keys.events == []
+
+
+# --- The brain (ADR 14) ------------------------------------------------------------------
+
+
+def test_what_the_fast_path_misses_goes_to_the_brain() -> None:
+    brain = FakeBrain(RunActions(("v_toggle_landing_system",), "Gear down."))
+    r = _conversation("put the wheels out would you", brain=brain)
+    result = r.results[0]
+    assert result.status == "done"
+    assert result.by_brain
+    assert result.commands == ("landing_gear",)  # the action ran as the fast path's command
+    assert result.say == "Gear down."
+    assert r.pressed() == _down_up("n")
+    assert brain.asked[0].text == "put the wheels out would you"
+    assert r.actions.entries[0]["by"] == "brain"
+    assert r.actions.entries[0]["tycho_said"] == "Gear down."
+
+
+def test_the_fast_path_never_asks_the_brain() -> None:
+    brain = FakeBrain()
+    r = _conversation("landing gear", brain=brain)
+    assert r.results[0].status == "done"
+    assert not r.results[0].by_brain
+    assert brain.asked == []
+
+
+def test_a_reply_presses_nothing() -> None:
+    r = _conversation("what's a good mining ship", brain=FakeBrain(Reply("The Prospector.")))
+    result = r.results[0]
+    assert result.status == "replied"
+    assert result.say == "The Prospector."
+    assert r.keys.events == []
+    assert r.feedback.played == ["done"]
+    assert r.actions.entries == []  # nothing was done, so it isn't an action
+
+
+def test_the_brain_can_run_a_sequence() -> None:
+    brain = FakeBrain(RunSequence("prepare_to_land", "Bringing us in."))
+    r = _conversation("take us down to the pad", brain=brain)
+    assert r.results[0].commands == ("prepare_to_land",)
+    assert r.results[0].pressed == ("v_atc_request", "v_toggle_landing_system")
+
+
+def test_when_the_brain_fails_tycho_says_so_and_presses_nothing() -> None:
+    r = _conversation("do the thing", brain=FakeBrain(BrainError("can't reach Claude")))
+    assert r.results[0].status == "failed"
+    assert "can't reach Claude" in r.results[0].detail
+    assert r.keys.events == []
+    assert r.feedback.played == ["not_done"]
+
+
+def test_a_brain_that_takes_too_long_is_given_up_on() -> None:
+    r = _conversation("do the thing", brain=FakeBrain(hang=True), brain_seconds=0.05)
+    assert r.results[0].status == "failed"
+    assert "took too long" in r.results[0].detail
+
+
+def test_a_confirm_grade_pick_from_the_brain_still_asks() -> None:
+    brain = FakeBrain(RunActions(("v_eject",), "Ejecting."))
+    r = _conversation("get me out of this thing", "confirm", brain=brain)
+    assert [x.status for x in r.results] == ["asking", "done"]
+    assert r.results[1].pressed == ("v_eject",)
+    assert r.results[1].by_brain  # the confirmation carries out the brain's pick
+    assert r.results[1].say == "Ejecting."
+    assert len(brain.asked) == 1  # "confirm" itself never goes to the brain
+
+
+def test_travel_the_brain_picked_asks_first_and_then_runs_as_quantum_engage() -> None:
+    brain = FakeBrain(RunActions(("v_toggle_qdrive_engagement",), "Engaging."))
+    r = _conversation("lets get out of here", "confirm", brain=brain)
+    assert r.results[0].status == "asking"
+    assert r.results[0].commands == ("quantum_engage",)
+    assert r.results[1].pressed == (
+        "v_master_mode_set_nav",
+        "v_set_quantum_mode",
+        "v_toggle_qdrive_engagement",
+    )
+
+
+def test_recent_exchanges_go_to_the_brain_for_follow_ups() -> None:
+    brain = FakeBrain(Reply("Which door?"), RunActions(("v_atc_request",), "Requested."))
+    r = _conversation("landing gear", "sort the door out", "call them again", brain=brain)
+    first, second = brain.asked
+    assert [e.said for e in first.recent] == ["landing gear"]
+    assert "landing_gear" in first.recent[0].outcome
+    assert [e.said for e in second.recent] == ["landing gear", "sort the door out"]
+    assert second.recent[1].outcome == "said: Which door?"
+    assert r.results[2].status == "done"
+
+
+def test_after_half_a_minute_of_quiet_the_brain_starts_fresh() -> None:
+    now = [100.0]
+    brain = FakeBrain(Reply("Hello."), Reply("Hello again."))
+
+    async def scenario() -> Rig:
+        r = rig("hi there", "you again", clock=lambda: now[0], brain=brain)
+        r.say()
+        await r.session.idle()
+        now[0] += 31
+        r.say()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    run(scenario)
+    assert brain.asked[1].recent == ()
+
+
+def test_without_a_brain_unmatched_requests_are_not_understood() -> None:
+    r = _conversation("put the wheels out would you")
+    assert r.results[0].status == "not_understood"
 
 
 # --- Requests that must not press anything ----------------------------------------------

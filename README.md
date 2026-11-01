@@ -32,7 +32,7 @@ Tycho only presses keys while Star Citizen is the window in front. You hear a cl
 
 - Windows 10 or 11, and Star Citizen.
 - An NVIDIA GPU makes speech recognition fastest; it also runs on the CPU.
-- An Anthropic API key (for Claude), and an ElevenLabs API key for the recommended voice. A free local voice is the fallback.
+- An Anthropic API key (for Claude), and an ElevenLabs API key for the recommended voice. A free local voice is the fallback. Store a key with `uv run python -m tycho.credentials set anthropic`; without one, Tycho understands only its built-in phrasings.
 - Development uses [uv](https://docs.astral.sh/uv/).
 
 ## What leaves your PC
@@ -41,7 +41,7 @@ Your voice never does: speech recognition runs on your PC. Only text is sent, an
 
 | Service | What it receives | When |
 |---|---|---|
-| Anthropic (Claude) | What you said (as text), a few hints about game words, your list of bound actions, and recent conversation | Requests the fast path doesn't handle |
+| Anthropic (Claude) | What you said (as text), your list of bound actions, commands and sequences, and your last few requests if they were in the last 30 seconds | Requests the fast path doesn't handle, plus one warm-up request when Tycho starts |
 | ElevenLabs | The text of Tycho's reply | When Tycho speaks with the ElevenLabs voice |
 | TypeSafe (Jev) | What you said (as text) | Only if you turn on the fast router |
 | UEX Corp, Star Citizen Wiki | Search terms, such as a commodity or place name | When you ask a trade, item or location question |

@@ -11,6 +11,10 @@ flight, and a key sequence stops within about 10 ms with every key released.
 Confirm-grade requests are asked about (ADR 13): a question sound, then nothing
 is pressed unless the next thing the player says is "confirm", within a few
 seconds. Expiry is checked when they next speak; no timer acts on its own.
+
+What the fast path can't match goes to the brain (ADR 14), with the last few
+exchanges if they were recent. What it picks becomes commands, planned and gated
+exactly like the fast path's.
 """
 
 import asyncio
@@ -26,13 +30,14 @@ from dataclasses import dataclass, field
 from tycho import safety
 from tycho.audio.clip import Samples
 from tycho.audio.source import AudioError, AudioSource
+from tycho.brain import BrainError, Exchange, Reply, commands_for
 from tycho.commands import Command, CommandMatcher, Defer, resolve
 from tycho.game.keybinds import Action, Keybinds
 from tycho.input import NotPressable, Press, Presser, UnsupportedKey, plan
 from tycho.lexicon import Lexicon
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime.messages import Result, Status, Trace
-from tycho.runtime.ports import ActionLog, Feedback, GameState, Transcriber
+from tycho.runtime.ports import ActionLog, Brain, Feedback, GameState, Transcriber
 from tycho.text import normalize
 
 log = logging.getLogger(__name__)
@@ -51,6 +56,12 @@ CONFIRM_WORDS = frozenset({"confirm", "confirmed", "affirmative"})
 CANCEL_WORDS = frozenset({"cancel", "abort", "negative", "belay that", "never mind", "nevermind"})
 """Replies to a question. Whole utterances only, and no command may use them as phrases."""
 
+BRAIN_SECONDS = 8.0
+"""How long to wait for the brain before saying it couldn't answer (ADR 14)."""
+FOLLOW_UP_SECONDS = 30.0
+"""Exchanges this recent go to the brain with the next request (ADR 10, ADR 14)."""
+FOLLOW_UP_LIMIT = 4
+
 _RECEIPT_STATUS: dict[str, Status] = {
     "cancelled": "cancelled",
     "no_focus": "no_focus",
@@ -65,6 +76,8 @@ class _Question:
     request: int
     commands: tuple[Command, ...]
     deadline: float
+    by_brain: bool = False
+    say: str = ""
 
 
 @dataclass(slots=True)
@@ -74,6 +87,8 @@ class _Progress:
     commands: tuple[str, ...] = ()
     pressed: list[str] = field(default_factory=list[str])
     confirmed: bool = False
+    by_brain: bool = False
+    say: str = ""
 
 
 def reply_to_question(text: str) -> str | None:
@@ -100,6 +115,8 @@ class Session:
         feedback: Feedback,
         game_state: GameState | None = None,
         action_log: ActionLog | None = None,
+        brain: Brain | None = None,
+        brain_seconds: float = BRAIN_SECONDS,
         confirm_seconds: float = CONFIRM_SECONDS,
         samplerate: int = 16_000,
         log_transcripts: bool = False,
@@ -120,6 +137,10 @@ class Session:
         self._feedback = feedback
         self._game_state = game_state
         self._action_log = action_log
+        self._brain = brain
+        self._brain_seconds = brain_seconds
+        self._recent: list[Exchange] = []
+        self._recent_at = 0.0
         self._confirm_seconds = confirm_seconds
         self._question: _Question | None = None
         self._samplerate = samplerate
@@ -144,9 +165,14 @@ class Session:
         )
         poller.start()
         log.debug("Listening for push-to-talk on %s", self._ptt.binding)
+        warming = None
+        if self._brain is not None:
+            warming = asyncio.create_task(self._brain.warm(self._keybinds()))
         try:
             await stop.wait()
         finally:
+            if warming is not None:
+                warming.cancel()
             halt.set()
             await asyncio.to_thread(poller.join, 1.0)
             await self.close()
@@ -274,12 +300,35 @@ class Session:
                 detail = f"cancelled #{question.request} ({asked})"
                 return self._result(request, "done", trace, heard, text, detail, progress=progress)
             commands, confirmed = question.commands, True
+            progress.by_brain, progress.say = question.by_brain, question.say
         else:
-            decision = self._matcher.match(text)
+            match = self._matcher.match(text)
             trace.mark("match")
-            if isinstance(decision, Defer):
-                return self._result(request, "not_understood", trace, heard, text, decision.reason)
-            commands, confirmed = decision.commands, False
+            confirmed = False
+            if not isinstance(match, Defer):
+                commands = match.commands
+            elif self._brain is None:
+                return self._result(request, "not_understood", trace, heard, text, match.reason)
+            else:
+                progress.by_brain = True
+                try:
+                    decision = await asyncio.wait_for(
+                        self._brain.decide(text, self._follow_ups(), self._keybinds()),
+                        self._brain_seconds,
+                    )
+                    trace.mark("brain")
+                    if isinstance(decision, Reply):
+                        progress.say = decision.text
+                        return self._result(
+                            request, "replied", trace, heard, text, progress=progress
+                        )
+                    commands, progress.say = commands_for(decision, self._matcher), decision.say
+                except (BrainError, TimeoutError) as e:
+                    trace.mark("brain")
+                    detail = f"the brain couldn't answer: {str(e) or 'it took too long'}"
+                    return self._result(
+                        request, "failed", trace, heard, text, detail, progress=progress
+                    )
 
         progress.commands = tuple(command.id for command in commands)
         progress.confirmed = confirmed
@@ -328,7 +377,9 @@ class Session:
         trace.mark("gate")
         if questions:
             deadline = self._clock() + self._confirm_seconds
-            self._question = _Question(request, tuple(commands), deadline)
+            self._question = _Question(
+                request, tuple(commands), deadline, progress.by_brain, progress.say
+            )
             return end("asking", f'{"; ".join(questions)}: hold push-to-talk and say "confirm"')
 
         for wait, press in steps:
@@ -363,6 +414,8 @@ class Session:
             detail=detail,
             commands=progress.commands,
             confirmed=progress.confirmed,
+            by_brain=progress.by_brain,
+            say=progress.say,
             timings=dict(trace.stages),
             total_ms=trace.total_ms,
         )
@@ -381,9 +434,12 @@ class Session:
             result.total_ms,
             stages or "no stages",
         )
+        if result.say:
+            log.info("Tycho: %s", result.say)
+        self._remember(result)
         if result.commands and self._action_log is not None:
             self._record(self._action_log, result)
-        if result.done:
+        if result.done or result.status == "replied":
             self._feedback.done()
         elif result.status == "asking":
             self._feedback.ask()
@@ -402,9 +458,33 @@ class Session:
         }
         if result.detail:
             entry["detail"] = result.detail
+        if result.by_brain:
+            entry["by"] = "brain"
+        if result.say:
+            entry["tycho_said"] = result.say
         if self._log_transcripts and result.text:
             entry["said"] = result.text
         try:
             action_log.record(entry)
         except OSError as e:  # a full disk mustn't stop the loop
             log.warning("Couldn't write the action log: %s", e)
+
+    def _follow_ups(self) -> list[Exchange]:
+        """The last few exchanges, if the latest was recent; otherwise a fresh start."""
+        if self._clock() - self._recent_at > FOLLOW_UP_SECONDS:
+            self._recent.clear()
+        return list(self._recent)
+
+    def _remember(self, result: Result) -> None:
+        if not result.text or result.status in ("empty", "cancelled"):
+            return
+        if result.status == "replied":
+            outcome = f"said: {result.say}"
+        elif result.status == "asking":
+            outcome = f"asked the player to confirm {', '.join(result.commands)}"
+        elif result.done and result.pressed:
+            outcome = f"did {', '.join(result.commands)} (pressed {', '.join(result.pressed)})"
+        else:
+            outcome = f"couldn't: {result.status}" + (f", {result.detail}" if result.detail else "")
+        self._recent = [*self._recent, Exchange(result.text, outcome)][-FOLLOW_UP_LIMIT:]
+        self._recent_at = self._clock()

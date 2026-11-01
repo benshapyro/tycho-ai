@@ -125,6 +125,8 @@ Vision is never on the fast path. It's for questions ("what's this contract wort
 
 The router must be fast and must say when it isn't sure. The modes and rules are in [ADR 10](adr/0010-interaction-modes-and-routing.md). Tested so far ([#1](https://github.com/benshapyro/tycho-ai/issues/1)): TypeSafe's Jev answers in about 0.12 s and routes questions and unclear requests well, but made 3 confident wrong single-action picks and its danger checks were unreliable. It is a candidate router only, never an actor; until it passes a re-test, Claude Haiku 5.5 decides everything the fast path doesn't.
 
+As built ([ADR 14](adr/0014-the-brain-voice-and-sequences.md)): the brain calls one tool per request (`run_sequence` or `run_actions`) or replies in text. Tycho acts the moment the tool call is complete. Every name it returns is checked against the player's own actions and sequences, and what it picks is turned back into commands, so the gate, the planner, spoken confirmation and the action log treat it like the fast path. Travel the brain picked always asks first. The briefing is cached for an hour and warmed up at startup; with it, a pick takes about 1.1 to 1.3 s.
+
 ### 4.7 Safety and confirmations
 
 Every action passes through one safety gate, which can refuse it. The gate is independent of the models: no router or brain output can skip a confirmation. The latency spike showed why: some hosted models engaged quantum travel or fired missiles without being asked.

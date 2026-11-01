@@ -636,6 +636,7 @@ version = "0.0.0"
 source = { editable = "." }
 default-groups = ["bench", "dev", "gpu"]
 dependencies = [
+    { name = "anthropic" },
     { name = "keyring" },
     { name = "numpy" },
     { name = "onnx-asr" },
@@ -647,7 +648,6 @@ dependencies = [
 
 [package.dev-dependencies]
 bench = [
-    { name = "anthropic" },
     { name = "httpx2" },
     { name = "openai" },
     { name = "soundfile" },
@@ -664,6 +664,7 @@ gpu = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anthropic", specifier = ">=2.3.0" },
     { name = "keyring", specifier = ">=25.7.0" },
     { name = "numpy", specifier = ">=2.5.4" },
     { name = "onnx-asr", specifier = "==0.12.0" },
@@ -675,7 +676,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 bench = [
-    { name = "anthropic", specifier = ">=2.3.0" },
     { name = "httpx2", specifier = ">=2.16.0" },
     { name = "openai", specifier = ">=3.41.0" },
     { name = "soundfile", specifier = ">=0.14.0" },

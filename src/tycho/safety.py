@@ -32,6 +32,10 @@ CONFIRM_GRADE = frozenset(
 Quantum engage and jump-point jumps aren't here: they're routine travel, and the
 author decided they shouldn't need confirming (2026-10-30 and 2026-10-31)."""
 
+TRAVEL = frozenset({"v_toggle_qdrive_engagement", "v_toggle_jump_request"})
+"""Quantum and jump engage. Not confirm-grade when the player says it in the fast
+path's words, but the brain's reading of looser words asks first (ADR 14)."""
+
 _DANGER_WORDS = (
     *("eject", "self_destruct", "emergency_exit", "jettison", "respawn"),
     *("launch_missile", "attack", "fire"),
@@ -102,6 +106,10 @@ def check(
     if not confirmed and (command.confirm or is_confirm_grade(action.name)):
         return Verdict(False, f"{name} needs your confirmation", ask=True)
     return Verdict(True)
+
+
+def is_travel(command: Command) -> bool:
+    return any(name in TRAVEL for name in command.actions)
 
 
 def is_confirm_grade(action_name: str) -> bool:
