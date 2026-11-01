@@ -91,7 +91,7 @@ def run_command(current: Settings, *, verbose: bool = False) -> int:
         return 0
     except (FileNotFoundError, GameDataError, AudioError, ModelError, SettingsError) as e:
         log.error("%s", e)
-        print("Run `tycho check` for a full diagnosis.", file=sys.stderr)
+        print("Run `uv run tycho check` for a full diagnosis.", file=sys.stderr)
         return 1
 
 
@@ -346,7 +346,7 @@ def check_command(current: Settings, *, quick: bool = False) -> int:
     elif warned:
         print(f"Ready, with {warned} thing(s) worth a look.")
     else:
-        print("All good. Start Tycho with: tycho run")
+        print("All good. Start Tycho with: uv run tycho run")
     return 1 if failed else 0
 
 
@@ -363,7 +363,7 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
 
     binding = current.push_to_talk_binding
     if binding is None:
-        yield Finding("fail", "Push-to-talk", "not chosen yet. Run: tycho bind")
+        yield Finding("fail", "Push-to-talk", "not chosen yet. Run: uv run tycho bind")
     else:
         yield Finding("ok", "Push-to-talk", describe(binding))
 
@@ -448,7 +448,7 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
             "warn",
             "Speech model",
             f"not downloaded yet ({size:.1f} GB to {model.folder(PARAKEET_V2)}); "
-            "tycho run downloads it. Set TYCHO_MODELS to put it on another drive.",
+            "uv run tycho run downloads it. Set TYCHO_MODELS to put it on another drive.",
         )
     choice = device_choice(current)
     yield Finding(
@@ -581,7 +581,7 @@ def conflict_warnings(binding: Binding, store: KeybindStore) -> list[str]:
     shown = ", ".join(names[:4]) + (f" and {len(names) - 4} more" if len(names) > 4 else "")
     return [
         f"{describe(binding)} is also bound in game ({shown}). The game sees the press "
-        "too, so choose another button with `tycho bind`, or unbind it in game."
+        "too, so choose another button with `uv run tycho bind`, or unbind it in game."
     ]
 
 

@@ -3,6 +3,11 @@ Copyright 2026 Ben Shapiro and Tycho contributors
 
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 
+Speech recognition uses NVIDIA's Parakeet TDT 0.6B v2 model, licensed under
+CC-BY-4.0 (https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2), in the ONNX
+export by istupakov (onnx-asr). Tycho downloads it; it is not part of this
+repository.
+
 Tycho is an unofficial fan project. It is not affiliated with the Cloud
 Imperium group of companies. Star Citizen®, Roberts Space Industries® and
 Cloud Imperium® are registered trademarks of Cloud Imperium Rights LLC.

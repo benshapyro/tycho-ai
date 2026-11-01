@@ -170,7 +170,7 @@ Settings (one schema, voice and file editing) arrive in stage 1. The settings GU
   | Path | Target | Measured so far (spike) |
   |---|---|---|
   | Fast path | under 300 ms | about 0.1 s transcription plus about 6 ms matching; key press not yet measured |
-  | Thinking, no vision | under 1.5 s | Haiku 5.5: 1.2 s typical, 2.1 s at p90 (misses the target at p90) |
+  | Thinking, no vision | under 1.5 s | Haiku 5.5 with a cached, warmed briefing: 1.24 s median when acting (brain eval, 2026-11-01); some requests take over 2 s |
   | With vision | under 4 s | not yet measured |
 - **Hands-off test:** a full session (startup, travel, a mission, landing) without touching the keyboard for any action Tycho supports.
 - **Game impact:** a measured, published frame-rate cost.
