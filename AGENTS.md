@@ -40,10 +40,11 @@ All four of these pass: `ruff format --check`, `ruff check`, `pyright`, and `pyt
 - `src/tycho/voice/`: Tycho's voice (ADR 14). The ElevenLabs speaker, and playing speech as it streams in.
 - `src/tycho/runtime/`: the talking loop (ADR 11). The session that joins every stage, the messages and per-stage timings, the transcriber, feedback and action-log boundaries, the action log file, and the single-instance lock.
 - `src/tycho/safety.py`: the safety gate. Every press goes through `safety.check`, which allows, refuses or asks (ADR 13); the confirm-grade list lives here.
+- `src/tycho/app.py`: the command line (`run`, `check`, `bind`, `sounds`) and the wiring that joins the parts. `src/tycho/feedback.py`: the done, not-done and question sounds. `src/tycho/logs.py`: logging and key redaction. `src/tycho/text.py`: text normalising and similarity.
 - `src/tycho/settings.py` and `src/tycho/paths.py`: the settings schema, and the only place file locations are decided.
 - `src/tycho/eval/`: scoring for benchmarks.
 - `src/tycho/credentials.py`: API keys.
-- `tools/bench/`: benchmarks (see its README). `tools/spike/`: the recorder, phrase lists and expected results.
+- `tools/bench/`: benchmarks and the brain eval (see its README). `tools/spike/`: the recorder, phrase lists, expected results and brain cases, the recommended-keybinds profile builder (`make_layout.py`), the in-game press tool (`press.py`) and the self-test (`selftest.py`).
 
 The project folder may still be named `ultimo` locally; the project is Tycho ([ADR 7](docs/adr/0007-name-tycho.md)).
 

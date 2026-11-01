@@ -4,8 +4,10 @@ Thanks for your interest. Tycho is pre-alpha, so expect things to move.
 
 ## Setup
 
+Tycho is Windows-only (the game is), and `uv sync` refuses other platforms.
+
 1. Install [uv](https://docs.astral.sh/uv/).
-2. `uv sync` creates the virtual environment, with Python 3.14.
+2. `uv sync` creates the virtual environment, with Python 3.14. It includes about 2 GB of CUDA libraries for NVIDIA cards; use `uv sync --no-group gpu` without one (CI does).
 3. `uv run pre-commit install` sets up the commit hooks.
 
 ## Before opening a pull request
@@ -17,7 +19,16 @@ uv run pyright
 uv run pytest
 ```
 
-CI runs the same checks on Windows.
+CI runs the same checks on Windows, plus the large-file and private-key checks.
+
+Every change goes through a pull request: branch from `main`, push, and open a PR. `main` is protected; a PR merges once CI and the automated Claude review pass. Pin any GitHub Action to a full commit SHA, with the version in a comment.
+
+## Tests CI can't run
+
+Before a release, on a Windows PC with the game installed and nobody using it:
+- `uv run pytest -m replay -s`: the recorded test set, through the real speech model.
+- `uv run python tools/spike/selftest.py`: the whole loop through real Windows input. It takes the foreground, so don't touch the PC while it runs.
+- `uv run python tools/bench/tycho_eval.py`: the brain eval (about 2 cents, with your Anthropic key).
 
 ## Ground rules
 

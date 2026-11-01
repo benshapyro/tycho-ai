@@ -1,6 +1,8 @@
 # 11. Runtime architecture
 
-Date: 2026-10-30 · Status: accepted
+Date: 2026-10-30 · Status: accepted; roadmap amended by [ADR 14](0014-the-brain-voice-and-sequences.md)
+
+> **As built (2026-11-01):** the brain and the voice shipped together in 0.3 (ADR 14), not in 0.3 and 0.4 as below. The stages run inside one `Session` method rather than as separate replaceable stages; splitting it is tracked as an issue.
 
 ## Context
 

@@ -61,5 +61,6 @@ class GameInstall:
         searched = ", ".join(str(r / channel) for r in roots)
         raise FileNotFoundError(
             f"No Star Citizen {channel} install found in {searched}. "
-            f"If the game is elsewhere, set {ROOT_VARIABLE} to the folder that contains {channel}."
+            f"If the game is elsewhere, set game_root in %APPDATA%\\tycho\\settings.toml to the "
+            f"folder that contains {channel} (or the {ROOT_VARIABLE} environment variable)."
         )

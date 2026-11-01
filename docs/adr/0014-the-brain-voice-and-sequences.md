@@ -42,7 +42,8 @@ The author decided the open questions in a design interview (2026-10-31). The de
   - When Claude acted, it says briefly what it did ("Gear down, lights on"), so the player hears how they were understood. The line is spoken after the press starts, never before.
   - **Unless the game announces it itself** *(author, 2026-10-31)*. The ship's computer already speaks for power, engines, weapons power, landing gear and flight ready, and air traffic control answers its own requests. Those commands are marked `announced = true` in `commands.toml`, and when everything Claude did is announced, Tycho plays the done sound instead of talking over the game.
   - Replies and questions from Claude are spoken.
-- **Pressing push-to-talk stops Tycho talking at once** (ADR 10). It doesn't cancel the key sequence already running unless the player says "stop" or "cancel".
+- **Pressing push-to-talk stops Tycho talking at once** (ADR 10), and cancels anything in flight, a key sequence included, as it always has (architecture 4.7). *(Corrected 2026-11-01: this line first said the sequence carried on, which the code never did.)*
+- **Questions are spoken too** *(author, 2026-11-01)*: "Eject? Say confirm.", in the gate's own words (ADR 13).
 - **Without an ElevenLabs key, or offline,** Tycho plays the done or not-done sound, and the reply goes to the log.
 
 ### Sequences
