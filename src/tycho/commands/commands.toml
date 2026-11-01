@@ -92,7 +92,7 @@ actions = ["v_power_set_on", "v_power_toggle"]
 
 [[command]]
 id = "power_off"
-say = ["power off", "power down", "turn the power off", "turn off the power", "power down the ship", "power everything down"]
+say = ["power off", "power down", "turn the power off", "turn off the power", "power down the ship", "power everything down", "shut down", "shutdown", "shut down the ship", "shut it down", "shut her down"]
 actions = ["v_power_set_off", "v_power_toggle"]
 
 [[command]]
@@ -102,7 +102,7 @@ actions = ["v_power_set_thrusters_on", "v_power_toggle_thrusters"]
 
 [[command]]
 id = "engines_off"
-say = ["engines off", "thrusters off", "turn off the engines", "turn the engines off", "kill the engines"]
+say = ["engines off", "thrusters off", "turn off the engines", "turn the engines off", "kill the engines", "shut down the engines", "shut the engines down", "shut off the engines"]
 actions = ["v_power_set_thrusters_off", "v_power_toggle_thrusters"]
 
 [[command]]
@@ -457,27 +457,20 @@ actions = ["pc_conversation_option5"]
 # (ADR 14). The fast path matches these phrasings; for any other wording, the
 # brain picks the sequence by name, and the steps still come from here. Every
 # step goes through the safety gate, and the whole sequence is planned before
-# the first press. A step's wait is the time after the previous step, in seconds.
+# the first press. Steps follow each other at the chain beat (0.15 s), which is
+# all the game needs; a step can add a wait, in seconds, if one ever needs time.
 [[sequence]]
 id = "startup"
 say = ["start up", "startup", "start up the ship", "start the ship", "start her up", "get us ready to fly", "ready for takeoff"]
 steps = [
-    { command = "flight_ready" },
-    { command = "request_departure", wait = 2.0 },
+    "flight_ready",
+    "request_departure",
 ]
 
 [[sequence]]
 id = "prepare_to_land"
 say = ["prepare to land", "prepare for landing", "landing sequence", "get ready to land", "bring us in"]
 steps = [
-    { command = "request_landing" },
-    { command = "landing_gear_down", wait = 1.0 },
-]
-
-[[sequence]]
-id = "shutdown"
-say = ["shut down", "shutdown", "shut down the ship", "shut it down", "shut her down"]
-steps = [
-    { command = "engines_off" },
-    { command = "power_off", wait = 1.0 },
+    "request_landing",
+    "landing_gear_down",
 ]

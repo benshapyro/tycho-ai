@@ -21,7 +21,8 @@ def _ids(matcher: CommandMatcher, text: str) -> list[str]:
         ("startup", "startup"),
         ("start up the ship please", "startup"),
         ("prepare for landing", "prepare_to_land"),
-        ("shut it down", "shutdown"),
+        ("shut it down", "power_off"),  # just the power, unless the player says more
+        ("shut down the engines", "engines_off"),
         ("shut the doors", "doors_close"),  # "shut" alone is still the doors
         ("start the engines", "engines_on"),
         ("power down", "power_off"),
@@ -33,7 +34,7 @@ def test_sequences_match_like_commands(text: str, expected: str) -> None:
 
 def test_built_in_sequences_are_made_of_commands_with_short_waits() -> None:
     sequences = [c for c in DEFAULT.commands if c.is_sequence]
-    assert {s.id for s in sequences} >= {"startup", "prepare_to_land", "shutdown"}
+    assert {s.id for s in sequences} >= {"startup", "prepare_to_land"}
     for sequence in sequences:
         assert not sequence.actions
         for step in sequence.steps:
