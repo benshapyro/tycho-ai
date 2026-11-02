@@ -10,8 +10,10 @@ from typing import Any, cast
 
 import pytest
 
+from tests.fakes.fake_lookup import FakeLookup
 from tycho.brain import (
     BrainError,
+    BrainRequest,
     Exchange,
     Reply,
     RunActions,
@@ -26,7 +28,8 @@ from tycho.brain.briefing import (
     command_phrasings,
     game_facts,
 )
-from tycho.brain.claude import ClaudeBrain, history
+from tycho.brain.claude import MAX_CALLS, ClaudeBrain, history
+from tycho.brain.lookups import run_lookup
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Action, Keybinds, KeyInput
 
@@ -169,7 +172,7 @@ def test_actions_nobody_says_are_left_out_unless_a_command_presses_them() -> Non
 def test_each_request_carries_todays_date_outside_the_cached_briefing() -> None:
     client = _Client([_tool_stop("run_sequence", {"name": "startup", "say": ""})])
     brain = ClaudeBrain(MATCHER, client=cast(Any, client), today=lambda: datetime.date(2026, 11, 1))
-    asyncio.run(brain.decide("start us up", [], KEYBINDS))
+    asyncio.run(brain.decide(BrainRequest("start us up", KEYBINDS)))
     (request,) = client.requests
     assert request["messages"][-1]["content"][0] == {"type": "text", "text": "[1 November 2026]"}
     assert request["messages"][-1]["content"][1]["text"] == "start us up"
@@ -231,8 +234,8 @@ class _Client:
         self.messages = SimpleNamespace(stream=stream, create=create)
 
 
-def _tool_stop(name: str, arguments: dict[str, Any]) -> Any:
-    block = SimpleNamespace(type="tool_use", name=name, input=arguments)
+def _tool_stop(name: str, arguments: dict[str, Any], use_id: str = "toolu_1") -> Any:
+    block = SimpleNamespace(type="tool_use", id=use_id, name=name, input=arguments)
     return SimpleNamespace(type="content_block_stop", content_block=block)
 
 
@@ -249,7 +252,7 @@ def _final(text: str, stop_reason: str = "end_turn") -> Any:
 
 def _decide(client: _Client, text: str = "gear please") -> Any:
     brain = ClaudeBrain(MATCHER, client=cast(Any, client))
-    return asyncio.run(brain.decide(text, [], KEYBINDS))
+    return asyncio.run(brain.decide(BrainRequest(text, KEYBINDS)))
 
 
 def test_claude_acts_as_soon_as_the_tool_call_is_complete() -> None:
@@ -313,10 +316,125 @@ def test_warming_up_caches_exactly_what_a_real_request_sends() -> None:
 
     async def scenario() -> None:
         await brain.warm(KEYBINDS)
-        await brain.decide("start us up", [], KEYBINDS)
+        await brain.decide(BrainRequest("start us up", KEYBINDS))
 
     asyncio.run(scenario())
     warm, real = client.requests
     assert warm["max_tokens"] == 0  # no output billed
     for part in ("model", "system", "tools", "tool_choice", "output_config"):
         assert warm[part] == real[part], part
+
+
+# --- Look-ups: the loop (ADR 15, #54) -------------------------------------------------------
+
+
+class _Calls:
+    """A client that answers each call to Claude with the next scripted (events, final)."""
+
+    def __init__(self, *calls: tuple[list[Any], Any]) -> None:
+        self.requests: list[dict[str, Any]] = []
+        script = list(calls)
+
+        @asynccontextmanager
+        async def stream(**request: Any) -> AsyncGenerator[_Stream]:
+            # Copy the messages: the brain appends to the same list between calls.
+            self.requests.append({**request, "messages": list(request["messages"])})
+            events, final = script.pop(0)
+            yield _Stream(events, final)
+
+        self.messages = SimpleNamespace(stream=stream)
+
+
+def _looks_up(name: str = "ship_lookup", use_id: str = "toolu_1") -> tuple[list[Any], Any]:
+    """A call where Claude asks for one look-up and stops to wait for it."""
+    stop = _tool_stop(name, {"name": "Andromeda"}, use_id)
+    return [stop], SimpleNamespace(
+        content=[stop.content_block], stop_reason="tool_use", usage=_final("").usage
+    )
+
+
+def _ask(client: _Calls, *lookups: FakeLookup) -> Any:
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=lookups)
+    return asyncio.run(brain.decide(BrainRequest("who makes the Andromeda", KEYBINDS)))
+
+
+def test_a_look_up_goes_back_to_claude_and_claude_answers() -> None:
+    lookup = FakeLookup()
+    client = _Calls(_looks_up(), ([], _final("RSI makes it.")))
+    assert _ask(client, lookup) == Reply("RSI makes it.")
+    assert lookup.asked == [{"name": "Andromeda"}]
+    first, second = client.requests
+    assert first["tools"] == second["tools"]  # the same tools every call, so the cache holds
+    assert first["tool_choice"] == second["tool_choice"]
+    assistant, results = second["messages"][-2:]
+    assert assistant["role"] == "assistant"
+    assert results == {
+        "role": "user",
+        "content": [
+            {
+                "type": "tool_result",
+                "tool_use_id": "toolu_1",
+                "content": '{"name": "Constellation Andromeda", "maker": "RSI"}',
+                "is_error": False,
+            }
+        ],
+    }
+
+
+def test_look_ups_are_offered_alongside_the_acts() -> None:
+    client = _Calls(([], _final("RSI.")))
+    _ask(client, FakeLookup())
+    (request,) = client.requests
+    assert [t["name"] for t in request["tools"]] == ["run_sequence", "run_actions", "ship_lookup"]
+    assert all(t["strict"] for t in request["tools"])
+
+
+def test_claude_can_act_after_a_look_up_and_the_act_is_still_checked() -> None:
+    act = _tool_stop("run_actions", {"actions": ["v_toggle_landing_system"], "say": "Gear."})
+    assert _ask(_Calls(_looks_up(), ([act], None)), FakeLookup()) == RunActions(
+        ("v_toggle_landing_system",), "Gear."
+    )
+    bad = _tool_stop("run_actions", {"actions": ["v_unbound"], "say": ""})
+    with pytest.raises(BrainError, match="isn't one of your bound"):
+        _ask(_Calls(_looks_up(), ([bad], None)), FakeLookup())
+
+
+def test_a_broken_look_up_becomes_an_error_result_not_a_crash() -> None:
+    client = _Calls(_looks_up(), ([], _final("I couldn't check that.")))
+    assert _ask(client, FakeLookup(answer=RuntimeError("down"))) == Reply("I couldn't check that.")
+    (result,) = client.requests[1]["messages"][-1]["content"]
+    assert result["is_error"]
+    assert "failed (RuntimeError)" in result["content"]
+
+
+@pytest.mark.parametrize(
+    ("lookup", "arguments", "problem"),
+    [
+        (FakeLookup(hang=True), {"name": "x"}, "too long"),
+        (None, {"name": "x"}, "no look-up by that name"),
+        (FakeLookup(), ["x"], "must be an object"),
+    ],
+)
+def test_run_lookup_never_raises(
+    lookup: FakeLookup | None, arguments: object, problem: str
+) -> None:
+    result = asyncio.run(run_lookup(lookup, arguments, seconds=0.01))
+    assert result.is_error
+    assert problem in result.content
+
+
+def test_a_tool_claude_invents_is_refused() -> None:
+    with pytest.raises(BrainError, match="unknown tool 'ship_lookup'"):
+        _ask(_Calls(_looks_up(), ([], _final("never"))))  # no look-ups offered
+
+
+def test_looking_things_up_forever_is_a_brain_error() -> None:
+    client = _Calls(*[_looks_up(use_id=f"toolu_{n}") for n in range(MAX_CALLS)])
+    with pytest.raises(BrainError, match="still looking"):
+        _ask(client, FakeLookup())
+    assert len(client.requests) == MAX_CALLS
+
+
+def test_a_look_up_cant_take_the_name_of_an_act() -> None:
+    with pytest.raises(ValueError, match="run_actions"):
+        ClaudeBrain(MATCHER, client=cast(Any, _Calls()), lookups=[FakeLookup(name="run_actions")])

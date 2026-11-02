@@ -2,24 +2,38 @@
 
 Speed matters most (#21): Tycho acts as soon as the tool call is complete, and
 stops reading the stream there, so it never waits for the rest of the answer.
-At most one tool call per request, so "the moment it's complete" is well defined.
+At most one tool call per response, so "the moment it's complete" is well defined.
+
+Look-ups (ADR 15) run in a loop: a look-up starts the moment its call is complete,
+its result goes back to Claude, and Claude carries on, at most ``MAX_CALLS`` times.
+An act still ends the request at once. Every call sends the same tools and settings,
+so the cache holds across the loop and across requests.
 
 The briefing (about 11,000 tokens) is cached for an hour, because play is bursty:
 gaps of 5 to 60 minutes are normal, and a cold cache added about 3 s. One warm-up
 request at startup writes it, so the first real request is fast too.
 """
 
+import asyncio
 import datetime
 import logging
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
 import anthropic
-from anthropic.types import MessageParam, TextBlockParam, ToolParam
+from anthropic.types import MessageParam, TextBlockParam, ToolParam, ToolResultBlockParam
 
 from tycho.brain.briefing import briefing, offered_actions
-from tycho.brain.decisions import BrainError, Decision, Exchange, Reply, parse_tool_call
+from tycho.brain.decisions import (
+    BrainError,
+    BrainRequest,
+    Decision,
+    Exchange,
+    Reply,
+    parse_tool_call,
+)
+from tycho.brain.lookups import Lookup, LookupResult, run_lookup
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Keybinds
 
@@ -30,11 +44,22 @@ EFFORT = "low"
 """97% on the 82-case eval at about 1.2 s; medium scored the same, slower (ADR 6)."""
 MAX_TOKENS = 1024
 """Replies are a sentence or two and tool calls a few dozen tokens; this is headroom."""
+MAX_CALLS = 3
+"""Calls to Claude per request: up to two rounds of look-ups, then the answer (ADR 15)."""
 # Haiku 5.5 per million tokens: input, output, cache read, cache write (1 hour).
 _PRICES = (0.10, 0.50, 0.01, 0.20)
 
 
-def _tools(sequences: list[str]) -> list[ToolParam]:
+def _tools(sequences: list[str], lookups: Iterable[Lookup] = ()) -> list[ToolParam]:
+    looks: list[ToolParam] = [
+        {
+            "name": lookup.name,
+            "description": lookup.description,
+            "strict": True,
+            "input_schema": dict(lookup.input_schema),
+        }
+        for lookup in lookups
+    ]
     return [
         {
             "name": "run_sequence",
@@ -68,6 +93,7 @@ def _tools(sequences: list[str]) -> list[ToolParam]:
                 "additionalProperties": False,
             },
         },
+        *looks,
     ]
 
 
@@ -102,6 +128,7 @@ class ClaudeBrain:
         client: anthropic.AsyncAnthropic | None = None,
         model: str = MODEL,
         today: Callable[[], datetime.date] = datetime.date.today,
+        lookups: Sequence[Lookup] = (),
     ) -> None:
         # The session gives up after its own deadline; one quick retry fits inside it.
         self._client = client or anthropic.AsyncAnthropic(
@@ -111,7 +138,10 @@ class ClaudeBrain:
         self._model = model
         self._today = today
         self._sequences = sorted(c.id for c in matcher.commands if c.is_sequence)
-        self._tools = _tools(self._sequences)
+        self._lookups = {lookup.name: lookup for lookup in lookups}
+        if clash := {"run_actions", "run_sequence"} & self._lookups.keys():
+            raise ValueError(f"a look-up can't be named {', '.join(sorted(clash))}")
+        self._tools = _tools(self._sequences, lookups)
         self._for: Keybinds | None = None
         self._system: list[TextBlockParam] = []
         self._actions: frozenset[str] = frozenset()
@@ -138,9 +168,40 @@ class ClaudeBrain:
             return
         _log_usage(message.usage, started, "Brain warmed up")
 
-    async def decide(self, text: str, recent: Sequence[Exchange], keybinds: Keybinds) -> Decision:
-        self._brief(keybinds)
+    async def decide(self, request: BrainRequest) -> Decision:
+        self._brief(request.keybinds)
         started = time.perf_counter()
+        messages = history(request.recent, request.text, self._today())
+        try:
+            for _ in range(MAX_CALLS):
+                decided, message, looking = await self._call(messages, started)
+                if decided is not None:
+                    return decided
+                _log_usage(message.usage, started)
+                if message.stop_reason == "refusal":
+                    raise BrainError("Claude declined")
+                if not looking:
+                    reply = " ".join(b.text for b in message.content if b.type == "text").strip()
+                    if not reply:
+                        raise BrainError(f"no answer (stopped: {message.stop_reason})")
+                    return Reply(reply[:400])
+                results = await asyncio.gather(*(task for _, task in looking))
+                messages.append({"role": "assistant", "content": message.content})
+                messages.append({"role": "user", "content": _results(looking, results)})
+        except anthropic.AuthenticationError as e:
+            raise BrainError("the Anthropic key was refused") from e
+        except anthropic.APIConnectionError as e:
+            raise BrainError("can't reach Claude (offline?)") from e
+        except anthropic.APIStatusError as e:
+            raise BrainError(f"Claude returned an error ({e.status_code})") from e
+        raise BrainError(f"still looking things up after {MAX_CALLS} tries")
+
+    async def _call(
+        self, messages: list[MessageParam], started: float
+    ) -> tuple[Decision | None, Any, list[tuple[str, asyncio.Task[LookupResult]]]]:
+        """One call to Claude: an act if it picked one (the stream is left there),
+        otherwise the whole message and the look-ups it started."""
+        looking: list[tuple[str, asyncio.Task[LookupResult]]] = []
         try:
             async with self._client.messages.stream(
                 model=self._model,
@@ -149,7 +210,7 @@ class ClaudeBrain:
                 tool_choice={"type": "auto", "disable_parallel_tool_use": True},
                 output_config={"effort": EFFORT},
                 max_tokens=MAX_TOKENS,
-                messages=history(recent, text, self._today()),
+                messages=messages,
             ) as stream:
                 async for event in stream:
                     if (
@@ -158,24 +219,27 @@ class ClaudeBrain:
                     ):
                         block = event.content_block
                         log.debug("Brain chose %s in %.0f ms", block.name, _ms(started))
+                        if block.name in self._lookups:
+                            # Start now; Claude's message may still be finishing.
+                            lookup = run_lookup(self._lookups[block.name], block.input)
+                            looking.append((block.id, asyncio.create_task(lookup)))
+                            continue
                         # Leaving the stream here ends the request: nothing more to wait for.
-                        return parse_tool_call(
-                            block.name, block.input, self._actions, self._sequences
+                        for _, task in looking:
+                            task.cancel()
+                        return (
+                            parse_tool_call(
+                                block.name, block.input, self._actions, self._sequences
+                            ),
+                            None,
+                            [],
                         )
                 message = await stream.get_final_message()
-        except anthropic.AuthenticationError as e:
-            raise BrainError("the Anthropic key was refused") from e
-        except anthropic.APIConnectionError as e:
-            raise BrainError("can't reach Claude (offline?)") from e
-        except anthropic.APIStatusError as e:
-            raise BrainError(f"Claude returned an error ({e.status_code})") from e
-        _log_usage(message.usage, started)
-        if message.stop_reason == "refusal":
-            raise BrainError("Claude declined")
-        reply = " ".join(b.text for b in message.content if b.type == "text").strip()
-        if not reply:
-            raise BrainError(f"no answer (stopped: {message.stop_reason})")
-        return Reply(reply[:400])
+        except BaseException:
+            for _, task in looking:
+                task.cancel()
+            raise
+        return None, message, looking
 
     def _brief(self, keybinds: Keybinds) -> None:
         """Rebuild the briefing only when the keybinds change, so the cache holds."""
@@ -187,6 +251,16 @@ class ClaudeBrain:
         self._system = [
             {"type": "text", "text": text, "cache_control": {"type": "ephemeral", "ttl": "1h"}}
         ]
+
+
+def _results(
+    looking: list[tuple[str, asyncio.Task[LookupResult]]], results: Sequence[LookupResult]
+) -> list[ToolResultBlockParam]:
+    """Every look-up's result, in one turn, in the order Claude asked (ADR 15)."""
+    return [
+        {"type": "tool_result", "tool_use_id": use_id, "content": r.content, "is_error": r.is_error}
+        for (use_id, _), r in zip(looking, results, strict=True)
+    ]
 
 
 def _ms(started: float) -> float:

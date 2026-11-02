@@ -11,6 +11,7 @@ from dataclasses import dataclass, replace
 
 from tycho import safety
 from tycho.commands import Command, CommandMatcher
+from tycho.game.keybinds import Keybinds
 
 MAX_ACTIONS = 8
 """More than this in one request is a misunderstanding, not a plan."""
@@ -46,6 +47,20 @@ class Exchange:
 
     said: str
     outcome: str
+
+
+@dataclass(frozen=True, slots=True)
+class BrainRequest:
+    """Everything the brain is asked with, in one object, so a new input (a player
+    profile, live game state) doesn't change the ``Brain`` Protocol (#54).
+
+    The keybinds decide the cached briefing; everything else changes each request.
+    """
+
+    text: str
+    keybinds: Keybinds
+    recent: tuple[Exchange, ...] = ()
+    """Earlier exchanges, oldest first, for follow-ups like "do that again"."""
 
 
 class BrainError(Exception):

@@ -31,7 +31,7 @@ from brain_report import GLOBAL_NEVER  # pyright: ignore[reportMissingImports, r
 
 from tycho import safety, settings
 from tycho.app import anthropic_key, find_install, load_commands
-from tycho.brain import BrainError, Exchange, Reply, commands_for
+from tycho.brain import BrainError, BrainRequest, Exchange, Reply, commands_for
 from tycho.brain.claude import ClaudeBrain
 from tycho.commands import Command, Defer, resolve
 from tycho.game.keybinds import Keybinds
@@ -136,7 +136,7 @@ async def run_case(
     recent = [Exchange(said, did) for said, did in rule.get("recent", [])]
     started = time.perf_counter()
     try:
-        decision = await brain.decide(text, recent, keybinds)
+        decision = await brain.decide(BrainRequest(text, keybinds, tuple(recent)))
     except BrainError as e:
         outcome.kind, outcome.notes = "error", [str(e)]
         return outcome
