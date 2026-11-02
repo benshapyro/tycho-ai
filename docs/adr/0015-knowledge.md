@@ -18,7 +18,7 @@ The architecture lists Knowledge as stage 3 ("trade, loadout and location questi
 
 | Tool | Source | Fetched |
 |---|---|---|
-| Ships | Star Citizen Wiki API | A local copy, refreshed each patch |
+| Ships | Star Citizen Wiki API; UEX Corp for ships still in concept | A local copy, refreshed each patch |
 | Trade | UEX Corp | Live, saved for a few minutes (UEX itself updates hourly) |
 | Items and blueprints | Star Citizen Wiki API; starcitizen.tools for prose | A local copy, refreshed each patch |
 | Web search | Anthropic's web search tool | Last resort, only when the others miss |
@@ -51,10 +51,11 @@ Each is its own pull request, measured with the brain eval:
 
 1. The #54 groundwork: tool loop, request object, look-up budget. The eval must show no change.
 2. Ships: the local copy and look-up tool, and the briefing-table alternative; keep the better one. New eval cases for makers, crew and cargo.
-3. Trade: the UEX tool and token, with the filler line.
-4. The player's fleet in the profile.
-5. Items and blueprints.
-6. Web search as the last resort.
+3. Ships still in concept (the Galaxy, the Kraken), from UEX's vehicle list, in the same local copy and marked as not in the game. The game files only hold ships that are in the game.
+4. Web search, for news the sources don't hold yet: newly revealed ships, upcoming patches, the roadmap. Moved ahead of trade (2026-11-02): players ask what's coming more than they ask prices.
+5. Trade: the UEX tool and token, with the filler line.
+6. The player's fleet in the profile.
+7. Items and blueprints.
 
 ## Terms
 

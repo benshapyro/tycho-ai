@@ -18,7 +18,8 @@ USER_AGENT = "Tycho (+https://github.com/benshapyro/tycho-ai)"
 
 
 class WikiError(Exception):
-    """The Wiki API couldn't be reached or answered with something unexpected."""
+    """A data API (the Wiki's or UEX's) couldn't be reached or answered with
+    something unexpected."""
 
 
 class WikiSource(Protocol):
@@ -30,9 +31,11 @@ class WikiSource(Protocol):
 class WikiApi:
     """The real API, over HTTPS, with a clear User-Agent and a timeout on every call."""
 
-    def __init__(self, client: httpx2.AsyncClient | None = None) -> None:
+    def __init__(
+        self, client: httpx2.AsyncClient | None = None, *, base_url: str = BASE_URL
+    ) -> None:
         self._client = client or httpx2.AsyncClient(
-            base_url=BASE_URL,
+            base_url=base_url,
             headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
             timeout=httpx2.Timeout(30.0, connect=5.0),
         )

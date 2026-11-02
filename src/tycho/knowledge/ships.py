@@ -6,6 +6,9 @@ two dozen facts players ask about. Names are free text: "Connie", "the Cat",
 "Cutlass Black". ``ShipLibrary.find`` turns slang into the full names, then
 matches word by word, forgiving small misspellings. When several ships fit
 equally well ("Constellation"), it says which, so Claude can ask or choose.
+
+Ships still in concept aren't in the game files; ``concepts_from_uex`` adds them
+from UEX, marked as not in the game, so "the Kraken" finds something true.
 """
 
 from collections.abc import Iterable, Mapping
@@ -38,6 +41,39 @@ ALIASES: dict[str, tuple[str, ...]] = {
 FILLER = frozenset({"the", "a", "an", "my", "ship", "ships"})
 NUMERALS = {"1": "i", "one": "i", "2": "ii", "two": "ii", "4": "iv", "four": "iv", "5": "v"}
 """Mark numbers as the names write them: "Mk 2" is "Mk II"."""
+CONCEPT_KEY = "uex:"
+"""Keys of ships from UEX's concept list start with this."""
+CONCEPT_STATUS = "concept: announced and sold, not in the game yet; details may change"
+ROLE_FLAGS = {
+    "boarding": "boarding",
+    "bomber": "bomber",
+    "cargo": "cargo",
+    "carrier": "carrier",
+    "construction": "construction",
+    "datarunner": "data running",
+    "docking": "docking",
+    "emp": "EMP",
+    "exploration": "exploration",
+    "hangar": "hangar",
+    "industrial": "industrial",
+    "interdiction": "interdiction",
+    "medical": "medical",
+    "military": "military",
+    "mining": "mining",
+    "passenger": "passenger",
+    "qed": "quantum interdiction",
+    "racing": "racing",
+    "refinery": "refining",
+    "refuel": "refuelling",
+    "repair": "repair",
+    "research": "research",
+    "salvage": "salvage",
+    "scanning": "scanning",
+    "science": "science",
+    "stealth": "stealth",
+    "tractor_beam": "tractor beam",
+}
+"""UEX's role flags ("is_mining"), as said."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +97,10 @@ class Ship:
     def keys(self) -> tuple[tuple[str, ...], ...]:
         return self._keys
 
+    @property
+    def is_concept(self) -> bool:
+        return self.key.startswith(CONCEPT_KEY)
+
 
 @dataclass(frozen=True, slots=True)
 class Ambiguous:
@@ -79,7 +119,13 @@ class ShipLibrary:
     """Every ship in one patch, in memory (a few hundred records)."""
 
     def __init__(
-        self, ships: Iterable[Ship], *, version: str, as_of: str, stale: bool = False
+        self,
+        ships: Iterable[Ship],
+        *,
+        version: str,
+        as_of: str,
+        stale: bool = False,
+        concepts: bool = False,
     ) -> None:
         self.ships = tuple(ships)
         self.version = version
@@ -88,6 +134,8 @@ class ShipLibrary:
         """When this copy was downloaded (ISO date)."""
         self.stale = stale
         """True when the current patch couldn't be checked, so this copy may be old."""
+        self.concepts = concepts
+        """True when the ships still in concept are in it too."""
 
     @property
     def patch(self) -> str:
@@ -96,6 +144,13 @@ class ShipLibrary:
 
     def __len__(self) -> int:
         return len(self.ships)
+
+    def with_concepts(self, concepts: Iterable[Ship]) -> ShipLibrary:
+        """This library with ``concepts`` in place of any concept ships it had."""
+        ships = [s for s in self.ships if not s.is_concept] + list(concepts)
+        return ShipLibrary(
+            ships, version=self.version, as_of=self.as_of, stale=self.stale, concepts=True
+        )
 
     def find(self, asked: str) -> Ship | Ambiguous | NotFound:
         query = _query(asked)
@@ -145,7 +200,8 @@ def answer(found: Ship | Ambiguous | NotFound) -> dict[str, object]:
         case NotFound():
             return {
                 "asked": found.asked,
-                "error": "not in this patch's game files: not flyable yet, or another name",
+                "error": "not in the game files or the list of concept ships: "
+                "another name, or too newly announced to be listed",
                 "closest": list(found.closest),
             }
 
@@ -206,6 +262,47 @@ def ship_from_wiki(record: Mapping[str, Any]) -> Ship:
     )
 
 
+def concepts_from_uex(records: Iterable[Mapping[str, Any]], known: Iterable[Ship]) -> list[Ship]:
+    """The concept ships, leaving out any already in the game files: those win."""
+    taken = {key for ship in known for key in ship.keys}
+    concepts: dict[str, Ship] = {}
+    for record in records:
+        ship = concept_from_uex(record)
+        if ship.name and not taken & set(ship.keys):
+            concepts.setdefault(ship.key, ship)
+    return list(concepts.values())
+
+
+def concept_from_uex(record: Mapping[str, Any]) -> Ship:
+    name = str(record.get("name") or "").strip()
+    full = str(record.get("name_full") or name)
+    roles = [said for flag, said in ROLE_FLAGS.items() if record.get(f"is_{flag}")]
+    facts: dict[str, object] = {
+        "name": full,
+        "maker": str(record.get("company_name") or ""),
+        "kind": "ground vehicle" if record.get("is_ground_vehicle") else "spaceship",
+        "status": CONCEPT_STATUS,
+        "roles": ", ".join(roles),
+        "crew": "-".join(str(record.get("crew") or "").split(",")),
+        "cargo_scu": _positive(record.get("scu")),
+        "length_m": _positive(record.get("length")),
+        "beam_m": _positive(record.get("width")),
+        "height_m": _positive(record.get("height")),
+        "landing_pad": record.get("pad_type"),
+    }
+    return Ship(
+        key=f"{CONCEPT_KEY}{record.get('slug') or name}",
+        name=name,
+        maker=str(facts["maker"]),
+        facts={k: v for k, v in facts.items() if v not in (None, "", [])},
+        names=(full,),
+    )
+
+
+def _positive(value: Any) -> float | int | None:
+    return value if isinstance(value, int | float) and value > 0 else None
+
+
 def _query(asked: str) -> tuple[str, ...]:
     words: list[str] = []
     for word in normalize(asked):
@@ -220,7 +317,10 @@ def _score(query: tuple[str, ...], key: tuple[str, ...]) -> float:
     if all(any(_same(q, k) for k in key) for q in query):
         # Every word said is in the name; fewer extra words is a closer match.
         return 1.0 - 0.05 * max(0, len(key) - len(query))
-    return 0.7 * similarity(" ".join(query), " ".join(key))
+    # A word said that isn't in the name means another ship, however alike the
+    # rest looks ("baby Merchantman" isn't the Banu Merchantman). This only ranks
+    # the closest names, and stays below MATCH.
+    return 0.5 * similarity(" ".join(query), " ".join(key))
 
 
 def _same(said: str, word: str) -> bool:

@@ -183,10 +183,10 @@ def load_brain(matcher: CommandMatcher) -> Brain | None:
         return None
     from tycho import paths
     from tycho.brain.claude import MODEL, ClaudeBrain
-    from tycho.knowledge import ShipLookup, WikiApi
+    from tycho.knowledge import ShipLookup, UexApi, WikiApi
 
     log.info("Brain: %s, for anything the built-in phrasings don't cover", MODEL)
-    ships = ShipLookup(WikiApi(), paths.knowledge_dir())
+    ships = ShipLookup(WikiApi(), paths.knowledge_dir(), concepts=UexApi())
     return ClaudeBrain(matcher, api_key=key, lookups=[ships])
 
 

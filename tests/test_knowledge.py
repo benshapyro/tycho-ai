@@ -9,9 +9,14 @@ from typing import Any
 
 import pytest
 
-from tests.fakes.fake_wiki import FakeWiki, vehicle
+from tests.fakes.fake_wiki import FakeUex, FakeWiki, uex_vehicle, vehicle
 from tycho.knowledge import Ambiguous, NotFound, Ship, ShipLibrary, ShipLookup
-from tycho.knowledge.ships import ship_from_wiki, ships_from_wiki
+from tycho.knowledge.ships import (
+    concept_from_uex,
+    concepts_from_uex,
+    ship_from_wiki,
+    ships_from_wiki,
+)
 from tycho.knowledge.store import ShipDataError, ensure, file_for, load, save
 
 FLEET = [
@@ -27,6 +32,25 @@ FLEET = [
     vehicle("400i", "Origin Jumpworks"),
     vehicle("F7A Hornet Mk II", "Anvil Aerospace"),
     vehicle("600i Explorer", "Origin Jumpworks"),
+]
+CONCEPTS = [
+    uex_vehicle(
+        "Kraken",
+        scu=3792,
+        crew="10",
+        length=270,
+        width=104,
+        height=64,
+        pad_type="XL",
+        is_military=1,
+        is_carrier=1,
+        is_docking=1,
+    ),
+    uex_vehicle("Galaxy", "Roberts Space Industries", scu=64, crew="1,6"),
+    uex_vehicle("Merchantman", "Banu Souli", scu=2880, crew="4,8"),
+    uex_vehicle("Galaxy Cargo Module", "Roberts Space Industries", is_addon=1),
+    uex_vehicle("Caterpillar", scu=999),  # in the game files already: theirs wins
+    uex_vehicle("Cutlass Black", is_concept=0),  # not a concept
 ]
 LIBRARY = ShipLibrary(ships_from_wiki(FLEET), version="4.10.2-LIVE.1", as_of="2026-11-01")
 
@@ -278,3 +302,85 @@ def test_the_tool_schema_suits_strict_tool_use() -> None:
     schema = ShipLookup(FakeWiki(FLEET), Path(), library=LIBRARY).input_schema
     assert schema["additionalProperties"] is False
     assert schema["required"] == ["names"]
+
+
+# --- Ships still in concept --------------------------------------------------------------------
+
+
+def test_a_concept_ship_says_it_isnt_in_the_game() -> None:
+    kraken = concept_from_uex(CONCEPTS[0])
+    assert kraken.is_concept
+    assert kraken.name == "Kraken"
+    assert dict(kraken.facts) == {
+        "name": "Drake Kraken",
+        "maker": "Drake Interplanetary",
+        "kind": "spaceship",
+        "status": "concept: announced and sold, not in the game yet; details may change",
+        "roles": "carrier, docking, military",
+        "crew": "10",
+        "cargo_scu": 3792,
+        "length_m": 270,
+        "beam_m": 104,
+        "height_m": 64,
+        "landing_pad": "XL",
+    }
+    assert concept_from_uex(CONCEPTS[1]).facts["crew"] == "1-6"
+
+
+def test_concepts_leave_out_modules_and_ships_already_in_the_game() -> None:
+    from tycho.knowledge.uex import concept_vehicles
+
+    records = asyncio.run(concept_vehicles(FakeUex(CONCEPTS)))
+    names = [s.name for s in concepts_from_uex(records, LIBRARY.ships)]
+    assert names == ["Kraken", "Galaxy", "Merchantman"]
+
+
+def test_concepts_are_found_by_name_and_game_ships_still_win() -> None:
+    library = LIBRARY.with_concepts(concepts_from_uex(CONCEPTS[:3], LIBRARY.ships))
+    assert library.concepts
+    assert _name(library.find("the Kraken")) == "Kraken"
+    assert _name(library.find("drake kraken")) == "Kraken"
+    assert library.find("Caterpillar") == LIBRARY.find("Caterpillar")
+    # A ship only just revealed isn't the concept it sounds like.
+    baby = library.find("baby Merchantman")
+    assert isinstance(baby, NotFound)
+    assert _name(library.find("Banu Merchantman")) == "Merchantman"
+    assert len(library.with_concepts([])) == len(LIBRARY)  # replaced, never doubled
+
+
+def test_the_local_copy_keeps_the_concepts(tmp_path: Path) -> None:
+    library = asyncio.run(ensure(FakeWiki(FLEET), tmp_path, _today, concepts=FakeUex(CONCEPTS)))
+    assert library.concepts
+    assert len(library) == len(FLEET) + 3
+    copy = load(file_for(tmp_path, "4.10.2-LIVE.1"))
+    assert copy.concepts
+    assert _name(copy.find("Galaxy")) == "Galaxy"
+
+
+def test_without_uex_the_concepts_are_fetched_next_time_alone(tmp_path: Path) -> None:
+    wiki, uex = FakeWiki(FLEET), FakeUex(CONCEPTS)
+    uex.offline = True
+    first = asyncio.run(ensure(wiki, tmp_path, _today, concepts=uex))
+    assert not first.concepts
+    assert len(first) == len(FLEET)
+
+    uex.offline = False
+    wiki.calls.clear()
+    again = asyncio.run(ensure(wiki, tmp_path, _today, concepts=uex))
+    assert wiki.calls == ["/api/v2/game-versions"]  # the game ships aren't downloaded again
+    assert again.concepts
+    assert load(file_for(tmp_path, "4.10.2-LIVE.1")).concepts
+
+    uex.calls.clear()
+    asyncio.run(ensure(wiki, tmp_path, _today, concepts=uex))
+    assert uex.calls == []  # once they're in, UEX isn't asked again this patch
+
+
+def test_the_look_up_answers_for_a_concept_ship(tmp_path: Path) -> None:
+    lookup = ShipLookup(FakeWiki(FLEET), tmp_path, concepts=FakeUex(CONCEPTS))
+    asyncio.run(lookup.prepare())
+    _, content = _run(lookup, {"names": ["Kraken"]})
+    assert "UEX" in content["source"]
+    (kraken,) = content["ships"]
+    assert kraken["status"].startswith("concept")
+    assert kraken["cargo_scu"] == 3792

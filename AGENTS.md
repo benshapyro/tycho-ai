@@ -36,7 +36,7 @@ All four of these pass: `ruff format --check`, `ruff check`, `pyright`, and `pyt
 - `src/tycho/commands/`: the fast-path command matcher, its command list and sequences, and merging in the player's own `commands.toml` (ADR 14).
 - `src/tycho/input/`: the hands. Key codes, press planning from the game's activation modes, the presser (focus-guarded, cancellable, always releases), and the Windows sender.
 - `src/tycho/stt/`: speech to text. Pinned, checksummed model downloads (`ModelStore`), choosing the GPU or CPU, and the Parakeet transcriber.
-- `src/tycho/knowledge/`: look-ups (ADR 15). The Star Citizen Wiki API client, the ship data and name matching, the per-patch SQLite copy built on the player's PC, and the ship look-up tool.
+- `src/tycho/knowledge/`: look-ups (ADR 15). The Star Citizen Wiki API and UEX clients, the ship data (concept ships from UEX) and name matching, the per-patch SQLite copy built on the player's PC, and the ship look-up tool.
 - `src/tycho/brain/`: the brain (ADR 14). What it can decide and the checks on it, its briefing, and the Claude adapter. Its output is untrusted: it becomes commands that the safety gate checks.
 - `src/tycho/voice/`: Tycho's voice (ADR 14). The ElevenLabs speaker, and playing speech as it streams in.
 - `src/tycho/runtime/`: the talking loop (ADR 11). The session that joins every stage, the messages and per-stage timings, the transcriber, feedback and action-log boundaries, the action log file, and the single-instance lock.
