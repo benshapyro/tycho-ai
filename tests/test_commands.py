@@ -23,6 +23,11 @@ def _ids(text: str) -> str:
         ("open the doors then lights on", "doors_open+lights_on"),
         ("flight ready and request landing", "flight_ready+request_landing"),
         ("unlock the target", "target_unlock"),
+        ("Space mode.", "scm_mode"),
+        ("get us clearance to leave", "request_departure"),
+        ("target whoever's shooting at us", "target_attacker"),
+        ("Full throttle!", "throttle_max"),
+        ("cut the throttle", "throttle_min"),
     ],
 )
 def test_matches_unseen_wordings(text: str, expected: str) -> None:
@@ -54,6 +59,11 @@ def test_defers_what_it_cannot_be_sure_of(text: str) -> None:
         ("lock the doors", "doors_unlock"),
         ("unlock target", "doors_unlock"),
         ("unlock the doors", "target_unlock"),
+        ("full throttle", "throttle_min"),
+        ("max throttle", "throttle_min"),
+        ("cut throttle", "throttle_max"),
+        ("min throttle", "throttle_max"),
+        ("space mode", "nav_mode"),
         ("engines off", "engines_on"),
         ("lock gimbals", "gimbals_unlock"),
         ("unlock gimbals", "gimbals_lock"),
