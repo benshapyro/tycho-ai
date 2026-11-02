@@ -438,3 +438,21 @@ def test_looking_things_up_forever_is_a_brain_error() -> None:
 def test_a_look_up_cant_take_the_name_of_an_act() -> None:
     with pytest.raises(ValueError, match="run_actions"):
         ClaudeBrain(MATCHER, client=cast(Any, _Calls()), lookups=[FakeLookup(name="run_actions")])
+
+
+def test_warming_up_also_loads_the_look_ups_data() -> None:
+    lookup = FakeLookup()
+    brain = ClaudeBrain(MATCHER, client=cast(Any, _Client([], _final(""))), lookups=[lookup])
+    asyncio.run(brain.warm(KEYBINDS))
+    assert lookup.prepared
+
+
+def test_reference_text_goes_at_the_end_of_the_cached_briefing() -> None:
+    client = _Client([], _final("RSI."))
+    brain = ClaudeBrain(
+        MATCHER, client=cast(Any, client), reference="ship | maker\nAndromeda | RSI"
+    )
+    asyncio.run(brain.decide(BrainRequest("who makes the Andromeda", KEYBINDS)))
+    (system,) = client.requests[0]["system"]
+    assert system["text"].endswith("\nship | maker\nAndromeda | RSI\n")
+    assert system["cache_control"]["type"] == "ephemeral"

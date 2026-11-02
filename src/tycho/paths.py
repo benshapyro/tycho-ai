@@ -44,5 +44,10 @@ def models_dir() -> Path:
     return data_dir() / "models"
 
 
+def knowledge_dir() -> Path:
+    """Look-up data downloaded on this PC, such as the ship data (ADR 15)."""
+    return data_dir() / "knowledge"
+
+
 def logs_dir() -> Path:
     return data_dir() / "logs"

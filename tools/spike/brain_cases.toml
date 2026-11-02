@@ -594,3 +594,79 @@ heard = "where's the main landing zone in Nyx"
 expect = ["reply"]
 answer = true
 tag = "question"
+
+
+# --- Ship questions the ship look-up answers (added 2026-11-01, patch 4.10.2) --------
+# mentions: groups of patterns (case-insensitive regex). The reply must match one
+# pattern from every group. The values are from the Star Citizen Wiki API for 4.10.2.
+
+[[case]]
+heard = "who makes the Andromeda"
+expect = ["reply"]
+mentions = [["RSI", "Roberts Space"]]
+tag = "ships"
+
+[[case]]
+heard = "how much cargo does the Caterpillar hold"
+expect = ["reply"]
+mentions = [["576"]]
+tag = "ships"
+
+[[case]]
+heard = "how much can a cutty black carry"
+expect = ["reply"]
+mentions = [["46"]]
+tag = "ships"
+
+[[case]]
+heard = "how much cargo does the C2 hold"
+expect = ["reply"]
+mentions = [["696"]]
+tag = "ships"
+
+[[case]]
+heard = "how many crew does the Hammerhead take"
+expect = ["reply"]
+mentions = [["11", "eleven"]]
+tag = "ships"
+
+[[case]]
+heard = "compare cargo on the Connie Taurus and the Freelancer MAX"
+expect = ["reply"]
+mentions = [["174"], ["120"]]
+tag = "ships"
+
+[[case]]
+heard = "where can I buy a Cutlass Black in game"
+expect = ["reply"]
+mentions = [["Lorville", "Teasa", "Hurston"]]
+tag = "ships"
+
+[[case]]
+heard = "how long is the insurance claim on a Carrack"
+expect = ["reply"]
+mentions = [["48"]]
+tag = "ships"
+
+[[case]]
+heard = "what loaner comes with the Caterpillar"
+expect = ["reply"]
+mentions = [["Buccaneer"]]
+tag = "ships"
+
+[[case]]
+heard = "who makes the Mercury Star Runner"
+expect = ["reply"]
+mentions = [["Crusader"]]
+tag = "ships"
+
+[[case]]
+heard = "what's the top speed of the Avenger Titan"
+expect = ["reply"]
+mentions = [["1,?425", "262"]]
+tag = "ships"
+
+[[case]]
+heard = "how much cargo does the Connie carry"
+expect = ["reply"]
+tag = "ships"

@@ -21,6 +21,7 @@ class FakeLookup:
         self._answer = answer
         self._hang = hang
         self.asked: list[Mapping[str, object]] = []
+        self.prepared = False
 
     @property
     def name(self) -> str:
@@ -38,6 +39,9 @@ class FakeLookup:
             "required": ["name"],
             "additionalProperties": False,
         }
+
+    async def prepare(self) -> None:
+        self.prepared = True
 
     async def run(self, arguments: Mapping[str, object]) -> LookupResult:
         self.asked.append(arguments)

@@ -47,6 +47,7 @@ def test_leaves_ordinary_speech_alone(text: str) -> None:
         "get us ready to leave and call the tower",  # was "Riccite"
         "set a route to microTech",  # was "set Ouratite microTech"
         "spool the quantum drive",  # was "quantum Drake"
+        "who makes the Mercury Star Runner",  # was "Mercury Starlancer"
     ],
 )
 def test_default_lexicon_leaves_real_phrases_alone(text: str) -> None:

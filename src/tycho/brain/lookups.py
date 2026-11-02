@@ -46,6 +46,11 @@ class Lookup(Protocol):
     @property
     def input_schema(self) -> Mapping[str, object]: ...
 
+    async def prepare(self) -> None:
+        """Load or download what the look-up needs. Called once at startup, in the
+        background; until it's done, ``run`` says the data isn't ready."""
+        ...
+
     async def run(self, arguments: Mapping[str, object]) -> LookupResult:
         """Raise nothing you expect: a miss is a result that says so, with what to try."""
         ...

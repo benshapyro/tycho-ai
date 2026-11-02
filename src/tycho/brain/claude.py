@@ -129,7 +129,10 @@ class ClaudeBrain:
         model: str = MODEL,
         today: Callable[[], datetime.date] = datetime.date.today,
         lookups: Sequence[Lookup] = (),
+        reference: str = "",
     ) -> None:
+        """``reference`` is extra text for the end of the cached briefing, such as
+        the ship table being measured against the ship look-up (ADR 15)."""
         # The session gives up after its own deadline; one quick retry fits inside it.
         self._client = client or anthropic.AsyncAnthropic(
             api_key=api_key, timeout=anthropic.Timeout(8.0, connect=3.0), max_retries=1
@@ -142,11 +145,18 @@ class ClaudeBrain:
         if clash := {"run_actions", "run_sequence"} & self._lookups.keys():
             raise ValueError(f"a look-up can't be named {', '.join(sorted(clash))}")
         self._tools = _tools(self._sequences, lookups)
+        self._reference = reference
         self._for: Keybinds | None = None
         self._system: list[TextBlockParam] = []
         self._actions: frozenset[str] = frozenset()
 
     async def warm(self, keybinds: Keybinds) -> None:
+        """Warm the cache, and load what the look-ups need, side by side."""
+        await asyncio.gather(
+            self._warm_cache(keybinds), *(lookup.prepare() for lookup in self._lookups.values())
+        )
+
+    async def _warm_cache(self, keybinds: Keybinds) -> None:
         """Write the briefing to the cache and open the connection, billing no output.
 
         Everything up to the briefing must match ``decide``'s request, or the cache misses.
@@ -248,6 +258,8 @@ class ClaudeBrain:
         self._for = keybinds
         self._actions = frozenset(offered_actions(keybinds, self._matcher))
         text = briefing(keybinds, self._matcher)
+        if self._reference:
+            text += f"\n{self._reference.strip()}\n"
         self._system = [
             {"type": "text", "text": text, "cache_control": {"type": "ephemeral", "ttl": "1h"}}
         ]

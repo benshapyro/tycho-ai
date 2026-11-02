@@ -181,10 +181,13 @@ def load_brain(matcher: CommandMatcher) -> Brain | None:
             "No Anthropic key, so only the built-in phrasings work. Add one: %s", BRAIN_KEY_HELP
         )
         return None
+    from tycho import paths
     from tycho.brain.claude import MODEL, ClaudeBrain
+    from tycho.knowledge import ShipLookup, WikiApi
 
     log.info("Brain: %s, for anything the built-in phrasings don't cover", MODEL)
-    return ClaudeBrain(matcher, api_key=key)
+    ships = ShipLookup(WikiApi(), paths.knowledge_dir())
+    return ClaudeBrain(matcher, api_key=key, lookups=[ships])
 
 
 VOICE_KEY_HELP = "uv run python -m tycho.credentials set elevenlabs"
