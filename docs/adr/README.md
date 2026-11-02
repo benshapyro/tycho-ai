@@ -18,4 +18,4 @@ Each record explains one decision: the context, what was decided, and what follo
 | [12](0012-modes-before-shared-keys.md) | Keep the player's bindings; set the mode before a shared key | Accepted |
 | [13](0013-spoken-confirmation-and-action-log.md) | Spoken confirmation and the action log | Accepted |
 | [14](0014-the-brain-voice-and-sequences.md) | The brain, its voice, and sequences | Accepted |
-| [15](0015-knowledge.md) | Knowledge: look-ups, sources and the player's fleet | Accepted |
+| [15](0015-knowledge.md) | Knowledge: look-ups, sources and the player's fleet | Accepted; amended after the source checks |
