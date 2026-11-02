@@ -26,6 +26,7 @@ import json
 import logging
 import re
 import statistics
+import tempfile
 import time
 import tomllib
 from collections.abc import Mapping
@@ -45,6 +46,7 @@ from tycho.commands import Command, Defer, resolve
 from tycho.game.keybinds import Keybinds
 from tycho.game.store import KeybindStore
 from tycho.knowledge import ShipLookup, UexApi, WikiApi
+from tycho.knowledge.fleet import Fleet, FleetUpdate
 from tycho.knowledge.store import ensure
 from tycho.knowledge.trade_lookup import trade_lookups
 from tycho.knowledge.web import WebSearch
@@ -139,6 +141,20 @@ def grade(outcome: Outcome, rule: dict[str, Any], valid: set[str]) -> str:
         for group in rule.get("mentions", []):
             if not any(re.search(p, outcome.say, re.IGNORECASE) for p in group):
                 return f"missing {'/'.join(group)}"
+    return "pass"
+
+
+def grade_fleet(fleet: Fleet, rule: dict[str, Any]) -> str:
+    """What a case says the fleet should hold afterwards: "fleet_has", "fleet_lacks",
+    and "flying_after"."""
+    for name in rule.get("fleet_has", []):
+        if name not in fleet.ships:
+            return f"fleet lacks {name} ({fleet.ships})"
+    for name in rule.get("fleet_lacks", []):
+        if name in fleet.ships:
+            return f"fleet still has {name}"
+    if "flying_after" in rule and fleet.flying != rule["flying_after"]:
+        return f"flying {fleet.flying!r}, expected {rule['flying_after']!r}"
     return "pass"
 
 
@@ -245,6 +261,7 @@ async def main() -> None:
         logging.getLogger(name).setLevel(logging.DEBUG)
     counted: _Counted | None = None
     reference = ""
+    library = None
     if args.ships != "none":
         library = await ensure(WikiApi(), paths.knowledge_dir(), concepts=UexApi())
         print(f"Ship data: {len(library)} ships for {library.patch}, as {args.ships}")
@@ -253,19 +270,30 @@ async def main() -> None:
         else:
             counted = _Counted(ShipLookup(WikiApi(), paths.knowledge_dir(), library=library))
     web = [] if args.no_web else [WebSearch(anthropic.AsyncAnthropic(api_key=key))]
+    # A fleet in a scratch file, set by each case ("fleet", "flying"): never the player's own.
+    fleet = Fleet(Path(tempfile.mkdtemp()) / "fleet.toml")
     brain = ClaudeBrain(
         MATCHER,
         api_key=key,
-        lookups=[*([counted] if counted else []), *trade_lookups(UexApi()), *web],
+        lookups=[
+            *([counted] if counted else []),
+            FleetUpdate(fleet, lambda: library),
+            *trade_lookups(UexApi()),
+            *web,
+        ],
         reference=reference,
+        about=lambda: fleet.describe(library),
     )
     await brain.warm(keybinds)
     lexicon = Lexicon.default()
 
     outcomes: list[Outcome] = []
     for rule in rules:
+        fleet.ships, fleet.flying = list(rule.get("fleet", [])), str(rule.get("flying", ""))
         outcome = await run_case(rule, lexicon, brain, keybinds, counted)
         outcome.verdict = grade(outcome, rule, valid)
+        if outcome.verdict == "pass":
+            outcome.verdict = grade_fleet(fleet, rule)
         outcomes.append(outcome)
         mark = "  " if outcome.verdict == "pass" else "XX"
         what = ", ".join(outcome.actions) if outcome.kind == "actions" else outcome.kind

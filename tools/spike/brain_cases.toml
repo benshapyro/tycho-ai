@@ -750,3 +750,49 @@ heard = "what should I haul from Port Tressler in my Cutlass Black"
 expect = ["reply"]
 mentions = [['UEX'], ['\d']]
 tag = "trade"
+
+# The player's fleet (ADR 15): said by voice, kept by update_fleet, and read from
+# each request's header. "fleet" and "flying" set it up; the rest check it after.
+[[case]]
+heard = "I just bought a Carrack"
+expect = ["reply"]
+fleet = ["Cutlass Black"]
+fleet_has = ["Carrack", "Cutlass Black"]
+tag = "fleet"
+
+[[case]]
+heard = "I sold my Prospector"
+expect = ["reply"]
+fleet = ["Cutlass Black", "Prospector"]
+fleet_has = ["Cutlass Black"]
+fleet_lacks = ["Prospector"]
+tag = "fleet"
+
+[[case]]
+heard = "I'm flying the cutty black today"
+expect = ["reply"]
+fleet = ["Cutlass Black", "Prospector"]
+flying_after = "Cutlass Black"
+tag = "fleet"
+
+[[case]]
+heard = "which of my ships is best for mining"
+expect = ["reply"]
+fleet = ["Cutlass Black", "Prospector", "Carrack"]
+mentions = [['Prospector']]
+tag = "fleet"
+
+[[case]]
+heard = "what should I haul from Port Tressler"
+expect = ["reply"]
+fleet = ["Cutlass Black", "Prospector"]
+flying = "Cutlass Black"
+mentions = [['UEX'], ['46']]
+tag = "fleet"
+
+[[case]]
+heard = "how much cargo does the Hammerhead carry"
+expect = ["reply"]
+fleet = ["Cutlass Black"]
+fleet_lacks = ["Hammerhead"]
+tag = "fleet"
