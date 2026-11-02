@@ -33,6 +33,7 @@ from tycho.brain.claude import (
     NO_PRESS_AFTER_SEARCH,
     ClaudeBrain,
     history,
+    spoken,
 )
 from tycho.brain.lookups import LOOKUP_SECONDS, run_lookup
 from tycho.commands import CommandMatcher
@@ -528,3 +529,9 @@ def test_a_search_gets_longer_than_other_look_ups() -> None:
     client = _Calls(_searches(), ([], _final("Done.")))
     decision, _ = _ask_web(client, lookup)
     assert decision == Reply("Done.")
+
+
+def test_a_reply_is_one_line_with_no_markdown_to_read_out() -> None:
+    assert spoken("Best route is **Quartz**,\n to `Stanton Gateway`. # done") == (
+        "Best route is Quartz, to Stanton Gateway. done"
+    )

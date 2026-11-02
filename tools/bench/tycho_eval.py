@@ -46,6 +46,7 @@ from tycho.game.keybinds import Keybinds
 from tycho.game.store import KeybindStore
 from tycho.knowledge import ShipLookup, UexApi, WikiApi
 from tycho.knowledge.store import ensure
+from tycho.knowledge.trade_lookup import trade_lookups
 from tycho.knowledge.web import WebSearch
 from tycho.lexicon import Lexicon
 
@@ -255,7 +256,7 @@ async def main() -> None:
     brain = ClaudeBrain(
         MATCHER,
         api_key=key,
-        lookups=[*([counted] if counted else []), *web],
+        lookups=[*([counted] if counted else []), *trade_lookups(UexApi()), *web],
         reference=reference,
     )
     await brain.warm(keybinds)

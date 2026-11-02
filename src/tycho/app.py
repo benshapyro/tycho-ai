@@ -187,12 +187,16 @@ def load_brain(matcher: CommandMatcher, current: Settings) -> Brain | None:
     from tycho.brain.claude import MODEL, ClaudeBrain
     from tycho.brain.lookups import Lookup
     from tycho.knowledge import ShipLookup, UexApi, WikiApi
+    from tycho.knowledge.trade_lookup import trade_lookups
     from tycho.knowledge.web import WebSearch
 
     log.info("Brain: %s, for anything the built-in phrasings don't cover", MODEL)
     if not current.web_search:
         log.info("Web search: off (web_search is false)")
-    lookups: list[Lookup] = [ShipLookup(WikiApi(), paths.knowledge_dir(), concepts=UexApi())]
+    lookups: list[Lookup] = [
+        ShipLookup(WikiApi(), paths.knowledge_dir(), concepts=UexApi()),
+        *trade_lookups(UexApi()),
+    ]
     if current.web_search:
         lookups.append(WebSearch(anthropic.AsyncAnthropic(api_key=key, max_retries=0)))
     return ClaudeBrain(matcher, api_key=key, lookups=lookups)

@@ -52,7 +52,7 @@ Without an ElevenLabs key, Tycho's replies go to the log and it plays its sounds
 - **Sounds:** a click when something was done, a low tone when it wasn't, two rising notes for a question. `uv run tycho sounds` plays them.
 - **Confirm or cancel.** Ejecting, firing and anything else you can't undo asks first ("Eject? Say confirm."). Hold push-to-talk and say "confirm" within 5 seconds, or "cancel". Anything else you say drops the question.
 - **Stop.** Pressing push-to-talk stops Tycho talking, and stops any key sequence it's in the middle of.
-- **Questions.** Ask about ships, places or how something works. Ship facts come from the current patch's game files, and ships still in concept from UEX. News, upcoming patches and events come from a web search of RSI's sites and the community wiki: Tycho says "Let me check." and answers a few seconds later. Everything else comes from Claude's own knowledge, which can be out of date.
+- **Questions.** Ask about ships, places or how something works. Ship facts come from the current patch's game files, and ships still in concept from UEX. Commodity prices and trade routes come live from UEX ("where's the best place to sell quantanium?", "best trade route from Lorville with 96 SCU?"). News, upcoming patches and events come from a web search of RSI's sites and the community wiki: Tycho says "Let me check." and answers a few seconds later. Everything else comes from Claude's own knowledge, which can be out of date.
 - **Discord on open mic?** Bind Discord's **Push to Mute** (Discord, User Settings, Keybinds) to the same button as Tycho's push-to-talk. While you hold it to talk to Tycho, your channel doesn't hear you, and nothing can get stuck muted. (Tycho can't mute Discord for you: on some headsets, muting one app's microphone mutes it for every app, Tycho included. See [#14](https://github.com/benshapyro/tycho-ai/issues/14).)
 - **Your own words.** Add phrases, commands and sequences in `%APPDATA%\tycho\commands.toml`. For example:
   ```toml
@@ -85,7 +85,8 @@ Your voice never does: speech recognition runs on your PC. Only text is sent, an
 | ElevenLabs | The text Tycho speaks | When Tycho speaks |
 | Star Citizen Wiki API, UEX Corp | Nothing about you: Tycho downloads their ship lists | On first run, and when a new patch goes live |
 | Anthropic (web search) | A short search query Claude writes from your question | Questions about news, upcoming patches, events and new ships; off with `web_search = false` |
-| *Planned:* UEX Corp, Star Citizen Wiki | Search terms, such as a commodity or place name | Trade, item and location questions |
+| UEX Corp | Which commodity or trading place you asked about | Trade questions |
+| *Planned:* Star Citizen Wiki | Search terms, such as an item name | Item and location questions |
 | *Planned:* Anthropic (Claude) | A capture of the game window | Only if you turn vision on and ask Tycho to look |
 
 ## Principles
@@ -110,7 +111,7 @@ See [docs/architecture.md](docs/architecture.md) for the design, [docs/adr](docs
 
 ## Credits
 
-Speech recognition uses NVIDIA's [Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) model (CC-BY-4.0), via [onnx-asr](https://github.com/istupakov/onnx-asr). Ship and vehicle data comes from the [Star Citizen Wiki API](https://api.star-citizen.wiki), downloaded to your PC once per patch; its in-game prices are reported by players to [UEX Corp](https://uexcorp.space), which also lists the ships still in concept. Planned look-ups will also use [starcitizen.tools](https://starcitizen.tools) (CC BY-SA 4.0).
+Speech recognition uses NVIDIA's [Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) model (CC-BY-4.0), via [onnx-asr](https://github.com/istupakov/onnx-asr). Ship and vehicle data comes from the [Star Citizen Wiki API](https://api.star-citizen.wiki), downloaded to your PC once per patch; its in-game prices are reported by players to [UEX Corp](https://uexcorp.space), which also lists the ships still in concept and provides the commodity prices and trade routes. Planned look-ups will also use [starcitizen.tools](https://starcitizen.tools) (CC BY-SA 4.0).
 
 ## Licence
 

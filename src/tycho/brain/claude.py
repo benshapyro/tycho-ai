@@ -21,6 +21,7 @@ request at startup writes it, so the first real request is fast too.
 import asyncio
 import datetime
 import logging
+import re
 import time
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
@@ -211,9 +212,7 @@ class ClaudeBrain:
                 if message.stop_reason == "refusal":
                     raise BrainError("Claude declined")
                 if not looking:
-                    reply = " ".join(
-                        " ".join(b.text for b in message.content if b.type == "text").split()
-                    )
+                    reply = spoken(" ".join(b.text for b in message.content if b.type == "text"))
                     if not reply:
                         raise BrainError(f"no answer (stopped: {message.stop_reason})")
                     return Reply(reply[:400])
@@ -304,6 +303,14 @@ def _results(
         {"type": "tool_result", "tool_use_id": use_id, "content": r.content, "is_error": r.is_error}
         for (use_id, _), r in zip(looking, results, strict=True)
     ]
+
+
+_MARKUP = re.compile(r"[*`#]+")
+
+
+def spoken(text: str) -> str:
+    """A reply as one line to say: no markdown (it would be read out), no line breaks."""
+    return " ".join(_MARKUP.sub("", text).split())
 
 
 def _ms(started: float) -> float:
