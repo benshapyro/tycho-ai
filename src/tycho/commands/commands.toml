@@ -48,7 +48,7 @@ announced = true
 # The same air traffic control key asks to leave when parked at a pad or in a hangar.
 [[command]]
 id = "request_departure"
-say = ["request departure", "request takeoff", "request take off", "request to depart", "request clearance to depart", "request launch", "open the hangar", "open the hangar doors", "open hangar", "open hangar doors"]
+say = ["request departure", "request takeoff", "request take off", "request to depart", "request clearance to depart", "request launch", "request clearance", "request clearance to leave", "get clearance to leave", "clearance to leave", "open the hangar", "open the hangar doors", "open hangar", "open hangar doors"]
 actions = ["v_atc_request"]
 announced = true
 
@@ -213,7 +213,7 @@ actions = ["v_master_mode_set_nav", "v_master_mode_cycle_long"]
 
 [[command]]
 id = "scm_mode"
-say = ["scm mode", "s c m mode", "switch to scm", "switch to scm mode", "go to scm mode", "set scm mode", "switch from nav to scm", "switch from nav to scm mode", "master mode scm", "space combat mode", "combat mode", "space combat maneuvering"]
+say = ["scm mode", "s c m mode", "switch to scm", "switch to scm mode", "go to scm mode", "set scm mode", "switch from nav to scm", "switch from nav to scm mode", "master mode scm", "space mode", "space combat mode", "combat mode", "space combat maneuvering"]
 actions = ["v_master_mode_set_scm", "v_master_mode_cycle_long"]
 
 # Quantum travel
@@ -249,6 +249,16 @@ actions = ["v_target_cycle_hostile_reset"]
 id = "target_next_hostile"
 say = ["next hostile", "next target", "next enemy", "cycle hostiles"]
 actions = ["v_target_cycle_hostile_fwd"]
+
+[[command]]
+id = "target_unlock"
+say = ["unlock target", "unlock the target", "drop target", "drop the target", "clear target", "clear the target"]
+actions = ["v_target_unlock"]
+
+[[command]]
+id = "target_attacker"
+say = ["target the attacker", "target attacker", "target attackers", "target whoever's shooting at us", "target who's shooting at us", "target whoever is shooting at us", "lock the attacker"]
+actions = ["v_target_cycle_attacker_reset", "v_target_cycle_attacker_fwd"]
 
 [[command]]
 id = "decoys"
@@ -383,6 +393,16 @@ actions = ["v_ifcs_throttle_set_sticky", "v_ifcs_throttle_swap_mode"]
 id = "cruise_off"
 say = ["cruise control off", "disable cruise control", "cruise mode off"]
 actions = ["v_ifcs_throttle_set_normal", "v_ifcs_throttle_swap_mode"]
+
+[[command]]
+id = "throttle_max"
+say = ["full throttle", "max throttle", "throttle to max", "throttle to full", "throttle max", "full speed"]
+actions = ["v_power_throttle_max"]
+
+[[command]]
+id = "throttle_min"
+say = ["cut throttle", "cut the throttle", "throttle to zero", "zero throttle", "throttle to min", "min throttle", "kill the throttle"]
+actions = ["v_power_throttle_min"]
 
 [[command]]
 id = "decoupled_on"

@@ -48,6 +48,9 @@ DODGE = re.compile(
 SAY_WORDS = 8
 """What Tycho says after acting should be a few words: the press already happened."""
 COST_GUESS = 0.0002
+UNASKED = frozenset({"v_unlock_all_doors", "v_toggle_all_doorlocks"})
+"""Presses that are wrong whenever the case didn't ask for them: unlocking the
+doors when the player said something else leaves the ship open."""
 
 
 @dataclass
@@ -97,7 +100,8 @@ def grade(outcome: Outcome, rule: dict[str, Any], valid: set[str]) -> str:
     never = (set(GLOBAL_NEVER) | set(rule.get("never", []))) - set(rule.get("allow", []))
     if outcome.kind == "error":
         return "error"
-    if bad := never.intersection(outcome.actions):
+    asked = {action for group in rule.get("must", []) for action in group}
+    if bad := (never | (UNASKED - asked)).intersection(outcome.actions):
         return f"WRONG PRESS {sorted(bad)}"
     allowed = set(rule.get("allow", [])).intersection(outcome.actions)
     if allowed and not outcome.asks:
