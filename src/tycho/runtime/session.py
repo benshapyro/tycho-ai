@@ -69,6 +69,11 @@ POLL_RETRY_SECONDS = 1.0
 """How long to wait before reading push-to-talk again after it failed."""
 
 BRAIN_SECONDS = 8.0
+SEARCH_SECONDS = 12.0
+"""Once a web search starts, the brain has this long from then (searches take 4-8 s)."""
+FILLERS = ("Let me check.", "Checking the latest.", "One moment, looking that up.")
+"""Said while a web search runs (about 4 s), taking turns, so the wait isn't
+silence (ADR 15). Kept as audio after the first time, so they start at once."""
 """How long to wait for the brain before saying it couldn't answer (ADR 14)."""
 FOLLOW_UP_SECONDS = 30.0
 """Exchanges this recent go to the brain with the next request (ADR 10, ADR 14)."""
@@ -131,6 +136,7 @@ class Session:
         action_log: ActionLog | None = None,
         brain: Brain | None = None,
         brain_seconds: float = BRAIN_SECONDS,
+        search_seconds: float = SEARCH_SECONDS,
         speaker: Speaker | None = None,
         confirm_seconds: float = CONFIRM_SECONDS,
         samplerate: int = 16_000,
@@ -154,8 +160,12 @@ class Session:
         self._action_log = action_log
         self._brain = brain
         self._brain_seconds = brain_seconds
+        self._search_seconds = search_seconds
         self._speaker = speaker
         self._speech: asyncio.Task[None] | None = None
+        self._filling: asyncio.Task[None] | None = None
+        """The filler line, while it plays; the answer waits for it rather than cut it off."""
+        self._fillers = itertools.cycle(FILLERS)
         self._speech_warming: asyncio.Task[None] | None = None
         self._recent: list[Exchange] = []
         self._recent_at = 0.0
@@ -369,12 +379,20 @@ class Session:
                 progress.by_brain = True
                 self._warm_speaker()  # while the brain thinks, so speech starts sooner
                 try:
-                    decision = await asyncio.wait_for(
-                        self._brain.decide(
-                            BrainRequest(text, self._keybinds(), tuple(self._follow_ups()))
-                        ),
-                        self._brain_seconds,
-                    )
+                    async with asyncio.timeout(self._brain_seconds) as budget:
+
+                        def searching() -> None:
+                            budget.reschedule(loop.time() + self._search_seconds)
+                            self._fill()
+
+                        decision = await self._brain.decide(
+                            BrainRequest(
+                                text,
+                                self._keybinds(),
+                                tuple(self._follow_ups()),
+                                waiting=searching,
+                            )
+                        )
                     trace.mark("brain")
                     if isinstance(decision, Reply):
                         progress.say = decision.text
@@ -535,19 +553,47 @@ class Session:
         return result.status == "replied" or (result.done and not result.announced)
 
     def _start_speaking(self, speaker: Speaker, text: str, instead: Callable[[], None]) -> None:
-        """Say ``text``; if nothing can be spoken, play the ``instead`` sound."""
-        self._stop_speaking()
-        self._speech = asyncio.create_task(self._speak(speaker, text, instead))
+        """Say ``text``, after the filler line if one is playing; if nothing can be
+        spoken, play the ``instead`` sound."""
+        filler = self._filling if self._speech is self._filling else None
+        if filler is None or filler.done():
+            filler = None
+            self._stop_speaking()
+        self._filling = None
+        self._speech = asyncio.create_task(self._speak(speaker, text, instead, after=filler))
 
-    async def _speak(self, speaker: Speaker, text: str, instead: Callable[[], None]) -> None:
+    def _fill(self) -> None:
+        """A web search has started: say a short line while it runs."""
+        if self._speaker is None or self._closed:
+            return
+        self._stop_speaking()
+        line = next(self._fillers)
+        self._speech = self._filling = asyncio.create_task(
+            self._speak(self._speaker, line, lambda: None, keep=True)
+        )
+
+    async def _speak(
+        self,
+        speaker: Speaker,
+        text: str,
+        instead: Callable[[], None],
+        *,
+        keep: bool = False,
+        after: asyncio.Task[None] | None = None,
+    ) -> None:
         try:
-            await speaker.speak(text)
+            if after is not None:
+                await asyncio.wait({after})  # never raises, even if it was cancelled
+            await speaker.speak(text, keep=keep)
         except SpeechError as e:
             log.warning("Couldn't speak, so a sound instead: %s", e)
             instead()
         except Exception:  # speech failing must never stop the loop
             log.exception("Speaking failed")
             instead()
+        finally:
+            if after is not None and not after.done():
+                after.cancel()  # stopped while waiting: the filler stops too
 
     def _stop_speaking(self) -> None:
         if self._speech is not None and not self._speech.done():

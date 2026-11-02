@@ -21,7 +21,7 @@ The architecture lists Knowledge as stage 3 ("trade, loadout and location questi
 | Ships | Star Citizen Wiki API; UEX Corp for ships still in concept | A local copy, refreshed each patch |
 | Trade | UEX Corp | Live, saved for a few minutes (UEX itself updates hourly) |
 | Items and blueprints | Star Citizen Wiki API; starcitizen.tools for prose | A local copy, refreshed each patch |
-| Web search | Anthropic's web search tool | Last resort, only when the others miss |
+| Web search | Anthropic's web search tool, in a request of its own, on Star Citizen sites only | Live, one search a request |
 
 How often data changes decides how it's fetched: specs change each patch, prices each hour.
 
@@ -53,6 +53,16 @@ Each is its own pull request, measured with the brain eval:
 2. Ships: the local copy and look-up tool, and the briefing-table alternative; keep the better one. New eval cases for makers, crew and cargo.
 3. Ships still in concept (the Galaxy, the Kraken), from UEX's vehicle list, in the same local copy and marked as not in the game. The game files only hold ships that are in the game.
 4. Web search, for news the sources don't hold yet: newly revealed ships, upcoming patches, the roadmap. Moved ahead of trade (2026-11-02): players ask what's coming more than they ask prices.
+
+   **Result (2 November 2026).** Web search is a look-up like the others (`knowledge/web.py`): when Claude calls it, Tycho makes a separate Claude request with Anthropic's search tool, one search, limited to robertsspaceindustries.com, starcitizen.tools, uexcorp.space, erkul.games, sc-craft.tools and scmdb.net, with its own brief (one or two sentences, official word first, no leaks or fan estimates). Measured against offering Anthropic's tool in the brain's own request:
+
+   | | Acting median | A search answer |
+   |---|---|---|
+   | No web search | 1.60 s | none |
+   | **Separate request (kept)** | **1.63 to 1.67 s** | 7 to 8.5 s, 20 to 45 words |
+   | Search tool in the brain's request | 1.91 to 1.94 s | about 5.3 s, 45 to 66 words |
+
+   The built-in tool cost every command about 0.3 s, searched or not, so it lost. While a search runs, Tycho says a short filler line ("Let me check."), kept as audio after the first time, and the brain gets 12 s from the search's start instead of the usual 8 s. Nothing is pressed in a request after a search. A search costs about 1.2 cents. On by default; `web_search = false` turns it off. The open web brought fan sites and leaked dates, and the community tool sites are mostly browser apps a search can't see into, but listing them costs nothing.
 5. Trade: the UEX tool and token, with the filler line.
 6. The player's fleet in the profile.
 7. Items and blueprints.

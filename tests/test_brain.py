@@ -28,8 +28,13 @@ from tycho.brain.briefing import (
     command_phrasings,
     game_facts,
 )
-from tycho.brain.claude import MAX_CALLS, ClaudeBrain, history
-from tycho.brain.lookups import run_lookup
+from tycho.brain.claude import (
+    MAX_CALLS,
+    NO_PRESS_AFTER_SEARCH,
+    ClaudeBrain,
+    history,
+)
+from tycho.brain.lookups import LOOKUP_SECONDS, run_lookup
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Action, Keybinds, KeyInput
 
@@ -456,3 +461,70 @@ def test_reference_text_goes_at_the_end_of_the_cached_briefing() -> None:
     (system,) = client.requests[0]["system"]
     assert system["text"].endswith("\nship | maker\nAndromeda | RSI\n")
     assert system["cache_control"]["type"] == "ephemeral"
+
+
+# --- Web search (ADR 15) ------------------------------------------------------------------
+
+
+def _searches(use_id: str = "toolu_1") -> tuple[list[Any], Any]:
+    """A call where Claude asks for a web search and stops to wait for it."""
+    stop = _tool_stop("web_search", {"query": "Star Citizen next patch"}, use_id)
+    return [stop], SimpleNamespace(
+        content=[stop.content_block], stop_reason="tool_use", usage=_final("").usage
+    )
+
+
+def _web() -> FakeLookup:
+    return FakeLookup("web_search", '{"answer": "4.10.3 is on the PTU."}', from_the_web=True)
+
+
+def _ask_web(client: _Calls, *lookups: FakeLookup) -> tuple[Any, list[str]]:
+    waited: list[str] = []
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=lookups)
+    request = BrainRequest("whats in the next patch", KEYBINDS, waiting=lambda: waited.append(""))
+    return asyncio.run(brain.decide(request)), waited
+
+
+def test_a_search_says_its_waiting_once_and_its_answer_is_spoken() -> None:
+    client = _Calls(_searches(), ([], _final("4.10.3 is on the PTU now.")))
+    decision, waited = _ask_web(client, _web())
+    assert decision == Reply("4.10.3 is on the PTU now.")
+    assert len(waited) == 1
+
+
+def test_other_look_ups_dont_say_theyre_waiting() -> None:
+    stop = _tool_stop("ship_lookup", {"name": "Andromeda"})
+    first = (
+        [stop],
+        SimpleNamespace(
+            content=[stop.content_block], stop_reason="tool_use", usage=_final("").usage
+        ),
+    )
+    _, waited = _ask_web(_Calls(first, ([], _final("RSI."))), FakeLookup())
+    assert waited == []
+
+
+def test_nothing_is_pressed_after_a_web_search() -> None:
+    act = _tool_stop("run_actions", {"actions": ["v_toggle_landing_system"], "say": "Gear."})
+    decision, _ = _ask_web(_Calls(_searches(), ([act], None)), _web())
+    assert decision == Reply(NO_PRESS_AFTER_SEARCH)
+
+
+def test_acting_without_a_search_still_presses() -> None:
+    act = _tool_stop("run_actions", {"actions": ["v_toggle_landing_system"], "say": "Gear."})
+    decision, _ = _ask_web(_Calls(([act], None)), _web())
+    assert decision == RunActions(("v_toggle_landing_system",), "Gear.")
+
+
+def test_a_search_gets_longer_than_other_look_ups() -> None:
+    class Slow(FakeLookup):
+        seconds = 0.5
+
+        async def run(self, arguments: Any) -> Any:
+            await asyncio.sleep(LOOKUP_SECONDS / 10)
+            return await super().run(arguments)
+
+    lookup = Slow("web_search", '{"answer": "ok"}', from_the_web=True)
+    client = _Calls(_searches(), ([], _final("Done.")))
+    decision, _ = _ask_web(client, lookup)
+    assert decision == Reply("Done.")

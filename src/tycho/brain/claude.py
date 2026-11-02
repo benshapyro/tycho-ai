@@ -9,6 +9,10 @@ its result goes back to Claude, and Claude carries on, at most ``MAX_CALLS`` tim
 An act still ends the request at once. Every call sends the same tools and settings,
 so the cache holds across the loop and across requests.
 
+A look-up from the web (``from_the_web``, the web search) is slow and can't be
+checked: when it starts, ``BrainRequest.waiting`` is called so the player hears
+a filler line, and after it the request may not press anything (ADR 15).
+
 The briefing (about 11,000 tokens) is cached for an hour, because play is bursty:
 gaps of 5 to 60 minutes are normal, and a cold cache added about 3 s. One warm-up
 request at startup writes it, so the first real request is fast too.
@@ -19,6 +23,7 @@ import datetime
 import logging
 import time
 from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 import anthropic
@@ -33,7 +38,7 @@ from tycho.brain.decisions import (
     Reply,
     parse_tool_call,
 )
-from tycho.brain.lookups import Lookup, LookupResult, run_lookup
+from tycho.brain.lookups import LOOKUP_SECONDS, Lookup, LookupResult, run_lookup
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Keybinds
 
@@ -48,6 +53,17 @@ MAX_CALLS = 3
 """Calls to Claude per request: up to two rounds of look-ups, then the answer (ADR 15)."""
 # Haiku 5.5 per million tokens: input, output, cache read, cache write (1 hour).
 _PRICES = (0.10, 0.50, 0.01, 0.20)
+NO_PRESS_AFTER_SEARCH = (
+    "I looked that up online, so I won't press anything for it. Say the command again."
+)
+
+
+@dataclass
+class _Turn:
+    """What one request has done so far, across its calls to Claude."""
+
+    waiting: Callable[[], None] | None = None
+    searched: bool = False
 
 
 def _tools(sequences: list[str], lookups: Iterable[Lookup] = ()) -> list[ToolParam]:
@@ -182,16 +198,22 @@ class ClaudeBrain:
         self._brief(request.keybinds)
         started = time.perf_counter()
         messages = history(request.recent, request.text, self._today())
+        turn = _Turn(waiting=request.waiting)
         try:
             for _ in range(MAX_CALLS):
-                decided, message, looking = await self._call(messages, started)
+                decided, message, looking = await self._call(messages, started, turn)
                 if decided is not None:
+                    if turn.searched:
+                        log.warning("The brain chose to act after a web search; not pressing")
+                        return Reply(NO_PRESS_AFTER_SEARCH)
                     return decided
                 _log_usage(message.usage, started)
                 if message.stop_reason == "refusal":
                     raise BrainError("Claude declined")
                 if not looking:
-                    reply = " ".join(b.text for b in message.content if b.type == "text").strip()
+                    reply = " ".join(
+                        " ".join(b.text for b in message.content if b.type == "text").split()
+                    )
                     if not reply:
                         raise BrainError(f"no answer (stopped: {message.stop_reason})")
                     return Reply(reply[:400])
@@ -207,10 +229,11 @@ class ClaudeBrain:
         raise BrainError(f"still looking things up after {MAX_CALLS} tries")
 
     async def _call(
-        self, messages: list[MessageParam], started: float
+        self, messages: list[MessageParam], started: float, turn: _Turn
     ) -> tuple[Decision | None, Any, list[tuple[str, asyncio.Task[LookupResult]]]]:
         """One call to Claude: an act if it picked one (the stream is left there),
-        otherwise the whole message and the look-ups it started."""
+        otherwise the whole message and the look-ups it started. Notes in ``turn``
+        whether a look-up from the web started."""
         looking: list[tuple[str, asyncio.Task[LookupResult]]] = []
         try:
             async with self._client.messages.stream(
@@ -231,7 +254,15 @@ class ClaudeBrain:
                         log.debug("Brain chose %s in %.0f ms", block.name, _ms(started))
                         if block.name in self._lookups:
                             # Start now; Claude's message may still be finishing.
-                            lookup = run_lookup(self._lookups[block.name], block.input)
+                            chosen = self._lookups[block.name]
+                            if getattr(chosen, "from_the_web", False):
+                                log.debug("Brain searching the web at %.0f ms", _ms(started))
+                                turn.searched = True
+                                if turn.waiting is not None:
+                                    turn.waiting()
+                                    turn.waiting = None  # once a request
+                            seconds = float(getattr(chosen, "seconds", LOOKUP_SECONDS))
+                            lookup = run_lookup(chosen, block.input, seconds)
                             looking.append((block.id, asyncio.create_task(lookup)))
                             continue
                         # Leaving the stream here ends the request: nothing more to wait for.

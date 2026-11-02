@@ -2,7 +2,8 @@
 
 import asyncio
 import json
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from pathlib import Path
 
 import httpx2
 import pytest
@@ -39,7 +40,11 @@ class FakeSink:
 
 class Rig:
     def __init__(
-        self, answer: Callable[[httpx2.Request], httpx2.Response], *, hang: bool = False
+        self,
+        answer: Callable[[httpx2.Request], httpx2.Response],
+        *,
+        hang: bool = False,
+        kept: Path | None = None,
     ) -> None:
         self.requests: list[httpx2.Request] = []
         self.sinks: list[FakeSink] = []
@@ -59,7 +64,7 @@ class Rig:
         client = httpx2.AsyncClient(
             base_url="https://api.elevenlabs.io", transport=httpx2.MockTransport(handler)
         )
-        self.speaker = ElevenLabsSpeaker(client=client, open_sink=open_sink, volume=0.5)
+        self.speaker = ElevenLabsSpeaker(client=client, open_sink=open_sink, volume=0.5, kept=kept)
 
 
 def _audio(_: httpx2.Request) -> httpx2.Response:
@@ -151,3 +156,43 @@ def test_warming_up_never_raises() -> None:
         raise httpx2.ConnectError("offline", request=request)
 
     asyncio.run(Rig(answer).speaker.warm())
+
+
+def test_a_kept_line_is_fetched_once_then_played_from_disk(tmp_path: Path) -> None:
+    rig = Rig(_audio, kept=tmp_path)
+    asyncio.run(rig.speaker.speak("Let me check.", keep=True))
+    asyncio.run(rig.speaker.speak("Let me check.", keep=True))
+    assert len(rig.requests) == 1
+    first, second = rig.sinks
+    assert second.audio == first.audio
+    assert second.finished
+    assert second.closed
+    (file,) = tmp_path.iterdir()
+    assert file.suffix == ".pcm"
+
+
+def test_only_kept_lines_are_kept(tmp_path: Path) -> None:
+    rig = Rig(_audio, kept=tmp_path)
+    asyncio.run(rig.speaker.speak("Gear down."))
+    asyncio.run(rig.speaker.speak("Gear down."))
+    assert len(rig.requests) == 2
+    assert list(tmp_path.iterdir()) == []
+    # Without a folder, keep just fetches.
+    plain = Rig(_audio)
+    asyncio.run(plain.speaker.speak("Let me check.", keep=True))
+    asyncio.run(plain.speaker.speak("Let me check.", keep=True))
+    assert len(plain.requests) == 2
+
+
+def test_a_line_cut_off_part_way_isnt_kept(tmp_path: Path) -> None:
+    def broken(request: httpx2.Request) -> httpx2.Response:
+        class Stream(httpx2.AsyncByteStream):
+            async def __aiter__(self) -> AsyncIterator[bytes]:
+                yield bytes(200)
+                raise httpx2.ReadError("dropped", request=request)
+
+        return httpx2.Response(200, stream=Stream())
+
+    rig = Rig(broken, kept=tmp_path)
+    asyncio.run(rig.speaker.speak("Let me check.", keep=True))
+    assert list(tmp_path.iterdir()) == []

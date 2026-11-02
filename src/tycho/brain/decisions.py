@@ -6,8 +6,8 @@ the whole decision. What it picks becomes ordinary commands, so the safety gate,
 the planner, spoken confirmation and the action log treat it like the fast path.
 """
 
-from collections.abc import Collection
-from dataclasses import dataclass, replace
+from collections.abc import Callable, Collection
+from dataclasses import dataclass, field, replace
 
 from tycho import safety
 from tycho.commands import Command, CommandMatcher
@@ -61,6 +61,9 @@ class BrainRequest:
     keybinds: Keybinds
     recent: tuple[Exchange, ...] = ()
     """Earlier exchanges, oldest first, for follow-ups like "do that again"."""
+    waiting: Callable[[], None] | None = field(default=None, compare=False)
+    """Called once if the answer will be slow (a web search has started), so the
+    player hears a short line instead of silence (ADR 15)."""
 
 
 class BrainError(Exception):

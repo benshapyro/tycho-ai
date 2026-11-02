@@ -8,11 +8,15 @@ from tycho.game.keybinds import Keybinds
 
 class FakeBrain:
     """Answers each request with the next scripted decision, or raises it if it's an
-    exception. ``hang`` makes every call wait forever, to test the deadline."""
+    exception. ``hang`` makes every call wait forever, to test the deadline.
+    ``search`` acts as if each answer needed a web search: it says it's waiting first."""
 
-    def __init__(self, *script: Decision | Exception, hang: bool = False) -> None:
+    def __init__(
+        self, *script: Decision | Exception, hang: bool = False, search: bool = False
+    ) -> None:
         self._script = list(script)
         self._hang = hang
+        self._search = search
         self.asked: list[BrainRequest] = []
         self.warmed = 0
 
@@ -23,6 +27,9 @@ class FakeBrain:
         self.asked.append(request)
         if self._hang:
             await asyncio.Event().wait()
+        if self._search and request.waiting is not None:
+            request.waiting()
+            await asyncio.sleep(0.02)
         answer = self._script.pop(0)
         if isinstance(answer, Exception):
             raise answer

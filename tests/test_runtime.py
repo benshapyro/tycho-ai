@@ -25,7 +25,7 @@ from tests.fakes.fake_runtime import (
 )
 from tests.fakes.fake_speaker import FakeSpeaker
 from tycho import safety
-from tycho.brain import BrainError, Reply, RunActions, RunSequence
+from tycho.brain import BrainError, BrainRequest, Decision, Reply, RunActions, RunSequence
 from tycho.commands import CommandMatcher
 from tycho.game.gamelog import QUANTUM_ROUTE
 from tycho.game.keybinds import Action, ActivationMode, Keybinds, KeyInput
@@ -34,6 +34,7 @@ from tycho.lexicon import Lexicon
 from tycho.ptt.binding import Binding
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime import AlreadyRunning, Result, Session, SingleInstance
+from tycho.runtime.session import FILLERS
 
 RATE = 16_000
 PTT = Binding.parse("mouse:0x06")
@@ -102,6 +103,7 @@ def rig(
     clock: Callable[[], float] = time.monotonic,
     brain: FakeBrain | None = None,
     brain_seconds: float = 8.0,
+    search_seconds: float = 12.0,
     speaker: FakeSpeaker | None = None,
 ) -> Rig:
     audio, keys, feedback = FakeAudioSource(RATE), FakeKeySender(), FakeFeedback()
@@ -121,6 +123,7 @@ def rig(
         action_log=actions,
         brain=brain,
         brain_seconds=brain_seconds,
+        search_seconds=search_seconds,
         speaker=speaker,
         samplerate=RATE,
         log_transcripts=log_transcripts,
@@ -1075,3 +1078,42 @@ def test_kept_transcripts_show_what_was_heard_before_correction(
     result = r.results[0]
     assert result.text != result.heard  # the lexicon corrected "micro tech"
     assert f'"{result.text}" (heard "fly to micro tech")' in caplog.text
+
+
+def test_a_web_search_gets_a_filler_line_and_the_answer_waits_for_it() -> None:
+    speaker = FakeSpeaker(seconds=0.05)  # the filler is still playing when the answer comes
+    brain = FakeBrain(Reply("4.11 is on the roadmap for Q4."), search=True)
+    _conversation("whats in the next patch", brain=brain, speaker=speaker)
+    filler = speaker.spoken[0]
+    assert filler in FILLERS
+    assert speaker.kept == [filler]  # kept as audio, so it starts at once next time
+    assert speaker.spoken == [filler, "4.11 is on the roadmap for Q4."]
+    assert speaker.stopped == []  # not cut off
+
+
+def test_the_filler_lines_take_turns() -> None:
+    speaker = FakeSpeaker()
+    brain = FakeBrain(Reply("One."), Reply("Two."), search=True)
+    _conversation("whats new", "any news", brain=brain, speaker=speaker)
+    assert speaker.kept == list(FILLERS[:2])
+
+
+def test_a_web_search_gets_longer_than_the_usual_deadline() -> None:
+    class SlowSearch(FakeBrain):
+        async def decide(self, request: BrainRequest) -> Decision:
+            await asyncio.sleep(0.05)
+            if request.waiting is not None:
+                request.waiting()
+            await asyncio.sleep(0.1)  # past brain_seconds, inside search_seconds
+            return Reply("4.11 is on the roadmap.")
+
+    speaker = FakeSpeaker()
+    r = _conversation(
+        "whats in the next patch",
+        brain=SlowSearch(),
+        speaker=speaker,
+        brain_seconds=0.1,
+        search_seconds=0.5,
+    )
+    assert r.results[0].status == "replied"
+    assert speaker.spoken[-1] == "4.11 is on the roadmap."

@@ -695,3 +695,26 @@ heard = "how many crew does the Merchantman need"
 expect = ["reply"]
 mentions = [["4", "four"], ["8", "eight"]]
 tag = "ships"
+
+# Web search (ADR 15): news and what's coming, from RSI's sites and the community wiki.
+[[case]]
+heard = "what's coming in the next patch"
+expect = ["reply"]
+mentions = [['4\.11', '4\.10\.3']]
+tag = "web"
+
+[[case]]
+heard = "when is the Kraken coming out"
+expect = ["reply"]
+mentions = [['no official', 'not announced', "hasn't", 'no (confirmed |firm |set )?(release )?date', 'TBA', 'to be announced', 'not (yet )?confirmed', 'unconfirmed', 'no confirmed', "(couldn't|could not) find an official"]]
+tag = "web"
+
+[[case]]
+heard = "is there a free fly event on right now"
+expect = ["reply"]
+tag = "web"
+
+[[case]]
+heard = "what was revealed at CitizenCon this year"
+expect = ["reply"]
+tag = "web"
