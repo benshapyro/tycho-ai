@@ -251,6 +251,11 @@ say = ["next hostile", "next target", "next enemy", "cycle hostiles"]
 actions = ["v_target_cycle_hostile_fwd"]
 
 [[command]]
+id = "target_unlock"
+say = ["unlock target", "unlock the target", "drop target", "drop the target", "clear target", "clear the target"]
+actions = ["v_target_unlock"]
+
+[[command]]
 id = "decoys"
 say = ["launch a decoy", "launch decoys", "decoy", "decoys", "fire decoys", "flares", "pop flares", "deploy countermeasures", "countermeasures"]
 actions = ["v_weapon_countermeasure_decoy_launch"]

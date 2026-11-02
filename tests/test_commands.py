@@ -22,6 +22,7 @@ def _ids(text: str) -> str:
         ("Lower the landing gear now.", "landing_gear_down"),
         ("open the doors then lights on", "doors_open+lights_on"),
         ("flight ready and request landing", "flight_ready+request_landing"),
+        ("unlock the target", "target_unlock"),
     ],
 )
 def test_matches_unseen_wordings(text: str, expected: str) -> None:
@@ -51,6 +52,8 @@ def test_defers_what_it_cannot_be_sure_of(text: str) -> None:
         ("gear up", "landing_gear_down"),
         ("power off", "power_on"),
         ("lock the doors", "doors_unlock"),
+        ("unlock target", "doors_unlock"),
+        ("unlock the doors", "target_unlock"),
         ("engines off", "engines_on"),
         ("lock gimbals", "gimbals_unlock"),
         ("unlock gimbals", "gimbals_lock"),
