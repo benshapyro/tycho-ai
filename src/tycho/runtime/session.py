@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from tycho import safety
 from tycho.audio.clip import Samples, trim_silence
 from tycho.audio.source import AudioError, AudioSource
-from tycho.brain import BrainError, Exchange, Reply, commands_for
+from tycho.brain import BrainError, BrainRequest, Exchange, Reply, commands_for
 from tycho.commands import Command, CommandMatcher, Defer, resolve
 from tycho.game.keybinds import Action, Keybinds
 from tycho.input import NotPressable, Press, Presser, UnsupportedKey, plan
@@ -370,7 +370,9 @@ class Session:
                 self._warm_speaker()  # while the brain thinks, so speech starts sooner
                 try:
                     decision = await asyncio.wait_for(
-                        self._brain.decide(text, self._follow_ups(), self._keybinds()),
+                        self._brain.decide(
+                            BrainRequest(text, self._keybinds(), tuple(self._follow_ups()))
+                        ),
                         self._brain_seconds,
                     )
                     trace.mark("brain")

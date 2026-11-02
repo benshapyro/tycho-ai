@@ -7,6 +7,7 @@ through ``runtime.Brain``, so tests use a fake and nothing here touches the keys
 
 from tycho.brain.decisions import (
     BrainError,
+    BrainRequest,
     Decision,
     Exchange,
     Reply,
@@ -18,6 +19,7 @@ from tycho.brain.decisions import (
 
 __all__ = [
     "BrainError",
+    "BrainRequest",
     "Decision",
     "Exchange",
     "Reply",
