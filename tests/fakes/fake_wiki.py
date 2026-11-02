@@ -51,3 +51,42 @@ class FakeWiki:
                 "meta": {"last_page": last},
             }
         raise WikiError(f"{path}: not found")
+
+
+def uex_vehicle(name: str, maker: str = "Drake Interplanetary", **fields: Any) -> dict[str, Any]:
+    """A UEX vehicle record, shaped like its ``/vehicles`` list, marked as a concept."""
+    record: dict[str, Any] = {
+        "name": name,
+        "name_full": f"{maker.split()[0]} {name}",
+        "slug": name.lower().replace(" ", "-"),
+        "company_name": maker,
+        "scu": 0,
+        "crew": "1",
+        "length": 0,
+        "width": 0,
+        "height": 0,
+        "pad_type": "",
+        "is_concept": 1,
+        "is_addon": 0,
+        "is_spaceship": 1,
+        "is_ground_vehicle": 0,
+    }
+    record.update(fields)
+    return record
+
+
+class FakeUex:
+    """UEX's vehicle list from memory (satisfies ``knowledge.WikiSource``)."""
+
+    def __init__(self, vehicles: list[dict[str, Any]]) -> None:
+        self.vehicles = vehicles
+        self.offline = False
+        self.calls: list[str] = []
+
+    async def get(self, path: str, params: Mapping[str, str | int] | None = None) -> Any:
+        self.calls.append(path)
+        if self.offline:
+            raise WikiError(f"{path}: offline")
+        if path == "/vehicles":
+            return {"status": "ok", "data": self.vehicles}
+        raise WikiError(f"{path}: not found")

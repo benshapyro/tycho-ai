@@ -43,7 +43,7 @@ from tycho.brain.lookups import Lookup, LookupResult
 from tycho.commands import Command, Defer, resolve
 from tycho.game.keybinds import Keybinds
 from tycho.game.store import KeybindStore
-from tycho.knowledge import ShipLookup, WikiApi
+from tycho.knowledge import ShipLookup, UexApi, WikiApi
 from tycho.knowledge.store import ensure
 from tycho.lexicon import Lexicon
 
@@ -233,7 +233,7 @@ async def main() -> None:
     counted: _Counted | None = None
     reference = ""
     if args.ships != "none":
-        library = await ensure(WikiApi(), paths.knowledge_dir())
+        library = await ensure(WikiApi(), paths.knowledge_dir(), concepts=UexApi())
         print(f"Ship data: {len(library)} ships for {library.patch}, as {args.ships}")
         if args.ships == "table":
             reference = "Ships and vehicles in this patch:\n" + library.table()

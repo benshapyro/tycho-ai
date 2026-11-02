@@ -7,6 +7,7 @@ ever shapes what Tycho says, never what it presses.
 
 from tycho.knowledge.ship_lookup import ShipLookup
 from tycho.knowledge.ships import Ambiguous, NotFound, Ship, ShipLibrary
+from tycho.knowledge.uex import UexApi
 from tycho.knowledge.wiki import WikiApi, WikiError, WikiSource
 
 __all__ = [
@@ -15,6 +16,7 @@ __all__ = [
     "Ship",
     "ShipLibrary",
     "ShipLookup",
+    "UexApi",
     "WikiApi",
     "WikiError",
     "WikiSource",

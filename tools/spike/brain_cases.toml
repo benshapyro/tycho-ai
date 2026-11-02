@@ -670,3 +670,28 @@ tag = "ships"
 heard = "how much cargo does the Connie carry"
 expect = ["reply"]
 tag = "ships"
+
+# Ships still in concept, from UEX's list (ADR 15).
+[[case]]
+heard = "who makes the Kraken"
+expect = ["reply"]
+mentions = [["Drake"]]
+tag = "ships"
+
+[[case]]
+heard = "how much cargo does the Kraken carry"
+expect = ["reply"]
+mentions = [["3,?792"]]
+tag = "ships"
+
+[[case]]
+heard = "can I fly the Galaxy yet"
+expect = ["reply"]
+mentions = [["concept", "not (yet )?(in|flyable|available|released)", "isn't", "not yet", "can't"]]
+tag = "ships"
+
+[[case]]
+heard = "how many crew does the Merchantman need"
+expect = ["reply"]
+mentions = [["4", "four"], ["8", "eight"]]
+tag = "ships"

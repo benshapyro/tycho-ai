@@ -19,17 +19,21 @@ from tycho.knowledge.wiki import WikiSource
 log = logging.getLogger(__name__)
 
 MAX_NAMES = 3
-SOURCE = "Star Citizen Wiki API (api.star-citizen.wiki), from the game files"
+SOURCE = (
+    "Star Citizen Wiki API (api.star-citizen.wiki), from the game files; "
+    "ships still in concept from UEX (uexcorp.space)"
+)
 
 DESCRIPTION = """\
 Look up Star Citizen ships and ground vehicles in data from the current patch's \
 game files: maker, role, size, crew, cargo (SCU), SCM and max speed (m/s), quantum \
 range (Gm), hull and shield HP, pilot DPS, missiles, dimensions, insurance claim \
 and expedite times, pledge price (USD), loaners, and where to buy or rent it in the \
-game (aUEC). Use it for any fact about a particular ship, including who makes it, \
-even when you think you know, and to compare ships: pass up to three names in one \
-call. Names can be informal ("Connie", "the \
-Cat", "Cutlass Black"). If a name matches several ships, the result lists them: \
+game (aUEC). It also has ships still in concept (announced but not in the game, \
+like the Kraken): their status says so, with fewer facts. Use it for any fact \
+about a particular ship, including who makes it, even when you think you know, \
+and to compare ships: pass up to three names in one call. Names can be informal \
+("Connie", "the Cat", "Cutlass Black"). If a name matches several ships, the result lists them: \
 pick the one the player meant, or ask. Don't use it for general questions (which \
 ship is good for what, how a mechanic works), ship components or weapons, or \
 commodity prices."""
@@ -37,10 +41,17 @@ commodity prices."""
 
 class ShipLookup:
     def __init__(
-        self, source: WikiSource, folder: Path, *, library: ShipLibrary | None = None
+        self,
+        source: WikiSource,
+        folder: Path,
+        *,
+        concepts: WikiSource | None = None,
+        library: ShipLibrary | None = None,
     ) -> None:
-        """``library`` is data already loaded; ``prepare`` then has nothing to do."""
+        """``concepts`` is UEX, for ships still in concept. ``library`` is data
+        already loaded; ``prepare`` then has nothing to do."""
         self._source = source
+        self._concepts = concepts
         self._folder = folder
         self._library = library
         self._problem = "the ship data is still loading"
@@ -76,7 +87,7 @@ class ShipLookup:
         if self._library is not None:
             return
         try:
-            self._library = await ensure(self._source, self._folder)
+            self._library = await ensure(self._source, self._folder, concepts=self._concepts)
         except ShipDataError as e:
             self._problem = str(e)
             log.warning("Ship look-ups are off: %s", e)
