@@ -61,6 +61,11 @@ class Settings(BaseModel):
     keep_transcripts: bool = Field(
         default=False, description="Keep a local record of what you said. Off by default."
     )
+    web_search: bool = Field(
+        default=True,
+        description="Let Tycho search Star Citizen sites for news, upcoming patches and new "
+        "ships. Each search costs about 1 cent of your Anthropic credit.",
+    )
 
     @field_validator("push_to_talk")
     @classmethod

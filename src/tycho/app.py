@@ -126,7 +126,7 @@ def _run(current: Settings, log_file: Path) -> int:
             focus=WindowsFocusCheck(),
             feedback=SoundFeedback(SoundDevicePlayer(), current.feedback_volume),
             action_log=action_log,
-            make_brain=load_brain,
+            make_brain=lambda matcher: load_brain(matcher, current),
             speaker=load_speaker(current),
         )
         log.info("Listening. Hold %s and speak; press Ctrl+C to stop.", describe(binding))
@@ -173,7 +173,7 @@ def anthropic_key() -> str | None:
         return None
 
 
-def load_brain(matcher: CommandMatcher) -> Brain | None:
+def load_brain(matcher: CommandMatcher, current: Settings) -> Brain | None:
     """Claude, if the player has stored an Anthropic key. Without one, the fast path only."""
     key = anthropic_key()
     if key is None:
@@ -181,13 +181,21 @@ def load_brain(matcher: CommandMatcher) -> Brain | None:
             "No Anthropic key, so only the built-in phrasings work. Add one: %s", BRAIN_KEY_HELP
         )
         return None
+    import anthropic
+
     from tycho import paths
     from tycho.brain.claude import MODEL, ClaudeBrain
+    from tycho.brain.lookups import Lookup
     from tycho.knowledge import ShipLookup, UexApi, WikiApi
+    from tycho.knowledge.web import WebSearch
 
     log.info("Brain: %s, for anything the built-in phrasings don't cover", MODEL)
-    ships = ShipLookup(WikiApi(), paths.knowledge_dir(), concepts=UexApi())
-    return ClaudeBrain(matcher, api_key=key, lookups=[ships])
+    if not current.web_search:
+        log.info("Web search: off (web_search is false)")
+    lookups: list[Lookup] = [ShipLookup(WikiApi(), paths.knowledge_dir(), concepts=UexApi())]
+    if current.web_search:
+        lookups.append(WebSearch(anthropic.AsyncAnthropic(api_key=key, max_retries=0)))
+    return ClaudeBrain(matcher, api_key=key, lookups=lookups)
 
 
 VOICE_KEY_HELP = "uv run python -m tycho.credentials set elevenlabs"
@@ -216,7 +224,9 @@ def load_speaker(current: Settings) -> Speaker | None:
     from tycho.voice.elevenlabs import MODEL, ElevenLabsSpeaker
 
     log.info("Voice: ElevenLabs %s, The Ship's Mind", MODEL)
-    return ElevenLabsSpeaker(api_key=key, volume=current.voice_volume)
+    from tycho import paths
+
+    return ElevenLabsSpeaker(api_key=key, volume=current.voice_volume, kept=paths.voice_dir())
 
 
 def load_commands() -> CommandMatcher:

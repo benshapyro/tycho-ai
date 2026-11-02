@@ -46,7 +46,10 @@ class Speaker(Protocol):
     so the session can play a sound instead.
     """
 
-    async def speak(self, text: str) -> None: ...
+    async def speak(self, text: str, *, keep: bool = False) -> None:
+        """``keep`` is for lines said again and again (the filler while a search
+        runs): the speaker may keep their audio and play it with no wait."""
+        ...
 
     async def warm(self) -> None:
         """Get ready to speak soon, e.g. by opening a connection. Never raises."""

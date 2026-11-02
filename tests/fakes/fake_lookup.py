@@ -16,7 +16,10 @@ class FakeLookup:
         answer: str | Exception = '{"name": "Constellation Andromeda", "maker": "RSI"}',
         *,
         hang: bool = False,
+        from_the_web: bool = False,
     ) -> None:
+        """``from_the_web``: acts like the web search, slow and unchecked."""
+        self.from_the_web = from_the_web
         self._name = name
         self._answer = answer
         self._hang = hang

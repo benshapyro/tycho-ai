@@ -49,5 +49,10 @@ def knowledge_dir() -> Path:
     return data_dir() / "knowledge"
 
 
+def voice_dir() -> Path:
+    """Spoken lines kept as audio, such as the filler while a search runs."""
+    return data_dir() / "voice"
+
+
 def logs_dir() -> Path:
     return data_dir() / "logs"

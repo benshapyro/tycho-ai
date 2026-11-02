@@ -83,6 +83,7 @@ Your voice never does: speech recognition runs on your PC. Only text is sent, an
 | Anthropic (Claude) | What you said (as text); your bound actions with their keys, your commands and sequences; and your last few requests with what Tycho did, if they were in the last 30 seconds | Requests the built-in commands don't handle, plus one warm-up request when Tycho starts |
 | ElevenLabs | The text Tycho speaks | When Tycho speaks |
 | Star Citizen Wiki API, UEX Corp | Nothing about you: Tycho downloads their ship lists | On first run, and when a new patch goes live |
+| Anthropic (web search) | A short search query Claude writes from your question | Questions about news, upcoming patches, events and new ships; off with `web_search = false` |
 | *Planned:* UEX Corp, Star Citizen Wiki | Search terms, such as a commodity or place name | Trade, item and location questions |
 | *Planned:* Anthropic (Claude) | A capture of the game window | Only if you turn vision on and ask Tycho to look |
 

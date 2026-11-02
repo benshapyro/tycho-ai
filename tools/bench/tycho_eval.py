@@ -33,6 +33,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+import anthropic
 from brain_report import GLOBAL_NEVER  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
 
 from tycho import paths, safety, settings
@@ -45,6 +46,7 @@ from tycho.game.keybinds import Keybinds
 from tycho.game.store import KeybindStore
 from tycho.knowledge import ShipLookup, UexApi, WikiApi
 from tycho.knowledge.store import ensure
+from tycho.knowledge.web import WebSearch
 from tycho.lexicon import Lexicon
 
 CASES = Path(__file__).resolve().parents[1] / "spike" / "brain_cases.toml"
@@ -76,6 +78,8 @@ class Outcome:
     ms: float = 0.0
     looked_up: int = 0
     """Look-ups the brain made for this request."""
+    searched: bool = False
+    """Whether the brain searched the web for this request."""
     verdict: str = ""
     notes: list[str] = field(default_factory=list[str])
 
@@ -174,7 +178,13 @@ async def run_case(
     started = time.perf_counter()
     before = counted.calls if counted else 0
     try:
-        decision = await brain.decide(BrainRequest(text, keybinds, tuple(recent)))
+
+        def searching() -> None:
+            outcome.searched = True
+
+        decision = await brain.decide(
+            BrainRequest(text, keybinds, tuple(recent), waiting=searching)
+        )
     except BrainError as e:
         outcome.kind, outcome.notes = "error", [str(e)]
         return outcome
@@ -214,6 +224,7 @@ async def main() -> None:
         default="lookup",
         help="ship data as a look-up tool (default), a table in the briefing, or neither",
     )
+    parser.add_argument("--no-web", action="store_true", help="don't offer web search")
     args = parser.parse_args()
 
     data: dict[str, Any] = tomllib.loads(args.cases.read_text("utf-8"))
@@ -228,8 +239,9 @@ async def main() -> None:
     keybinds = store.keybinds
     valid = {a.name for a in keybinds if a.bound}
     costs = _Costs()
-    logging.getLogger("tycho.brain").addHandler(costs)
-    logging.getLogger("tycho.brain").setLevel(logging.DEBUG)
+    for name in ("tycho.brain", "tycho.knowledge.web"):  # the search is its own request
+        logging.getLogger(name).addHandler(costs)
+        logging.getLogger(name).setLevel(logging.DEBUG)
     counted: _Counted | None = None
     reference = ""
     if args.ships != "none":
@@ -239,8 +251,12 @@ async def main() -> None:
             reference = "Ships and vehicles in this patch:\n" + library.table()
         else:
             counted = _Counted(ShipLookup(WikiApi(), paths.knowledge_dir(), library=library))
+    web = [] if args.no_web else [WebSearch(anthropic.AsyncAnthropic(api_key=key))]
     brain = ClaudeBrain(
-        MATCHER, api_key=key, lookups=[counted] if counted else [], reference=reference
+        MATCHER,
+        api_key=key,
+        lookups=[*([counted] if counted else []), *web],
+        reference=reference,
     )
     await brain.warm(keybinds)
     lexicon = Lexicon.default()
@@ -254,6 +270,7 @@ async def main() -> None:
         what = ", ".join(outcome.actions) if outcome.kind == "actions" else outcome.kind
         what += " (asks first)" if outcome.asks else ""
         what += f" after {outcome.looked_up} look-up(s)" if outcome.looked_up else ""
+        what += " after a web search" if outcome.searched else ""
         print(f"{mark} {outcome.route:5} {outcome.ms:5.0f} ms  {outcome.heard!r} -> {what}")
         if outcome.say:
             print(f"{'':16}says ({len(outcome.say.split())} words): {outcome.say}")
@@ -286,6 +303,11 @@ def _summary(outcomes: list[Outcome], costs: _Costs) -> None:
         print()
     if picks:
         print(f"Brain picks (acting): p50 {statistics.median(picks):.0f} ms (bar: 1500)")
+    if searched := [o for o in outcomes if o.searched]:
+        print(
+            f"Web searches: {len(searched)} requests, "
+            f"p50 {statistics.median(o.ms for o in searched):.0f} ms"
+        )
     looked = [o for o in outcomes if o.looked_up]
     if looked:
         print(
