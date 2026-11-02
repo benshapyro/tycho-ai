@@ -52,7 +52,8 @@ Without an ElevenLabs key, Tycho's replies go to the log and it plays its sounds
 - **Sounds:** a click when something was done, a low tone when it wasn't, two rising notes for a question. `uv run tycho sounds` plays them.
 - **Confirm or cancel.** Ejecting, firing and anything else you can't undo asks first ("Eject? Say confirm."). Hold push-to-talk and say "confirm" within 5 seconds, or "cancel". Anything else you say drops the question.
 - **Stop.** Pressing push-to-talk stops Tycho talking, and stops any key sequence it's in the middle of.
-- **Questions.** Ask about ships, places or how something works. Answers come from Claude's own knowledge, which can be out of date; live data is planned.
+- **Questions.** Ask about ships, places or how something works. Ship facts come from the current patch's game files, and ships still in concept from UEX. News, upcoming patches and events come from a web search of RSI's sites and the community wiki: Tycho says "Let me check." and answers a few seconds later. Everything else comes from Claude's own knowledge, which can be out of date.
+- **Discord on open mic?** Bind Discord's **Push to Mute** (Discord, User Settings, Keybinds) to the same button as Tycho's push-to-talk. While you hold it to talk to Tycho, your channel doesn't hear you, and nothing can get stuck muted. (Tycho can't mute Discord for you: on some headsets, muting one app's microphone mutes it for every app, Tycho included. See [#14](https://github.com/benshapyro/tycho-ai/issues/14).)
 - **Your own words.** Add phrases, commands and sequences in `%APPDATA%\tycho\commands.toml`. For example:
   ```toml
   [[command]]
