@@ -69,6 +69,9 @@ POLL_RETRY_SECONDS = 1.0
 """How long to wait before reading push-to-talk again after it failed."""
 
 BRAIN_SECONDS = 8.0
+KEEP_CHARACTERS = 40
+"""Lines this short ("Gear down.", "Which Constellation?") repeat, so the speaker
+keeps their audio: the next time they're free and start at once."""
 SEARCH_SECONDS = 12.0
 """Once a web search starts, the brain has this long from then (searches take 4-8 s)."""
 FILLERS = ("Let me check.", "Checking the latest.", "One moment, looking that up.")
@@ -560,7 +563,10 @@ class Session:
             filler = None
             self._stop_speaking()
         self._filling = None
-        self._speech = asyncio.create_task(self._speak(speaker, text, instead, after=filler))
+        keep = len(text.strip()) <= KEEP_CHARACTERS
+        self._speech = asyncio.create_task(
+            self._speak(speaker, text, instead, keep=keep, after=filler)
+        )
 
     def _fill(self) -> None:
         """A web search has started: say a short line while it runs."""

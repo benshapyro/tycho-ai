@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
@@ -9,7 +10,14 @@ import httpx2
 import pytest
 
 from tycho.voice import SpeechError
-from tycho.voice.elevenlabs import GEORGE, MAX_CHARACTERS, RATE, SHIPS_MIND, ElevenLabsSpeaker
+from tycho.voice.elevenlabs import (
+    GEORGE,
+    MAX_CHARACTERS,
+    RATE,
+    SHIPS_MIND,
+    ElevenLabsSpeaker,
+    _make_room,  # pyright: ignore[reportPrivateUsage]
+)
 
 
 class FakeSink:
@@ -196,3 +204,21 @@ def test_a_line_cut_off_part_way_isnt_kept(tmp_path: Path) -> None:
     rig = Rig(broken, kept=tmp_path)
     asyncio.run(rig.speaker.speak("Let me check.", keep=True))
     assert list(tmp_path.iterdir()) == []
+
+
+def test_the_kept_lines_stay_within_their_room_dropping_the_least_used(tmp_path: Path) -> None:
+    rig = Rig(_audio, kept=tmp_path)  # each line is 4,800 bytes
+    for line in ("One.", "Two.", "Three."):
+        asyncio.run(rig.speaker.speak(line, keep=True))
+    files = {f.name: f for f in tmp_path.iterdir()}
+    oldest = sorted(files.values(), key=lambda f: f.stat().st_mtime)
+    for age, file in enumerate(oldest):
+        os.utime(file, (1000 + age, 1000 + age))  # One, Two, Three: oldest first
+    asyncio.run(rig.speaker.speak("One.", keep=True))  # used again: now the newest
+    assert len(rig.requests) == 3
+
+    _make_room(tmp_path, 2 * 4800)
+    left = {f.name for f in tmp_path.iterdir()}
+    assert len(left) == 2
+    assert oldest[0].name in left  # "One." was just used
+    assert oldest[1].name not in left  # "Two." was used longest ago

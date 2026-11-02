@@ -7,6 +7,9 @@ still thinking, so the request doesn't pay for the handshake.
 
 Lines said again and again (``keep``) are kept as audio files on the player's PC,
 one per voice and wording, so they play at once and cost nothing the next time.
+ElevenLabs charges per character and has no cheaper model than v4 Turbo, so not
+paying twice for "Gear down." is the saving. The folder is capped (``KEPT_BYTES``):
+the line used longest ago goes first.
 """
 
 import asyncio
@@ -34,6 +37,8 @@ GEORGE = "JBFqnCBsd6RMkjVDRZzb"
 """A stock British voice, the closest to The Ship's Mind, used when it isn't available."""
 RATE = 24_000
 MAX_CHARACTERS = 400
+KEPT_BYTES = 10_000_000
+"""Room for kept lines: about 140 short ones (a second of speech is 48 KB)."""
 """The brain is asked for short lines; this caps the cost of a long one."""
 
 
@@ -92,6 +97,7 @@ class ElevenLabsSpeaker:
             return
         file = self._file_for(text) if keep else None
         if file is not None and (audio := await asyncio.to_thread(_read, file)):
+            log.debug("Speaking a kept line")
             return await self._play(text, audio)
         heard = bytearray() if file is not None else None
         sink: Sink | None = None
@@ -130,7 +136,7 @@ class ElevenLabsSpeaker:
                 return await self.speak(text, keep=keep)
             sink.finish()
             if file is not None and heard:
-                await asyncio.to_thread(_write, file, bytes(heard))
+                await asyncio.to_thread(_write, file, bytes(heard), KEPT_BYTES)
             await sink.drained()
         finally:
             if sink is not None:
@@ -163,21 +169,39 @@ class ElevenLabsSpeaker:
 
 
 def _read(file: Path) -> bytes | None:
+    """The kept audio, marked as just used so it's kept longest; None if there's none."""
     try:
-        return file.read_bytes() or None
+        audio = file.read_bytes()
+        os.utime(file)
+        return audio or None
     except OSError:
         return None
 
 
-def _write(file: Path, audio: bytes) -> None:
+def _write(file: Path, audio: bytes, room: int) -> None:
     """Never raises: a line that can't be kept is just fetched again next time."""
     try:
         file.parent.mkdir(parents=True, exist_ok=True)
         partial = file.with_suffix(".partial")
         partial.write_bytes(audio)
         os.replace(partial, file)
+        _make_room(file.parent, room)
     except OSError as e:
         log.debug("Couldn't keep a spoken line in %s: %s", file, e)
+
+
+def _make_room(folder: Path, room: int) -> None:
+    """Drop the lines used longest ago until the folder fits in ``room`` bytes."""
+    kept = sorted(
+        ((f.stat().st_mtime, f.stat().st_size, f) for f in folder.glob("*.pcm")),
+        key=lambda entry: entry[0],
+    )
+    total = sum(size for _, size, _ in kept)
+    for _, size, file in kept:
+        if total <= room:
+            break
+        file.unlink(missing_ok=True)
+        total -= size
 
 
 def _voice_missing(status: int, body: bytes) -> bool:

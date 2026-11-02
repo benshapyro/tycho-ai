@@ -34,7 +34,7 @@ from tycho.lexicon import Lexicon
 from tycho.ptt.binding import Binding
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime import AlreadyRunning, Result, Session, SingleInstance
-from tycho.runtime.session import FILLERS
+from tycho.runtime.session import FILLERS, KEEP_CHARACTERS
 
 RATE = 16_000
 PTT = Binding.parse("mouse:0x06")
@@ -1086,7 +1086,7 @@ def test_a_web_search_gets_a_filler_line_and_the_answer_waits_for_it() -> None:
     _conversation("whats in the next patch", brain=brain, speaker=speaker)
     filler = speaker.spoken[0]
     assert filler in FILLERS
-    assert speaker.kept == [filler]  # kept as audio, so it starts at once next time
+    assert filler in speaker.kept  # kept as audio, so it starts at once next time
     assert speaker.spoken == [filler, "4.11 is on the roadmap for Q4."]
     assert speaker.stopped == []  # not cut off
 
@@ -1095,7 +1095,7 @@ def test_the_filler_lines_take_turns() -> None:
     speaker = FakeSpeaker()
     brain = FakeBrain(Reply("One."), Reply("Two."), search=True)
     _conversation("whats new", "any news", brain=brain, speaker=speaker)
-    assert speaker.kept == list(FILLERS[:2])
+    assert speaker.spoken == [FILLERS[0], "One.", FILLERS[1], "Two."]
 
 
 def test_a_web_search_gets_longer_than_the_usual_deadline() -> None:
@@ -1117,3 +1117,13 @@ def test_a_web_search_gets_longer_than_the_usual_deadline() -> None:
     )
     assert r.results[0].status == "replied"
     assert speaker.spoken[-1] == "4.11 is on the roadmap."
+
+
+def test_short_lines_are_kept_and_long_ones_arent() -> None:
+    speaker = FakeSpeaker()
+    long = "The Prospector, or the MOLE if you have a crew to fill it."
+    brain = FakeBrain(Reply("The Prospector."), Reply(long))
+    _conversation("best mining ship", "and for a group", brain=brain, speaker=speaker)
+    assert speaker.spoken == ["The Prospector.", long]
+    assert speaker.kept == ["The Prospector."]
+    assert len(long) > KEEP_CHARACTERS
