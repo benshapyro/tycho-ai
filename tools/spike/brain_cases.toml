@@ -718,3 +718,35 @@ tag = "web"
 heard = "what was revealed at CitizenCon this year"
 expect = ["reply"]
 tag = "web"
+
+# Trade (ADR 15): live prices and routes from UEX. Prices change hourly, so the
+# grade is that the answer credits UEX and gives a number.
+[[case]]
+heard = "where's the best place to sell quantanium"
+expect = ["reply"]
+mentions = [['UEX'], ['\d']]
+tag = "trade"
+
+[[case]]
+heard = "what's laranite going for at Area 18"
+expect = ["reply"]
+mentions = [['UEX'], ['\d']]
+tag = "trade"
+
+[[case]]
+heard = "where can I sell raw laranite"
+expect = ["reply"]
+mentions = [['UEX'], ['\d']]
+tag = "trade"
+
+[[case]]
+heard = "what's the best trade route from Lorville with 96 SCU"
+expect = ["reply"]
+mentions = [['UEX'], ['\d']]
+tag = "trade"
+
+[[case]]
+heard = "what should I haul from Port Tressler in my Cutlass Black"
+expect = ["reply"]
+mentions = [['UEX'], ['\d']]
+tag = "trade"

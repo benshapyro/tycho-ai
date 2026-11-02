@@ -7,17 +7,21 @@ ever shapes what Tycho says, never what it presses.
 
 from tycho.knowledge.ship_lookup import ShipLookup
 from tycho.knowledge.ships import Ambiguous, NotFound, Ship, ShipLibrary
+from tycho.knowledge.trade_lookup import CommodityPrices, TradeRoutes, trade_lookups
 from tycho.knowledge.uex import UexApi
 from tycho.knowledge.wiki import WikiApi, WikiError, WikiSource
 
 __all__ = [
     "Ambiguous",
+    "CommodityPrices",
     "NotFound",
     "Ship",
     "ShipLibrary",
     "ShipLookup",
+    "TradeRoutes",
     "UexApi",
     "WikiApi",
     "WikiError",
     "WikiSource",
+    "trade_lookups",
 ]
