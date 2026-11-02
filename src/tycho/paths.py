@@ -34,6 +34,11 @@ def commands_file() -> Path:
     return config_dir() / "commands.toml"
 
 
+def fleet_file() -> Path:
+    """The player's ships (ADR 15), kept by Tycho and editable by hand."""
+    return config_dir() / "fleet.toml"
+
+
 def cache_dir() -> Path:
     return data_dir() / "cache"
 

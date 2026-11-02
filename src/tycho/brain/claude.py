@@ -115,10 +115,11 @@ def _tools(sequences: list[str], lookups: Iterable[Lookup] = ()) -> list[ToolPar
 
 
 def history(
-    recent: Sequence[Exchange], text: str, today: datetime.date | None = None
+    recent: Sequence[Exchange], text: str, today: datetime.date | None = None, about: str = ""
 ) -> list[MessageParam]:
-    """Earlier exchanges as turns, then this request, headed by today's date. The
-    date lives here, not in the briefing, so the cached briefing never changes."""
+    """Earlier exchanges as turns, then this request, headed by today's date and what
+    Tycho knows about the player (``about``: their ships). Both live here, not in the
+    briefing, so the cached briefing never changes."""
     messages: list[MessageParam] = []
     for exchange in recent:
         messages.append({"role": "user", "content": exchange.said})
@@ -126,11 +127,11 @@ def history(
     if today is None:
         messages.append({"role": "user", "content": text})
     else:
-        date = f"[{today.day} {today:%B %Y}]"
+        header = f"[{today.day} {today:%B %Y}]" + (f"\n{about}" if about else "")
         messages.append(
             {
                 "role": "user",
-                "content": [{"type": "text", "text": date}, {"type": "text", "text": text}],
+                "content": [{"type": "text", "text": header}, {"type": "text", "text": text}],
             }
         )
     return messages
@@ -147,9 +148,11 @@ class ClaudeBrain:
         today: Callable[[], datetime.date] = datetime.date.today,
         lookups: Sequence[Lookup] = (),
         reference: str = "",
+        about: Callable[[], str] = lambda: "",
     ) -> None:
         """``reference`` is extra text for the end of the cached briefing, such as
-        the ship table being measured against the ship look-up (ADR 15)."""
+        the ship table being measured against the ship look-up (ADR 15). ``about``
+        says what Tycho knows about the player, for each request's header."""
         # The session gives up after its own deadline; one quick retry fits inside it.
         self._client = client or anthropic.AsyncAnthropic(
             api_key=api_key, timeout=anthropic.Timeout(8.0, connect=3.0), max_retries=1
@@ -163,6 +166,7 @@ class ClaudeBrain:
             raise ValueError(f"a look-up can't be named {', '.join(sorted(clash))}")
         self._tools = _tools(self._sequences, lookups)
         self._reference = reference
+        self._about = about
         self._for: Keybinds | None = None
         self._system: list[TextBlockParam] = []
         self._actions: frozenset[str] = frozenset()
@@ -198,7 +202,7 @@ class ClaudeBrain:
     async def decide(self, request: BrainRequest) -> Decision:
         self._brief(request.keybinds)
         started = time.perf_counter()
-        messages = history(request.recent, request.text, self._today())
+        messages = history(request.recent, request.text, self._today(), self._about())
         turn = _Turn(waiting=request.waiting)
         try:
             for _ in range(MAX_CALLS):
