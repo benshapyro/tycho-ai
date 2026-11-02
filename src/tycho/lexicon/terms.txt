@@ -108,6 +108,8 @@ Aquila
 Phoenix
 Spirit
 Starlancer
+Mercury Star Runner
+Star Runner
 Ursa
 Cyclone
 Nox

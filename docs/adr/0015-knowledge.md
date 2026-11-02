@@ -29,6 +29,8 @@ How often data changes decides how it's fetched: specs change each patch, prices
 
 **Ship data: measure two designs and keep the better one.** (a) the local copy behind a look-up tool, which adds a second Claude call; (b) a compact table of every ship in the cached briefing, which needs no loop but roughly triples the briefing. The eval decides, on accuracy, wait time and cost.
 
+*Result (1 November 2026, 12 ship questions, patch 4.10.2):* the look-up tool, 12/12 right at a 2.0 s median; the table, 9/12 at 1.8 s (it can't hold shops, insurance or loaners without growing further); Claude's memory alone, 4/12. **Tycho uses the look-up.** `tools/bench/tycho_eval.py --ships table` re-runs the comparison each patch.
+
 **Waiting.** If a look-up takes longer than about 0.7 s, Tycho says a short filler line ("Checking UEX…") and then answers. After about 4 s it gives up and says so honestly.
 
 **Sources.** Tycho names the source out loud only when freshness matters: prices and web answers ("UEX says 3,240 at Area18, as of an hour ago"). Ship and item specs are just answered. The full source is always logged.

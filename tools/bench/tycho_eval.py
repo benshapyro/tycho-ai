@@ -8,11 +8,16 @@ ones), from the player's real keybinds.
 
 The bar (ADR 14): zero wrong presses, and Claude's picks at p50 <= 1.5 s.
 Answers to questions must answer: a reply that only points the player elsewhere
-("check the wiki") fails a case marked ``answer = true``.
+("check the wiki") fails a case marked ``answer = true``, and a case's ``mentions``
+(the true numbers and names) must all be in the reply.
+
+Ship questions go through the ship look-up by default. ``--ships table`` puts a
+table of every ship in the briefing instead, and ``--ships none`` gives Claude
+neither, to measure the two designs ADR 15 compares.
 
 Uses the Anthropic key in Windows Credential Manager. About $0.0002 a request.
 
-Usage: uv run python tools/bench/tycho_eval.py [tools/spike/brain_cases.toml] [--tag log]
+Usage: uv run python tools/bench/tycho_eval.py [cases.toml] [--tag ships] [--ships table]
 """
 
 import argparse
@@ -23,19 +28,23 @@ import re
 import statistics
 import time
 import tomllib
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 from brain_report import GLOBAL_NEVER  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
 
-from tycho import safety, settings
+from tycho import paths, safety, settings
 from tycho.app import anthropic_key, find_install, load_commands
 from tycho.brain import BrainError, BrainRequest, Exchange, Reply, commands_for
 from tycho.brain.claude import ClaudeBrain
+from tycho.brain.lookups import Lookup, LookupResult
 from tycho.commands import Command, Defer, resolve
 from tycho.game.keybinds import Keybinds
 from tycho.game.store import KeybindStore
+from tycho.knowledge import ShipLookup, WikiApi
+from tycho.knowledge.store import ensure
 from tycho.lexicon import Lexicon
 
 CASES = Path(__file__).resolve().parents[1] / "spike" / "brain_cases.toml"
@@ -65,6 +74,8 @@ class Outcome:
     """Tycho would ask "confirm" before pressing (a confirm-grade action, or travel
     the brain picked)."""
     ms: float = 0.0
+    looked_up: int = 0
+    """Look-ups the brain made for this request."""
     verdict: str = ""
     notes: list[str] = field(default_factory=list[str])
 
@@ -119,7 +130,28 @@ def grade(outcome: Outcome, rule: dict[str, Any], valid: set[str]) -> str:
                 return f"missing {'/'.join(group)}"
     if outcome.kind == "reply" and rule.get("answer") and DODGE.search(outcome.say):
         return "dodged the question"
+    if outcome.kind == "reply":
+        for group in rule.get("mentions", []):
+            if not any(re.search(p, outcome.say, re.IGNORECASE) for p in group):
+                return f"missing {'/'.join(group)}"
     return "pass"
+
+
+class _Counted:
+    """A look-up that counts its calls, so the eval can say how often Claude used it."""
+
+    def __init__(self, inner: Lookup) -> None:
+        self.inner = inner
+        self.calls = 0
+        self.name, self.description = inner.name, inner.description
+        self.input_schema = inner.input_schema
+
+    async def prepare(self) -> None:
+        await self.inner.prepare()
+
+    async def run(self, arguments: Mapping[str, object]) -> LookupResult:
+        self.calls += 1
+        return await self.inner.run(arguments)
 
 
 async def run_case(
@@ -127,6 +159,7 @@ async def run_case(
     lexicon: Lexicon,
     brain: ClaudeBrain,
     keybinds: Keybinds,
+    counted: _Counted | None = None,
 ) -> Outcome:
     outcome = Outcome(rule["heard"], str(rule.get("tag", "")))
     text = lexicon.correct(rule["heard"]).text
@@ -139,6 +172,7 @@ async def run_case(
     outcome.route = "brain"
     recent = [Exchange(said, did) for said, did in rule.get("recent", [])]
     started = time.perf_counter()
+    before = counted.calls if counted else 0
     try:
         decision = await brain.decide(BrainRequest(text, keybinds, tuple(recent)))
     except BrainError as e:
@@ -146,6 +180,7 @@ async def run_case(
         return outcome
     finally:
         outcome.ms = (time.perf_counter() - started) * 1000
+        outcome.looked_up = (counted.calls if counted else 0) - before
     if isinstance(decision, Reply):
         outcome.kind, outcome.say = "reply", decision.text
         return outcome
@@ -173,6 +208,12 @@ async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("cases", type=Path, nargs="?", default=CASES)
     parser.add_argument("--tag", action="append", help="only cases with this tag; repeatable")
+    parser.add_argument(
+        "--ships",
+        choices=["lookup", "table", "none"],
+        default="lookup",
+        help="ship data as a look-up tool (default), a table in the briefing, or neither",
+    )
     args = parser.parse_args()
 
     data: dict[str, Any] = tomllib.loads(args.cases.read_text("utf-8"))
@@ -189,18 +230,30 @@ async def main() -> None:
     costs = _Costs()
     logging.getLogger("tycho.brain").addHandler(costs)
     logging.getLogger("tycho.brain").setLevel(logging.DEBUG)
-    brain = ClaudeBrain(MATCHER, api_key=key)
+    counted: _Counted | None = None
+    reference = ""
+    if args.ships != "none":
+        library = await ensure(WikiApi(), paths.knowledge_dir())
+        print(f"Ship data: {len(library)} ships for {library.patch}, as {args.ships}")
+        if args.ships == "table":
+            reference = "Ships and vehicles in this patch:\n" + library.table()
+        else:
+            counted = _Counted(ShipLookup(WikiApi(), paths.knowledge_dir(), library=library))
+    brain = ClaudeBrain(
+        MATCHER, api_key=key, lookups=[counted] if counted else [], reference=reference
+    )
     await brain.warm(keybinds)
     lexicon = Lexicon.default()
 
     outcomes: list[Outcome] = []
     for rule in rules:
-        outcome = await run_case(rule, lexicon, brain, keybinds)
+        outcome = await run_case(rule, lexicon, brain, keybinds, counted)
         outcome.verdict = grade(outcome, rule, valid)
         outcomes.append(outcome)
         mark = "  " if outcome.verdict == "pass" else "XX"
         what = ", ".join(outcome.actions) if outcome.kind == "actions" else outcome.kind
         what += " (asks first)" if outcome.asks else ""
+        what += f" after {outcome.looked_up} look-up(s)" if outcome.looked_up else ""
         print(f"{mark} {outcome.route:5} {outcome.ms:5.0f} ms  {outcome.heard!r} -> {what}")
         if outcome.say:
             print(f"{'':16}says ({len(outcome.say.split())} words): {outcome.say}")
@@ -233,6 +286,12 @@ def _summary(outcomes: list[Outcome], costs: _Costs) -> None:
         print()
     if picks:
         print(f"Brain picks (acting): p50 {statistics.median(picks):.0f} ms (bar: 1500)")
+    looked = [o for o in outcomes if o.looked_up]
+    if looked:
+        print(
+            f"Look-ups: {len(looked)} requests used them, "
+            f"p50 {statistics.median(o.ms for o in looked):.0f} ms"
+        )
     unpriced = len(brain) - costs.counted
     print(f"Cost: about ${costs.total + max(0, unpriced) * COST_GUESS:.3f}")
 

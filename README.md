@@ -107,7 +107,7 @@ See [docs/architecture.md](docs/architecture.md) for the design, [docs/adr](docs
 
 ## Credits
 
-Speech recognition uses NVIDIA's [Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) model (CC-BY-4.0), via [onnx-asr](https://github.com/istupakov/onnx-asr). Planned look-ups will use community data from the [Star Citizen Wiki API](https://api.star-citizen.wiki), [starcitizen.tools](https://starcitizen.tools) and [UEX Corp](https://uexcorp.space).
+Speech recognition uses NVIDIA's [Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) model (CC-BY-4.0), via [onnx-asr](https://github.com/istupakov/onnx-asr). Ship and vehicle data comes from the [Star Citizen Wiki API](https://api.star-citizen.wiki), downloaded to your PC once per patch; its in-game prices are reported by players to [UEX Corp](https://uexcorp.space). Planned look-ups will also use [starcitizen.tools](https://starcitizen.tools) (CC BY-SA 4.0).
 
 ## Licence
 
