@@ -168,6 +168,30 @@ def test_an_unknown_name_offers_the_closest() -> None:
     assert isinstance(LIBRARY.find("the"), NotFound)
 
 
+def test_a_name_asked_again_is_remembered_with_the_new_wording(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Every request's fleet line finds each owned ship again (audit, 2026-11-03).
+    library = ShipLibrary(LIBRARY.ships, version=LIBRARY.version, as_of=LIBRARY.as_of)
+    first = library.find("Kraken")
+    assert isinstance(first, NotFound)
+    searches: list[str] = []
+    real = library._search  # pyright: ignore[reportPrivateUsage]
+
+    def search(asked: str, query: tuple[str, ...]) -> Ship | Ambiguous | NotFound:
+        searches.append(asked)
+        return real(asked, query)
+
+    monkeypatch.setattr(library, "_search", search)
+    again = library.find("the kraken")  # the same words once "the" is dropped
+    assert searches == []
+    assert isinstance(again, NotFound)
+    assert again.closest == first.closest
+    assert again.asked == "the kraken"
+    assert library.find("Caterpillar") is library.find("caterpillar")
+    assert searches == ["Caterpillar"]
+
+
 def test_the_briefing_table_has_a_line_per_ship() -> None:
     lines = LIBRARY.table().splitlines()
     assert len(lines) == len(LIBRARY) + 1

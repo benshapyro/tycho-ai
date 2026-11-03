@@ -5,6 +5,7 @@ it can't be had, the look-up says so and Claude answers from memory. The tool is
 offered either way, so the tools never change and the cache holds.
 """
 
+import asyncio
 import json
 import logging
 from collections.abc import Mapping
@@ -105,6 +106,8 @@ class ShipLookup:
             "game_version": library.patch,
             "as_of": library.as_of,
             "stale": library.stale,
-            "ships": [answer(library.find(name)) for name in asked],
+            # Off the event loop: matching a name the first time takes milliseconds
+            # each, and push-to-talk must never wait for it.
+            "ships": await asyncio.to_thread(lambda: [answer(library.find(n)) for n in asked]),
         }
         return LookupResult(json.dumps(result, ensure_ascii=False, separators=(",", ":")))

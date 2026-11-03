@@ -12,7 +12,8 @@ from UEX, marked as not in the game, so "the Kraken" finds something true.
 """
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from functools import lru_cache
 from typing import Any, cast
 
 from tycho.text import normalize, similarity
@@ -21,6 +22,8 @@ MATCH = 0.6
 """The lowest score that counts as a match; below it, the closest names are offered."""
 TIE = 0.03
 """Scores this close to the best are equally good matches."""
+REMEMBERED = 1024
+"""How many names ``ShipLibrary.find`` remembers the answer for."""
 CHOICES = 3
 """How many candidates to offer when a name is ambiguous or unknown."""
 
@@ -136,6 +139,9 @@ class ShipLibrary:
         """True when the current patch couldn't be checked, so this copy may be old."""
         self.concepts = concepts
         """True when the ships still in concept are in it too."""
+        # Every request's header finds each ship in the fleet again, and the ships
+        # never change, so the answers are kept (audit, 2026-11-03).
+        self._found: dict[tuple[str, ...], Ship | Ambiguous | NotFound] = {}
 
     @property
     def patch(self) -> str:
@@ -156,10 +162,20 @@ class ShipLibrary:
         query = _query(asked)
         if not query:
             return NotFound(asked, ())
-        scored = sorted(
-            ((max(_score(query, key) for key in ship.keys), ship) for ship in self.ships),
-            key=lambda pair: (-pair[0], len(pair[1].name)),
-        )
+        if (known := self._found.get(query)) is not None:
+            return _retold(known, asked)
+        if len(self._found) >= REMEMBERED:
+            self._found.clear()
+        found = self._found[query] = self._search(asked, query)
+        return found
+
+    def _search(self, asked: str, query: tuple[str, ...]) -> Ship | Ambiguous | NotFound:
+        # Names with every word said score 0.6 or more; the rest score at most 0.5,
+        # only to rank the closest names when nothing matches. So the slow part
+        # (comparing whole names letter by letter) runs only when nothing matches.
+        scored = self._scored(query, near=False)
+        if not scored or scored[0][0] < MATCH:
+            scored = self._scored(query, near=True)
         best = scored[0][0] if scored else 0.0
         if best < MATCH:
             return NotFound(asked, tuple(s.name for _, s in scored[:CHOICES]))
@@ -170,6 +186,15 @@ class ShipLibrary:
             return exact[0]
         return Ambiguous(
             asked, tuple(s.name for s in tied[:CHOICES]), more=max(0, len(tied) - CHOICES)
+        )
+
+    def _scored(self, query: tuple[str, ...], *, near: bool) -> list[tuple[float, Ship]]:
+        return sorted(
+            (
+                (max(_score(query, key, near=near) for key in ship.keys), ship)
+                for ship in self.ships
+            ),
+            key=lambda pair: (-pair[0], len(pair[1].name)),
         )
 
     def table(self) -> str:
@@ -314,23 +339,39 @@ def _query(asked: str) -> tuple[str, ...]:
     return tuple(words)
 
 
-def _score(query: tuple[str, ...], key: tuple[str, ...]) -> float:
+def _retold(found: Ship | Ambiguous | NotFound, asked: str) -> Ship | Ambiguous | NotFound:
+    """A remembered answer, for the words this player used."""
+    match found:
+        case Ship():
+            return found
+        case Ambiguous() | NotFound():
+            return replace(found, asked=asked)
+
+
+def _score(query: tuple[str, ...], key: tuple[str, ...], *, near: bool = True) -> float:
     if all(any(_same(q, k) for k in key) for q in query):
         # Every word said is in the name; fewer extra words is a closer match.
         return 1.0 - 0.05 * max(0, len(key) - len(query))
+    if not near:
+        return 0.0
     # A word said that isn't in the name means another ship, however alike the
     # rest looks ("baby Merchantman" isn't the Banu Merchantman). This only ranks
     # the closest names, and stays below MATCH.
     return 0.5 * similarity(" ".join(query), " ".join(key))
 
 
+@lru_cache(maxsize=65536)
 def _same(said: str, word: str) -> bool:
     if said == word:
         return True
     # Forgive a misspelling in a word, never in a model code ("c1", "400i", "f7a").
     if any(c.isdigit() for c in said + word):
         return False
-    return min(len(said), len(word)) >= 4 and similarity(said, word) >= 0.8
+    shorter, longer = sorted((len(said), len(word)))
+    # 0.8 alike allows one change in five letters, so longer words can't be close.
+    if shorter < 4 or longer - shorter > longer // 5:
+        return False
+    return similarity(said, word) >= 0.8
 
 
 def _preference(record: Mapping[str, Any]) -> tuple[bool, bool, int]:
