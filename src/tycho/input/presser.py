@@ -5,7 +5,10 @@ Rules (AGENTS.md):
   into a chat window or another app. Focus is checked before every tap.
 - Every key that went down is released, in reverse order, in a ``finally``,
   whatever happens: cancellation, lost focus, or an error from Windows.
-- Waiting is done in small slices, so cancellation takes effect within ~10 ms.
+- Waiting is done in small slices, so cancellation takes effect within ~10 ms,
+  except that a hold past the game's tap window is never cut short inside it
+  (``Press.min_hold_seconds``, at most 0.3 s), so a cancel can't turn it into a tap of
+  another action on the same key.
 
 This module presses keys; it doesn't decide whether an action is allowed.
 That's the safety gate's job, upstream.
@@ -47,6 +50,13 @@ class Receipt:
     outcome: Outcome
     taps_done: int
     detail: str = ""
+    interrupted: bool = False
+    """Stopped part way through a tap, after its key went down: the game may have acted."""
+
+    @property
+    def sent(self) -> bool:
+        """Whether any of its keys reached the game."""
+        return self.taps_done > 0 or self.interrupted
 
     @property
     def done(self) -> bool:
@@ -84,7 +94,7 @@ class Presser:
                     if not self._focus.game_has_focus():
                         return Receipt(press.action, "no_focus", taps, "Star Citizen isn't focused")
                 if not self._tap(press, held, cancel):
-                    return Receipt(press.action, "cancelled", taps)
+                    return Receipt(press.action, "cancelled", taps, interrupted=press.main in held)
                 taps += 1
             return Receipt(press.action, "done", taps)
         except OSError as e:
@@ -103,7 +113,9 @@ class Presser:
         else:
             self._sender.down(main)
             held.append(main)
+            down_at = self._clock()
             if not self._wait(press.hold_seconds, cancel):
+                self._hold_on(down_at + press.min_hold_seconds)
                 return False
             self._release_one(held)
         while held:
@@ -124,6 +136,12 @@ class Presser:
                 return False
             self._sleep(min(_SLICE_SECONDS, left))
         return not cancel.is_set()
+
+    def _hold_on(self, until: float) -> None:
+        """Keep holding until ``until`` (on this clock), whatever cancels. Bounded by
+        ``Press.min_hold_seconds``."""
+        while (left := until - self._clock()) > 0:
+            self._sleep(min(_SLICE_SECONDS, left))
 
     def _release(self, held: list[Code]) -> None:
         """Let go of everything still down, newest first. A failed release is tried once

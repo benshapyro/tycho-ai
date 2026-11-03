@@ -659,6 +659,8 @@ def test_pressing_again_stops_a_key_sequence_and_lets_go() -> None:
     assert r.results[0].status == "cancelled"
     assert stopped < 1.2  # well short of the full 1.6 s hold, even on a slow runner
     assert r.keys.held() == set()
+    # The key went down before the cancel, so the log says so (audit, 2026-11-03).
+    assert r.results[0].pressed == ("v_toggle_landing_system",)
 
 
 def test_shutdown_doesnt_wait_for_tycho_to_finish_talking() -> None:
@@ -722,6 +724,7 @@ def test_shutdown_releases_a_held_key() -> None:
     r = run(scenario)
     assert r.keys.held() == set()
     assert r.results[0].status == "cancelled"
+    assert r.results[0].pressed == ("v_toggle_landing_system",)
 
 
 def test_after_close_push_to_talk_is_ignored() -> None:
