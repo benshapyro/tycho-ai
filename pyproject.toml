@@ -47,6 +47,9 @@ bench = [
 gpu = [
     "onnxruntime-gpu[cuda,cudnn]==1.31.1",
 ]
+build = [
+    "pyinstaller==6.21.0",
+]
 
 [tool.uv]
 default-groups = ["dev", "bench", "gpu"]
