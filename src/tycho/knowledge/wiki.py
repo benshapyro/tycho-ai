@@ -45,6 +45,10 @@ class WikiApi:
             response = await self._client.get(path, params=dict(params or {}))
             response.raise_for_status()
             return response.json()
+        except httpx2.HTTPStatusError as e:
+            # Not str(e): it holds the whole URL, and a search's URL holds the words the
+            # player said, which would reach the log file (audit, 2026-11-03).
+            raise WikiError(f"{path}: HTTP {e.response.status_code}") from e
         except (httpx2.HTTPError, ValueError) as e:
             raise WikiError(f"{path}: {e}") from e
 

@@ -4,6 +4,7 @@ its own. What the brain does around it is in test_brain."""
 import asyncio
 import datetime
 import json
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
@@ -11,6 +12,7 @@ from typing import Any, cast
 
 import anthropic
 import httpx2
+import pytest
 
 from tycho.knowledge.web import SECONDS, SITES, WEB_SEARCH, WebSearch
 
@@ -113,3 +115,16 @@ def test_the_brain_treats_it_as_from_the_web() -> None:
     assert search.seconds == SECONDS
     assert search.input_schema["additionalProperties"] is False
     assert search.name == "web_search"
+
+
+@pytest.mark.parametrize("kept", [False, True])
+def test_the_query_reaches_the_log_only_with_transcripts_kept(
+    caplog: pytest.LogCaptureFixture, kept: bool
+) -> None:
+    # It's the player's question, reworded (audit, 2026-11-03).
+    caplog.set_level(logging.DEBUG, logger="tycho.knowledge.web")
+    client = _Client(_found("RSI's roadmap has 4.11 for Q4 2026."))
+    search = WebSearch(cast(Any, client), log_queries=kept)
+    asyncio.run(search.run({"query": "is the Polaris getting nerfed"}))
+    assert ("Polaris" in caplog.text) is kept
+    assert "Web search" in caplog.text

@@ -40,6 +40,8 @@ a = Analysis(  # noqa: F821
         "pygame",
         "tkinter",
         "pytest",
+        "_pytest",  # pytest's code, pulled in through hooks when the dev group is installed
+        "pygments",
         "openai",
         "IPython",
         "matplotlib",

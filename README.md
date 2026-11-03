@@ -117,7 +117,7 @@ See [docs/architecture.md](docs/architecture.md) for the design, [docs/adr](docs
 
 ## Credits
 
-Speech recognition uses NVIDIA's [Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) model (CC-BY-4.0), via [onnx-asr](https://github.com/istupakov/onnx-asr). Ship and vehicle data comes from the [Star Citizen Wiki API](https://api.star-citizen.wiki), downloaded to your PC once per patch; its in-game prices are reported by players to [UEX Corp](https://uexcorp.space), which also lists the ships still in concept and provides the commodity prices and trade routes. Planned look-ups will also use [starcitizen.tools](https://starcitizen.tools) (CC BY-SA 4.0).
+Speech recognition uses NVIDIA's [Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) model (CC-BY-4.0), via [onnx-asr](https://github.com/istupakov/onnx-asr). Ship and vehicle data comes from the [Star Citizen Wiki API](https://api.star-citizen.wiki), downloaded to your PC once per patch; its in-game prices are reported by players to [UEX Corp](https://uexcorp.space), which also lists the ships still in concept and provides the commodity prices and trade routes. Web search answers can draw on [starcitizen.tools](https://starcitizen.tools) (CC BY-SA 4.0). `tycho credits` shows these in the app, and the installer includes them.
 
 ## Licence
 

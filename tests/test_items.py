@@ -5,10 +5,11 @@ import asyncio
 import json
 from typing import Any
 
+import httpx2
 import pytest
 
 from tests.fakes.fake_items import FakeItemsWiki
-from tycho.knowledge import WikiError, items
+from tycho.knowledge import WikiApi, WikiError, items
 from tycho.knowledge.item_lookup import ItemLookup
 from tycho.knowledge.items import Found, Items, Missing, Unclear, facts, spellings
 
@@ -193,3 +194,17 @@ def test_the_tool_schema_suits_strict_tool_use() -> None:
     lookup = ItemLookup(FakeItemsWiki())
     assert lookup.input_schema["additionalProperties"] is False
     assert lookup.seconds > 2 * items.QUERY_SECONDS  # a spelling, then the recipe
+
+
+def test_a_failed_request_never_names_what_was_searched() -> None:
+    # The URL holds the player's words; the error reaches the log (audit, 2026-11-03).
+    def refuse(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(503, request=request)
+
+    client = httpx2.AsyncClient(
+        base_url="https://api.star-citizen.wiki", transport=httpx2.MockTransport(refuse)
+    )
+    api = WikiApi(client)
+    with pytest.raises(WikiError) as caught:
+        asyncio.run(api.get("/api/v2/items", {"filter[name]": "my secret gun"}))
+    assert str(caught.value) == "/api/v2/items: HTTP 503"
