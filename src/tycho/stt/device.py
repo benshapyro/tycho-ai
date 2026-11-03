@@ -5,8 +5,9 @@ Star Citizen already using about 8 GB. Revisited after the frame-rate test (#23)
 """
 
 import importlib.util
-import shutil
+import os
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -60,13 +61,34 @@ def nvidia_driver() -> int | None:
         return None
 
 
+def smi_path(environ: Mapping[str, str] = os.environ) -> Path | None:
+    """Where nvidia-smi is, never looking in the current folder.
+
+    ``shutil.which`` on Windows tries the current folder first, so an
+    ``nvidia-smi.exe`` saved to Downloads would run whenever Tycho was started from
+    there (audit, 2026-11-03). The driver's own places come first, then PATH's
+    absolute folders.
+    """
+    places: list[Path] = []
+    if root := environ.get("SystemRoot"):
+        places.append(Path(root) / "System32")
+    if programs := environ.get("ProgramFiles"):
+        places.append(Path(programs) / "NVIDIA Corporation" / "NVSMI")
+    places += [Path(p) for p in environ.get("PATH", "").split(os.pathsep) if Path(p).is_absolute()]
+    for folder in places:
+        candidate = folder / "nvidia-smi.exe"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def _smi(field: str) -> str | None:
     """One field for the first NVIDIA card, from nvidia-smi."""
-    smi = shutil.which("nvidia-smi")
+    smi = smi_path()
     if smi is None:
         return None
     try:
-        out = subprocess.run(  # noqa: S603 - a fixed command, found on PATH
+        out = subprocess.run(  # noqa: S603 - a fixed command, from a known folder
             [smi, f"--query-gpu={field}", "--format=csv,noheader,nounits"],
             capture_output=True,
             text=True,

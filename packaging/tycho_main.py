@@ -13,6 +13,13 @@ LAZY_IMPORTS = (
     "keyring.backends.Windows",
     "tycho.stt.parakeet",
     "tycho.ptt.joystick",
+    # sounddevice loads PortAudio when imported, and the spec picks its DLLs by hand.
+    "sounddevice",
+    "tycho.audio.microphone",
+    "tycho.feedback",
+    "tycho.voice.playback",
+    "anthropic",
+    "tycho.brain.claude",
 )
 
 

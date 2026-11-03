@@ -218,3 +218,37 @@ def test_the_hint_fires_when_cuda_is_missing_and_not_when_memory_is_short(
     caplog.clear()
     app.load_transcriber(Settings(transcription_device="cpu"))  # the player chose the processor
     assert "gpu install" not in caplog.text
+
+
+def test_removing_while_tycho_runs_is_refused(
+    tmp_path: Path,
+    wheels: dict[str, bytes],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # A running Tycho has the DLLs loaded (audit, 2026-11-03).
+    from tycho.runtime.instance import SingleInstance
+
+    libraries = CudaLibraries(tmp_path / "cuda", FakeDownloader(wheels))
+    libraries.ensure()
+    monkeypatch.setattr(app.paths, "cuda_dir", lambda: tmp_path / "cuda")
+    with SingleInstance():  # this test plays the running Tycho
+        assert app.gpu_command("remove") == 2
+    assert "Close it first" in capsys.readouterr().err
+    assert libraries.ready()
+    assert app.gpu_command("remove") == 0
+    assert not libraries.ready()
+
+
+def test_a_removal_that_fails_says_so_plainly(
+    tmp_path: Path, wheels: dict[str, bytes], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    libraries = CudaLibraries(tmp_path / "cuda", FakeDownloader(wheels))
+    libraries.ensure()
+
+    def in_use(path: Path) -> None:
+        raise PermissionError(5, "Access is denied")
+
+    monkeypatch.setattr(cuda.shutil, "rmtree", in_use)
+    with pytest.raises(ModelError, match="Close anything using it"):
+        libraries.remove()
