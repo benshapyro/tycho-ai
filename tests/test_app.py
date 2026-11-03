@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from tycho import app, logs
+from tycho import app, logs, settings
 from tycho.game.keybinds import Action, Keybinds, KeyInput
 from tycho.input import code_for
 from tycho.ptt.binding import Binding, DeviceKind
@@ -167,3 +167,23 @@ def test_the_players_commands_file_is_used(tmp_path: Path, monkeypatch: pytest.M
         '[[sequence]]\nid = "wake"\nsay = ["wake up"]\nsteps = ["flight_ready"]\n', "utf-8"
     )
     assert app.load_commands().get("wake") is not None
+
+
+def test_an_unknown_setting_is_a_note_not_a_stop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A setting from a newer Tycho sharing the file (or a typo) mustn't stop this one.
+    monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path))
+    (tmp_path / "settings.toml").write_text("from_the_future = true\n", encoding="utf-8")
+
+    def gpu(action: str) -> int:
+        return 0
+
+    monkeypatch.setattr(app, "gpu_command", gpu)
+    assert app.main(["gpu", "status"]) == 0
+    assert "from_the_future in settings.toml isn't a setting" in capsys.readouterr().err
+    findings = app._checks(settings.load(), quick=True)  # pyright: ignore[reportPrivateUsage]
+    first, second = next(findings), next(findings)
+    assert first.what == second.what == "Settings"
+    assert second.level == "warn"
+    assert "from_the_future" in second.detail
