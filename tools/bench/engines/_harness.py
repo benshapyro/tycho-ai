@@ -25,7 +25,7 @@ def parse_args(default_model: str) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("clips", type=Path, help="a recordings/<session> folder")
     parser.add_argument("--model", default=default_model)
-    parser.add_argument("--device", default="cuda", choices=["cuda", "directml", "cpu"])
+    parser.add_argument("--device", default="cuda", choices=["cuda", "cpu"])
     parser.add_argument("--label", help="name in results; defaults to the model name")
     parser.add_argument("--runs", type=int, default=3, help="timed runs per clip; median is kept")
     return parser.parse_args()
