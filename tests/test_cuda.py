@@ -164,3 +164,15 @@ def test_the_hint_says_what_to_do(gpu: SimpleNamespace) -> None:
     assert "driver 580" in (app.gpu_hint() or "")
     gpu.driver = None
     assert app.gpu_hint() is None
+
+
+def test_without_any_cuda_libraries_cuda_isnt_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The installed app before `tycho gpu install`: no folder, no pip wheels. ONNX
+    # Runtime's GPU build would still list CUDA, and only print that it failed.
+    from tycho.stt import cuda_available, device
+
+    def nothing(name: str) -> None:
+        return None
+
+    monkeypatch.setattr(device.importlib.util, "find_spec", nothing)
+    assert not cuda_available()

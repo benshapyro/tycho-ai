@@ -4,6 +4,7 @@ The GPU session reserved about 3.5 GB of graphics memory in the benchmark, with
 Star Citizen already using about 8 GB. Revisited after the frame-rate test (#23).
 """
 
+import importlib.util
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -79,7 +80,13 @@ def _smi(field: str) -> str | None:
 
 def cuda_available(libraries: Path | None = None) -> bool:
     """Whether ONNX Runtime can use CUDA. Its libraries come from ``libraries`` (what
-    ``tycho gpu install`` downloaded) when given, else from pip wheels in development."""
+    ``tycho gpu install`` downloaded) when given, else from pip wheels in development.
+
+    ONNX Runtime's GPU build lists CUDA as available whether or not NVIDIA's libraries
+    are there, and only prints when they fail to load; so with neither a folder nor the
+    wheels, the answer is no (the installed app without `tycho gpu install`)."""
+    if libraries is None and importlib.util.find_spec("nvidia") is None:
+        return False
     # Slow to import, so only when needed. ONNX Runtime ships no type information.
     import onnxruntime as ort  # pyright: ignore[reportMissingTypeStubs]
 
