@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
-from tycho import __version__, logs, paths, settings
+from tycho import __version__, credentials, logs, paths, settings
 from tycho.audio.source import AudioError
 from tycho.commands import CommandFileError, CommandMatcher, resolve
 from tycho.game.install import GameInstall, search_roots
@@ -59,6 +59,9 @@ def main(argv: list[str] | None = None) -> int:
         "gpu", help="download (or remove) what speech recognition needs to use an NVIDIA card"
     )
     gpu.add_argument("action", choices=["install", "status", "remove"])
+    key = commands.add_parser("key", help="store, check or remove an API key")
+    key.add_argument("action", choices=["set", "check", "delete"])
+    key.add_argument("name", choices=credentials.KNOWN)
     args = parser.parse_args(argv)
 
     try:
@@ -75,6 +78,8 @@ def main(argv: list[str] | None = None) -> int:
             return sounds_command(current)
         case "gpu":
             return gpu_command(args.action)
+        case "key":
+            return credentials.main([args.action, args.name])
         case _:
             return run_command(current, verbose=getattr(args, "verbose", False))
 
@@ -163,19 +168,25 @@ def load_transcriber(current: Settings) -> ParakeetTranscriber:
     started = time.monotonic()
     transcriber = ParakeetTranscriber.load(folder, choice.device)
     log.info("Speech model ready in %.1f s", time.monotonic() - started)
-    if transcriber.device == "cpu" and choice.device == "gpu" and (hint := gpu_hint()):
+    wanted = current.transcription_device != "cpu"
+    if transcriber.device == "cpu" and wanted and (hint := gpu_hint()):
         log.info("%s", hint)
     return transcriber
 
 
 def gpu_hint() -> str | None:
     """What to do when an NVIDIA card could run speech recognition but its libraries are
-    missing; None if there's no NVIDIA card or they're already downloaded."""
+    missing; None if there's no NVIDIA card or it already has them (downloaded, or the
+    pip wheels in development), so a card that's merely short of memory gets no hint."""
+    import importlib.util
+
     from tycho.stt import CudaLibraries, nvidia_driver
     from tycho.stt.cuda import DOWNLOAD_BYTES, MIN_DRIVER
 
     driver = nvidia_driver()
     if driver is None or CudaLibraries(paths.cuda_dir()).ready():
+        return None
+    if importlib.util.find_spec("nvidia") is not None:
         return None
     if driver < MIN_DRIVER:
         return (
@@ -223,7 +234,7 @@ def gpu_command(action: str) -> int:
     return 0
 
 
-BRAIN_KEY_HELP = "uv run python -m tycho.credentials set anthropic"
+BRAIN_KEY_HELP = "uv run tycho key set anthropic"
 
 
 def anthropic_key() -> str | None:
@@ -273,7 +284,7 @@ def load_brain(matcher: CommandMatcher, current: Settings) -> Brain | None:
     )
 
 
-VOICE_KEY_HELP = "uv run python -m tycho.credentials set elevenlabs"
+VOICE_KEY_HELP = "uv run tycho key set elevenlabs"
 
 
 def elevenlabs_key() -> str | None:

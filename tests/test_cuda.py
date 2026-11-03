@@ -7,6 +7,7 @@ import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -132,9 +133,18 @@ def test_the_pinned_wheels_match_onnxruntime_gpus_needs() -> None:
 
 @pytest.fixture
 def gpu(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+    """An NVIDIA card, as an installed Tycho sees it: no CUDA pip wheels."""
+    import importlib.util
+
     state = SimpleNamespace(driver=617)
     monkeypatch.setattr(app.paths, "cuda_dir", lambda: tmp_path / "cuda")
     monkeypatch.setattr("tycho.stt.nvidia_driver", lambda: state.driver)
+    real = importlib.util.find_spec
+
+    def no_wheels(name: str, package: str | None = None) -> Any:
+        return None if name == "nvidia" else real(name, package)
+
+    monkeypatch.setattr(importlib.util, "find_spec", no_wheels)
     return state
 
 
@@ -176,3 +186,35 @@ def test_without_any_cuda_libraries_cuda_isnt_available(monkeypatch: pytest.Monk
 
     monkeypatch.setattr(device.importlib.util, "find_spec", nothing)
     assert not cuda_available()
+
+
+def test_the_hint_fires_when_cuda_is_missing_and_not_when_memory_is_short(
+    gpu: SimpleNamespace, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The #81 review: without the libraries CUDA is unavailable, so the device chosen
+    # is already the processor; the hint must still fire then.
+    import logging
+
+    from tycho.settings import Settings
+    from tycho.stt import DeviceChoice
+    from tycho.stt.parakeet import ParakeetTranscriber
+
+    def loaded(folder: Path, device: str) -> Any:
+        return SimpleNamespace(device="cpu")
+
+    def present(self: object, spec: object, progress: object = None) -> Path:
+        return Path()
+
+    def no_cuda(current: Settings) -> DeviceChoice:
+        return DeviceChoice("cpu", "CUDA isn't available")
+
+    monkeypatch.setattr(app.ModelStore, "ensure", present)
+    monkeypatch.setattr(ParakeetTranscriber, "load", loaded)
+    monkeypatch.setattr(app, "device_choice", no_cuda)
+    caplog.set_level(logging.INFO)
+    app.load_transcriber(Settings())
+    assert "uv run tycho gpu install" in caplog.text
+
+    caplog.clear()
+    app.load_transcriber(Settings(transcription_device="cpu"))  # the player chose the processor
+    assert "gpu install" not in caplog.text

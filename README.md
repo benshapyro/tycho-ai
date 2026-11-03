@@ -24,8 +24,8 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
    Installed without them, `uv run tycho gpu install` adds the same CUDA libraries later (a 1.2 GB download, kept in `%LOCALAPPDATA%\tycho\cuda`); `uv run tycho gpu remove` takes them away.
 4. **Add your keys** (optional, but most of Tycho needs them; see [Keys and costs](#keys-and-costs)). Each command asks for the key and stores it in Windows Credential Manager, never in a file:
    ```powershell
-   uv run python -m tycho.credentials set anthropic
-   uv run python -m tycho.credentials set elevenlabs
+   uv run tycho key set anthropic
+   uv run tycho key set elevenlabs
    ```
 5. **Check, choose a button, and go.**
    ```powershell
