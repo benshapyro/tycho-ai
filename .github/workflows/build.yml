@@ -60,11 +60,14 @@ jobs:
           & $exe key --help | Out-Null
           if ($LASTEXITCODE -ne 0) { throw "tycho key failed" }
 
+      - name: Third-party notices, and nothing GPL or non-commercial
+        run: uv run --no-sync python tools/notices.py dist/tycho
+
       - name: Nothing GPL, LGPL or CUDA in the build
         shell: pwsh
         run: |
           $bad = Get-ChildItem dist\tycho -Recurse -File | Where-Object {
-            $_.Name -match "^(SDL2_(mixer|image|ttf|gfx)|libgme|libxmp|libmodplug|libavif|libjxl|cublas|cudnn|cudart|cufft|curand|nvrtc|nvJitLink)" -or
+            $_.Name -match "^(SDL2_(mixer|image|ttf|gfx)|libgme|libxmp|libmodplug|libavif|libjxl|cublas|cudnn|cudart|cufft|curand|nvrtc|nvJitLink|libportaudio.*asio)" -or
             $_.FullName -match "\\(pygame|nvidia)\\"
           }
           if ($bad) { $bad | ForEach-Object { Write-Output $_.FullName }; throw "left-out files got in" }

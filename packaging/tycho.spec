@@ -43,6 +43,9 @@ a = Analysis(  # noqa: F821
         "openai",
         "IPython",
         "matplotlib",
+        "yaml",  # only numpy.__config__ uses it, to print numpy's build settings
+        "setuptools",
+        "pkg_resources",
     ],
     noarchive=False,
 )
@@ -55,6 +58,10 @@ def kept(entry: tuple[str, str, str]) -> bool:
         return False
     if "sdl2dll" in parts and parts[-1].endswith(".dll"):
         return parts[-1] == "sdl2.dll"
+    if "portaudio-binaries" in parts and parts[-1].startswith("libportaudio"):
+        # Only the 64-bit build sounddevice loads; not the ASIO ones (Steinberg's ASIO is
+        # GPLv3 or proprietary), 32-bit, ARM or macOS.
+        return parts[-1] == "libportaudio64bit.dll"
     return parts[-1] != "onnxruntime_providers_tensorrt.dll"
 
 
