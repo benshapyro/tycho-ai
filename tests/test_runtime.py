@@ -105,6 +105,7 @@ def rig(
     brain_seconds: float = 8.0,
     search_seconds: float = 12.0,
     speaker: FakeSpeaker | None = None,
+    matcher: CommandMatcher = _MATCHER,
 ) -> Rig:
     audio, keys, feedback = FakeAudioSource(RATE), FakeKeySender(), FakeFeedback()
     actions = FakeActionLog()
@@ -115,7 +116,7 @@ def rig(
         push_to_talk=PushToTalk(PTT, sources or []),
         transcriber=transcriber,
         lexicon=_LEXICON,
-        matcher=_MATCHER,
+        matcher=matcher,
         keybinds=keybinds_now or (lambda: keybinds),
         presser=Presser(keys, focus or FakeFocus(True)),
         feedback=feedback,
@@ -658,6 +659,8 @@ def test_pressing_again_stops_a_key_sequence_and_lets_go() -> None:
     assert r.results[0].status == "cancelled"
     assert stopped < 1.2  # well short of the full 1.6 s hold, even on a slow runner
     assert r.keys.held() == set()
+    # The key went down before the cancel, so the log says so (audit, 2026-11-03).
+    assert r.results[0].pressed == ("v_toggle_landing_system",)
 
 
 def test_shutdown_doesnt_wait_for_tycho_to_finish_talking() -> None:
@@ -721,6 +724,7 @@ def test_shutdown_releases_a_held_key() -> None:
     r = run(scenario)
     assert r.keys.held() == set()
     assert r.results[0].status == "cancelled"
+    assert r.results[0].pressed == ("v_toggle_landing_system",)
 
 
 def test_after_close_push_to_talk_is_ignored() -> None:
@@ -1127,3 +1131,30 @@ def test_short_lines_are_kept_and_long_ones_arent() -> None:
     assert speaker.spoken == ["The Prospector.", long]
     assert speaker.kept == ["The Prospector."]
     assert len(long) > KEEP_CHARACTERS
+
+
+# --- A player's confirm and requires on a sequence (audit, 2026-11-03) -------------------
+
+
+def _careful(tmp_path: Path, extra: str) -> CommandMatcher:
+    file = tmp_path / "commands.toml"
+    file.write_text(
+        '[[sequence]]\nid = "careful_landing"\nsay = ["careful landing"]\n'
+        f'{extra}\nsteps = ["landing_gear", "request_landing"]\n',
+        "utf-8",
+    )
+    return CommandMatcher.default(file)
+
+
+def test_a_confirm_sequence_asks_once_then_runs_every_step(tmp_path: Path) -> None:
+    r = _conversation("careful landing", "confirm", matcher=_careful(tmp_path, "confirm = true"))
+    assert [x.status for x in r.results] == ["asking", "done"]
+    assert r.results[0].pressed == ()
+    assert r.results[1].pressed == ("v_toggle_landing_system", "v_atc_request")
+
+
+def test_a_sequence_that_needs_a_fact_presses_nothing_without_it(tmp_path: Path) -> None:
+    matcher = _careful(tmp_path, 'requires = ["quantum_route_set"]')
+    r = _conversation("careful landing", matcher=matcher, game_state=FakeGameState())
+    assert r.results[0].status == "refused"
+    assert r.keys.events == []

@@ -332,10 +332,13 @@ def load_commands() -> CommandMatcher:
     """The built-in commands plus the player's own file. A broken file is reported
     and skipped, so a typo never stops Tycho starting."""
     try:
-        return CommandMatcher.default(paths.commands_file())
+        matcher = CommandMatcher.default(paths.commands_file())
     except CommandFileError as e:
         log.warning("Your commands file can't be used, so only the built-in ones are: %s", e)
         return CommandMatcher.default()
+    for warning in matcher.warnings:
+        log.warning("Your commands file: %s", warning)
+    return matcher
 
 
 def build_session(
@@ -511,6 +514,8 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
         counts = f"{len(matcher.commands) - sequences} commands, {sequences} sequences"
         if commands_file.exists():
             yield Finding("ok", "Your commands", f"{counts}, with yours from {commands_file}")
+            for warning in matcher.warnings:
+                yield Finding("warn", "Your commands", warning)
         else:
             yield Finding("ok", "Commands", f"{counts}; add your own in {commands_file}")
 

@@ -166,3 +166,52 @@ actions = ["v_deploy_landing_system"]
 def test_a_broken_user_file_says_what_is_wrong(tmp_path: Path, text: str, problem: str) -> None:
     with pytest.raises(CommandFileError, match=problem):
         _user(tmp_path, text)
+
+
+def test_a_sequences_confirm_and_requires_reach_every_step(tmp_path: Path) -> None:
+    matcher = _user(
+        tmp_path,
+        """
+[[sequence]]
+id = "careful_landing"
+say = ["careful landing"]
+confirm = true
+requires = ["quantum_route_set"]
+steps = ["landing_gear", "request_landing"]
+""",
+    )
+    sequence = matcher.get("careful_landing")
+    assert sequence is not None
+    assert sequence.confirm
+    assert sequence.requires == ("quantum_route_set",)
+    assert [(s.command.confirm, s.command.requires) for s in sequence.steps] == [
+        (True, ("quantum_route_set",)),
+        (True, ("quantum_route_set",)),
+    ]
+    assert matcher.warnings == ()
+    plain = matcher.get("landing_gear")
+    assert plain is not None
+    assert not plain.confirm  # the step command on its own is unchanged
+
+
+def test_keys_a_sequence_cant_use_are_ignored_with_a_warning(tmp_path: Path) -> None:
+    matcher = _user(
+        tmp_path,
+        """
+[[command]]
+id = "my_lights"
+say = ["cabin glow"]
+actions = ["v_lights"]
+
+[[sequence]]
+id = "quiet_start"
+say = ["quiet start"]
+announced = true
+setup = ["v_power_toggle"]
+steps = ["power_on"]
+""",
+    )
+    assert matcher.get("my_lights") is not None  # the rest of the file still loads
+    (warning,) = matcher.warnings
+    assert "quiet_start" in warning
+    assert "setup, announced" in warning

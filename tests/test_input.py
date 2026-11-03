@@ -140,8 +140,70 @@ def test_cancelling_mid_hold_releases_every_key() -> None:
     sender.on_event = lambda: cancel.set() if len(sender.events) == 2 else None
     receipt = presser.press(plan(_action("lalt+f6", "", "(Hold)"), MODES), cancel)
     assert receipt.outcome == "cancelled"
+    assert receipt.interrupted
+    assert receipt.sent
     assert sender.held() == set()
-    assert clock.now < 0.05  # stopped promptly, not after the full 0.6 s
+    # Held past the tap window, so it can't become "Engines - Increase", then let go:
+    # not the full 0.6 s.
+    assert clock.now == pytest.approx(0.30)
+
+
+@pytest.mark.parametrize(
+    ("activation", "label", "least"),
+    [
+        ("tap", "", 0.0),
+        ("press", "", 0.0),
+        ("delayed_press", "", 0.30),  # 0.37 s planned
+        ("delayed_press_long", "", 0.30),  # 1.62 s planned
+        ("", "(Hold)", 0.30),  # 0.6 s planned
+    ],
+)
+def test_holds_past_the_tap_window_are_never_cut_inside_it(
+    activation: str, label: str, least: float
+) -> None:
+    press = plan(_action("n", activation, label), MODES)
+    assert press.min_hold_seconds == pytest.approx(least)
+    assert press.min_hold_seconds <= press.hold_seconds
+
+
+def test_a_short_press_still_stops_at_once() -> None:
+    cancel = threading.Event()
+    sender = FakeKeySender()
+    presser, clock = _presser(sender)
+    sender.on_event = lambda: cancel.set() if len(sender.events) == 1 else None
+    receipt = presser.press(plan(_action("n", "press"), MODES), cancel)
+    assert receipt.outcome == "cancelled"
+    assert receipt.interrupted  # a press-mode key acts on key-down, so the log must say so
+    assert clock.now < 0.02
+    assert sender.held() == set()
+
+
+def test_a_long_hold_cancelled_past_the_window_lets_go_at_once() -> None:
+    cancel = threading.Event()
+    sender = FakeKeySender()
+    clock = FakeClock()
+
+    def sleep(seconds: float) -> None:
+        clock.sleep(seconds)
+        if clock.now >= 0.5:
+            cancel.set()
+
+    presser = Presser(sender, FakeFocus(True), sleep=sleep, clock=clock)
+    receipt = presser.press(plan(_action("n", "delayed_press_long"), MODES), cancel)
+    assert receipt.outcome == "cancelled"
+    assert clock.now == pytest.approx(0.5, abs=0.02)  # not the full 1.62 s
+    assert sender.held() == set()
+
+
+def test_cancelled_before_any_key_sent_nothing() -> None:
+    cancel = threading.Event()
+    cancel.set()
+    sender = FakeKeySender()
+    presser, _ = _presser(sender)
+    receipt = presser.press(plan(_action("n"), MODES), cancel)
+    assert receipt.outcome == "cancelled"
+    assert not receipt.sent
+    assert sender.events == []
 
 
 def test_an_error_from_windows_still_releases_what_was_pressed() -> None:
