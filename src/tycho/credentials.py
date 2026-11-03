@@ -52,6 +52,7 @@ def get(name: str) -> str | None:
 
 
 def set_secret(name: str, value: str) -> None:
+    _store()
     try:
         keyring.set_password(SERVICE, name, value)
     except keyring.errors.KeyringError as e:
@@ -60,7 +61,6 @@ def set_secret(name: str, value: str) -> None:
 
 def delete(name: str) -> bool:
     """Remove a key. Returns False if there was none."""
-    _store()
     _store()
     try:
         keyring.delete_password(SERVICE, name)

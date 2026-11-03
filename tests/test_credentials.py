@@ -123,3 +123,16 @@ def test_tycho_key_stores_and_checks_a_key(
     assert "123456789" not in out  # only ever masked
     assert app.main(["key", "delete", "anthropic"]) == 0
     assert app.main(["key", "check", "anthropic"]) == 1
+
+
+def test_every_use_of_the_store_sets_up_the_backend_first(
+    memory: MemoryKeyring, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Getting, setting and deleting all go through _store(), or an installed build
+    # whose keyring lost its backend would fail on that one (#56, the #78 review).
+    calls: list[str] = []
+    monkeypatch.setattr(credentials, "_store", lambda: calls.append("store"))
+    credentials.set_secret("anthropic", "sk-ant-test-123456789")
+    credentials.get("anthropic")
+    credentials.delete("anthropic")
+    assert calls == ["store", "store", "store"]
