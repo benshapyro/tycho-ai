@@ -11,11 +11,16 @@
 
 from pathlib import PurePath
 
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_data_files, copy_metadata
 
 ROOT = PurePath(SPECPATH).parent  # noqa: F821 - PyInstaller defines SPECPATH
 
 datas = [
+    # Package metadata isn't bundled unless asked for. onnx-asr reads its own version
+    # when imported, so without this the speech model can't load; Tycho's gives
+    # `tycho --version` the real version.
+    *copy_metadata("onnx-asr"),
+    *copy_metadata("tycho-ai"),
     *collect_data_files("tycho", includes=["**/*.toml", "**/*.txt", "**/*.md"]),
     *collect_data_files("onnx_asr", includes=["preprocessors/data/*"]),
     *collect_data_files("sdl2dll", includes=["dll/SDL2.dll"]),
