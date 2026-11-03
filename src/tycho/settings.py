@@ -14,6 +14,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from tycho import paths
+from tycho.game.install import Channel
 from tycho.ptt.binding import Binding
 
 CURRENT_VERSION = 1
@@ -39,7 +40,13 @@ class Settings(BaseModel):
     )
     game_root: Path | None = Field(
         default=None,
-        description="The Star Citizen folder that contains LIVE, if it isn't in the default place.",
+        description="The Star Citizen folder that contains LIVE. Empty means Tycho finds it "
+        "from the RSI Launcher, the default folder, or common folders on each drive.",
+    )
+    game_channel: Channel = Field(
+        default="LIVE",
+        description="Which version of the game you play: LIVE, PTU, EPTU, TECH-PREVIEW or "
+        "HOTFIX. Tycho reads that version's keybinds.",
     )
     transcription_device: Device = Field(
         default="auto",

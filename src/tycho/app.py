@@ -15,7 +15,7 @@ import numpy as np
 from tycho import __version__, credentials, logs, paths, settings
 from tycho.audio.source import AudioError
 from tycho.commands import CommandFileError, CommandMatcher, resolve
-from tycho.game.install import GameInstall, search_roots
+from tycho.game.install import GameInstall, root_from, search_roots
 from tycho.game.store import GameDataError, KeybindStore
 from tycho.ptt.binding import Binding, DeviceKind
 from tycho.ptt.monitor import InputSource
@@ -504,8 +504,18 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
 
     store: KeybindStore | None = None
     try:
-        install = find_install(current)
-        yield Finding("ok", "Star Citizen", str(install.folder))
+        try:
+            install = find_install(current)
+            yield Finding("ok", "Star Citizen", str(install.folder))
+        except FileNotFoundError:
+            # Not found anywhere Tycho looks: ask, if someone's there to answer.
+            root = ask_game_root(current.game_channel) if sys.stdin.isatty() else None
+            if root is None:
+                raise
+            current = current.model_copy(update={"game_root": root})
+            saved = settings.save(current)
+            install = find_install(current)
+            yield Finding("ok", "Star Citizen", f"{install.folder} (saved to {saved})")
         store = KeybindStore.load(install)
         unbound = [
             c.id
@@ -652,7 +662,25 @@ def find_install(current: Settings) -> GameInstall:
     roots = search_roots()
     if current.game_root is not None:
         roots = (current.game_root, *roots)
-    return GameInstall.find(roots=roots)
+    return GameInstall.find(current.game_channel, roots=roots)
+
+
+def ask_game_root(channel: str, ask: Callable[[str], str] = input) -> Path | None:
+    """Ask where the game is, accepting the channel folder, StarCitizen or Roberts Space
+    Industries; None if the player skips or gives up."""
+    print(f"       Where is Star Citizen? Paste the folder that contains {channel}, or press")
+    print("       Enter to skip. (In the RSI Launcher: Settings, Games, Library Folder.)")
+    for _ in range(3):
+        try:
+            answer = ask("       > ").strip().strip('"')
+        except EOFError:
+            return None
+        if not answer:
+            return None
+        if (root := root_from(Path(answer), channel)) is not None:
+            return root
+        print(f"       There's no {channel}\\Data.p4k in or under {answer}. Try again?")
+    return None
 
 
 def device_choice(current: Settings) -> DeviceChoice:
