@@ -11,9 +11,11 @@ so "what should I haul?" uses the player's real cargo space. Nothing here presse
 a key: it only changes what Tycho knows about the player.
 """
 
+import asyncio
 import json
 import logging
 import os
+import threading
 import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -90,6 +92,7 @@ class FleetUpdate:
         """``library`` gives the ship data once it has loaded (``ShipLookup.library``)."""
         self._fleet = fleet
         self._library = library
+        self._changing = threading.Lock()  # two calls in one turn change one fleet in turn
 
     @property
     def name(self) -> str:
@@ -123,6 +126,15 @@ class FleetUpdate:
         library = self._library()
         if library is None:
             return failure("the ship data is still loading; ask the player to say it again soon")
+        # Off the event loop: matching names and writing the file mustn't hold up
+        # push-to-talk (audit, 2026-11-03).
+        return await asyncio.to_thread(self._apply, library, arguments)
+
+    def _apply(self, library: ShipLibrary, arguments: Mapping[str, object]) -> LookupResult:
+        with self._changing:
+            return self._change(library, arguments)
+
+    def _change(self, library: ShipLibrary, arguments: Mapping[str, object]) -> LookupResult:
         fleet = self._fleet
         changed: dict[str, list[str]] = {"added": [], "removed": []}
         problems: list[dict[str, object]] = []

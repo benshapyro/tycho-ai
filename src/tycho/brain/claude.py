@@ -202,7 +202,9 @@ class ClaudeBrain:
     async def decide(self, request: BrainRequest) -> Decision:
         self._brief(request.keybinds)
         started = time.perf_counter()
-        messages = history(request.recent, request.text, self._today(), self._about())
+        # The fleet line matches ship names, which is too slow for the event loop.
+        about = await asyncio.to_thread(self._about)
+        messages = history(request.recent, request.text, self._today(), about)
         turn = _Turn(waiting=request.waiting)
         try:
             for _ in range(MAX_CALLS):
