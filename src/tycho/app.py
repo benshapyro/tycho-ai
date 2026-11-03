@@ -8,11 +8,11 @@ import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
-from tycho import __version__, credentials, logs, paths, settings
+from tycho import __version__, credentials, logs, paths, settings, updates
 from tycho.audio.source import AudioError
 from tycho.commands import CommandFileError, CommandMatcher, resolve
 from tycho.game.install import GameInstall, root_from, search_roots
@@ -116,6 +116,8 @@ def _run(current: Settings, log_file: Path) -> int:
     from tycho.runtime.actionlog import FileActionLog
 
     log.info("Tycho %s. Log file: %s", __version__, log_file)
+    if current.check_for_updates:
+        updates.announce_in_background(__version__)
     binding = current.push_to_talk_binding
     if binding is None:
         print("First, choose your push-to-talk button.")
@@ -570,7 +572,20 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
     )
 
     if not quick:
+        if current.check_for_updates:
+            yield update_finding()
         yield focus_finding()
+
+
+def update_finding(get: Callable[[str], Any] = updates.latest_json) -> Finding:
+    """Whether a newer Tycho is out. Never a problem: at most worth a look."""
+    try:
+        release = updates.newer_release(__version__, get)
+    except updates.UpdateError as e:
+        return Finding("ok", "Updates", f"couldn't check ({e}); you have {__version__}")
+    if release is None:
+        return Finding("ok", "Updates", f"{__version__} is the latest")
+    return Finding("warn", "Updates", f"Tycho {release.version} is out: {release.url}")
 
 
 def microphone_finding(current: Settings, seconds: float = 2.5) -> Finding:
