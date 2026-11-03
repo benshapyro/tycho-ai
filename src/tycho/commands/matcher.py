@@ -169,7 +169,8 @@ class CommandMatcher:
         if user_file is not None and user_file.exists():
             source = str(user_file)
             try:
-                user = tomllib.loads(user_file.read_text("utf-8"))
+                # utf-8-sig: Notepad and PowerShell can save a byte-order mark.
+                user = tomllib.loads(user_file.read_text("utf-8-sig"))
             except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
                 raise CommandFileError(f"{source}: {e}") from e
             mine = _entries(user, source)

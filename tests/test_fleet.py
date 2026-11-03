@@ -48,7 +48,36 @@ def test_a_broken_file_starts_empty_rather_than_failing(
     path = tmp_path / "fleet.toml"
     path.write_text("ships = [ not toml", "utf-8")
     assert Fleet.load(path).ships == []
-    assert "Couldn't read your fleet" in caplog.text
+    assert "Starting without your fleet" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        b"ships = [ not toml",
+        'ships = ["Caf\xe9 Racer"]'.encode("cp1252"),  # an ANSI editor; not UTF-8
+    ],
+)
+def test_an_unreadable_file_is_never_written_over(tmp_path: Path, content: bytes) -> None:
+    # The audit's data-loss case: 15 hand-typed ships and one typo must not become
+    # just the ship said this session.
+    path = tmp_path / "fleet.toml"
+    path.write_bytes(content)
+    fleet = Fleet.load(path)
+    assert fleet.problem
+    error, result = _update(fleet, add=["cutty black"])
+    assert not error
+    assert result["fleet"] == ["Cutlass Black"]  # kept for this session
+    assert "can't be read" in result["problems"][0]["note"]
+    assert path.read_bytes() == content
+
+
+def test_a_file_saved_with_a_byte_order_mark_is_read(tmp_path: Path) -> None:
+    path = tmp_path / "fleet.toml"
+    path.write_bytes(b"\xef\xbb\xbf" + b'ships = ["Caterpillar"]\n')
+    fleet = Fleet.load(path)
+    assert fleet.ships == ["Caterpillar"]
+    assert not fleet.problem
 
 
 # --- What each request is told ------------------------------------------------------------------
