@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
-from tycho import __version__, logs, paths, settings
+from tycho import __version__, credentials, logs, paths, settings
 from tycho.audio.source import AudioError
 from tycho.commands import CommandFileError, CommandMatcher, resolve
 from tycho.game.install import GameInstall, search_roots
@@ -55,6 +55,9 @@ def main(argv: list[str] | None = None) -> int:
     check.add_argument("--quick", action="store_true", help="skip the microphone and focus tests")
     commands.add_parser("bind", help="choose the push-to-talk button")
     commands.add_parser("sounds", help="play the done, not-done and asking sounds")
+    key = commands.add_parser("key", help="store, check or remove an API key")
+    key.add_argument("action", choices=["set", "check", "delete"])
+    key.add_argument("name", choices=credentials.KNOWN)
     args = parser.parse_args(argv)
 
     try:
@@ -69,6 +72,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if bind_command(current) else 1
         case "sounds":
             return sounds_command(current)
+        case "key":
+            return credentials.main([args.action, args.name])
         case _:
             return run_command(current, verbose=getattr(args, "verbose", False))
 
@@ -160,7 +165,7 @@ def load_transcriber(current: Settings) -> ParakeetTranscriber:
     return transcriber
 
 
-BRAIN_KEY_HELP = "uv run python -m tycho.credentials set anthropic"
+BRAIN_KEY_HELP = "uv run tycho key set anthropic"
 
 
 def anthropic_key() -> str | None:
@@ -210,7 +215,7 @@ def load_brain(matcher: CommandMatcher, current: Settings) -> Brain | None:
     )
 
 
-VOICE_KEY_HELP = "uv run python -m tycho.credentials set elevenlabs"
+VOICE_KEY_HELP = "uv run tycho key set elevenlabs"
 
 
 def elevenlabs_key() -> str | None:

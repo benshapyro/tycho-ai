@@ -133,9 +133,12 @@ def test_microphone_setting(setting: str | None, device: int | str | None) -> No
 
 
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
+    import importlib.metadata
+
     with pytest.raises(SystemExit):
         app.main(["--version"])
-    assert "Tycho" in capsys.readouterr().out
+    # The version is written once, in pyproject.toml, and read back from the package.
+    assert capsys.readouterr().out.strip() == f"Tycho {importlib.metadata.version('tycho-ai')}"
 
 
 def test_a_broken_settings_file_stops_with_its_message(
