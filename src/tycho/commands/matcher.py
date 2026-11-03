@@ -14,7 +14,7 @@ command made of other commands, with waits between them.
 
 import tomllib
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib import resources
 from pathlib import Path
 from typing import Any, cast
@@ -131,9 +131,16 @@ class Defer:
 
 class CommandMatcher:
     def __init__(
-        self, commands: Iterable[Command], *, threshold: float = 0.85, margin: float = 0.03
+        self,
+        commands: Iterable[Command],
+        *,
+        threshold: float = 0.85,
+        margin: float = 0.03,
+        warnings: tuple[str, ...] = (),
     ) -> None:
         self.commands = tuple(commands)
+        self.warnings = warnings
+        """Parts of the player's file that are ignored, in plain words."""
         self._threshold = threshold
         self._margin = margin
         self._phrases: list[tuple[tuple[str, ...], Command]] = []
@@ -158,15 +165,18 @@ class CommandMatcher:
         text = resources.files("tycho.commands").joinpath("commands.toml").read_text("utf-8")
         entries = _entries(tomllib.loads(text), "the built-in commands")
         source = "the built-in commands"
+        warnings: tuple[str, ...] = ()
         if user_file is not None and user_file.exists():
             source = str(user_file)
             try:
                 user = tomllib.loads(user_file.read_text("utf-8"))
             except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
                 raise CommandFileError(f"{source}: {e}") from e
-            entries = _merge(entries, _entries(user, source))
+            mine = _entries(user, source)
+            warnings = _warnings(mine)
+            entries = _merge(entries, mine)
         try:
-            return cls(_build(entries))
+            return cls(_build(entries), warnings=warnings)
         except (KeyError, TypeError, ValueError) as e:
             raise CommandFileError(f"{source}: {e}") from e
 
@@ -305,6 +315,21 @@ def _type_problem(entry: _Entry) -> str | None:
     return None
 
 
+_COMMAND_ONLY = ("actions", "setup", "accepted_risks", "settle_seconds", "announced")
+"""Keys a sequence has no use for. (Its own confirm and requires apply to every step.)
+They're ignored with a warning, not refused: refusing would drop every command in the
+player's file over one harmless key."""
+
+
+def _warnings(entries: dict[str, _Entry]) -> tuple[str, ...]:
+    return tuple(
+        f"sequence {entry_id!r}: {', '.join(wrong)} only work on commands, so they're ignored; "
+        "put them on the step commands"
+        for entry_id, entry in entries.items()
+        if entry["_kind"] == "sequence" and (wrong := [k for k in _COMMAND_ONLY if k in entry])
+    )
+
+
 def _merge(base: dict[str, _Entry], user: dict[str, _Entry]) -> dict[str, _Entry]:
     """The player's entries replace built-in ones with the same id, and take their
     phrases: a phrase the player gives an entry is removed from every built-in one."""
@@ -353,7 +378,30 @@ def _sequence(
     if not steps:
         raise ValueError(f"sequence {entry_id!r} has no steps")
     say = tuple(str(s) for s in entry.get("say", ()))
-    return Command(id=entry_id, say=say, actions=(), steps=tuple(steps))
+    confirm = bool(entry.get("confirm", False))
+    requires = tuple(str(r) for r in entry.get("requires", ()))
+    if confirm or requires:
+        # The whole chain is planned before anything is pressed, so one "confirm" covers
+        # every step, and a missing fact stops the sequence before its first key.
+        steps = [
+            replace(
+                s,
+                command=replace(
+                    s.command,
+                    confirm=s.command.confirm or confirm,
+                    requires=tuple(dict.fromkeys((*s.command.requires, *requires))),
+                ),
+            )
+            for s in steps
+        ]
+    return Command(
+        id=entry_id,
+        say=say,
+        actions=(),
+        steps=tuple(steps),
+        confirm=confirm,
+        requires=requires,
+    )
 
 
 def _command(entry: _Entry) -> Command:

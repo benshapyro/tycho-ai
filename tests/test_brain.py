@@ -126,6 +126,40 @@ def test_an_action_no_command_owns_runs_bare() -> None:
     )
 
 
+def test_a_fallback_action_keeps_the_players_confirm(tmp_path: Any) -> None:
+    # The briefing offers the action that has a key; here that's the fallback, so the
+    # brain names it, not the command's first action.
+    file = tmp_path / "commands.toml"
+    file.write_text(
+        '[[command]]\nid = "careful"\nsay = ["lock it carefully"]\nconfirm = true\n'
+        'requires = ["quantum_route_set"]\n'
+        'actions = ["v_not_bound_anywhere", "v_lock_rotation"]\n',
+        "utf-8",
+    )
+    (picked,) = commands_for(RunActions(("v_lock_rotation",)), CommandMatcher.default(file))
+    assert picked.actions == ("v_lock_rotation",)
+    assert picked.confirm
+    assert picked.requires == ("quantum_route_set",)
+
+
+def test_a_players_confirm_holds_on_an_action_a_built_in_starts_with(tmp_path: Any) -> None:
+    file = tmp_path / "commands.toml"
+    file.write_text(
+        '[[command]]\nid = "my_gear"\nsay = ["my wheels"]\nconfirm = true\n'
+        'actions = ["v_toggle_landing_system"]\n',
+        "utf-8",
+    )
+    (gear,) = commands_for(RunActions(("v_toggle_landing_system",)), CommandMatcher.default(file))
+    assert gear.id == "landing_gear"  # still the built-in command, with its setup and waits
+    assert gear.confirm
+
+
+def test_picks_nobody_marked_stay_as_they_were() -> None:
+    (gear,) = commands_for(RunActions(("v_toggle_landing_system",)), MATCHER)
+    assert not gear.confirm
+    assert gear.requires == ()
+
+
 def test_a_sequence_with_travel_asks_when_the_brain_picked_it(tmp_path: Any) -> None:
     file = tmp_path / "commands.toml"
     file.write_text(
