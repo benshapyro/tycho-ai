@@ -188,6 +188,7 @@ def load_brain(matcher: CommandMatcher, current: Settings) -> Brain | None:
     from tycho.brain.lookups import Lookup
     from tycho.knowledge import ShipLookup, UexApi, WikiApi
     from tycho.knowledge.fleet import Fleet, FleetUpdate
+    from tycho.knowledge.item_lookup import ItemLookup
     from tycho.knowledge.trade_lookup import trade_lookups
     from tycho.knowledge.web import WebSearch
 
@@ -199,6 +200,7 @@ def load_brain(matcher: CommandMatcher, current: Settings) -> Brain | None:
     lookups: list[Lookup] = [
         ships,
         FleetUpdate(fleet, lambda: ships.library),
+        ItemLookup(WikiApi()),
         *trade_lookups(UexApi()),
     ]
     if current.web_search:

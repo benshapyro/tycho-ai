@@ -52,3 +52,28 @@ def edit_distance(a: Sequence[Hashable], b: Sequence[Hashable]) -> int:
 def similarity(a: Sequence[Hashable], b: Sequence[Hashable]) -> float:
     """1.0 for identical sequences, falling towards 0 as they differ."""
     return 1 - edit_distance(a, b) / max(len(a), len(b), 1)
+
+
+def name_score(said: Sequence[str], name: Sequence[str]) -> float:
+    """How well the words said fit a name, for look-ups (commodities, items).
+
+    1.0 less a little per extra word in the name when every word said is in it;
+    0.9 less the same when some are only near ("quantanium") or the start of a
+    word ("quant"); below 0.5 otherwise, which is never a match. A real word
+    beats a near miss, so "laranite" is Laranite and not Caranite.
+    """
+    extra = 0.05 * max(0, len(name) - len(said))
+    if all(s in name for s in said):
+        return 1.0 - extra
+    if all(any(_near(s, n) for n in name) for s in said):
+        return 0.9 - extra
+    return 0.5 * similarity(" ".join(said), " ".join(name))
+
+
+def _near(said: str, word: str) -> bool:
+    """A misspelling or the start of a word; never in model codes ("fs9", "c2")."""
+    if said == word:
+        return True
+    if any(c.isdigit() for c in said + word) or min(len(said), len(word)) < 4:
+        return False
+    return word.startswith(said) or similarity(said, word) >= 0.8
