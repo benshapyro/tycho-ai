@@ -497,16 +497,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pygame-ce"
-version = "2.5.8"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/26/2d/0f942ec31d558a6a1f2fd0df9965ff0055f165ed5b8d36f6509b1f3768a2/pygame_ce-2.5.8.tar.gz", hash = "sha256:3c8e69088ead310037972c391306ea58e74d7296b35d1890067749235fd554ba", size = 5300831, upload-time = "2026-08-09T11:39:49.226Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f1/31/92d32a9bf9b78e9ef10cec7224e2f00efc957757505822af8dc4225e9b41/pygame_ce-2.5.8-cp314-cp314-win_amd64.whl", hash = "sha256:b4c2e28c201240199356952e6bd0221969d2eb8a1a15c3454d77db209bad7891", size = 9833757, upload-time = "2026-08-09T11:39:11.989Z" },
-    { url = "https://files.pythonhosted.org/packages/87/41/404836598d666ffe02681fd0c29f013daaa8baf18e5de5f7a5d4870b6105/pygame_ce-2.5.8-cp315-cp315-win_amd64.whl", hash = "sha256:5b789aa7e4239be025c9de8428c2c422f0811f0e3dd702b574d836fd9ae040eb", size = 9833657, upload-time = "2026-08-09T11:39:31.897Z" },
-]
-
-[[package]]
 name = "pygments"
 version = "2.21.0"
 source = { registry = "https://pypi.org/simple" }
@@ -526,6 +516,24 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e1/1b/244c7b710031ada80f27e579ec20d28a2285dfc318fed0339866b1047f12/pyright-1.1.414.tar.gz", hash = "sha256:523c0a97c60da6333234955c277730c9cf4f5bd6d5399e7b7d2b0fc5d3599524", size = 4154638, upload-time = "2026-09-10T12:26:53.181Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d7/ba/18b6e682ead424ad24bcc134339ae5d1b931cd9ae260540592a058a91279/pyright-1.1.414-py3-none-any.whl", hash = "sha256:2a6b4b3298c9eec174c5ed83bd338de6eee82df2992f3e1930e6199d381be36f", size = 6225049, upload-time = "2026-09-10T12:26:51.427Z" },
+]
+
+[[package]]
+name = "pysdl2"
+version = "0.9.17"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d7/ff/8704d84ad4d25f0a7bf7912504f64575e432e8d57dfba2fe35f5b2db7e04/pysdl2-0.9.17.tar.gz", hash = "sha256:48c6ef01a4eb123db5f7e46e1a1b565675755b07e615f3fe20a623c94735b52b", size = 775955, upload-time = "2024-12-30T18:07:27.562Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5d/e2/399ea7900e7510096aeb41439e6f1540bef0bdf7e15cc2d8464e4adb71e8/PySDL2-0.9.17-py3-none-any.whl", hash = "sha256:fe923dbf5c7b27bbc1eb2bf58abfa793f8f13fd7ae8b27b1bc2de49920bcbd41", size = 583137, upload-time = "2024-12-30T18:07:25.987Z" },
+]
+
+[[package]]
+name = "pysdl2-dll"
+version = "2.32.10"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/28/5b/bd6fb7cce36ec24cacea8f7d8264db819a3a9de89402653690d70a8da659/pysdl2_dll-2.32.10.tar.gz", hash = "sha256:ad83e0e1a0227633495d6b3ec6701ac5a2beac44e6692f52278033bda1313717", size = 16235, upload-time = "2026-05-26T18:07:45.48Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/91/8e/3a90c664cca4c61c7538a8b1a7fd86c7dc3521465198a844bce21b4a97c1/pysdl2_dll-2.32.10-py2.py3-none-win_amd64.whl", hash = "sha256:65eba83d68c33b22aa5eca6c9a8521cff5044435ecd5b49521068df82674de6a", size = 4064320, upload-time = "2026-05-26T18:11:29.046Z" },
 ]
 
 [[package]]
@@ -643,7 +651,8 @@ dependencies = [
     { name = "onnx-asr" },
     { name = "onnxruntime-gpu" },
     { name = "pydantic" },
-    { name = "pygame-ce" },
+    { name = "pysdl2" },
+    { name = "pysdl2-dll" },
     { name = "sounddevice" },
 ]
 
@@ -672,7 +681,8 @@ requires-dist = [
     { name = "onnx-asr", specifier = "==0.12.0" },
     { name = "onnxruntime-gpu", specifier = "==1.31.1" },
     { name = "pydantic", specifier = ">=2.14.2" },
-    { name = "pygame-ce", specifier = ">=2.5.8" },
+    { name = "pysdl2", specifier = ">=0.9.17" },
+    { name = "pysdl2-dll", specifier = ">=2.32.10" },
     { name = "sounddevice", specifier = ">=0.5.6" },
 ]
 

@@ -690,7 +690,7 @@ def test_push_to_talk_keeps_working_after_a_joystick_error(
         def poll(self) -> Edge | None:
             self.calls += 1
             if self.calls == 1:
-                raise RuntimeError("Invalid joystick device number")  # what pygame raises
+                raise RuntimeError("Invalid joystick device number")  # what SDL can raise
             return Edge.PRESSED if self.calls == 2 else None
 
     async def scenario() -> bool:

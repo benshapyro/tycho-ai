@@ -9,6 +9,7 @@ modification time are recorded, and it's only hashed again if either changes.
 import hashlib
 import json
 import os
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -109,7 +110,14 @@ class HttpDownloader:
         request = urllib.request.Request(url, headers={"User-Agent": "tycho-ai"})  # noqa: S310 - scheme checked above
         if have:
             request.add_header("Range", f"bytes={have}-")
-        with urllib.request.urlopen(request, timeout=self._timeout) as response:  # noqa: S310
+        try:
+            response = urllib.request.urlopen(request, timeout=self._timeout)  # noqa: S310
+        except urllib.error.HTTPError as e:
+            if have and e.code == 416:  # nothing after the bytes we have: it's all here
+                e.close()
+                return
+            raise
+        with response:
             if have and response.status != 206:  # the server ignored the range: start over
                 have = 0
             total = have + int(response.headers.get("Content-Length", 0))
@@ -166,15 +174,20 @@ class ModelStore:
     ) -> None:
         target, part = folder / file.name, folder / f"{file.name}.part"
         target.unlink(missing_ok=True)
-        if part.exists() and part.stat().st_size > file.size:
-            part.unlink()
+        if part.exists():
+            size = part.stat().st_size
+            # Too big, or whole but wrong (it was killed before the check): start again.
+            if size > file.size or (size == file.size and file_sha256(part) != file.sha256):
+                part.unlink()
 
         def report(done: int, total: int) -> None:
             if progress is not None:
                 progress(file.name, done, total)
 
-        self._downloader.fetch(spec.url(file), part, report)
-        if part.stat().st_size != file.size or _sha256(part) != file.sha256:
+        # A whole, right .part was downloaded but not yet renamed: nothing to fetch (#57).
+        if not (part.exists() and part.stat().st_size == file.size):
+            self._downloader.fetch(spec.url(file), part, report)
+        if part.stat().st_size != file.size or file_sha256(part) != file.sha256:
             part.unlink(missing_ok=True)
             raise ModelError(
                 f"{file.name} didn't match its checksum after downloading, so it was deleted. "
@@ -192,7 +205,7 @@ class ModelStore:
             return False
         if checked.get(file.name) == [*stamp, file.sha256]:
             return True
-        if _sha256(path) != file.sha256:
+        if file_sha256(path) != file.sha256:
             checked.pop(file.name, None)
             return False
         checked[file.name] = [*stamp, file.sha256]
@@ -207,7 +220,7 @@ def _stamp(path: Path) -> tuple[int, int]:
     return stat.st_size, stat.st_mtime_ns
 
 
-def _sha256(path: Path) -> str:
+def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as f:
         while chunk := f.read(_CHUNK):

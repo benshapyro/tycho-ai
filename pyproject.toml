@@ -21,7 +21,8 @@ dependencies = [
     "onnx-asr==0.12.0",
     "onnxruntime-gpu==1.31.1",
     "pydantic>=2.14.2",
-    "pygame-ce>=2.5.8",
+    "pysdl2>=0.9.17",
+    "pysdl2-dll>=2.32.10",
     "sounddevice>=0.5.6",
 ]
 
@@ -43,6 +44,7 @@ bench = [
 ]
 # CUDA and cuDNN as pip wheels (~2 GB), so speech recognition can use the graphics card
 # without a system CUDA install. Without them ONNX Runtime runs on the CPU. CI leaves them out.
+# An installed Tycho gets the same wheels' DLLs with `tycho gpu install` (src/tycho/stt/cuda.py).
 gpu = [
     "onnxruntime-gpu[cuda,cudnn]==1.31.1",
 ]
