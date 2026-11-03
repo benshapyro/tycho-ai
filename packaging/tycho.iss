@@ -36,12 +36,19 @@ WizardStyle=modern
 UninstallDisplayName=Tycho
 UninstallDisplayIcon={app}\tycho.exe
 
+[InstallDelete]
+; An upgrade starts from a clean _internal: otherwise the old version's package
+; metadata stays beside the new one and the app reports the old version (and the
+; update check keeps offering the upgrade). Nothing of the player's lives here.
+Type: filesandordirs; Name: "{app}\_internal"
+
 [Files]
 Source: "..\dist\tycho\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\Tycho"; Filename: "{app}\tycho.exe"; Parameters: "run"; Comment: "Start listening"
-Name: "{group}\Tycho check"; Filename: "{cmd}"; Parameters: "/k ""{app}\tycho.exe"" check"; Comment: "Check the setup, in plain words"
+; Through cmd /k, so if Tycho stops with a problem the window stays open to read it.
+Name: "{group}\Tycho"; Filename: "{cmd}"; Parameters: "/k ""{app}\tycho.exe"" run"; IconFilename: "{app}\tycho.exe"; Comment: "Start listening"
+Name: "{group}\Tycho check"; Filename: "{cmd}"; Parameters: "/k ""{app}\tycho.exe"" check"; IconFilename: "{app}\tycho.exe"; Comment: "Check the setup, in plain words"
 Name: "{group}\Uninstall Tycho"; Filename: "{uninstallexe}"
 
 [Registry]

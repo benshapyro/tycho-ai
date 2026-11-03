@@ -42,6 +42,11 @@ log = logging.getLogger("tycho")
 TYCHO = "tycho" if getattr(sys, "frozen", False) else "uv run tycho"
 """How to run Tycho, for messages: installed, it's `tycho` (on PATH and the Start menu)."""
 
+UNKNOWN_SETTING = (
+    "{name} in settings.toml isn't a setting this Tycho knows, so it's ignored. It may be a "
+    "typo, or from a newer Tycho."
+)
+
 KEYBIND_REFRESH_SECONDS = 2.0
 """How often to look for keybinds the player changed in game."""
 
@@ -72,6 +77,9 @@ def main(argv: list[str] | None = None) -> int:
     except SettingsError as e:
         print(e, file=sys.stderr)
         return 2
+    if args.command != "check":  # check lists them itself
+        for name in settings.unknown_keys():
+            print(f"Note: {UNKNOWN_SETTING.format(name=name)}", file=sys.stderr)
     match args.command:
         case "check":
             return check_command(current, quick=args.quick)
@@ -464,6 +472,8 @@ def diagnose(current: Settings, *, quick: bool = False) -> Iterator[Finding]:
 
 def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
     yield Finding("ok", "Settings", str(paths.settings_file()))
+    for name in settings.unknown_keys():
+        yield Finding("warn", "Settings", UNKNOWN_SETTING.format(name=name))
 
     binding = current.push_to_talk_binding
     if binding is None:
@@ -580,12 +590,14 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
 def update_finding(get: Callable[[str], Any] = updates.latest_json) -> Finding:
     """Whether a newer Tycho is out. Never a problem: at most worth a look."""
     try:
-        release = updates.newer_release(__version__, get)
+        release = updates.latest_release(get)
     except updates.UpdateError as e:
         return Finding("ok", "Updates", f"couldn't check ({e}); you have {__version__}")
     if release is None:
-        return Finding("ok", "Updates", f"{__version__} is the latest")
-    return Finding("warn", "Updates", f"Tycho {release.version} is out: {release.url}")
+        return Finding("ok", "Updates", f"no release published yet; you have {__version__}")
+    if updates.is_newer(release.version, __version__):
+        return Finding("warn", "Updates", f"Tycho {release.version} is out: {release.url}")
+    return Finding("ok", "Updates", f"{__version__} is the latest")
 
 
 def microphone_finding(current: Settings, seconds: float = 2.5) -> Finding:

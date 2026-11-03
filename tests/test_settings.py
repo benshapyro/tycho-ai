@@ -40,7 +40,6 @@ def test_the_file_explains_each_setting(tmp_path: Path) -> None:
         ("confirm_seconds = 60", "confirm_seconds"),  # a question must not linger
         ('transcription_device = "tpu"', "transcription_device"),
         ('push_to_talk = "elbow:1"', "push_to_talk"),
-        ("volume = 0.5", "volume"),  # unknown key: probably a typo
         ("version = 99", "newer Tycho"),
         ("this is not toml", "Couldn't read"),
     ],
@@ -50,6 +49,28 @@ def test_bad_files_get_a_clear_error(tmp_path: Path, content: str, message: str)
     path.write_text(content, encoding="utf-8")
     with pytest.raises(SettingsError, match=message):
         settings.load(path)
+
+
+def test_a_bad_value_says_how_to_fix_it(tmp_path: Path) -> None:
+    path = tmp_path / "settings.toml"
+    path.write_text("feedback_volume = 3.0", encoding="utf-8")
+    with pytest.raises(SettingsError, match="delete it to use the default"):
+        settings.load(path)
+
+
+def test_settings_this_tycho_doesnt_know_are_ignored_not_fatal(tmp_path: Path) -> None:
+    # A typo, or a setting a newer Tycho saved to the same (roaming) file.
+    path = tmp_path / "settings.toml"
+    path.write_text("keep_transcripts = true\nvolume = 0.5\nfuture_thing = 1\n", "utf-8")
+    assert settings.load(path).keep_transcripts is True
+    assert settings.unknown_keys(path) == ("volume", "future_thing")
+
+
+def test_unknown_keys_is_empty_without_a_readable_file(tmp_path: Path) -> None:
+    assert settings.unknown_keys(tmp_path / "missing.toml") == ()
+    broken = tmp_path / "broken.toml"
+    broken.write_text("this is not toml", "utf-8")
+    assert settings.unknown_keys(broken) == ()
 
 
 def test_files_without_a_version_are_treated_as_version_1(tmp_path: Path) -> None:

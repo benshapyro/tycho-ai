@@ -106,23 +106,47 @@ def json_schema() -> dict[str, Any]:
 
 
 def load(path: Path | None = None) -> Settings:
-    """Read settings, or the defaults if there's no file yet."""
+    """Read settings, or the defaults if there's no file yet.
+
+    A setting this Tycho doesn't know is ignored (``unknown_keys`` names it): it may
+    be a typo, or a setting from a newer Tycho sharing the file, and refusing it
+    would stop this one starting at all.
+    """
     path = path or paths.settings_file()
-    if not path.exists():
+    data = _read(path)
+    if data is None:
         return Settings()
-    try:
-        # utf-8-sig: Notepad and PowerShell can save a byte-order mark, which TOML rejects.
-        data = tomllib.loads(path.read_text("utf-8-sig"))
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
-        raise SettingsError(f"Couldn't read {path}: {e}") from e
     data = _migrate(data)
     try:
-        return Settings.model_validate(data)
+        return Settings.model_validate(
+            {k: v for k, v in data.items() if k in Settings.model_fields}
+        )
     except ValidationError as e:
         problems = "; ".join(
             f"{'.'.join(str(p) for p in err['loc']) or 'file'}: {err['msg']}" for err in e.errors()
         )
-        raise SettingsError(f"{path} has a problem: {problems}") from e
+        raise SettingsError(
+            f"{path} has a problem: {problems}. Fix that line, or delete it to use the default."
+        ) from e
+
+
+def unknown_keys(path: Path | None = None) -> tuple[str, ...]:
+    """Settings in the file that this Tycho doesn't know, so ``load`` ignores them."""
+    try:
+        data = _read(path or paths.settings_file())
+    except SettingsError:
+        return ()
+    return tuple(k for k in data or {} if k not in Settings.model_fields)
+
+
+def _read(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    try:
+        # utf-8-sig: Notepad and PowerShell can save a byte-order mark, which TOML rejects.
+        return tomllib.loads(path.read_text("utf-8-sig"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        raise SettingsError(f"Couldn't read {path}: {e}") from e
 
 
 def save(settings: Settings, path: Path | None = None) -> Path:
