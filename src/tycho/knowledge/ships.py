@@ -201,7 +201,8 @@ def answer(found: Ship | Ambiguous | NotFound) -> dict[str, object]:
             return {
                 "asked": found.asked,
                 "error": "not in the game files or the list of concept ships: "
-                "another name, or too newly announced to be listed",
+                "another name, or too newly announced to be listed; if it's a weapon, "
+                "armor or ship component, use item_lookup",
                 "closest": list(found.closest),
             }
 

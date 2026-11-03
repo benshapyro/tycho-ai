@@ -796,3 +796,34 @@ expect = ["reply"]
 fleet = ["Cutlass Black"]
 fleet_lacks = ["Hammerhead"]
 tag = "fleet"
+
+# Items and crafting (ADR 15): live from the Wiki API, named as players say them.
+[[case]]
+heard = "what do I need to craft an FS-9"
+expect = ["reply"]
+mentions = [['Lindinium'], ['Hephaestanite'], ['Iron']]
+tag = "items"
+
+[[case]]
+heard = "what's the DPS on the gallant"
+expect = ["reply"]
+mentions = [['315']]
+tag = "items"
+
+[[case]]
+heard = "compare the bulwark and the palisade shields"
+expect = ["reply"]
+mentions = [['2,?160']]
+tag = "items"
+
+[[case]]
+heard = "where can I buy a bulldog repeater"
+expect = ["reply"]
+mentions = [['New Babbage', 'Area 18', 'CenterMass', 'CRU-L5']]
+tag = "items"
+
+[[case]]
+heard = "how fast is the Atlas quantum drive"
+expect = ["reply"]
+mentions = [['259']]
+tag = "items"

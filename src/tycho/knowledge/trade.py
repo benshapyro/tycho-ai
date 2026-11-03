@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from tycho.knowledge.wiki import WikiError, WikiSource
-from tycho.text import normalize, similarity
+from tycho.text import name_score, normalize, similarity
 
 log = logging.getLogger(__name__)
 
@@ -235,21 +235,7 @@ def top(
 def _score(said: list[str], name: list[str], code: str) -> float:
     if len(said) == 1 and said[0] == code.lower():
         return 1.0
-    extra = 0.05 * max(0, len(name) - len(said))
-    if all(s in name for s in said):
-        return 1.0 - extra
-    # A near miss scores lower than the real word: "laranite" is Laranite, not Caranite.
-    if all(any(_same(s, n) for n in name) for s in said):
-        return 0.9 - extra
-    return 0.5 * similarity(" ".join(said), " ".join(name))
-
-
-def _same(said: str, word: str) -> bool:
-    if said == word:
-        return True
-    if any(c.isdigit() for c in said + word) or min(len(said), len(word)) < 4:
-        return False
-    return word.startswith(said) or similarity(said, word) >= 0.8
+    return name_score(said, name)
 
 
 def _squash(text: str) -> str:
