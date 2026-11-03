@@ -1,0 +1,86 @@
+name: Build
+
+# The installed app (#9): freeze with PyInstaller, smoke-test what was frozen, check
+# nothing GPL, LGPL or CUDA got in, and wrap it in an Inno Setup installer. Unsigned
+# for now, so Windows SmartScreen warns on first run.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "src/**"
+      - "packaging/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+      # The app and PyInstaller only: no dev tools, benchmarks or CUDA wheels.
+      - run: uv sync --locked --no-default-groups --group build
+      - run: uv run pyinstaller packaging/tycho.spec --noconfirm --log-level WARN
+
+      - name: Smoke-test the frozen app
+        shell: pwsh
+        run: |
+          $exe = "dist\tycho\tycho.exe"
+          $version = & $exe --version
+          if ($LASTEXITCODE -ne 0) { throw "tycho --version failed" }
+          Write-Output $version
+          if ($version -match "unknown") { throw "the version's metadata is missing" }
+          # What's imported only on first use (the speech model, joysticks): a module or
+          # package metadata missing from the build fails here, not on a player's PC.
+          & $exe --smoke-imports
+          if ($LASTEXITCODE -ne 0) { throw "a lazily imported module is missing" }
+          # No game or microphone here, so check reports problems; it must still run.
+          $out = & $exe check --quick 2>&1 | Out-String
+          Write-Output $out
+          if ($out -match "Traceback|ModuleNotFoundError|ImportError|Failed to load") {
+            throw "the frozen app is missing something"
+          }
+          if ($out -notmatch "Settings") { throw "tycho check didn't run" }
+          & $exe key --help | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "tycho key failed" }
+
+      - name: Nothing GPL, LGPL or CUDA in the build
+        shell: pwsh
+        run: |
+          $bad = Get-ChildItem dist\tycho -Recurse -File | Where-Object {
+            $_.Name -match "^(SDL2_(mixer|image|ttf|gfx)|libgme|libxmp|libmodplug|libavif|libjxl|cublas|cudnn|cudart|cufft|curand|nvrtc|nvJitLink)" -or
+            $_.FullName -match "\\(pygame|nvidia)\\"
+          }
+          if ($bad) { $bad | ForEach-Object { Write-Output $_.FullName }; throw "left-out files got in" }
+          if (-not (Test-Path dist\tycho\_internal\sdl2dll\dll\SDL2.dll)) { throw "SDL2.dll is missing" }
+
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          choco install innosetup --version=6.7.1 -y --no-progress
+          $version = (uv version --short).Trim()
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Qp "/DAppVersion=$version" packaging\tycho.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+          Get-ChildItem dist\TychoSetup-*.exe | ForEach-Object { "{0}: {1:N0} MB" -f $_.Name, ($_.Length / 1MB) }
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tycho-installer
+          path: dist/TychoSetup-*.exe
+          retention-days: 14

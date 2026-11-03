@@ -6,9 +6,13 @@
 
 Tycho turns natural speech into in-game actions, using your own keybinds. Hold push-to-talk and say what you want, the way you'd say it to a crewmate. Tycho presses the right keys, tells you what it did, and asks before doing anything you can't undo. It can also answer Star Citizen questions.
 
-**Status: pre-alpha (0.3).** Common commands run instantly on your PC. Claude handles everything said differently, plus questions, and Tycho answers aloud with an ElevenLabs voice. Anything you can't undo (ejecting, firing) waits for you to say "confirm". There's no installer yet: you need a terminal and about 15 minutes.
+**Status: pre-alpha (0.3).** Common commands run instantly on your PC. Claude handles everything said differently, plus questions, and Tycho answers aloud with an ElevenLabs voice. Anything you can't undo (ejecting, firing) waits for you to say "confirm". An installer is being tested (below); otherwise you need a terminal and about 15 minutes.
 
 ## Install
+
+**Installer (preview).** Each build on `main` makes `TychoSetup-<version>.exe`: open the [Build workflow](https://github.com/benshapyro/tycho-ai/actions/workflows/build.yml), pick the latest run, and download `tycho-installer`. It installs for you only, with no administrator prompt, adds Tycho to the Start menu and puts `tycho` on your PATH. It isn't code-signed yet, so Windows SmartScreen will say it's from an unknown publisher: choose **More info**, then **Run anyway**. Then, in a new terminal: `tycho key set anthropic`, `tycho key set elevenlabs`, `tycho bind`, `tycho run`. With an NVIDIA card, `tycho gpu install` lets speech recognition use it. Uninstalling keeps your settings, keys and the speech model.
+
+**From source:**
 
 1. **Install uv**, which fetches Python for you. In PowerShell:
    ```powershell

@@ -39,6 +39,9 @@ if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when run
 
 log = logging.getLogger("tycho")
 
+TYCHO = "tycho" if getattr(sys, "frozen", False) else "uv run tycho"
+"""How to run Tycho, for messages: installed, it's `tycho` (on PATH and the Start menu)."""
+
 KEYBIND_REFRESH_SECONDS = 2.0
 """How often to look for keybinds the player changed in game."""
 
@@ -102,7 +105,7 @@ def run_command(current: Settings, *, verbose: bool = False) -> int:
         return 0
     except (FileNotFoundError, GameDataError, AudioError, ModelError, SettingsError) as e:
         log.error("%s", e)
-        print("Run `uv run tycho check` for a full diagnosis.", file=sys.stderr)
+        print(f"Run `{TYCHO} check` for a full diagnosis.", file=sys.stderr)
         return 1
 
 
@@ -199,7 +202,7 @@ def gpu_hint() -> str | None:
     )
 
 
-GPU_HELP = "uv run tycho gpu install"
+GPU_HELP = f"{TYCHO} gpu install"
 
 
 def gpu_command(action: str) -> int:
@@ -234,7 +237,7 @@ def gpu_command(action: str) -> int:
     return 0
 
 
-BRAIN_KEY_HELP = "uv run tycho key set anthropic"
+BRAIN_KEY_HELP = f"{TYCHO} key set anthropic"
 
 
 def anthropic_key() -> str | None:
@@ -284,7 +287,7 @@ def load_brain(matcher: CommandMatcher, current: Settings) -> Brain | None:
     )
 
 
-VOICE_KEY_HELP = "uv run tycho key set elevenlabs"
+VOICE_KEY_HELP = f"{TYCHO} key set elevenlabs"
 
 
 def elevenlabs_key() -> str | None:
@@ -445,7 +448,7 @@ def check_command(current: Settings, *, quick: bool = False) -> int:
     elif warned:
         print(f"Ready, with {warned} thing(s) worth a look.")
     else:
-        print("All good. Start Tycho with: uv run tycho run")
+        print(f"All good. Start Tycho with: {TYCHO} run")
     return 1 if failed else 0
 
 
@@ -462,7 +465,7 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
 
     binding = current.push_to_talk_binding
     if binding is None:
-        yield Finding("fail", "Push-to-talk", "not chosen yet. Run: uv run tycho bind")
+        yield Finding("fail", "Push-to-talk", f"not chosen yet. Run: {TYCHO} bind")
     else:
         yield Finding("ok", "Push-to-talk", describe(binding))
 
@@ -547,7 +550,7 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
             "warn",
             "Speech model",
             f"not downloaded yet ({size:.1f} GB to {model.folder(PARAKEET_V2)}); "
-            "uv run tycho run downloads it. Set TYCHO_MODELS to put it on another drive.",
+            f"{TYCHO} run downloads it. Set TYCHO_MODELS to put it on another drive.",
         )
     choice = device_choice(current)
     yield Finding(
@@ -682,7 +685,7 @@ def conflict_warnings(binding: Binding, store: KeybindStore) -> list[str]:
     shown = ", ".join(names[:4]) + (f" and {len(names) - 4} more" if len(names) > 4 else "")
     return [
         f"{describe(binding)} is also bound in game ({shown}). The game sees the press "
-        "too, so choose another button with `uv run tycho bind`, or unbind it in game."
+        f"too, so choose another button with `{TYCHO} bind`, or unbind it in game."
     ]
 
 
