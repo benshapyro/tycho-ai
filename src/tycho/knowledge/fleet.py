@@ -39,30 +39,49 @@ player said them; pass empty values for anything unchanged. Never call it for \
 ships the player is only asking about."""
 
 
+class FleetFileError(OSError):
+    """The fleet file exists but couldn't be read, so Tycho won't write over it."""
+
+
 class Fleet:
     """The ships the player owns (kept in a file) and the one they're flying (not kept)."""
 
-    def __init__(self, path: Path, ships: Sequence[str] = (), flying: str = "") -> None:
+    def __init__(
+        self, path: Path, ships: Sequence[str] = (), flying: str = "", problem: str = ""
+    ) -> None:
         self.path = path
         self.ships = list(ships)
         self.flying = flying
+        # Set when the file is there but unreadable: saving would replace the player's
+        # hand-written list with whatever was said this session, so ``save`` refuses.
+        self.problem = problem
 
     @classmethod
     def load(cls, path: Path) -> Fleet:
-        """The fleet in ``path``; an empty one if there's no file or it can't be read."""
+        """The fleet in ``path``; an empty one if there's no file or it can't be read.
+
+        An unreadable file is left alone (``problem`` says why) rather than overwritten.
+        """
         try:
-            data = tomllib.loads(path.read_text("utf-8"))
+            # utf-8-sig: Notepad and PowerShell can save a byte-order mark, which TOML rejects.
+            data = tomllib.loads(path.read_text("utf-8-sig"))
         except FileNotFoundError:
             return cls(path)
-        except (OSError, tomllib.TOMLDecodeError) as e:
-            log.warning("Couldn't read your fleet in %s (%s); starting without it", path, e)
-            return cls(path)
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+            problem = (
+                f"{path} can't be read ({e}), so Tycho won't change it. "
+                "Fix that, or delete the file to start a new fleet."
+            )
+            log.warning("Starting without your fleet: %s", problem)
+            return cls(path, problem=problem)
         ships = data.get("ships", [])
         names = [str(s) for s in cast(list[object], ships)] if isinstance(ships, list) else []
         return cls(path, names[:MAX_SHIPS])
 
     def save(self) -> None:
         """Write the fleet, swapping the new file in so a crash never loses it."""
+        if self.problem:
+            raise FleetFileError(self.problem)
         lines = [HEADER, "ships = ["]
         lines += [f"    {json.dumps(name, ensure_ascii=False)}," for name in self.ships]
         lines.append("]\n")
@@ -154,7 +173,9 @@ class FleetUpdate:
                 fleet.save()
             except OSError as e:
                 log.warning("Couldn't save your fleet to %s: %s", fleet.path, e)
-                problems.append({"note": "the change couldn't be saved; it lasts until restart"})
+                problems.append(
+                    {"note": f"the change couldn't be saved, so it lasts until restart: {e}"}
+                )
         result: dict[str, object] = {
             **{k: v for k, v in changed.items() if v},
             "fleet": fleet.ships,

@@ -187,3 +187,30 @@ def test_an_unknown_setting_is_a_note_not_a_stop(
     assert first.what == second.what == "Settings"
     assert second.level == "warn"
     assert "from_the_future" in second.detail
+
+
+def test_a_commands_file_with_a_byte_order_mark_is_used(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # PowerShell 5.1's Set-Content -Encoding utf8 always writes one.
+    monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path))
+    text = '[[sequence]]\nid = "wake"\nsay = ["wake up"]\nsteps = ["flight_ready"]\n'
+    (tmp_path / "commands.toml").write_text(text, "utf-8-sig")
+    assert app.load_commands().get("wake") is not None
+
+
+def test_check_warns_about_broken_player_files_without_failing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # run starts anyway with either file broken, so check mustn't say it can't.
+    monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path))
+    (tmp_path / "commands.toml").write_text("[[sequence]\n", "utf-8")
+    (tmp_path / "fleet.toml").write_text("ships = [ not toml", "utf-8")
+    seen: dict[str, app.Finding] = {}
+    for finding in app._checks(settings.load(), quick=True):  # pyright: ignore[reportPrivateUsage]
+        seen[finding.what] = finding
+        if finding.what == "Your fleet":
+            break
+    assert seen["Your commands"].level == "warn"
+    assert seen["Your fleet"].level == "warn"
+    assert "won't change it" in seen["Your fleet"].detail
