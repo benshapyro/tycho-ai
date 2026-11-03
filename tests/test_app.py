@@ -233,3 +233,30 @@ def test_check_warns_about_broken_player_files_without_failing(
     assert seen["Your commands"].level == "warn"
     assert seen["Your fleet"].level == "warn"
     assert "won't change it" in seen["Your fleet"].detail
+
+
+@pytest.mark.parametrize("allowed", [True, False])
+def test_check_for_updates_false_never_asks_github(
+    monkeypatch: pytest.MonkeyPatch, allowed: bool
+) -> None:
+    # The documented opt-out had no test (audit, 2026-11-03).
+    asked: list[str] = []
+
+    def announce(current: str) -> None:
+        asked.append("run")
+
+    def finding() -> app.Finding:
+        asked.append("check")
+        return app.Finding("ok", "Updates", "stub")
+
+    def focus() -> app.Finding:
+        return app.Finding("ok", "Focus", "stub")
+
+    monkeypatch.setattr(app.updates, "announce_in_background", announce)
+    monkeypatch.setattr(app, "update_finding", finding)
+    monkeypatch.setattr(app, "focus_finding", focus)
+    current = settings.Settings(check_for_updates=allowed)
+    app.start_update_check(current)
+    checked = [f.what for f in app._live_checks(current)]  # pyright: ignore[reportPrivateUsage]
+    assert asked == (["run", "check"] if allowed else [])
+    assert checked == (["Updates", "Focus"] if allowed else ["Focus"])

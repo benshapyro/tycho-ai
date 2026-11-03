@@ -124,8 +124,7 @@ def _run(current: Settings, log_file: Path) -> int:
     from tycho.runtime.actionlog import FileActionLog
 
     log.info("Tycho %s. Log file: %s", __version__, log_file)
-    if current.check_for_updates:
-        updates.announce_in_background(__version__)
+    start_update_check(current)
     binding = current.push_to_talk_binding
     if binding is None:
         print("First, choose your push-to-talk button.")
@@ -228,7 +227,19 @@ def gpu_command(action: str) -> int:
         print(f"Not installed ({DOWNLOAD_BYTES / 1e9:.1f} GB to download). Run: {GPU_HELP}")
         return 1
     if action == "remove":
-        print("Removed." if libraries.remove() else "Nothing to remove.")
+        from tycho.runtime.instance import AlreadyRunning, SingleInstance
+
+        # A running Tycho has the DLLs loaded, and deleting half of them leaves neither
+        # the graphics card nor a quick reinstall (audit, 2026-11-03).
+        try:
+            with SingleInstance():
+                print("Removed." if libraries.remove() else "Nothing to remove.")
+        except AlreadyRunning:
+            print("Tycho is running and using these libraries. Close it first.", file=sys.stderr)
+            return 2
+        except ModelError as e:
+            print(e, file=sys.stderr)
+            return 2
         return 0
     driver = nvidia_driver()
     if driver is None:
@@ -599,9 +610,20 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
     )
 
     if not quick:
-        if current.check_for_updates:
-            yield update_finding()
-        yield focus_finding()
+        yield from _live_checks(current)
+
+
+def _live_checks(current: Settings) -> Iterator[Finding]:
+    """The checks that ask GitHub or need the player at the PC."""
+    if current.check_for_updates:  # the opt-out: no request to GitHub at all
+        yield update_finding()
+    yield focus_finding()
+
+
+def start_update_check(current: Settings) -> None:
+    """Ask GitHub for a newer Tycho in the background, unless the player turned it off."""
+    if current.check_for_updates:
+        updates.announce_in_background(__version__)
 
 
 def update_finding(get: Callable[[str], Any] = updates.latest_json) -> Finding:
@@ -734,7 +756,8 @@ def device_choice(current: Settings) -> DeviceChoice:
         return choose_device("cpu", cuda=False, free_mb=None)
     libraries = CudaLibraries(paths.cuda_dir())
     cuda = cuda_available(libraries.dlls if libraries.ready() else None)
-    return choose_device(current.transcription_device, cuda=cuda, free_mb=gpu_free_mb())
+    free_mb = gpu_free_mb() if cuda else None  # no NVIDIA tool runs without CUDA
+    return choose_device(current.transcription_device, cuda=cuda, free_mb=free_mb)
 
 
 def microphone_device(setting: str | None) -> int | str | None:

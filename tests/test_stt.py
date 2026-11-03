@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from tycho.stt import ModelError, ModelFile, ModelSpec, ModelStore, choose_device
+from tycho.stt.device import smi_path
 from tycho.stt.models import HttpDownloader
 from tycho.stt.parakeet import Device, device_in_use
 
@@ -295,3 +296,36 @@ def test_a_download_that_gets_nowhere_is_deleted(tmp_path: Path) -> None:
     with pytest.raises(ModelError, match="checksum"):
         ModelStore(tmp_path, FakeDownloader(serve=short)).ensure(spec)
     assert not (tmp_path / spec.folder / "a.onnx.part").exists()
+
+
+# --- Finding nvidia-smi ------------------------------------------------------------------
+
+
+def _tool(folder: Path) -> Path:
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "nvidia-smi.exe"
+    path.write_bytes(b"")
+    return path
+
+
+def test_nvidia_smi_is_never_taken_from_the_current_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A planted nvidia-smi.exe in Downloads ran on every start (audit, 2026-11-03).
+    downloads = tmp_path / "Downloads"
+    _tool(downloads)
+    monkeypatch.chdir(downloads)
+    assert smi_path({"PATH": os.pathsep.join([".", "Downloads", ""])}) is None
+
+
+def test_nvidia_smi_comes_from_the_drivers_folder_first(tmp_path: Path) -> None:
+    system32 = _tool(tmp_path / "Windows" / "System32")
+    _tool(tmp_path / "elsewhere")
+    environ = {"SystemRoot": str(tmp_path / "Windows"), "PATH": str(tmp_path / "elsewhere")}
+    assert smi_path(environ) == system32
+
+
+def test_nvidia_smi_from_an_absolute_path_folder(tmp_path: Path) -> None:
+    tool = _tool(tmp_path / "NVSMI")
+    assert smi_path({"PATH": str(tmp_path / "NVSMI")}) == tool
+    assert smi_path({}) is None

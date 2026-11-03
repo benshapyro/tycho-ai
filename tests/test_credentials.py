@@ -2,29 +2,11 @@ import sys
 from collections.abc import Iterator
 
 import keyring
-import keyring.backend
 import keyring.errors
 import pytest
 
+from tests.fakes.fake_keyring import MemoryKeyring
 from tycho import credentials
-
-
-class MemoryKeyring(keyring.backend.KeyringBackend):
-    priority = 1  # pyright: ignore[reportAssignmentType]
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.store: dict[tuple[str, str], str] = {}
-
-    def get_password(self, service: str, username: str) -> str | None:
-        return self.store.get((service, username))
-
-    def set_password(self, service: str, username: str, password: str) -> None:
-        self.store[(service, username)] = password
-
-    def delete_password(self, service: str, username: str) -> None:
-        if self.store.pop((service, username), None) is None:
-            raise keyring.errors.PasswordDeleteError(username)
 
 
 @pytest.fixture
@@ -136,3 +118,9 @@ def test_every_use_of_the_store_sets_up_the_backend_first(
     credentials.get("anthropic")
     credentials.delete("anthropic")
     assert calls == ["store", "store", "store"]
+
+
+def test_no_test_can_reach_the_real_credential_manager() -> None:
+    # tests/conftest.py: a test of `tycho check` read the real keys (audit, 2026-11-03).
+    assert isinstance(keyring.get_keyring(), MemoryKeyring)
+    assert credentials.get("anthropic") is None

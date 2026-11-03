@@ -146,7 +146,13 @@ class CudaLibraries:
         """Delete the libraries. Returns False if there were none."""
         if not self.root.exists():
             return False
-        shutil.rmtree(self.root)
+        try:
+            shutil.rmtree(self.root)
+        except OSError as e:  # a DLL in use: tycho gpu remove checks Tycho isn't running
+            raise ModelError(
+                f"Couldn't remove all of {self.root} ({e.strerror or e}). Close anything using "
+                "it, then try again."
+            ) from e
         return True
 
     def _fetch(self, wheel: Wheel, progress: Progress | None) -> None:
