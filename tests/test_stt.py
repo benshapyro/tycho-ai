@@ -115,11 +115,19 @@ def server() -> Iterator[tuple[str, list[str]]]:
     ranges: list[str] = []
 
     class Handler(http.server.BaseHTTPRequestHandler):
+        """Like a real file server. Under /plain/ it ignores Range, as some do."""
+
         def do_GET(self) -> None:
             start = 0
-            if header := self.headers.get("Range"):
+            header = self.headers.get("Range")
+            if header and not self.path.startswith("/plain/"):
                 ranges.append(header)
                 start = int(header.removeprefix("bytes=").rstrip("-"))
+                if start >= len(data):
+                    self.send_response(416)  # nothing after that byte
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
                 self.send_response(206)
             else:
                 self.send_response(200)
@@ -149,6 +157,49 @@ def test_the_downloader_resumes_a_partial_file(
     assert part.read_bytes() == CONTENT["a.onnx"]
     assert ranges == ["bytes=250-"]
     assert seen[-1] == (700, 700)
+
+
+def test_a_finished_part_file_is_complete_not_an_error(
+    tmp_path: Path, server: tuple[str, list[str]]
+) -> None:
+    url, _ = server
+    part = tmp_path / "a.onnx.part"
+    part.write_bytes(CONTENT["a.onnx"])  # whole: the server answers 416 to the range
+    HttpDownloader(allow_http=True).fetch(url, part, lambda done, total: None)
+    assert part.read_bytes() == CONTENT["a.onnx"]
+
+
+def test_a_server_that_ignores_the_range_starts_over(
+    tmp_path: Path, server: tuple[str, list[str]]
+) -> None:
+    url, _ = server
+    part = tmp_path / "a.onnx.part"
+    part.write_bytes(CONTENT["a.onnx"][:250])
+    plain = url.replace("/a.onnx", "/plain/a.onnx")
+    HttpDownloader(allow_http=True).fetch(plain, part, lambda done, total: None)
+    assert part.read_bytes() == CONTENT["a.onnx"]  # not the first 250 bytes twice
+
+
+def test_a_whole_part_file_left_by_a_crash_is_used_without_a_download(tmp_path: Path) -> None:
+    spec, downloader = _spec(), FakeDownloader(fail=True)  # offline: it mustn't need to fetch
+    folder = tmp_path / spec.folder
+    folder.mkdir(parents=True)
+    for name, data in CONTENT.items():
+        (folder / f"{name}.part").write_bytes(data)
+    assert ModelStore(tmp_path, downloader).ensure(spec) == folder
+    assert downloader.fetched == []
+    assert (folder / "a.onnx").read_bytes() == CONTENT["a.onnx"]
+    assert not list(folder.glob("*.part"))
+
+
+def test_a_whole_but_wrong_part_file_is_downloaded_again(tmp_path: Path) -> None:
+    spec, downloader = _spec(), FakeDownloader()
+    folder = tmp_path / spec.folder
+    folder.mkdir(parents=True)
+    (folder / "a.onnx.part").write_bytes(b"x" * len(CONTENT["a.onnx"]))
+    ModelStore(tmp_path, downloader).ensure(spec)
+    assert "a.onnx" in downloader.fetched
+    assert (folder / "a.onnx").read_bytes() == CONTENT["a.onnx"]
 
 
 def test_the_downloader_refuses_plain_http_by_default(tmp_path: Path) -> None:
