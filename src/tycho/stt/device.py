@@ -7,6 +7,7 @@ Star Citizen already using about 8 GB. Revisited after the frame-rate test (#23)
 import shutil
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 GPU_MEMORY_NEEDED_MB = 4_500
@@ -45,29 +46,48 @@ def choose_device(setting: Setting, *, cuda: bool, free_mb: int | None) -> Devic
 
 def gpu_free_mb() -> int | None:
     """Free memory on the first NVIDIA card, or None if there isn't one or it can't be read."""
+    value = _smi("memory.free")
+    return int(value) if value is not None and value.isdigit() else None
+
+
+def nvidia_driver() -> int | None:
+    """The NVIDIA driver's major version (e.g. 581), or None without an NVIDIA card."""
+    value = _smi("driver_version")
+    try:
+        return int(value.split(".")[0]) if value else None
+    except ValueError:
+        return None
+
+
+def _smi(field: str) -> str | None:
+    """One field for the first NVIDIA card, from nvidia-smi."""
     smi = shutil.which("nvidia-smi")
     if smi is None:
         return None
     try:
         out = subprocess.run(  # noqa: S603 - a fixed command, found on PATH
-            [smi, "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
+            [smi, f"--query-gpu={field}", "--format=csv,noheader,nounits"],
             capture_output=True,
             text=True,
             timeout=5,
             check=False,
         )
-        return int(out.stdout.split()[0])
-    except OSError, subprocess.TimeoutExpired, IndexError, ValueError:
+        return out.stdout.split()[0]
+    except OSError, subprocess.TimeoutExpired, IndexError:
         return None
 
 
-def cuda_available() -> bool:
-    """Whether ONNX Runtime can use CUDA, loading the CUDA libraries from their pip wheels."""
+def cuda_available(libraries: Path | None = None) -> bool:
+    """Whether ONNX Runtime can use CUDA. Its libraries come from ``libraries`` (what
+    ``tycho gpu install`` downloaded) when given, else from pip wheels in development."""
     # Slow to import, so only when needed. ONNX Runtime ships no type information.
     import onnxruntime as ort  # pyright: ignore[reportMissingTypeStubs]
 
     try:
-        ort.preload_dlls()  # pyright: ignore[reportUnknownMemberType]
+        if libraries is not None:
+            ort.preload_dlls(directory=str(libraries))  # pyright: ignore[reportUnknownMemberType]
+        else:
+            ort.preload_dlls()  # pyright: ignore[reportUnknownMemberType]
     except OSError, RuntimeError:
         return False
     providers: list[str] = ort.get_available_providers()  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]

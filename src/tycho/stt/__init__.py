@@ -1,6 +1,13 @@
 """Speech to text: the model files, where recognition runs, and the transcriber."""
 
-from tycho.stt.device import DeviceChoice, choose_device, cuda_available, gpu_free_mb
+from tycho.stt.cuda import CudaLibraries
+from tycho.stt.device import (
+    DeviceChoice,
+    choose_device,
+    cuda_available,
+    gpu_free_mb,
+    nvidia_driver,
+)
 from tycho.stt.models import (
     PARAKEET_V2,
     HttpDownloader,
@@ -12,6 +19,7 @@ from tycho.stt.models import (
 
 __all__ = [
     "PARAKEET_V2",
+    "CudaLibraries",
     "DeviceChoice",
     "HttpDownloader",
     "ModelError",
@@ -21,4 +29,5 @@ __all__ = [
     "choose_device",
     "cuda_available",
     "gpu_free_mb",
+    "nvidia_driver",
 ]

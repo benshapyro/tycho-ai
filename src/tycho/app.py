@@ -55,6 +55,10 @@ def main(argv: list[str] | None = None) -> int:
     check.add_argument("--quick", action="store_true", help="skip the microphone and focus tests")
     commands.add_parser("bind", help="choose the push-to-talk button")
     commands.add_parser("sounds", help="play the done, not-done and asking sounds")
+    gpu = commands.add_parser(
+        "gpu", help="download (or remove) what speech recognition needs to use an NVIDIA card"
+    )
+    gpu.add_argument("action", choices=["install", "status", "remove"])
     args = parser.parse_args(argv)
 
     try:
@@ -69,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if bind_command(current) else 1
         case "sounds":
             return sounds_command(current)
+        case "gpu":
+            return gpu_command(args.action)
         case _:
             return run_command(current, verbose=getattr(args, "verbose", False))
 
@@ -157,7 +163,64 @@ def load_transcriber(current: Settings) -> ParakeetTranscriber:
     started = time.monotonic()
     transcriber = ParakeetTranscriber.load(folder, choice.device)
     log.info("Speech model ready in %.1f s", time.monotonic() - started)
+    if transcriber.device == "cpu" and choice.device == "gpu" and (hint := gpu_hint()):
+        log.info("%s", hint)
     return transcriber
+
+
+def gpu_hint() -> str | None:
+    """What to do when an NVIDIA card could run speech recognition but its libraries are
+    missing; None if there's no NVIDIA card or they're already downloaded."""
+    from tycho.stt import CudaLibraries, nvidia_driver
+    from tycho.stt.cuda import DOWNLOAD_BYTES, MIN_DRIVER
+
+    driver = nvidia_driver()
+    if driver is None or CudaLibraries(paths.cuda_dir()).ready():
+        return None
+    if driver < MIN_DRIVER:
+        return (
+            f"Your NVIDIA card could recognise speech about 10x faster, but needs driver "
+            f"{MIN_DRIVER} or newer (you have {driver}). Update it, then run: {GPU_HELP}"
+        )
+    return (
+        "Speech recognition is on the processor. Your NVIDIA card can do it about 10x "
+        f"faster with a one-time {DOWNLOAD_BYTES / 1e9:.1f} GB download: {GPU_HELP}"
+    )
+
+
+GPU_HELP = "uv run tycho gpu install"
+
+
+def gpu_command(action: str) -> int:
+    """``tycho gpu``: NVIDIA's CUDA libraries, so speech recognition can use the card."""
+    from tycho.stt import CudaLibraries, ModelError, nvidia_driver
+    from tycho.stt.cuda import DOWNLOAD_BYTES, MIN_DRIVER
+
+    libraries = CudaLibraries(paths.cuda_dir())
+    if action == "status":
+        if libraries.ready():
+            print(f"Installed in {libraries.root}. Speech recognition can use the graphics card.")
+            return 0
+        print(f"Not installed ({DOWNLOAD_BYTES / 1e9:.1f} GB to download). Run: {GPU_HELP}")
+        return 1
+    if action == "remove":
+        print("Removed." if libraries.remove() else "Nothing to remove.")
+        return 0
+    driver = nvidia_driver()
+    if driver is None:
+        print("No NVIDIA graphics card found, so speech recognition runs on the processor.")
+        return 1
+    if driver < MIN_DRIVER:
+        print(f"Update the NVIDIA driver to {MIN_DRIVER} or newer first (you have {driver}).")
+        return 1
+    print(f"Downloading NVIDIA's CUDA libraries ({DOWNLOAD_BYTES / 1e9:.1f} GB), once.")
+    try:
+        libraries.ensure(_download_progress("the graphics card libraries"))
+    except ModelError as e:
+        print(e, file=sys.stderr)
+        return 2
+    print("Done. Speech recognition will use the graphics card the next time Tycho starts.")
+    return 0
 
 
 BRAIN_KEY_HELP = "uv run python -m tycho.credentials set anthropic"
@@ -332,7 +395,7 @@ async def _refresh_keybinds(store: KeybindStore) -> None:
         last_error = store.last_error
 
 
-def _download_progress() -> Callable[[str, int, int], None]:
+def _download_progress(what: str = "the speech model") -> Callable[[str, int, int], None]:
     """One line per file, updated in place, ending when the file is complete."""
     shown: dict[str, int] = {}
 
@@ -343,7 +406,7 @@ def _download_progress() -> Callable[[str, int, int], None]:
         shown[name] = percent
         size = f"{done / 1e9:.2f} of {total / 1e9:.2f} GB" if total > 1e8 else ""
         end = "\n" if done >= total else ""
-        line = f"  Downloading the speech model: {name} {percent:3d}% {size}"
+        line = f"  Downloading {what}: {name} {percent:3d}% {size}"
         print("\r" + line, end=end, flush=True)  # \r: overwrite the line in place
 
     return show
@@ -579,11 +642,13 @@ def find_install(current: Settings) -> GameInstall:
 
 
 def device_choice(current: Settings) -> DeviceChoice:
-    from tycho.stt import choose_device, cuda_available, gpu_free_mb
+    from tycho.stt import CudaLibraries, choose_device, cuda_available, gpu_free_mb
 
     if current.transcription_device == "cpu":
         return choose_device("cpu", cuda=False, free_mb=None)
-    return choose_device(current.transcription_device, cuda=cuda_available(), free_mb=gpu_free_mb())
+    libraries = CudaLibraries(paths.cuda_dir())
+    cuda = cuda_available(libraries.dlls if libraries.ready() else None)
+    return choose_device(current.transcription_device, cuda=cuda, free_mb=gpu_free_mb())
 
 
 def microphone_device(setting: str | None) -> int | str | None:

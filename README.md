@@ -21,6 +21,7 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
    uv sync                  # with an NVIDIA graphics card (adds about 2 GB of CUDA libraries)
    uv sync --no-group gpu   # without one; speech recognition then runs on the processor
    ```
+   Installed without them, `uv run tycho gpu install` adds the same CUDA libraries later (a 1.2 GB download, kept in `%LOCALAPPDATA%	ycho\cuda`); `uv run tycho gpu remove` takes them away.
 4. **Add your keys** (optional, but most of Tycho needs them; see [Keys and costs](#keys-and-costs)). Each command asks for the key and stores it in Windows Credential Manager, never in a file:
    ```powershell
    uv run python -m tycho.credentials set anthropic
