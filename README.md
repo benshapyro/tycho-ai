@@ -79,7 +79,7 @@ uv run python tools/spike/make_layout.py --install
 
 ## Settings and logs
 
-Settings are in `%APPDATA%\tycho\settings.toml`, and logs in `%LOCALAPPDATA%\tycho\logs`: `tycho.jsonl` for everything, `actions.jsonl` for every key Tycho pressed. Set `keep_transcripts = true` to also log what you said and what Tycho said, which helps when something goes wrong. It stays on your PC. Set `TYCHO_MODELS` to keep the speech model on another drive.
+Settings are in `%APPDATA%\tycho\settings.toml`, and logs in `%LOCALAPPDATA%\tycho\logs`: `tycho.jsonl` for everything, `actions.jsonl` for every key Tycho pressed. Set `keep_transcripts = true` to also log what you said and what Tycho said, which helps when something goes wrong. It stays on your PC. Set `TYCHO_MODELS` to keep the speech model on another drive. When it starts, Tycho asks GitHub whether a newer version is out and says so (it never updates itself); set `check_for_updates = false` to turn that off.
 
 ## What leaves your PC
 

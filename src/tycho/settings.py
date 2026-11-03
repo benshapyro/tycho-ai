@@ -73,6 +73,11 @@ class Settings(BaseModel):
         description="Let Tycho search Star Citizen sites for news, upcoming patches and new "
         "ships. Each search costs about 1 cent of your Anthropic credit.",
     )
+    check_for_updates: bool = Field(
+        default=True,
+        description="When Tycho starts, ask GitHub whether a newer version is out, and say so. "
+        "Tycho never updates itself.",
+    )
 
     @field_validator("push_to_talk")
     @classmethod
