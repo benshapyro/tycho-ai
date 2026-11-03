@@ -105,6 +105,8 @@ def commands_for(
     An action that is a command's own (first) action runs as that command, with its
     setup, waits and accepted risks, exactly as the fast path would. Any other action
     runs bare, with none: a key it shares with a confirm-grade action stays refused.
+    Either way, if any command using the action has ``confirm`` or ``requires``, so
+    does the pick.
     A bare action counts as announced if an announced command uses it, so Tycho
     doesn't talk over the game. Travel the brain picked always asks first (the
     author's call, 2026-10-31).
@@ -116,18 +118,31 @@ def commands_for(
         steps = tuple(replace(s, command=_ask_before_travel(s.command)) for s in sequence.steps)
         return (replace(sequence, steps=steps),)
     own: dict[str, Command] = {}
-    announced: set[str] = set()
+    users: dict[str, list[Command]] = {}
     for command in matcher.commands:
         if command.actions and not command.is_sequence:
             own.setdefault(command.actions[0], command)
-            if command.announced:
-                announced.update(command.actions)
-    return tuple(
-        _ask_before_travel(
-            own.get(name) or Command(id=name, say=(), actions=(name,), announced=name in announced)
+            for name in command.actions:
+                users.setdefault(name, []).append(command)
+    picked: list[Command] = []
+    for name in decision.actions:
+        using = users.get(name, [])
+        command = own.get(name) or Command(
+            id=name, say=(), actions=(name,), announced=any(c.announced for c in using)
         )
-        for name in decision.actions
-    )
+        picked.append(_ask_before_travel(_strictest(command, using)))
+    return tuple(picked)
+
+
+def _strictest(command: Command, using: list[Command]) -> Command:
+    """``command``, asking first and needing every fact if any command that uses its
+    action does: a player's ``confirm = true`` holds however the brain names the
+    action, as a fallback or one a built-in command also starts with."""
+    confirm = command.confirm or any(c.confirm for c in using)
+    requires = tuple(dict.fromkeys((*command.requires, *(r for c in using for r in c.requires))))
+    if confirm == command.confirm and requires == command.requires:
+        return command
+    return replace(command, confirm=confirm, requires=requires)
 
 
 def _ask_before_travel(command: Command) -> Command:
