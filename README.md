@@ -38,7 +38,7 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
    uv run tycho run     # downloads the speech model the first time (2.5 GB)
    ```
 
-If the game isn't in `C:\Program Files\Roberts Space Industries\StarCitizen`, set `game_root` in `%APPDATA%\tycho\settings.toml` to the folder that contains `LIVE`. `uv run tycho check` explains anything else that's wrong, in plain words.
+Tycho finds the game where the RSI Launcher last installed or launched it, in the default folder, or in common folders on each drive. If it still can't, `tycho check` asks for the folder and saves it as `game_root` in `%APPDATA%\tycho\settings.toml`. To use PTU's keybinds instead of LIVE's, set `game_channel = "PTU"` there (or EPTU, TECH-PREVIEW, HOTFIX). `uv run tycho check` explains anything else that's wrong, in plain words.
 
 ## Keys and costs
 
