@@ -31,7 +31,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
-from tycho import safety
+from tycho import logs, safety
 from tycho.audio.clip import Samples, trim_silence
 from tycho.audio.source import AudioError, AudioSource
 from tycho.brain import BrainError, BrainRequest, Exchange, Reply, commands_for
@@ -123,6 +123,12 @@ def reply_to_question(text: str) -> str | None:
     return None
 
 
+def _log_failure(task: asyncio.Task[None]) -> None:
+    """Put a background warm-up's failure in Tycho's log, not asyncio's stderr warning."""
+    if not task.cancelled() and (e := task.exception()) is not None:
+        log.error("Warming up failed: %s", e, exc_info=e)
+
+
 class Session:
     def __init__(
         self,
@@ -199,6 +205,7 @@ class Session:
         warming = None
         if self._brain is not None:
             warming = asyncio.create_task(self._brain.warm(self._keybinds()))
+            warming.add_done_callback(_log_failure)
         self._warm_speaker()
         try:
             await stop.wait()
@@ -544,6 +551,13 @@ class Session:
             log.info(
                 "Tycho%s: %s", "" if speak else f" (not spoken: {self._quiet(result)})", result.say
             )
+        elif self._speaker is None:
+            # No voice: the console is the only place the player can read the answer
+            # (audit, 2026-11-03). Not the log file, unless they keep transcripts.
+            if result.say and self._would_speak(result):
+                log.info("Tycho: %s", result.say, extra=logs.CONSOLE_ONLY)
+            elif result.status == "asking" and result.question:
+                log.info("Tycho asks: %s", result.question, extra=logs.CONSOLE_ONLY)
         self._remember(result)
         if result.commands and self._action_log is not None:
             self._record(self._action_log, result, spoken=speak)
@@ -561,7 +575,12 @@ class Session:
             self._on_result(result)
 
     def _should_speak(self, result: Result) -> bool:
-        if self._speaker is None or not result.by_brain or not result.say.strip():
+        return self._speaker is not None and self._would_speak(result)
+
+    @staticmethod
+    def _would_speak(result: Result) -> bool:
+        """Whether this result has a line for the player, given a voice to say it."""
+        if not result.by_brain or not result.say.strip():
             return False
         return result.status == "replied" or (result.done and not result.announced)
 
@@ -621,6 +640,7 @@ class Session:
             return
         if self._speech_warming is None or self._speech_warming.done():
             self._speech_warming = asyncio.create_task(self._speaker.warm())
+            self._speech_warming.add_done_callback(_log_failure)
 
     def _quiet(self, result: Result) -> str:
         """Why a line wasn't spoken, for the log."""

@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from tests.fakes.fake_wiki import FakeUex, FakeWiki, uex_vehicle, vehicle
-from tycho.knowledge import Ambiguous, NotFound, Ship, ShipLibrary, ShipLookup
+from tycho.knowledge import Ambiguous, NotFound, Ship, ShipLibrary, ShipLookup, ship_lookup, store
 from tycho.knowledge.ships import (
     concept_from_uex,
     concepts_from_uex,
@@ -275,6 +275,19 @@ def test_an_old_schema_is_downloaded_again(tmp_path: Path) -> None:
     assert "/api/v2/vehicles" in wiki.calls
 
 
+def test_data_that_cant_be_saved_is_used_until_restart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # A full disk or a locked file left look-ups "still loading" all session (audit, 2026-11-03).
+    def full(*_: Any, **__: Any) -> None:
+        raise sqlite3.OperationalError("database or disk is full")
+
+    monkeypatch.setattr(store, "save", full)
+    library = asyncio.run(ensure(FakeWiki(FLEET), tmp_path, _today))
+    assert len(library) == len(FLEET)
+    assert "couldn't save it" in caplog.text
+
+
 # --- The look-up -------------------------------------------------------------------------------
 
 
@@ -312,6 +325,21 @@ def test_if_the_data_cant_be_had_it_says_why(tmp_path: Path) -> None:
     error, content = _run(lookup, {"names": ["Caterpillar"]})
     assert error
     assert "no ship data on this PC" in content["error"]
+
+
+def test_an_unexpected_failure_says_why_instead_of_still_loading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def broken(*_: Any, **__: Any) -> ShipLibrary:
+        raise PermissionError("the file is in use")
+
+    monkeypatch.setattr(ship_lookup, "ensure", broken)
+    lookup = ShipLookup(FakeWiki(FLEET), tmp_path)
+    asyncio.run(lookup.prepare())  # never raises
+    error, content = _run(lookup, {"names": ["Caterpillar"]})
+    assert error
+    assert "still loading" not in content["error"]
+    assert "the file is in use" in content["error"]
 
 
 @pytest.mark.parametrize("arguments", [{}, {"names": []}, {"names": "Caterpillar"}])

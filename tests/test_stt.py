@@ -248,3 +248,50 @@ def test_the_device_reported_is_the_one_really_used(
 
 def test_an_unrecognised_model_is_taken_at_its_word() -> None:
     assert device_in_use(object(), "gpu") == "gpu"
+
+
+class DroppingDownloader:
+    """Sends ``step`` bytes per connection, then the connection closes cleanly."""
+
+    def __init__(self, data: bytes, step: int, raises: bool = False) -> None:
+        self.data, self.step, self.raises = data, step, raises
+        self.calls = 0
+
+    def fetch(self, url: str, dest: Path, progress: Callable[[int, int], None]) -> None:
+        self.calls += 1
+        have = dest.stat().st_size if dest.exists() else 0
+        with dest.open("ab") as out:
+            out.write(self.data[have : have + self.step])
+        if self.raises:
+            raise OSError("connection reset")
+
+
+@pytest.mark.parametrize("raises", [False, True])
+def test_a_dropped_connection_continues_where_it_stopped(tmp_path: Path, raises: bool) -> None:
+    # A clean close used to delete up to 2.4 GB as a checksum failure (audit, 2026-11-03).
+    data = CONTENT["a.onnx"]
+    spec = _spec({"a.onnx": data})
+    downloader = DroppingDownloader(data, step=len(data) // 3 + 1, raises=raises)
+    folder = ModelStore(tmp_path, downloader).ensure(spec)
+    assert (folder / "a.onnx").read_bytes() == data
+    assert downloader.calls == 3
+
+
+def test_a_download_that_keeps_stopping_is_kept_for_next_time(tmp_path: Path) -> None:
+    data = CONTENT["a.onnx"]
+    spec = _spec({"a.onnx": data})
+    with pytest.raises(ModelError, match="keeps stopping"):
+        ModelStore(tmp_path, DroppingDownloader(data, step=10)).ensure(spec)
+    part = tmp_path / spec.folder / "a.onnx.part"
+    assert part.read_bytes() == data[:50]  # five tries of 10 bytes
+    ModelStore(tmp_path, DroppingDownloader(data, step=len(data))).ensure(spec)
+    assert (tmp_path / spec.folder / "a.onnx").read_bytes() == data
+
+
+def test_a_download_that_gets_nowhere_is_deleted(tmp_path: Path) -> None:
+    # Shorter than it should be, and a second try adds nothing: not the right file.
+    spec = _spec()
+    short = {**CONTENT, "a.onnx": b"short"}
+    with pytest.raises(ModelError, match="checksum"):
+        ModelStore(tmp_path, FakeDownloader(serve=short)).ensure(spec)
+    assert not (tmp_path / spec.folder / "a.onnx.part").exists()

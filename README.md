@@ -48,7 +48,7 @@ Tycho finds the game where the RSI Launcher last installed or launched it, in th
 | [Anthropic](https://console.anthropic.com) (Claude) | Anything said differently, misheard words, two-part requests, and questions | About $0.0002 a request, plus about $0.002 each time Tycho starts. An evening of play is usually a few cents. |
 | [ElevenLabs](https://elevenlabs.io) (voice) | Tycho speaks its answers, what it did, and its questions. The key needs text-to-speech permission. | About 0.5 credits a character: a chatty hour is about 4,000 credits. The free plan is non-commercial and requires attribution. |
 
-Without an ElevenLabs key, Tycho's replies go to the log and it plays its sounds instead.
+Without an ElevenLabs key, Tycho's replies are shown in its window and it plays its sounds instead.
 
 ## Using it
 

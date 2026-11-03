@@ -17,6 +17,9 @@ from pathlib import Path
 from typing import Protocol
 
 _CHUNK = 1 << 20
+RESUME_ATTEMPTS = 5
+"""How many times one download continues after the connection drops, before giving up
+(the partial file is kept, so the next run continues from there)."""
 _MARKER = ".tycho-verified.json"
 
 type Progress = Callable[[str, int, int], None]
@@ -128,6 +131,57 @@ class HttpDownloader:
                     progress(have, total)
 
 
+def fetch_whole(
+    downloader: Downloader,
+    url: str,
+    part: Path,
+    size: int,
+    report: Callable[[int, int], None],
+    name: str,
+) -> None:
+    """Download ``url`` into ``part`` until it holds ``size`` bytes, continuing where
+    it stopped when the connection drops, cleanly or not (audit, 2026-11-03).
+
+    What's downloaded so far is kept for the next run. A download that gets no
+    further at all isn't the file expected, so it's deleted.
+    """
+    for attempt in range(1, RESUME_ATTEMPTS + 1):
+        before = _size(part)
+        if before >= size:
+            return
+        try:
+            downloader.fetch(url, part, report)
+        except OSError:
+            if _size(part) > before and attempt < RESUME_ATTEMPTS:
+                continue  # it got somewhere: carry on from there
+            raise
+        after = _size(part)
+        if after >= size:
+            return
+        if after == before:
+            part.unlink(missing_ok=True)
+            raise ModelError(wrong_download(name))
+    mb = 1 << 20
+    raise ModelError(
+        f"The download of {name} keeps stopping: {_size(part) // mb} of {size // mb} MB so "
+        "far, which is kept. Check the internet connection, then try again to continue."
+    )
+
+
+def wrong_download(name: str) -> str:
+    return (
+        f"{name} didn't match its checksum after downloading, so it was deleted. "
+        "Try again; if it keeps failing, the download may be blocked or altered."
+    )
+
+
+def _size(path: Path) -> int:
+    try:
+        return path.stat().st_size
+    except FileNotFoundError:
+        return 0
+
+
 class ModelStore:
     """The models folder: what's there, what's been checked, and getting what's missing."""
 
@@ -185,14 +239,10 @@ class ModelStore:
                 progress(file.name, done, total)
 
         # A whole, right .part was downloaded but not yet renamed: nothing to fetch (#57).
-        if not (part.exists() and part.stat().st_size == file.size):
-            self._downloader.fetch(spec.url(file), part, report)
+        fetch_whole(self._downloader, spec.url(file), part, file.size, report, file.name)
         if part.stat().st_size != file.size or file_sha256(part) != file.sha256:
             part.unlink(missing_ok=True)
-            raise ModelError(
-                f"{file.name} didn't match its checksum after downloading, so it was deleted. "
-                "Try again; if it keeps failing, the download may be blocked or altered."
-            )
+            raise ModelError(wrong_download(file.name))
         os.replace(part, target)
         checked = _read_marker(folder)
         checked[file.name] = [*_stamp(target), file.sha256]

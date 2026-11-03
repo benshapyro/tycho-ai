@@ -20,7 +20,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from tycho.stt.models import Downloader, HttpDownloader, ModelError, Progress, file_sha256
+from tycho.stt.models import (
+    Downloader,
+    HttpDownloader,
+    ModelError,
+    Progress,
+    fetch_whole,
+    file_sha256,
+    wrong_download,
+)
 
 log = logging.getLogger(__name__)
 
@@ -150,14 +158,10 @@ class CudaLibraries:
             if progress is not None:
                 progress(wheel.name, done, total)
 
-        if not (part.exists() and part.stat().st_size == wheel.size):
-            self._downloader.fetch(wheel.url, part, report)
+        fetch_whole(self._downloader, wheel.url, part, wheel.size, report, wheel.name)
         if part.stat().st_size != wheel.size or file_sha256(part) != wheel.sha256:
             part.unlink(missing_ok=True)
-            raise ModelError(
-                f"{wheel.name} didn't match its checksum after downloading, so it was deleted. "
-                "Try again; if it keeps failing, the download may be blocked or altered."
-            )
+            raise ModelError(wrong_download(wheel.name))
         with zipfile.ZipFile(part) as archive:
             for member in archive.infolist():
                 name = Path(member.filename).name  # flattened: never a path out of the folder

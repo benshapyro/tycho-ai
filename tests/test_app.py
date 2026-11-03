@@ -63,6 +63,25 @@ def test_the_log_file_is_json_lines_with_tracebacks_redacted(tmp_path: Path) -> 
     logging.getLogger("tycho").handlers.clear()
 
 
+def test_console_only_lines_never_reach_the_log_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Tycho's reply with no voice: the player reads it, but it isn't kept unless
+    # they keep transcripts.
+    path = logs.setup(folder=tmp_path)
+    log = logging.getLogger("tycho.test")
+    log.info("Tycho: Try the Prospector.", extra=logs.CONSOLE_ONLY)
+    log.info("kept")
+    for handler in logging.getLogger("tycho").handlers:
+        handler.flush()
+        handler.close()
+    assert "Try the Prospector" in capsys.readouterr().err
+    assert [json.loads(line)["message"] for line in path.read_text("utf-8").splitlines()] == [
+        "kept"
+    ]
+    logging.getLogger("tycho").handlers.clear()
+
+
 # --- Push-to-talk conflicts --------------------------------------------------------------
 
 

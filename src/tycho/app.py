@@ -312,13 +312,15 @@ def elevenlabs_key() -> str | None:
 
 def load_speaker(current: Settings) -> Speaker | None:
     """ElevenLabs, if the player has stored a key and the voice isn't turned off.
-    Without it, Tycho's replies go to the log and it plays its sounds."""
+    Without it, Tycho's replies are shown in its window and it plays its sounds."""
     if current.voice_volume == 0:
         log.info("Voice: off (voice_volume is 0)")
         return None
     key = elevenlabs_key()
     if key is None:
-        log.info("No ElevenLabs key, so Tycho's replies go to the log. Add one: %s", VOICE_KEY_HELP)
+        log.info(
+            "No ElevenLabs key, so Tycho's replies are shown here. Add one: %s", VOICE_KEY_HELP
+        )
         return None
     from tycho.voice.elevenlabs import MODEL, ElevenLabsSpeaker
 
@@ -495,10 +497,14 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
         yield Finding("ok", "Brain", "Claude, with your Anthropic key")
 
     if current.voice_volume == 0:
-        yield Finding("ok", "Voice", "off (voice_volume is 0); Tycho's replies go to the log")
+        yield Finding(
+            "ok", "Voice", "off (voice_volume is 0); Tycho's replies are shown in its window"
+        )
     elif elevenlabs_key() is None:
         yield Finding(
-            "warn", "Voice", f"no ElevenLabs key, so replies go to the log: {VOICE_KEY_HELP}"
+            "warn",
+            "Voice",
+            f"no ElevenLabs key, so replies are shown in Tycho's window: {VOICE_KEY_HELP}",
         )
     else:
         yield Finding("ok", "Voice", "ElevenLabs, with your key")
