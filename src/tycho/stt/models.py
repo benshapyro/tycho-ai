@@ -177,7 +177,7 @@ class ModelStore:
         if part.exists():
             size = part.stat().st_size
             # Too big, or whole but wrong (it was killed before the check): start again.
-            if size > file.size or (size == file.size and _sha256(part) != file.sha256):
+            if size > file.size or (size == file.size and file_sha256(part) != file.sha256):
                 part.unlink()
 
         def report(done: int, total: int) -> None:
@@ -187,7 +187,7 @@ class ModelStore:
         # A whole, right .part was downloaded but not yet renamed: nothing to fetch (#57).
         if not (part.exists() and part.stat().st_size == file.size):
             self._downloader.fetch(spec.url(file), part, report)
-        if part.stat().st_size != file.size or _sha256(part) != file.sha256:
+        if part.stat().st_size != file.size or file_sha256(part) != file.sha256:
             part.unlink(missing_ok=True)
             raise ModelError(
                 f"{file.name} didn't match its checksum after downloading, so it was deleted. "
@@ -205,7 +205,7 @@ class ModelStore:
             return False
         if checked.get(file.name) == [*stamp, file.sha256]:
             return True
-        if _sha256(path) != file.sha256:
+        if file_sha256(path) != file.sha256:
             checked.pop(file.name, None)
             return False
         checked[file.name] = [*stamp, file.sha256]
@@ -220,7 +220,7 @@ def _stamp(path: Path) -> tuple[int, int]:
     return stat.st_size, stat.st_mtime_ns
 
 
-def _sha256(path: Path) -> str:
+def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as f:
         while chunk := f.read(_CHUNK):

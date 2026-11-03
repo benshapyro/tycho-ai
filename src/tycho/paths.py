@@ -54,6 +54,11 @@ def knowledge_dir() -> Path:
     return data_dir() / "knowledge"
 
 
+def cuda_dir() -> Path:
+    """NVIDIA's CUDA libraries, downloaded by ``tycho gpu install``."""
+    return data_dir() / "cuda"
+
+
 def voice_dir() -> Path:
     """Spoken lines kept as audio, such as the filler while a search runs."""
     return data_dir() / "voice"
