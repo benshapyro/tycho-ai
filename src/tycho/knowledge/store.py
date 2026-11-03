@@ -72,13 +72,19 @@ async def ensure(
         else:
             library, changed = library.with_concepts(found), True
     if changed:
-        await asyncio.to_thread(
-            save, path, library.ships, version, library.as_of, concepts=library.concepts
-        )
-        await asyncio.to_thread(_remove_others, folder, path)
-        log.info(
-            "Ship data: %d ships and vehicles for %s, saved to %s", len(library), version, path
-        )
+        try:
+            await asyncio.to_thread(
+                save, path, library.ships, version, library.as_of, concepts=library.concepts
+            )
+            await asyncio.to_thread(_remove_others, folder, path)
+        except (OSError, sqlite3.Error) as e:
+            # A full disk or a locked file: the data is in memory, so use it this session
+            # rather than leaving look-ups "still loading" (audit, 2026-11-03).
+            log.warning("Ship data: couldn't save it to %s (%s); using it until restart", path, e)
+        else:
+            log.info(
+                "Ship data: %d ships and vehicles for %s, saved to %s", len(library), version, path
+            )
     return library
 
 

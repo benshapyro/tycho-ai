@@ -1008,9 +1008,39 @@ def test_tychos_lines_are_only_logged_with_transcripts_on(
 ) -> None:
     caplog.set_level(logging.INFO, logger="tycho.runtime.session")
     brain = FakeBrain(RunActions(("v_toggle_landing_system",), "Calling you Ace."))
-    r = _conversation("put the wheels out would you", brain=brain)
+    r = _conversation("put the wheels out would you", brain=brain, speaker=FakeSpeaker())
     assert "Calling you Ace" not in caplog.text
     assert "tycho_said" not in r.actions.entries[0]
+
+
+def _console_only(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [r.getMessage() for r in caplog.records if getattr(r, "console_only", False)]
+
+
+def test_with_no_voice_replies_are_shown_but_not_kept(caplog: pytest.LogCaptureFixture) -> None:
+    # Without ElevenLabs the answer was thrown away (audit, 2026-11-03).
+    caplog.set_level(logging.INFO, logger="tycho.runtime.session")
+    r = _conversation("what's a good mining ship", brain=FakeBrain(Reply("The Prospector.")))
+    assert r.results[0].status == "replied"
+    assert _console_only(caplog) == ["Tycho: The Prospector."]
+
+
+def test_with_no_voice_a_question_is_shown(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, logger="tycho.runtime.session")
+    _conversation("eject")
+    assert len(_console_only(caplog)) == 1
+    assert _console_only(caplog)[0].startswith("Tycho asks: ")
+
+
+def test_with_no_voice_and_transcripts_kept_a_reply_is_logged_once(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="tycho.runtime.session")
+    _conversation(
+        "what's a good mining ship", brain=FakeBrain(Reply("The Prospector.")), log_transcripts=True
+    )
+    assert _console_only(caplog) == []
+    assert caplog.text.count("The Prospector.") == 1
 
 
 def test_a_refused_pick_isnt_spoken_as_if_it_were_done() -> None:
@@ -1158,3 +1188,20 @@ def test_a_sequence_that_needs_a_fact_presses_nothing_without_it(tmp_path: Path)
     r = _conversation("careful landing", matcher=matcher, game_state=FakeGameState())
     assert r.results[0].status == "refused"
     assert r.keys.events == []
+
+
+def test_a_failed_warm_up_goes_to_tychos_log(caplog: pytest.LogCaptureFixture) -> None:
+    # Not asyncio's "Task exception was never retrieved" on stderr (audit, 2026-11-03).
+    from tycho.runtime import session
+
+    async def fails() -> None:
+        raise RuntimeError("no network")
+
+    async def scenario() -> None:
+        task = asyncio.create_task(fails())
+        task.add_done_callback(session._log_failure)  # pyright: ignore[reportPrivateUsage]
+        await asyncio.gather(task, return_exceptions=True)
+
+    caplog.set_level(logging.ERROR, logger="tycho.runtime.session")
+    asyncio.run(scenario())
+    assert "Warming up failed: no network" in caplog.text

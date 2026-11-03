@@ -92,6 +92,9 @@ class ShipLookup:
         except ShipDataError as e:
             self._problem = str(e)
             log.warning("Ship look-ups are off: %s", e)
+        except Exception as e:  # anything else mustn't leave them "still loading" all session
+            self._problem = f"the ship data couldn't be loaded ({type(e).__name__}: {e})"
+            log.exception("Ship look-ups are off")
 
     async def run(self, arguments: Mapping[str, object]) -> LookupResult:
         names = arguments.get("names")

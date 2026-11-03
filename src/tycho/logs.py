@@ -60,6 +60,15 @@ def _keep_label(match: re.Match[str]) -> str:
     return _REDACTED
 
 
+CONSOLE_ONLY = {"console_only": True}
+"""``extra=`` for a line the player must see but that isn't kept in the log file:
+Tycho's reply when there's no voice, unless ``keep_transcripts`` is on."""
+
+
+def _not_console_only(record: logging.LogRecord) -> bool:
+    return not getattr(record, "console_only", False)
+
+
 class ConsoleFormatter(logging.Formatter):
     def __init__(self) -> None:
         super().__init__("%(asctime)s  %(message)s", datefmt="%H:%M:%S")
@@ -98,6 +107,7 @@ def setup(*, verbose: bool = False, folder: Path | None = None) -> Path:
         folder / LOG_FILE, maxBytes=_MAX_BYTES, backupCount=_BACKUPS, encoding="utf-8"
     )
     file.setFormatter(JsonFormatter())
+    file.addFilter(_not_console_only)
     file.setLevel(logging.DEBUG)
 
     root = logging.getLogger("tycho")
