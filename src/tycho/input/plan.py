@@ -22,6 +22,10 @@ THRESHOLD_MARGIN = 0.12
 """Extra time past a delayed-press threshold, so it reliably counts."""
 TAP_GAP_SECONDS = 0.08
 """Between the presses of a double-tap."""
+TAP_WINDOW_SECONDS = 0.25
+"""The game's tap window (``release_threshold``): a key let go sooner counts as a tap."""
+SAFE_RELEASE_SECONDS = TAP_WINDOW_SECONDS + 0.05
+"""How long a hold must last before a cancel may let go of it, so it can't become a tap."""
 
 
 class NotPressable(ValueError):
@@ -39,6 +43,12 @@ class Press:
     taps: int = 1
     gap_seconds: float = TAP_GAP_SECONDS
     label: str = ""
+    min_hold_seconds: float = 0.0
+    """A cancel lets go no sooner than this. For a hold past the tap window, letting go
+    inside it would count as a tap, which on many keys is another action: mouse1 tapped
+    can be a jump request while held it engages quantum; F6 tapped is "Engines -
+    Increase", held is "Set to Max". Held this long, the press does what was asked or
+    nothing."""
 
     @property
     def main(self) -> Code:
@@ -54,12 +64,14 @@ def plan(
         raise NotPressable(f"{action.label or action.name} has no key Tycho can press")
     codes = tuple(code_for(name) for name in (*key.modifiers, key.key))
     mode = modes.get(action.activation or "press") or ActivationMode(action.activation or "press")
+    hold = 0.0 if not codes[-1].holdable else _hold_time(action, mode, hold_seconds)
     return Press(
         action=action.name,
         keys=codes,
-        hold_seconds=0.0 if not codes[-1].holdable else _hold_time(action, mode, hold_seconds),
+        hold_seconds=hold,
         taps=action.taps,
         label=action.label,
+        min_hold_seconds=min(hold, SAFE_RELEASE_SECONDS) if hold > TAP_WINDOW_SECONDS else 0.0,
     )
 
 

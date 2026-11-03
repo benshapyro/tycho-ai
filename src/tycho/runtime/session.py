@@ -473,8 +473,18 @@ class Session:
         for wait, press in steps:
             if wait:
                 await asyncio.sleep(wait)
-            receipt = await loop.run_in_executor(self._keys, self._presser.press, press, cancel)
+            running = loop.run_in_executor(self._keys, self._presser.press, press, cancel)
+            try:
+                receipt = await asyncio.shield(running)
+            except asyncio.CancelledError:
+                # The press runs on in its thread until it has let go (``cancel`` is set,
+                # so that's soon). Wait for it, so the log says what reached the game.
+                if (await running).sent:
+                    progress.pressed.append(press.action)
+                raise
             if not receipt.done:
+                if receipt.sent:
+                    progress.pressed.append(press.action)
                 trace.mark("press")
                 return end(_RECEIPT_STATUS.get(receipt.outcome, "failed"), receipt.detail)
             progress.pressed.append(press.action)
