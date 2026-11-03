@@ -507,7 +507,8 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
     try:
         matcher = CommandMatcher.default(commands_file)
     except CommandFileError as e:
-        yield Finding("fail", "Your commands", f"{e} (only the built-in ones are used)")
+        # A warning, not a failure: run starts anyway, with the built-in commands.
+        yield Finding("warn", "Your commands", f"{e} (only the built-in ones are used)")
         matcher = CommandMatcher.default()
     else:
         sequences = sum(c.is_sequence for c in matcher.commands)
@@ -518,6 +519,11 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
                 yield Finding("warn", "Your commands", warning)
         else:
             yield Finding("ok", "Commands", f"{counts}; add your own in {commands_file}")
+
+    from tycho.knowledge.fleet import Fleet
+
+    if problem := Fleet.load(paths.fleet_file()).problem:
+        yield Finding("warn", "Your fleet", problem)
 
     store: KeybindStore | None = None
     try:
