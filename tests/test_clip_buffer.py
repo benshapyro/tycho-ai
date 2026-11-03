@@ -1,7 +1,8 @@
 import numpy as np
+import pytest
 
 from tests.fakes.fake_audio import FakeAudioSource
-from tycho.audio.clip import ClipBuffer, trailing_quiet_seconds, trim_silence
+from tycho.audio.clip import MAX_CLIP_SECONDS, ClipBuffer, trailing_quiet_seconds, trim_silence
 from tycho.audio.source import AudioSource
 
 
@@ -98,3 +99,27 @@ def test_quiet_is_measured_on_the_clip_being_recorded() -> None:
     assert buffer.quiet_seconds() == 0.1
     buffer.feed(_sound(0.02, 0.1))
     assert buffer.quiet_seconds() == 0.0
+
+
+def test_a_stuck_button_records_no_more_than_the_limit(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Unbounded, an hour held down was 230 MB and minutes of speech recognition (audit).
+    buffer = ClipBuffer(samplerate=100, preroll_seconds=0.0)
+    buffer.start()
+    for _ in range(round(MAX_CLIP_SECONDS * 100 / 10) * 3):  # three times the limit
+        buffer.feed(_block(1))
+    clip = buffer.stop()
+    assert len(clip) == round(MAX_CLIP_SECONDS * 100)
+    assert "Is the button stuck?" in caplog.text
+
+
+def test_the_limit_starts_again_with_each_press() -> None:
+    buffer = ClipBuffer(samplerate=100, preroll_seconds=0.0)
+    buffer.start()
+    for _ in range(round(MAX_CLIP_SECONDS * 10) + 5):
+        buffer.feed(_block(1))
+    buffer.stop()
+    buffer.start()
+    buffer.feed(_block(2))
+    assert list(buffer.stop()) == [2.0] * 10

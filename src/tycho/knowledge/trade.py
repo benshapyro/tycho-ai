@@ -18,6 +18,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
+from tycho.knowledge.fresh import Fresh
 from tycho.knowledge.wiki import WikiError, WikiSource
 from tycho.text import name_score, normalize, similarity
 
@@ -77,10 +78,9 @@ class Trade:
 
     def __init__(self, source: WikiSource, clock: Callable[[], float] = time.monotonic) -> None:
         self._source = source
-        self._clock = clock
         self.commodities: list[Commodity] = []
         self.terminals: dict[int, Mapping[str, Any]] = {}
-        self._fetched: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+        self._fetched: Fresh[list[dict[str, Any]]] = Fresh(FRESH_SECONDS, clock)
         self._loading = asyncio.Lock()
 
     @property
@@ -199,10 +199,10 @@ class Trade:
 
     async def _fresh(self, path: str, params: Mapping[str, int]) -> list[dict[str, Any]]:
         key = f"{path}?{sorted(params.items())}"
-        if (hit := self._fetched.get(key)) and self._clock() - hit[0] < FRESH_SECONDS:
-            return hit[1]
+        if (hit := self._fetched.get(key)) is not None:
+            return hit
         rows = await self._list(path, params)
-        self._fetched[key] = (self._clock(), rows)
+        self._fetched.keep(key, rows)
         return rows
 
     async def _list(

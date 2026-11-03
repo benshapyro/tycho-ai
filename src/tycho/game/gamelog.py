@@ -20,11 +20,19 @@ from pathlib import Path
 QUANTUM_ROUTE = "quantum_route_set"
 """A quantum route is plotted and not yet flown, and the player hasn't left the pilot seat."""
 
-_ROUTE_PLOTTED = "Successfully calculated route to"
-_ARRIVED = "Arrived at Final Destination"
-_LEFT_SEAT = ("<Vehicle Control Flow>", "ClearDriver")
+_ROUTE_PLOTTED = b"Successfully calculated route to"
+_ARRIVED = b"Arrived at Final Destination"
+_LEFT_SEAT = (b"<Vehicle Control Flow>", b"ClearDriver")
+_MARKERS = (_ROUTE_PLOTTED, _ARRIVED, _LEFT_SEAT[1])
+"""A chunk with none of these needs no line-by-line look: most of the log is other news."""
 _HEADER_BYTES = 256
 """The log's first lines name the session; a different start means the game restarted."""
+MAX_BACKLOG_BYTES = 8 << 20
+"""Read at most this much of what's new. A bigger backlog (hours of play since the last
+command that needed the log) is skipped to its last part, forgetting what was known:
+a fact from the skipped part might no longer hold, and not knowing only makes commands
+that need it refuse. Bounded so a quantum command never waits seconds (audit, 2026-11-03)."""
+_CHUNK = 1 << 20
 
 
 class GameLog:
@@ -36,6 +44,7 @@ class GameLog:
         self._offset = 0
         self._header = b""
         self._partial = b""
+        self._skipping = False
         self._facts: set[str] = set()
         self.readable = False
         """Whether the last read found the log."""
@@ -54,27 +63,43 @@ class GameLog:
                 same = min(len(header), len(self._header))
                 if not self._header or header[:same] != self._header[:same] or size < self._offset:
                     self._restart(header)  # a new game session, or the first read
+                if size - self._offset > MAX_BACKLOG_BYTES:
+                    self._restart(header)
+                    self._offset = size - MAX_BACKLOG_BYTES
+                    file.seek(self._offset - 1)
+                    self._skipping = file.read(1) != b"\n"  # start at the next whole line
                 file.seek(self._offset)
-                data = file.read()
+                while chunk := file.read(_CHUNK):
+                    self._read(chunk)
         except OSError:
             self.readable = False
             self._restart(b"")
             return
         self.readable = True
         self._header = header
-        self._offset += len(data)
-        lines = (self._partial + data).split(b"\n")
+
+    def _read(self, chunk: bytes) -> None:
+        self._offset += len(chunk)
+        data = self._partial + chunk
+        lines = data.split(b"\n")
         self._partial = lines.pop()  # the game may be mid-way through writing a line
+        if self._skipping and lines:
+            lines.pop(0)  # the end of a line whose start was skipped
+            self._skipping = False
+        if not any(marker in data for marker in _MARKERS):
+            return
         for line in lines:
-            self._apply(line.decode("utf-8", "replace"))
+            self._apply(line)
 
     def _restart(self, header: bytes) -> None:
         self._header = header
         self._offset = 0
         self._partial = b""
+        self._skipping = False
         self._facts.clear()
 
-    def _apply(self, line: str) -> None:
+    def _apply(self, line: bytes) -> None:
+        # Matched as bytes: decoding every line of a long session was most of the time.
         if _ROUTE_PLOTTED in line:
             self._facts.add(QUANTUM_ROUTE)
         elif _ARRIVED in line or all(part in line for part in _LEFT_SEAT):
