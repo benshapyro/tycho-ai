@@ -1,3 +1,4 @@
+import sys
 from collections.abc import Iterator
 
 import keyring
@@ -83,3 +84,42 @@ def test_cli_set_reads_hidden_input(
     output = capsys.readouterr().out
     assert "secretsecret" not in output
     assert credentials.main(["check", "anthropic"]) == 0
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows Credential Manager")
+def test_a_lost_backend_falls_back_to_windows_credential_manager() -> None:
+    # What a frozen build sees when keyring can't find its backends (#56).
+    from keyring.backends.fail import Keyring as Failing
+    from keyring.backends.Windows import WinVaultKeyring
+
+    previous = keyring.get_keyring()
+    keyring.set_keyring(Failing())
+    try:
+        credentials._store()  # pyright: ignore[reportPrivateUsage]
+        assert isinstance(keyring.get_keyring(), WinVaultKeyring)
+    finally:
+        keyring.set_keyring(previous)
+
+
+def test_a_chosen_backend_is_left_alone(memory: MemoryKeyring) -> None:
+    credentials._store()  # pyright: ignore[reportPrivateUsage]
+    assert keyring.get_keyring() is memory
+
+
+def test_tycho_key_stores_and_checks_a_key(
+    memory: MemoryKeyring, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from tycho import app
+
+    def typed(prompt: str = "") -> str:
+        return "sk-ant-test-123456789"
+
+    monkeypatch.setattr(credentials.getpass, "getpass", typed)
+    assert app.main(["key", "set", "anthropic"]) == 0
+    assert memory.store == {("tycho", "anthropic"): "sk-ant-test-123456789"}
+    assert app.main(["key", "check", "anthropic"]) == 0
+    out = capsys.readouterr().out
+    assert "sk-ant-" in out
+    assert "123456789" not in out  # only ever masked
+    assert app.main(["key", "delete", "anthropic"]) == 0
+    assert app.main(["key", "check", "anthropic"]) == 1

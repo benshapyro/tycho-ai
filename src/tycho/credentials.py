@@ -2,9 +2,9 @@
 
 Never in files, environment files or logs. To store or remove a key, run one of:
 
-    uv run python -m tycho.credentials set anthropic
-    uv run python -m tycho.credentials delete anthropic
-    uv run python -m tycho.credentials check anthropic
+    uv run tycho key set anthropic
+    uv run tycho key delete anthropic
+    uv run tycho key check anthropic
 """
 
 import argparse
@@ -12,6 +12,7 @@ import getpass
 import sys
 
 import keyring
+import keyring.backends.fail
 import keyring.errors
 
 from tycho import logs
@@ -26,8 +27,21 @@ class CredentialStoreError(Exception):
     """The operating system's credential store is unavailable or refused the request."""
 
 
+def _store() -> None:
+    """Use Windows Credential Manager when keyring couldn't find a backend itself.
+
+    keyring finds backends through package entry points, which frozen (installed)
+    builds often lose: it then falls back to one that fails every call (#56).
+    A backend chosen on purpose, such as a test's, is left alone."""
+    if sys.platform == "win32" and isinstance(keyring.get_keyring(), keyring.backends.fail.Keyring):
+        from keyring.backends.Windows import WinVaultKeyring
+
+        keyring.set_keyring(WinVaultKeyring())
+
+
 def get(name: str) -> str | None:
     """The stored key, or None if there isn't one. Registered with the log redactor."""
+    _store()
     try:
         value = keyring.get_password(SERVICE, name)
     except keyring.errors.KeyringError as e:
@@ -46,6 +60,8 @@ def set_secret(name: str, value: str) -> None:
 
 def delete(name: str) -> bool:
     """Remove a key. Returns False if there was none."""
+    _store()
+    _store()
     try:
         keyring.delete_password(SERVICE, name)
     except keyring.errors.PasswordDeleteError:
@@ -74,7 +90,7 @@ def _explain(error: Exception) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m tycho.credentials", description=__doc__)
+    parser = argparse.ArgumentParser(prog="tycho key", description=__doc__)
     parser.add_argument("command", choices=["set", "delete", "check"])
     parser.add_argument("name", choices=KNOWN)
     args = parser.parse_args(argv)
