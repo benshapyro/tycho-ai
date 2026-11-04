@@ -1,6 +1,7 @@
 import json
 import logging
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import pytest
@@ -271,3 +272,34 @@ def test_tycho_credits_names_the_sources_and_says_its_unofficial(
     for expected in ("api.star-citizen.wiki", "UEX Corp", "starcitizen.tools", "CC-BY-4.0"):
         assert expected in out
     assert "not affiliated with the" in out
+
+
+@pytest.mark.parametrize(
+    ("device", "driver", "hint", "level", "says"),
+    [
+        ("gpu", 617, None, "ok", "graphics card"),
+        ("cpu", None, None, "ok", "no NVIDIA card"),  # nothing to do about it
+        ("cpu", 617, "Run: tycho gpu install", "warn", "tycho gpu install"),
+        ("cpu", 617, None, "warn", "short of memory"),  # a card, but no room on it
+    ],
+)
+def test_check_says_how_to_move_speech_to_the_graphics_card(
+    monkeypatch: pytest.MonkeyPatch,
+    device: Literal["gpu", "cpu"],
+    driver: int | None,
+    hint: str | None,
+    level: str,
+    says: str,
+) -> None:
+    import tycho.stt
+    from tycho.stt import DeviceChoice
+
+    def choice(current: settings.Settings) -> DeviceChoice:
+        return DeviceChoice(device, "short of memory")
+
+    monkeypatch.setattr(app, "device_choice", choice)
+    monkeypatch.setattr(app, "gpu_hint", lambda: hint)
+    monkeypatch.setattr(tycho.stt, "nvidia_driver", lambda: driver)
+    finding = app.speech_finding(settings.Settings())
+    assert finding.level == level
+    assert says in finding.detail

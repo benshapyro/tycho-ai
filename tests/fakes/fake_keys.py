@@ -14,11 +14,15 @@ class FakeKeySender:
     fail_on: int | None = None
     """Raise OSError on this event number (0-based), to simulate Windows refusing input."""
     on_event: Callable[[], None] | None = None
+    stuck: set[Code] = field(default_factory=set[Code])
+    """Keys whose key-up Windows refuses every time."""
 
     def down(self, code: Code) -> None:
         self._record("down", code)
 
     def up(self, code: Code) -> None:
+        if code in self.stuck:
+            raise OSError("SendInput failed")
         self._record("up", code)
 
     def wheel(self, notches: int) -> None:

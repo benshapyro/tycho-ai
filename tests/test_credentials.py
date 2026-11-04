@@ -1,5 +1,6 @@
 import sys
 from collections.abc import Iterator
+from pathlib import Path
 
 import keyring
 import keyring.errors
@@ -124,3 +125,11 @@ def test_no_test_can_reach_the_real_credential_manager() -> None:
     # tests/conftest.py: a test of `tycho check` read the real keys (audit, 2026-11-03).
     assert isinstance(keyring.get_keyring(), MemoryKeyring)
     assert credentials.get("anthropic") is None
+
+
+def test_no_test_can_reach_the_real_settings_or_data(tmp_path: Path) -> None:
+    # tests/conftest.py: `tycho key set` read the real settings.toml (audit, 2026-11-03).
+    from tycho import paths
+
+    assert paths.settings_file().is_relative_to(tmp_path)
+    assert paths.data_dir().is_relative_to(tmp_path)

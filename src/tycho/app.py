@@ -210,6 +210,22 @@ def load_transcriber(current: Settings) -> ParakeetTranscriber:
     return transcriber
 
 
+def speech_finding(current: Settings) -> Finding:
+    """Where speech recognition runs, and how to move it to the graphics card if it
+    could be there (audit, 2026-11-03: check warned without saying what to do)."""
+    from tycho.stt import nvidia_driver
+
+    choice = device_choice(current)
+    detail = f"on the {_device_name(choice.device)}: {choice.reason}"
+    if choice.device == "gpu" or current.transcription_device == "cpu":
+        return Finding("ok", "Speech recognition", detail)
+    if hint := gpu_hint():
+        return Finding("warn", "Speech recognition", f"{detail}. {hint}")
+    if nvidia_driver() is None:  # nothing to do about it: fine, just slower
+        return Finding("ok", "Speech recognition", "on the processor (no NVIDIA card)")
+    return Finding("warn", "Speech recognition", detail)
+
+
 def gpu_hint() -> str | None:
     """What to do when an NVIDIA card could run speech recognition but its libraries are
     missing; None if there's no NVIDIA card or it already has them (downloaded, or the
@@ -631,12 +647,7 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
             f"not downloaded yet ({size:.1f} GB to {model.folder(PARAKEET_V2)}); "
             f"{TYCHO} run downloads it. Set TYCHO_MODELS to put it on another drive.",
         )
-    choice = device_choice(current)
-    yield Finding(
-        "ok" if choice.device == "gpu" or current.transcription_device == "cpu" else "warn",
-        "Speech recognition",
-        f"on the {_device_name(choice.device)}: {choice.reason}",
-    )
+    yield speech_finding(current)
 
     if not quick:
         yield from _live_checks(current)

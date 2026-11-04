@@ -1135,10 +1135,11 @@ def test_the_filler_lines_take_turns() -> None:
 def test_a_web_search_gets_longer_than_the_usual_deadline() -> None:
     class SlowSearch(FakeBrain):
         async def decide(self, request: BrainRequest) -> Decision:
-            await asyncio.sleep(0.05)
+            # Says it's searching at once: a sleep first left 50 ms between that and
+            # brain_seconds, which a slow runner could miss (audit, 2026-11-03).
             if request.waiting is not None:
                 request.waiting()
-            await asyncio.sleep(0.1)  # past brain_seconds, inside search_seconds
+            await asyncio.sleep(0.6)  # well past brain_seconds, well inside search_seconds
             return Reply("4.11 is on the roadmap.")
 
     speaker = FakeSpeaker()
@@ -1146,8 +1147,8 @@ def test_a_web_search_gets_longer_than_the_usual_deadline() -> None:
         "whats in the next patch",
         brain=SlowSearch(),
         speaker=speaker,
-        brain_seconds=0.1,
-        search_seconds=0.5,
+        brain_seconds=0.2,
+        search_seconds=3.0,
     )
     assert r.results[0].status == "replied"
     assert speaker.spoken[-1] == "4.11 is on the roadmap."
@@ -1205,3 +1206,30 @@ def test_a_failed_warm_up_goes_to_tychos_log(caplog: pytest.LogCaptureFixture) -
     caplog.set_level(logging.ERROR, logger="tycho.runtime.session")
     asyncio.run(scenario())
     assert "Warming up failed: no network" in caplog.text
+
+
+# --- A chain stops at the first press that doesn't happen (audit, 2026-11-03) ------------
+
+
+def test_a_chain_stops_when_the_game_loses_focus_part_way() -> None:
+    r = _conversation("prepare for landing", focus=FakeFocus(True, False))
+    result = r.results[0]
+    assert result.status == "no_focus"
+    assert result.pressed == ("v_atc_request",)  # the second step never went
+    assert r.keys.held() == set()
+
+
+def test_a_chain_stops_when_windows_refuses_a_press_part_way() -> None:
+    async def scenario() -> Rig:
+        r = rig("prepare for landing")
+        r.keys.fail_on = 4  # Left Alt+N went down and up; the second step's N fails
+        r.say()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    result = r.results[0]
+    assert result.status == "failed"
+    assert result.pressed == ("v_atc_request",)
+    assert r.keys.held() == set()

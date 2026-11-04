@@ -239,6 +239,20 @@ def test_a_key_up_windows_refuses_is_tried_again() -> None:
     assert sender.held() == set()  # N was released on the second try, then Left Alt
 
 
+def test_a_key_that_never_releases_doesnt_stop_the_others(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Both tries fail: the press is reported failed, Left Alt still goes up, and
+    # nothing escapes the finally (audit, 2026-11-03).
+    sender = FakeKeySender(stuck={code_for("n")})
+    presser, _ = _presser(sender)
+    receipt = presser.press(plan(_action("lalt+n"), MODES))
+    assert receipt.outcome == "failed"
+    assert sender.held() == {code_for("n")}  # Windows never took it
+    assert ("up", code_for("lalt")) in sender.events
+    assert "wouldn't let go of a key" in caplog.text
+
+
 def test_wheel_actions_send_one_notch() -> None:
     sender = FakeKeySender()
     presser, _ = _presser(sender)
