@@ -167,7 +167,7 @@ From then on they can start it from Start, **Tycho**. Tell them how it works:
 
 - Hold the button, speak, and let go: "landing gear", "request landing", "flight ready". Questions work too, with a key: "best place to sell quantanium?".
 - Tycho presses keys only while Star Citizen is the window in front.
-- **Sounds:** a click means done, a low tone means not done, and two rising notes mean a question.
+- **Sounds:** a click means the keys were pressed, a low tone means they weren't, and two rising notes mean a question. Tycho can't see the game, so a click doesn't prove the game acted: some actions need something else first, like engine power needing the engines on.
 - Anything that can't be undone (ejecting, firing) waits for them to hold the button and say "confirm".
 - Pressing the button again stops whatever Tycho is doing.
 
