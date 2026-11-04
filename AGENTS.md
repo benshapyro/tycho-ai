@@ -51,6 +51,13 @@ All four of these pass: `ruff format --check`, `ruff check`, `pyright`, and `pyt
 
 The project folder may still be named `ultimo` locally; the project is Tycho ([ADR 7](docs/adr/0007-name-tycho.md)).
 
+## Skills for agents working here
+
+- `add-voice-command`: a new built-in command or sequence, with its tests and eval cases.
+- `release`: bump the version, take CI's installer, draft the GitHub release, and publish when the maintainer agrees.
+
+They're in `.claude/skills/` (Claude Code) and `.agents/skills/` (Codex and others), as identical copies: edit one, copy it to the other (`tests/test_agent_skills.py` checks).
+
 ## Conventions
 
 - Python 3.14, `src/` layout, `asyncio`. Never block the event loop: use `asyncio.to_thread` for blocking calls.
