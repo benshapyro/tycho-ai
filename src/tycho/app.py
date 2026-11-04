@@ -52,6 +52,21 @@ KEYBIND_REFRESH_SECONDS = 2.0
 
 
 def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+
+    try:
+        current = settings.load()
+    except SettingsError as e:
+        print(e, file=sys.stderr)
+        return 2
+    if args.command != "check":  # check lists them itself
+        for name in settings.unknown_keys():
+            print(f"Note: {UNKNOWN_SETTING.format(name=name)}", file=sys.stderr)
+    return _dispatch(args, current)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """The command line. The agent skills in plugins/ are tested against it."""
     parser = argparse.ArgumentParser(
         prog="tycho", description="Tycho, an unofficial voice co-pilot for Star Citizen."
     )
@@ -80,16 +95,10 @@ def main(argv: list[str] | None = None) -> int:
     key = commands.add_parser("key", help="store, check or remove an API key")
     key.add_argument("action", choices=["set", "check", "delete"])
     key.add_argument("name", choices=credentials.KNOWN)
-    args = parser.parse_args(argv)
+    return parser
 
-    try:
-        current = settings.load()
-    except SettingsError as e:
-        print(e, file=sys.stderr)
-        return 2
-    if args.command != "check":  # check lists them itself
-        for name in settings.unknown_keys():
-            print(f"Note: {UNKNOWN_SETTING.format(name=name)}", file=sys.stderr)
+
+def _dispatch(args: argparse.Namespace, current: Settings) -> int:
     match args.command:
         case "check":
             if args.json:
