@@ -41,6 +41,12 @@ press every one of them.
 - Otherwise reply: to answer a question, to ask what the player means, or to \
 answer chat that isn't a request. Never call run_actions with no actions.
 
+When the request means one of the player's commands with no key (listed below), \
+reply that it has no key and which game action to bind: "Lock All Doors has no \
+key. Bind one in the game's keybindings." Never press another action in its place: \
+a toggle or a neighbour that does something else ("Open/Close Doors" for "lock the \
+doors") is a wrong press.
+
 Look-ups: when a look-up tool covers what's asked, call it before you answer, even \
 when you think you know: your memory of ships and items is often wrong (who makes \
 them, crew, cargo, damage, recipes, prices), and trade prices change by the hour. \
@@ -158,6 +164,27 @@ def command_phrasings(keybinds: Keybinds, matcher: CommandMatcher) -> list[str]:
     return sorted(lines)
 
 
+UNBOUND_PHRASES = 2
+"""How many of a command's phrases the no-key list shows: enough to recognise it."""
+
+
+def unbound_commands(keybinds: Keybinds, matcher: CommandMatcher) -> list[str]:
+    """Each command Tycho can't do on this PC, because none of its actions has a key,
+    with the game action to bind: so the brain says so rather than pressing something
+    near it ("lock the doors" pressed Open/Close Doors, #28)."""
+    lines: list[str] = []
+    for command in matcher.commands:
+        if command.is_sequence or not command.say or not command.actions:
+            continue
+        if resolve(command, keybinds).action is not None:
+            continue
+        best = keybinds.get(command.actions[0])
+        to_bind = best.label.strip() if best is not None and best.label.strip() else ""
+        said = "; ".join(command.say[:UNBOUND_PHRASES])
+        lines.append(f"{command.id} | {said} | {to_bind or command.actions[0]}")
+    return sorted(lines)
+
+
 def game_facts() -> str:
     """The hand-kept sheet of what's true in the current patch."""
     return resources.files("tycho.brain").joinpath("facts.md").read_text("utf-8").strip()
@@ -178,6 +205,8 @@ def briefing(keybinds: Keybinds, matcher: CommandMatcher) -> str:
         + ("\n".join(sequences) or "(none)")
         + "\n\nThe player's commands (the action it presses | how it's said):\n"
         + ("\n".join(command_phrasings(keybinds, matcher)) or "(none)")
+        + "\n\nThe player's commands with no key (name | how it's said | what to bind):\n"
+        + ("\n".join(unbound_commands(keybinds, matcher)) or "(none)")
         + "\n\nThe player's bound actions (name | what it does | key):\n"
         + "\n".join(sorted(actions.values()))
         + "\n"
