@@ -63,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
     check.add_argument("--quick", action="store_true", help="skip the microphone and focus tests")
     commands.add_parser("bind", help="choose the push-to-talk button")
     commands.add_parser("sounds", help="play the done, not-done and asking sounds")
+    commands.add_parser("credits", help="where Tycho's data and speech model come from")
     gpu = commands.add_parser(
         "gpu", help="download (or remove) what speech recognition needs to use an NVIDIA card"
     )
@@ -87,12 +88,35 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if bind_command(current) else 1
         case "sounds":
             return sounds_command(current)
+        case "credits":
+            return credits_command()
         case "gpu":
             return gpu_command(args.action)
         case "key":
             return credentials.main([args.action, args.name])
         case _:
             return run_command(current, verbose=getattr(args, "verbose", False))
+
+
+def notice_file() -> Path:
+    """NOTICE: the credits and the unofficial-fan-project notice. The installed app has
+    it beside tycho.exe (tools/notices.py puts it there); in development, the repo's."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).with_name("NOTICE.txt")
+    return Path(__file__).resolve().parents[2] / "NOTICE"
+
+
+def credits_command() -> int:
+    """``tycho credits``: the credits ADR 15 promises, and the not-affiliated notice."""
+    try:
+        print(notice_file().read_text("utf-8-sig").strip())
+    except OSError:
+        print(
+            "Tycho is an unofficial Star Citizen fan project, not affiliated with the Cloud "
+            "Imperium group of companies. Data: the Star Citizen Wiki API, UEX Corp and "
+            "starcitizen.tools. Speech: NVIDIA's Parakeet TDT 0.6B v2 (CC-BY-4.0)."
+        )
+    return 0
 
 
 # --- tycho run -----------------------------------------------------------------------
@@ -302,7 +326,12 @@ def load_brain(matcher: CommandMatcher, current: Settings) -> Brain | None:
         *trade_lookups(UexApi()),
     ]
     if current.web_search:
-        lookups.append(WebSearch(anthropic.AsyncAnthropic(api_key=key, max_retries=0)))
+        lookups.append(
+            WebSearch(
+                anthropic.AsyncAnthropic(api_key=key, max_retries=0),
+                log_queries=current.keep_transcripts,
+            )
+        )
     return ClaudeBrain(
         matcher, api_key=key, lookups=lookups, about=lambda: fleet.describe(ships.library)
     )

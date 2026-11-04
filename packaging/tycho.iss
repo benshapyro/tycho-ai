@@ -20,6 +20,9 @@ AppPublisher=Tycho (an unofficial, open-source Star Citizen voice co-pilot)
 AppPublisherURL=https://github.com/benshapyro/tycho-ai
 AppSupportURL=https://github.com/benshapyro/tycho-ai/issues
 LicenseFile=..\LICENSE
+; The credits and the unofficial-fan-project notice (CIG's fankit, ADR 3 and 15). The
+; build's copy: tools/notices.py writes it with the byte-order mark Inno Setup needs.
+InfoBeforeFile=..\dist\tycho\NOTICE.txt
 DefaultDirName={localappdata}\Programs\Tycho
 DisableDirPage=yes
 DefaultGroupName=Tycho

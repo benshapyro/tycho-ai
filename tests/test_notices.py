@@ -52,3 +52,38 @@ def test_the_notices_cover_the_build(tmp_path: Path) -> None:
     assert "tycho-ai" not in text.split("Licence texts")[0]  # Tycho isn't third-party
     assert "SDL2_mixer" not in text  # only SDL2.dll ships
     assert "Mozilla Public License" in text  # licence texts are included in full
+
+
+def test_native_libraries_get_their_licence_texts_in_full(tmp_path: Path) -> None:
+    # MIT and BSD need the notice itself, not a link (audit, 2026-11-03).
+    assert notices.write(tmp_path) == []
+    text = (tmp_path / "THIRD-PARTY-NOTICES.txt").read_text("utf-8")
+    for expected in (
+        "Ross Bencina and Phil Burk",  # PortAudio
+        "PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2",
+        "libffi",
+        "expat",
+        "libmpdec",
+        "Apache License",  # OpenSSL 3
+    ):
+        assert expected in text
+    notice = (tmp_path / "NOTICE.txt").read_bytes()
+    assert notice.startswith(b"\xef\xbb\xbf")  # Inno Setup reads UTF-8 only with one
+    assert "Star Citizen®" in notice.decode("utf-8-sig")
+    assert "not affiliated" in notice.decode("utf-8-sig")
+
+
+def test_modules_packed_inside_the_exe_are_covered(tmp_path: Path) -> None:
+    # pytest and pygments were packed into tycho.exe with no notice (audit, 2026-11-03).
+    build = tmp_path / "build"
+    build.mkdir()
+    entries = [("pygments.lexer", "x.py", "PYMODULE"), ("json", "y.py", "PYMODULE")]
+    (build / "PYZ-00.toc").write_text(repr(("PYZ-00.pyz", entries)), "utf-8")
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    assert notices.write(dist, build) == []
+    assert "Pygments" in (dist / "THIRD-PARTY-NOTICES.txt").read_text("utf-8")
+
+
+def test_a_build_without_its_table_of_contents_cant_pass(tmp_path: Path) -> None:
+    assert notices.write(tmp_path, tmp_path / "missing") != []
