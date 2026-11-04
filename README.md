@@ -8,6 +8,26 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
 
 **Status: pre-alpha (0.3).** Common commands run instantly on your PC. Claude handles everything said differently, plus questions, and Tycho answers aloud with an ElevenLabs voice. Anything you can't undo (ejecting, firing) waits for you to say "confirm". Install it with the installer from [Releases](https://github.com/benshapyro/tycho-ai/releases/latest), or from source with a terminal and about 15 minutes.
 
+## Set up with an AI agent
+
+If you use an AI agent on your PC (Claude Code, Codex, Cursor, Gemini CLI or another), it can install and set up Tycho for you. It runs the installer and Tycho's checks, and fixes what they find. It opens a window when it needs you: to paste an API key, which it never sees, or to press your push-to-talk button.
+
+**Any agent:** paste this.
+
+> Set up Tycho, the Star Citizen voice co-pilot, on this PC. Follow https://raw.githubusercontent.com/benshapyro/tycho-ai/main/plugins/tycho/skills/tycho-setup/SKILL.md
+
+**Claude Code:** install Tycho's skills once, then ask it to "set up Tycho", or to "add a voice command for space mode".
+
+```
+/plugin install tycho --marketplace benshapyro/tycho-ai
+```
+
+On older versions of Claude Code, that's `/plugin marketplace add benshapyro/tycho-ai`, then `/plugin install tycho@tycho`.
+
+**Codex and others that read `~/.agents/skills`:** copy the folders in [plugins/tycho/skills](plugins/tycho/skills) there.
+
+The skills are [tycho-setup](plugins/tycho/skills/tycho-setup/SKILL.md) (install, keys, button, downloads, first run) and [tycho-commands](plugins/tycho/skills/tycho-commands/SKILL.md) (your own phrases and sequences, and why Tycho didn't understand something). For the agent, `tycho check --json` lists what's left to do, `tycho model download` gets the speech model, and `tycho actions <words>` finds the game's action names.
+
 ## Install
 
 **Installer (preview).** Download `TychoSetup-<version>.exe` from the [latest release](https://github.com/benshapyro/tycho-ai/releases/latest) and run it. (Every build on `main` also makes one: the [Build workflow](https://github.com/benshapyro/tycho-ai/actions/workflows/build.yml)'s `tycho-installer` artifact.) It installs for you only, with no administrator prompt, adds Tycho to the Start menu and puts `tycho` on your PATH. It isn't code-signed yet, so Windows SmartScreen will say it's from an unknown publisher: choose **More info**, then **Run anyway**. Then, in a new terminal: `tycho key set anthropic`, `tycho key set elevenlabs`, `tycho bind`, `tycho run`. With an NVIDIA card, `tycho gpu install` lets speech recognition use it. Uninstalling keeps your settings, keys and the speech model.

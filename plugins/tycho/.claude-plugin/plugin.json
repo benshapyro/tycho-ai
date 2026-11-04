@@ -1,0 +1,16 @@
+{
+  "name": "tycho",
+  "description": "Install and set up Tycho, an unofficial voice co-pilot for Star Citizen, on Windows, and add your own voice commands and sequences.",
+  "author": {
+    "name": "Ben Shapiro",
+    "url": "https://github.com/benshapyro"
+  },
+  "homepage": "https://github.com/benshapyro/tycho-ai",
+  "repository": "https://github.com/benshapyro/tycho-ai",
+  "license": "Apache-2.0",
+  "keywords": [
+    "star-citizen",
+    "voice",
+    "setup"
+  ]
+}
