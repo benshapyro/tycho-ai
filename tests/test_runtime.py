@@ -311,6 +311,9 @@ def test_a_confirmation_checks_the_keybinds_again() -> None:
 
 def test_every_request_that_matched_is_in_the_action_log() -> None:
     r = _conversation("eject", "confirm", "sing me a song", "landing gear")
+    keydowns = [entry.pop("keydown_ms", None) for entry in r.actions.entries]
+    assert keydowns[0] is None  # asked, pressed nothing
+    assert all(isinstance(ms, int) and ms >= 0 for ms in keydowns[1:])
     assert r.actions.entries == [
         {
             "request": 1,
@@ -335,6 +338,17 @@ def test_every_request_that_matched_is_in_the_action_log() -> None:
             "confirmed": False,
         },
     ]  # "sing me a song" matched nothing, so it isn't an action
+
+
+def test_the_time_to_the_first_key_down_is_measured(caplog: pytest.LogCaptureFixture) -> None:
+    # The 0.3 s target is about when the game sees the key, not when the tap ends (#58).
+    caplog.set_level(logging.INFO, logger="tycho.runtime.session")
+    r = _conversation("prepare for landing")  # two steps, a beat apart
+    result = r.results[0]
+    assert result.keydown_ms is not None
+    assert result.keydown_ms < result.total_ms  # the first key, not the last
+    assert "key down at" in caplog.text
+    assert _conversation("sing me a song").results[0].keydown_ms is None
 
 
 def test_the_action_log_says_what_was_said_only_if_transcripts_are_kept() -> None:

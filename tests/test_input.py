@@ -258,3 +258,15 @@ def test_wheel_actions_send_one_notch() -> None:
     presser, _ = _presser(sender)
     presser.press(plan(_action("mwheel_down"), MODES))
     assert sender.events == [("wheel", -1)]
+
+
+def test_the_presser_says_when_the_key_the_game_acts_on_goes_down() -> None:
+    sender = FakeKeySender()
+    presser, _ = _presser(sender)
+    seen: list[int] = []
+    receipt = presser.press(
+        plan(_action("lalt+n", "double_tap"), MODES),
+        on_down=lambda: seen.append(len(sender.events)),
+    )
+    assert receipt.outcome == "done"
+    assert seen == [2]  # once, just after Left Alt and N went down on the first tap

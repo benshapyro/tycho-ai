@@ -80,8 +80,15 @@ class Presser:
         self._sleep = sleep
         self._clock = clock
 
-    def press(self, press: Press, cancel: threading.Event | None = None) -> Receipt:
-        """Carry out ``press``. Blocks for the length of the press; call it off the event loop."""
+    def press(
+        self,
+        press: Press,
+        cancel: threading.Event | None = None,
+        on_down: Callable[[], None] | None = None,
+    ) -> Receipt:
+        """Carry out ``press``. Blocks for the length of the press; call it off the event loop.
+        ``on_down`` is called (on this thread) the moment the first key the game acts on
+        goes down: the time that matters to the player, not when the tap ends."""
         cancel = cancel or threading.Event()
         held: list[Code] = []
         taps = 0
@@ -96,7 +103,7 @@ class Presser:
                         return Receipt(press.action, "cancelled", taps)
                     if not self._focus.game_has_focus():
                         return Receipt(press.action, "no_focus", taps, "Star Citizen isn't focused")
-                if not self._tap(press, held, cancel):
+                if not self._tap(press, held, cancel, on_down if tap == 0 else None):
                     return Receipt(press.action, "cancelled", taps, interrupted=press.main in held)
                 taps += 1
             return Receipt(press.action, "done", taps)
@@ -105,7 +112,13 @@ class Presser:
         finally:
             self._release(held, press.action)
 
-    def _tap(self, press: Press, held: list[Code], cancel: threading.Event) -> bool:
+    def _tap(
+        self,
+        press: Press,
+        held: list[Code],
+        cancel: threading.Event,
+        on_down: Callable[[], None] | None = None,
+    ) -> bool:
         """One press of the whole chord. Returns False if cancelled part way."""
         *modifiers, main = press.keys
         for code in modifiers:
@@ -113,9 +126,13 @@ class Presser:
             held.append(code)
         if main.device == "wheel":
             self._sender.wheel(main.value)
+            if on_down is not None:
+                on_down()
         else:
             self._sender.down(main)
             held.append(main)
+            if on_down is not None:
+                on_down()
             down_at = self._clock()
             if not self._wait(press.hold_seconds, cancel):
                 self._hold_on(down_at + press.min_hold_seconds)

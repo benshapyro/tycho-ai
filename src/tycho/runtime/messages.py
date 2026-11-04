@@ -36,6 +36,10 @@ class Trace:
     def total_ms(self) -> float:
         return (self._last - self._start) * 1000
 
+    def elapsed_ms(self) -> float:
+        """Time since the request started, now. Safe to call from another thread."""
+        return (self._clock() - self._start) * 1000
+
 
 @dataclass(frozen=True, slots=True)
 class Result:
@@ -64,6 +68,9 @@ class Result:
     """The player said "confirm" to a question Tycho asked about this request."""
     timings: dict[str, float] = field(default_factory=dict[str, float])
     total_ms: float = 0.0
+    keydown_ms: float | None = None
+    """From releasing push-to-talk to the first key the game acts on going down: what
+    the 0.3 s target is about (#58). None if nothing was pressed."""
 
     @property
     def done(self) -> bool:

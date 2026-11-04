@@ -25,7 +25,8 @@ from pathlib import Path
 
 import numpy as np
 
-VARIANTS = ("default", "lean")
+VARIANTS = ("default", "lean", "split")
+"""split: lean, with the preprocessor and decoder on the processor (#58)."""
 
 
 def main() -> int:
@@ -75,8 +76,10 @@ def _measure(variant: str, clips: list[Path]) -> dict[str, object]:
     before = peak.now()
     peak.start()
     started = time.perf_counter()
-    options: dict[str, str] = dict(LEAN_CUDA) if variant == "lean" else {}
-    transcriber = ParakeetTranscriber._open(folder, "gpu", options)  # pyright: ignore[reportPrivateUsage]
+    options: dict[str, str] = {} if variant == "default" else dict(LEAN_CUDA)
+    transcriber = ParakeetTranscriber._open(  # pyright: ignore[reportPrivateUsage]
+        folder, "gpu", options, small_parts_on_cpu=variant == "split"
+    )
     transcriber._warm_up()  # pyright: ignore[reportPrivateUsage]
     loaded = time.perf_counter() - started
     after_load = peak.now()
@@ -166,8 +169,9 @@ def _report(results: dict[str, dict[str, object]], clips: int, with_game: bool) 
             f"{name:8} {r['device']!s:6} {r['load_s']!s:>5}s {r['p50_ms']!s:>5}ms "
             f"{r['p90_ms']!s:>5}ms {r['after_load_mb']!s:>6} MB {r['peak_mb']!s:>6} MB"
         )
-    if len(results) == 2:
-        same = results["default"]["texts"] == results["lean"]["texts"]
+    if len(results) > 1:
+        texts = [r["texts"] for r in results.values()]
+        same = all(x == texts[0] for x in texts)
         print(f"\nSame transcripts: {'yes' if same else 'NO'}")
 
 

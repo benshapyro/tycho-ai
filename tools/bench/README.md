@@ -43,7 +43,7 @@ uv run python tools/bench/gpu_memory.py $r               # with Star Citizen clo
 uv run python tools/bench/gpu_memory.py $r --with-game   # with it open, to see it share the card
 ```
 
-Loads Parakeet on the graphics card with ONNX Runtime's default CUDA settings and with Tycho's lean ones (`LEAN_CUDA` in `src/tycho/stt/parakeet.py`), each in a process of its own, and reports load time, warm latency (p50, p90) and the card's memory in use above where it started. Measured on 2026-11-04 with the game closed: 3.5 GB with the defaults, 3.0 GB lean, the same speed and the same transcripts.
+Loads Parakeet on the graphics card with ONNX Runtime's default CUDA settings and with Tycho's lean ones (`LEAN_CUDA` in `src/tycho/stt/parakeet.py`), each in a process of its own, and reports load time, warm latency (p50, p90) and the card's memory in use above where it started. Measured on 2026-11-04 with the game closed: 3.5 GB with the defaults, 3.0 GB lean, the same speed and the same transcripts. A third setting, `split`, also runs the preprocessor and the small decoder on the processor (`SMALL_PARTS_ON_CPU`): 2.8 GB, but slower with the card idle (p50 298 ms against 240). It's off until a run with `--with-game` shows whether it helps when the decoder's many small GPU calls would wait behind the game's frames.
 
 ## What's measured
 

@@ -111,6 +111,7 @@ class _Progress:
     say: str = ""
     announced: bool = False
     question: str = ""
+    keydown_ms: float | None = None
 
 
 def reply_to_question(text: str) -> str | None:
@@ -477,10 +478,16 @@ class Session:
             )
             return end("asking", f'{"; ".join(questions)}: hold push-to-talk and say "confirm"')
 
+        def first_key_down() -> None:  # on the key thread, as the key goes down
+            if progress.keydown_ms is None:
+                progress.keydown_ms = trace.elapsed_ms()
+
         for wait, press in steps:
             if wait:
                 await asyncio.sleep(wait)
-            running = loop.run_in_executor(self._keys, self._presser.press, press, cancel)
+            running = loop.run_in_executor(
+                self._keys, self._presser.press, press, cancel, first_key_down
+            )
             try:
                 receipt = await asyncio.shield(running)
             except asyncio.CancelledError:
@@ -525,6 +532,7 @@ class Session:
             question=progress.question,
             timings=dict(trace.stages),
             total_ms=trace.total_ms,
+            keydown_ms=progress.keydown_ms,
         )
 
     def _report(self, result: Result) -> None:
@@ -534,8 +542,9 @@ class Session:
             said = f' "{result.text}"'
             if result.heard and result.heard != result.text:  # the lexicon corrected it
                 said += f' (heard "{result.heard}")'
+        keydown = "" if result.keydown_ms is None else f"key down at {result.keydown_ms:.0f}, "
         log.info(
-            "#%d%s: %s%s%s%s in %.0f ms (%s)",
+            "#%d%s: %s%s%s%s in %.0f ms (%s%s)",
             result.request,
             said,
             "+".join(result.commands) + " " if result.commands else "",
@@ -543,6 +552,7 @@ class Session:
             result.status,
             f" ({result.detail})" if result.detail else "",
             result.total_ms,
+            keydown,
             stages or "no stages",
         )
         speak = self._speaker is not None and self._should_speak(result)
@@ -658,6 +668,8 @@ class Session:
             "pressed": list(result.pressed),
             "confirmed": result.confirmed,
         }
+        if result.keydown_ms is not None:
+            entry["keydown_ms"] = round(result.keydown_ms)
         if result.detail:
             entry["detail"] = result.detail
         if result.by_brain:
