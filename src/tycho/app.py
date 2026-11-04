@@ -61,9 +61,18 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("-v", "--verbose", action="store_true", help="show debug detail")
     check = commands.add_parser("check", help="check the setup, in plain words")
     check.add_argument("--quick", action="store_true", help="skip the microphone and focus tests")
+    check.add_argument(
+        "--json", action="store_true", help="print the findings as JSON, for scripts and agents"
+    )
     commands.add_parser("bind", help="choose the push-to-talk button")
     commands.add_parser("sounds", help="play the done, not-done and asking sounds")
     commands.add_parser("credits", help="where Tycho's data and speech model come from")
+    model = commands.add_parser("model", help="download the speech model now, or see if it's here")
+    actions = commands.add_parser(
+        "actions", help="find the game's action names, for your own commands.toml"
+    )
+    actions.add_argument("words", nargs="*", help='words to look for, e.g. "landing gear"')
+    model.add_argument("action", choices=["download", "status"])
     gpu = commands.add_parser(
         "gpu", help="download (or remove) what speech recognition needs to use an NVIDIA card"
     )
@@ -83,7 +92,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Note: {UNKNOWN_SETTING.format(name=name)}", file=sys.stderr)
     match args.command:
         case "check":
+            if args.json:
+                return check_json(current, quick=args.quick)
             return check_command(current, quick=args.quick)
+        case "model":
+            return model_command(args.action)
+        case "actions":
+            return actions_command(current, args.words)
         case "bind":
             return 0 if bind_command(current) else 1
         case "sounds":
@@ -220,7 +235,8 @@ def speech_finding(current: Settings) -> Finding:
     if choice.device == "gpu" or current.transcription_device == "cpu":
         return Finding("ok", "Speech recognition", detail)
     if hint := gpu_hint():
-        return Finding("warn", "Speech recognition", f"{detail}. {hint}")
+        fix = GPU_HELP if hint.endswith(GPU_HELP) else ""
+        return Finding("warn", "Speech recognition", f"{detail}. {hint}", fix=fix)
     if nvidia_driver() is None:  # nothing to do about it: fine, just slower
         return Finding("ok", "Speech recognition", "on the processor (no NVIDIA card)")
     return Finding("warn", "Speech recognition", detail)
@@ -252,6 +268,71 @@ def gpu_hint() -> str | None:
 
 
 GPU_HELP = f"{TYCHO} gpu install"
+MODEL_HELP = f"{TYCHO} model download"
+
+
+MAX_ACTIONS_SHOWN = 40
+
+
+def actions_command(current: Settings, words: list[str]) -> int:
+    """``tycho actions``: the game's actions whose name or label has every word given, with
+    their keys, so a player (or their agent) can write commands.toml with the right names."""
+    try:
+        keybinds = KeybindStore.load(find_install(current)).keybinds
+    except (FileNotFoundError, GameDataError) as e:
+        print(e, file=sys.stderr)
+        return 2
+    wanted = [w.lower() for w in words]
+    found = [
+        a
+        for a in keybinds
+        if all(w in f"{a.name} {a.label}".lower().replace("_", " ") for w in wanted)
+    ]
+    for action in found[:MAX_ACTIONS_SHOWN]:
+        keys = ", ".join(str(k) for k in action.inputs) or "no key"
+        print(f"{action.name}  |  {action.label or '(no label)'}  |  {keys}  |  {action.actionmap}")
+    if len(found) > MAX_ACTIONS_SHOWN:
+        print(f"... and {len(found) - MAX_ACTIONS_SHOWN} more: add a word to narrow it down.")
+    # The game's names often aren't the player's ("Landing System", not "landing gear"),
+    # so Tycho's own commands that are said with those words are shown too.
+    try:
+        matcher = CommandMatcher.default(paths.commands_file())
+    except CommandFileError:  # tycho check explains it; the built-in ones still help here
+        matcher = CommandMatcher.default()
+    said = [
+        c
+        for c in matcher.commands
+        if wanted and any(all(w in phrase for w in wanted) for phrase in c.say)
+    ]
+    if said:
+        print("Tycho's commands said that way (their actions, best first):")
+        for command in said[:MAX_ACTIONS_SHOWN]:
+            parts = command.actions or tuple(f"[{s.command.id}]" for s in command.steps)
+            print(f"  {command.id}: {', '.join(parts)}")
+    if not found and not said:
+        print("No action has all of those words. Try fewer, or other words for it.")
+    return 0 if found or said else 1
+
+
+def model_command(action: str) -> int:
+    """``tycho model``: get the speech model before the first ``tycho run`` (a setup step an
+    agent can do for the player), or say whether it's here."""
+    model = ModelStore(paths.models_dir())
+    folder = model.folder(PARAKEET_V2)
+    if action == "status":
+        if model.ready(PARAKEET_V2) or not model.missing(PARAKEET_V2):
+            print(f"Downloaded and checked, in {folder}.")
+            return 0
+        print(f"Not downloaded yet ({PARAKEET_V2.size / 1e9:.1f} GB). Run: {MODEL_HELP}")
+        return 1
+    print(f"Getting the speech model ({PARAKEET_V2.size / 1e9:.1f} GB) into {folder}.")
+    try:
+        model.ensure(PARAKEET_V2, _download_progress())
+    except ModelError as e:
+        print(e, file=sys.stderr)
+        return 2
+    print("Done. The speech model is downloaded and checked.")
+    return 0
 
 
 def gpu_command(action: str) -> int:
@@ -507,6 +588,8 @@ class Finding:
     level: Level
     what: str
     detail: str
+    fix: str = ""
+    """What to run or change to fix it, when there is one (for `tycho check --json`)."""
 
 
 def check_command(current: Settings, *, quick: bool = False) -> int:
@@ -520,6 +603,25 @@ def check_command(current: Settings, *, quick: bool = False) -> int:
         print(f"Ready, with {warned} thing(s) worth a look.")
     else:
         print(f"All good. Start Tycho with: {TYCHO} run")
+    return 1 if failed else 0
+
+
+def check_json(current: Settings, *, quick: bool = False) -> int:
+    """``tycho check --json``: the same checks, as one JSON document on stdout, so an agent
+    helping the player set up doesn't have to read the printed text."""
+    import json
+
+    findings = list(_checks(current, quick))
+    failed = any(f.level == "fail" for f in findings)
+    document = {
+        "tycho": __version__,
+        "ready": not failed,
+        "findings": [
+            {"level": f.level, "what": f.what, "detail": f.detail, "fix": f.fix or None}
+            for f in findings
+        ],
+    }
+    print(json.dumps(document, ensure_ascii=False, indent=2))
     return 1 if failed else 0
 
 
@@ -538,7 +640,9 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
 
     binding = current.push_to_talk_binding
     if binding is None:
-        yield Finding("fail", "Push-to-talk", f"not chosen yet. Run: {TYCHO} bind")
+        yield Finding(
+            "fail", "Push-to-talk", f"not chosen yet. Run: {TYCHO} bind", fix=f"{TYCHO} bind"
+        )
     else:
         yield Finding("ok", "Push-to-talk", describe(binding))
 
@@ -547,7 +651,10 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
 
     if anthropic_key() is None:
         yield Finding(
-            "warn", "Brain", f"no Anthropic key, so only built-in phrasings work: {BRAIN_KEY_HELP}"
+            "warn",
+            "Brain",
+            f"no Anthropic key, so only built-in phrasings work: {BRAIN_KEY_HELP}",
+            fix=BRAIN_KEY_HELP,
         )
     else:
         yield Finding("ok", "Brain", "Claude, with your Anthropic key")
@@ -561,6 +668,7 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
             "warn",
             "Voice",
             f"no ElevenLabs key, so replies are shown in Tycho's window: {VOICE_KEY_HELP}",
+            fix=VOICE_KEY_HELP,
         )
     else:
         yield Finding("ok", "Voice", "ElevenLabs, with your key")
@@ -622,7 +730,12 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
         else:
             yield Finding("warn", "Game.log", f"not found at {log_file}; the game writes it")
     except FileNotFoundError as e:
-        yield Finding("fail", "Star Citizen", str(e))
+        yield Finding(
+            "fail",
+            "Star Citizen",
+            str(e),
+            fix=f'set game_root = "<the folder holding Data.p4k>" in {paths.settings_file()}',
+        )
     except GameDataError as e:
         yield Finding("fail", "Keybinds", f"couldn't read them: {e}")
 
@@ -645,7 +758,9 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
             "warn",
             "Speech model",
             f"not downloaded yet ({size:.1f} GB to {model.folder(PARAKEET_V2)}); "
-            f"{TYCHO} run downloads it. Set TYCHO_MODELS to put it on another drive.",
+            f"{MODEL_HELP} (or {TYCHO} run) downloads it. Set TYCHO_MODELS to put it on "
+            "another drive.",
+            fix=MODEL_HELP,
         )
     yield speech_finding(current)
 
@@ -675,7 +790,9 @@ def update_finding(get: Callable[[str], Any] = updates.latest_json) -> Finding:
     if release is None:
         return Finding("ok", "Updates", f"no release published yet; you have {__version__}")
     if updates.is_newer(release.version, __version__):
-        return Finding("warn", "Updates", f"Tycho {release.version} is out: {release.url}")
+        return Finding(
+            "warn", "Updates", f"Tycho {release.version} is out: {release.url}", fix=release.url
+        )
     return Finding("ok", "Updates", f"{__version__} is the latest")
 
 

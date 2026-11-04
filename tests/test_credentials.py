@@ -62,6 +62,7 @@ def test_cli_set_reads_hidden_input(
         return "  sk-ant-api03-secretsecret1234  "
 
     monkeypatch.setattr("getpass.getpass", fake_getpass)
+    monkeypatch.setattr(credentials, "_interactive", lambda: True)
     assert credentials.main(["set", "anthropic"]) == 0
     assert credentials.get("anthropic") == "sk-ant-api03-secretsecret1234"
     output = capsys.readouterr().out
@@ -98,6 +99,7 @@ def test_tycho_key_stores_and_checks_a_key(
         return "sk-ant-test-123456789"
 
     monkeypatch.setattr(credentials.getpass, "getpass", typed)
+    monkeypatch.setattr(credentials, "_interactive", lambda: True)
     assert app.main(["key", "set", "anthropic"]) == 0
     assert memory.store == {("tycho", "anthropic"): "sk-ant-test-123456789"}
     assert app.main(["key", "check", "anthropic"]) == 0
@@ -133,3 +135,19 @@ def test_no_test_can_reach_the_real_settings_or_data(tmp_path: Path) -> None:
 
     assert paths.settings_file().is_relative_to(tmp_path)
     assert paths.data_dir().is_relative_to(tmp_path)
+
+
+def test_a_piped_key_is_refused_so_it_never_sits_in_a_transcript(
+    memory: MemoryKeyring, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # An agent running `tycho key set` with the key on stdin would leave it in its
+    # transcript; it should open a terminal window for the player instead.
+    def piped(prompt: str = "") -> str:
+        return "sk-ant-api03-secretsecret1234"
+
+    monkeypatch.setattr(credentials.getpass, "getpass", piped)
+    monkeypatch.setattr(credentials, "_interactive", lambda: False)
+    assert credentials.main(["set", "anthropic"]) == 2
+    assert memory.store == {}
+    err = capsys.readouterr().err
+    assert 'start "Tycho key" cmd /k tycho key set anthropic' in err
