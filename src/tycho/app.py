@@ -68,6 +68,10 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("sounds", help="play the done, not-done and asking sounds")
     commands.add_parser("credits", help="where Tycho's data and speech model come from")
     model = commands.add_parser("model", help="download the speech model now, or see if it's here")
+    actions = commands.add_parser(
+        "actions", help="find the game's action names, for your own commands.toml"
+    )
+    actions.add_argument("words", nargs="*", help='words to look for, e.g. "landing gear"')
     model.add_argument("action", choices=["download", "status"])
     gpu = commands.add_parser(
         "gpu", help="download (or remove) what speech recognition needs to use an NVIDIA card"
@@ -93,6 +97,8 @@ def main(argv: list[str] | None = None) -> int:
             return check_command(current, quick=args.quick)
         case "model":
             return model_command(args.action)
+        case "actions":
+            return actions_command(current, args.words)
         case "bind":
             return 0 if bind_command(current) else 1
         case "sounds":
@@ -263,6 +269,49 @@ def gpu_hint() -> str | None:
 
 GPU_HELP = f"{TYCHO} gpu install"
 MODEL_HELP = f"{TYCHO} model download"
+
+
+MAX_ACTIONS_SHOWN = 40
+
+
+def actions_command(current: Settings, words: list[str]) -> int:
+    """``tycho actions``: the game's actions whose name or label has every word given, with
+    their keys, so a player (or their agent) can write commands.toml with the right names."""
+    try:
+        keybinds = KeybindStore.load(find_install(current)).keybinds
+    except (FileNotFoundError, GameDataError) as e:
+        print(e, file=sys.stderr)
+        return 2
+    wanted = [w.lower() for w in words]
+    found = [
+        a
+        for a in keybinds
+        if all(w in f"{a.name} {a.label}".lower().replace("_", " ") for w in wanted)
+    ]
+    for action in found[:MAX_ACTIONS_SHOWN]:
+        keys = ", ".join(str(k) for k in action.inputs) or "no key"
+        print(f"{action.name}  |  {action.label or '(no label)'}  |  {keys}  |  {action.actionmap}")
+    if len(found) > MAX_ACTIONS_SHOWN:
+        print(f"... and {len(found) - MAX_ACTIONS_SHOWN} more: add a word to narrow it down.")
+    # The game's names often aren't the player's ("Landing System", not "landing gear"),
+    # so Tycho's own commands that are said with those words are shown too.
+    try:
+        matcher = CommandMatcher.default(paths.commands_file())
+    except CommandFileError:  # tycho check explains it; the built-in ones still help here
+        matcher = CommandMatcher.default()
+    said = [
+        c
+        for c in matcher.commands
+        if wanted and any(all(w in phrase for w in wanted) for phrase in c.say)
+    ]
+    if said:
+        print("Tycho's commands said that way (their actions, best first):")
+        for command in said[:MAX_ACTIONS_SHOWN]:
+            parts = command.actions or tuple(f"[{s.command.id}]" for s in command.steps)
+            print(f"  {command.id}: {', '.join(parts)}")
+    if not found and not said:
+        print("No action has all of those words. Try fewer, or other words for it.")
+    return 0 if found or said else 1
 
 
 def model_command(action: str) -> int:

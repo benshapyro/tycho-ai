@@ -1,6 +1,7 @@
 import json
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Literal
 
 import numpy as np
@@ -343,3 +344,32 @@ def test_tycho_model_status_and_download(
     assert app.main(["model", "download"]) == 0
     assert fetched == ["ensure"]
     assert "Done." in capsys.readouterr().out
+
+
+def test_tycho_actions_finds_names_by_label_and_by_what_players_say(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # For writing commands.toml with an agent: the game's names, and Tycho's own phrases.
+    scm = Action(
+        name="v_master_mode_set_scm",
+        actionmap="spaceship_movement",
+        label="Set Master Mode to SCM",
+        inputs=tuple(k for k in [KeyInput.parse("ralt+v")] if k is not None),
+    )
+    gear = _action("v_toggle_landing_system")
+    store = SimpleNamespace(keybinds=Keybinds([scm, gear]))
+
+    def install(current: settings.Settings) -> object:
+        return object()
+
+    def load(found: object) -> SimpleNamespace:
+        return store
+
+    monkeypatch.setattr(app, "find_install", install)
+    monkeypatch.setattr(app.KeybindStore, "load", load)
+    assert app.main(["actions", "master", "mode"]) == 0
+    out = capsys.readouterr().out
+    assert "v_master_mode_set_scm  |  Set Master Mode to SCM  |  ralt+v" in out
+    assert app.main(["actions", "gear", "down"]) == 0  # no label says "gear"
+    assert "landing_gear_down: v_deploy_landing_system" in capsys.readouterr().out
+    assert app.main(["actions", "zzqq"]) == 1
