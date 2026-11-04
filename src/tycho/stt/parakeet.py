@@ -1,5 +1,6 @@
 """Parakeet TDT 0.6B v2 through onnx-asr and ONNX Runtime: the transcriber Tycho ships (ADR 2)."""
 
+import gc
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self
@@ -22,23 +23,42 @@ type Device = Literal["gpu", "cpu"]
 class ParakeetTranscriber:
     """Satisfies ``runtime.Transcriber``. Load once at startup; ``transcribe`` from one thread."""
 
-    def __init__(self, model: TextResultsAsrAdapter, device: Device) -> None:
+    def __init__(
+        self, model: TextResultsAsrAdapter, device: Device, folder: Path | None = None
+    ) -> None:
         self._model = model
         self.device: Device = device
+        self._folder = folder
+        """Where the model is, to load it on the processor if the graphics card fails."""
 
     @classmethod
     def load(cls, folder: Path, device: Device) -> Self:
-        """Load the model and warm it up. Falls back to the processor if the GPU won't start."""
+        """Load the model and warm it up. Falls back to the processor if the graphics card
+        won't start it, or fails on the warm-up: free memory is only a guess, and the game
+        may take more between the check and the first run (Ben's run, 2026-11-03)."""
+        if device == "gpu":
+            try:
+                transcriber = cls._open(folder, "gpu")
+                transcriber._warm_up()
+            except Exception as e:  # ONNX Runtime raises its own unrelated exception types
+                log.warning(
+                    "The graphics card couldn't run speech recognition (%s); using the "
+                    "processor instead",
+                    _first_line(e),
+                )
+                gc.collect()  # let go of what the failed session holds on the card
+            else:
+                return transcriber
         try:
-            transcriber = cls._open(folder, device)
-        except Exception as e:  # ONNX Runtime raises its own unrelated exception types
-            if device == "cpu":
-                raise ModelError(f"Couldn't load the speech model from {folder}: {e}") from e
-            log.warning("The graphics card couldn't run speech recognition (%s); using the CPU", e)
-            return cls.load(folder, "cpu")
-        # The first call compiles kernels and allocates memory; pay for it now, not on a command.
-        transcriber.transcribe(np.zeros(SAMPLERATE, dtype=np.float32), SAMPLERATE)
+            transcriber = cls._open(folder, "cpu")
+            transcriber._warm_up()
+        except Exception as e:
+            raise ModelError(f"Couldn't load the speech model from {folder}: {e}") from e
         return transcriber
+
+    def _warm_up(self) -> None:
+        # The first call compiles kernels and allocates memory; pay for it now, not on a command.
+        self._recognize(np.zeros(SAMPLERATE, dtype=np.float32))
 
     @classmethod
     def _open(cls, folder: Path, device: Device) -> Self:
@@ -52,12 +72,35 @@ class ParakeetTranscriber:
         model = onnx_asr.load_model(  # pyright: ignore[reportUnknownMemberType] - ORT's types
             PARAKEET_V2.name, folder, providers=providers
         )
-        return cls(model, device_in_use(model, device))
+        return cls(model, device_in_use(model, device), folder)
 
     def transcribe(self, samples: Samples, samplerate: int) -> str:
         if samplerate != SAMPLERATE:
             raise ValueError(f"Parakeet needs {SAMPLERATE} Hz audio, not {samplerate}")
+        try:
+            return self._recognize(samples)
+        except Exception as e:
+            if self.device != "gpu" or self._folder is None:
+                raise
+            # The game took the card's memory mid-session, or the driver reset: carry on
+            # on the processor for the rest of the session, and do this request there.
+            log.warning(
+                "Speech recognition failed on the graphics card (%s); using the processor "
+                "from now on",
+                _first_line(e),
+            )
+            del self._model
+            gc.collect()
+            cpu = type(self)._open(self._folder, "cpu")
+            self._model, self.device = cpu._model, "cpu"
+            return self._recognize(samples)
+
+    def _recognize(self, samples: Samples) -> str:
         return str(self._model.recognize(samples, sample_rate=SAMPLERATE)).strip()
+
+
+def _first_line(error: Exception) -> str:
+    return (str(error).strip().splitlines() or [type(error).__name__])[0]
 
 
 def device_in_use(model: Any, asked: Device) -> Device:
