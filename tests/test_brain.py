@@ -27,6 +27,7 @@ from tycho.brain.briefing import (
     briefing,
     command_phrasings,
     game_facts,
+    unbound_commands,
 )
 from tycho.brain.claude import (
     MAX_CALLS,
@@ -194,6 +195,21 @@ def test_the_briefing_tells_claude_how_players_say_each_command() -> None:
     assert any("gear down" in line for line in gear)
     assert not any("v_lights" in line for line in lines)  # no key, so not offered
     assert "how it's said" in briefing(KEYBINDS, MATCHER)
+
+
+def test_the_briefing_names_commands_with_no_key_and_what_to_bind() -> None:
+    # Without a lock key, every model pressed Open/Close Doors for "lock the doors" (#28).
+    lines = unbound_commands(KEYBINDS, MATCHER)
+    lock = next(line for line in lines if line.startswith("doors_lock |"))
+    assert lock == "doors_lock | lock the doors; lock doors | v_lock_all_doors"
+    assert not any(line.startswith("landing_gear") for line in lines)  # has a key
+    labelled = Keybinds([*KEYBINDS, _action("v_lock_all_doors", None, "Lock All Doors")])
+    assert "doors_lock | lock the doors; lock doors | Lock All Doors" in unbound_commands(
+        labelled, MATCHER
+    )
+    text = briefing(KEYBINDS, MATCHER)
+    assert "commands with no key" in text
+    assert "Never press another action in its place" in text
 
 
 def test_actions_nobody_says_are_left_out_unless_a_command_presses_them() -> None:
