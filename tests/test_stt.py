@@ -216,7 +216,8 @@ def test_the_downloader_refuses_plain_http_by_default(tmp_path: Path) -> None:
     ("setting", "cuda", "free_mb", "device", "reason"),
     [
         ("auto", True, 12_000, "gpu", "11.7 GB free"),
-        ("auto", True, 3_000, "cpu", "needs 4.4 GB"),
+        ("auto", True, 3_000, "cpu", "needs 3.9 GB"),
+        ("auto", True, 4_200, "gpu", "4.1 GB free"),  # enough with the lean CUDA settings
         ("auto", True, None, "cpu", "couldn't read"),
         ("auto", False, 12_000, "cpu", "CUDA isn't available"),
         ("cpu", True, 12_000, "cpu", "settings"),
@@ -404,3 +405,27 @@ def test_a_processor_failure_is_a_plain_model_error(
     monkeypatch.setattr(ParakeetTranscriber, "_open", _opener(_Model(), _Model(fails=1), []))
     with pytest.raises(ModelError, match="Couldn't load the speech model"):
         ParakeetTranscriber.load(tmp_path, "cpu")
+
+
+def test_the_graphics_card_gets_the_lean_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # They take the model from 3.5 GB to 3.0 GB at the same speed (tools/bench/gpu_memory.py).
+    import onnx_asr
+
+    from tycho.stt.parakeet import CUDA_OPTIONS, LEAN_CUDA, ParakeetTranscriber
+
+    asked: list[object] = []
+
+    def load_model(name: str, folder: Path, providers: list[object]) -> object:
+        asked.append(providers)
+        return _Model()
+
+    monkeypatch.setattr(onnx_asr, "load_model", load_model)
+    ParakeetTranscriber._open(tmp_path, "gpu")  # pyright: ignore[reportPrivateUsage]
+    ParakeetTranscriber._open(tmp_path, "cpu")  # pyright: ignore[reportPrivateUsage]
+    assert CUDA_OPTIONS == LEAN_CUDA
+    assert asked == [
+        [("CUDAExecutionProvider", dict(LEAN_CUDA)), "CPUExecutionProvider"],
+        ["CPUExecutionProvider"],
+    ]

@@ -2,6 +2,7 @@
 
 import gc
 import logging
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self
 
@@ -18,6 +19,20 @@ log = logging.getLogger(__name__)
 SAMPLERATE = 16_000
 
 type Device = Literal["gpu", "cpu"]
+
+LEAN_CUDA: Mapping[str, str] = {
+    # Grow the memory pool by what's asked for, not by doubling: ONNX Runtime's default
+    # keeps up to twice what the model needs, and Star Citizen wants the rest.
+    "arena_extend_strategy": "kSameAsRequested",
+    # Pick convolution algorithms by rule, without trying each (which allocates the
+    # biggest workspace any of them needs), and keep cuDNN's workspace small.
+    "cudnn_conv_algo_search": "HEURISTIC",
+    "cudnn_conv_use_max_workspace": "0",
+}
+"""CUDA settings that keep the speech model's graphics memory small, so it can share the
+card with the game (Ben's run with Star Citizen open, 2026-11-03)."""
+CUDA_OPTIONS: Mapping[str, str] = LEAN_CUDA
+"""What Tycho uses: see tools/bench/gpu_memory.py for the measurements behind it."""
 
 
 class ParakeetTranscriber:
@@ -61,14 +76,17 @@ class ParakeetTranscriber:
         self._recognize(np.zeros(SAMPLERATE, dtype=np.float32))
 
     @classmethod
-    def _open(cls, folder: Path, device: Device) -> Self:
+    def _open(
+        cls, folder: Path, device: Device, cuda_options: Mapping[str, str] | None = None
+    ) -> Self:
         import onnx_asr  # imports ONNX Runtime: slow, so only when actually loading
         import onnxruntime as ort  # pyright: ignore[reportMissingTypeStubs]
 
         ort.set_default_logger_severity(3)  # pyright: ignore[reportUnknownMemberType] - errors only
-        providers = ["CPUExecutionProvider"]
+        providers: list[str | tuple[str, dict[str, str]]] = ["CPUExecutionProvider"]
         if device == "gpu":
-            providers.insert(0, "CUDAExecutionProvider")
+            options = CUDA_OPTIONS if cuda_options is None else cuda_options
+            providers.insert(0, ("CUDAExecutionProvider", dict(options)))
         model = onnx_asr.load_model(  # pyright: ignore[reportUnknownMemberType] - ORT's types
             PARAKEET_V2.name, folder, providers=providers
         )
