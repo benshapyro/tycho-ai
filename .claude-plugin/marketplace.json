@@ -1,0 +1,16 @@
+{
+  "name": "tycho",
+  "owner": { "name": "Ben Shapiro", "url": "https://github.com/benshapyro" },
+  "metadata": {
+    "description": "Skills for Tycho, an unofficial voice co-pilot for Star Citizen: set it up on your PC, and write your own voice commands."
+  },
+  "plugins": [
+    {
+      "name": "tycho",
+      "source": "./plugins/tycho",
+      "description": "Install and set up Tycho on Windows, and add your own voice commands and sequences.",
+      "homepage": "https://github.com/benshapyro/tycho-ai",
+      "license": "Apache-2.0"
+    }
+  ]
+}
