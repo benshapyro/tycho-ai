@@ -179,7 +179,7 @@ def test_a_sequence_with_travel_asks_when_the_brain_picked_it(tmp_path: Any) -> 
 def test_the_briefing_lists_only_actions_tycho_can_press() -> None:
     actions = bound_actions(KEYBINDS)
     assert set(actions) == {"v_toggle_landing_system", "v_eject"}
-    assert actions["v_eject"] == "v_eject | Eject | ralt+y"
+    assert actions["v_eject"] == "v_eject | Eject"  # what it does, not its key
 
 
 def test_the_briefing_is_the_same_every_time_so_the_cache_holds() -> None:
@@ -585,3 +585,12 @@ def test_a_reply_is_one_line_with_no_markdown_to_read_out() -> None:
     assert spoken("Best route is **Quartz**,\n to `Stanton Gateway`. # done") == (
         "Best route is Quartz, to Stanton Gateway. done"
     )
+
+
+def test_claude_sees_a_few_phrases_per_command_the_short_ones_first() -> None:
+    # The fast path matches every phrase; Claude needs only enough to recognise the
+    # command said another way. Fewer tokens on every request.
+    lines = command_phrasings(KEYBINDS, MATCHER)
+    down = next(line for line in lines if "lower the landing gear" in line)
+    assert down == "v_toggle_landing_system | lower the landing gear; gear down; drop the gear"
+    assert all(line.count(";") <= 2 for line in lines)

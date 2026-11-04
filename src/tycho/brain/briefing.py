@@ -141,7 +141,8 @@ def bound_actions(keybinds: Keybinds, keep: frozenset[str] = frozenset()) -> dic
             continue
         if action.name not in keep and not briefed(action.name, action.actionmap):
             continue
-        lines[action.name] = f"{action.name} | {action.label} | {key}"
+        # No key: Claude picks by what an action does, and Tycho presses its key.
+        lines[action.name] = f"{action.name} | {action.label}"
     return lines
 
 
@@ -149,6 +150,11 @@ def offered_actions(keybinds: Keybinds, matcher: CommandMatcher) -> dict[str, st
     """The actions the brain may pick: what the briefing lists, and nothing else."""
     keep = frozenset(line.split(" | ", 1)[0] for line in command_phrasings(keybinds, matcher))
     return bound_actions(keybinds, keep)
+
+
+BRIEFED_PHRASES = 3
+"""How many of a command's phrases Claude sees: enough to recognise it said another way.
+The rest are for the fast path, which matches them without Claude."""
 
 
 def command_phrasings(keybinds: Keybinds, matcher: CommandMatcher) -> list[str]:
@@ -160,7 +166,7 @@ def command_phrasings(keybinds: Keybinds, matcher: CommandMatcher) -> list[str]:
         resolved = resolve(command, keybinds)
         if resolved.action is None:
             continue
-        lines.append(f"{resolved.action.name} | {'; '.join(command.say)}")
+        lines.append(f"{resolved.action.name} | {'; '.join(_examples(command.say))}")
     return sorted(lines)
 
 
@@ -185,6 +191,13 @@ def unbound_commands(keybinds: Keybinds, matcher: CommandMatcher) -> list[str]:
     return sorted(lines)
 
 
+def _examples(say: tuple[str, ...]) -> list[str]:
+    """The first phrase, which names the command, and the shortest others: how it's
+    said in a few words ("gear down"), not the long variants after it."""
+    rest = sorted(say[1:], key=len)[: BRIEFED_PHRASES - 1]
+    return [*say[:1], *rest]
+
+
 def game_facts() -> str:
     """The hand-kept sheet of what's true in the current patch."""
     return resources.files("tycho.brain").joinpath("facts.md").read_text("utf-8").strip()
@@ -207,7 +220,7 @@ def briefing(keybinds: Keybinds, matcher: CommandMatcher) -> str:
         + ("\n".join(command_phrasings(keybinds, matcher)) or "(none)")
         + "\n\nThe player's commands with no key (name | how it's said | what to bind):\n"
         + ("\n".join(unbound_commands(keybinds, matcher)) or "(none)")
-        + "\n\nThe player's bound actions (name | what it does | key):\n"
+        + "\n\nThe player's bound actions (name | what it does):\n"
         + "\n".join(sorted(actions.values()))
         + "\n"
     )
