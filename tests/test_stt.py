@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from tycho.stt import ModelError, ModelFile, ModelSpec, ModelStore, choose_device
@@ -329,3 +330,77 @@ def test_nvidia_smi_from_an_absolute_path_folder(tmp_path: Path) -> None:
     tool = _tool(tmp_path / "NVSMI")
     assert smi_path({"PATH": str(tmp_path / "NVSMI")}) == tool
     assert smi_path({}) is None
+
+
+# --- The graphics card failing (Ben's run, 2026-11-03) -----------------------------------
+
+
+class _Model:
+    """Stands in for onnx-asr's model: fails like CUDA did, or answers."""
+
+    def __init__(self, fails: int = 0) -> None:
+        self.fails = fails
+        self.calls = 0
+
+    def recognize(self, samples: object, sample_rate: int) -> str:
+        self.calls += 1
+        if self.fails:
+            self.fails -= 1
+            raise RuntimeError(
+                "[ONNXRuntimeError] : 1 : FAIL : Non-zero status code returned while running "
+                "Div node.\nCUDA error cudaErrorUnknown:unknown error"
+            )
+        return " hello "
+
+
+def _opener(gpu: _Model, cpu: _Model, opened: list[str]) -> Callable[..., object]:
+    from tycho.stt.parakeet import ParakeetTranscriber
+
+    def _open(cls: type[ParakeetTranscriber], folder: Path, device: Device) -> ParakeetTranscriber:
+        opened.append(device)
+        return ParakeetTranscriber(gpu if device == "gpu" else cpu, device, folder)  # type: ignore[arg-type]
+
+    return classmethod(_open)  # type: ignore[return-value]
+
+
+def test_a_graphics_card_that_fails_the_warm_up_falls_back_to_the_processor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # 4.7 GB was free, but the warm-up ran out of memory and Tycho stopped with a traceback.
+    from tycho.stt.parakeet import ParakeetTranscriber
+
+    opened: list[str] = []
+    monkeypatch.setattr(ParakeetTranscriber, "_open", _opener(_Model(fails=1), _Model(), opened))
+    transcriber = ParakeetTranscriber.load(tmp_path, "gpu")
+    assert transcriber.device == "cpu"
+    assert opened == ["gpu", "cpu"]
+    assert "using the processor instead" in caplog.text
+    assert "cudaErrorUnknown" not in caplog.text  # one plain line, not ONNX Runtime's essay
+
+
+def test_a_graphics_card_that_fails_mid_session_moves_to_the_processor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tycho.stt.parakeet import ParakeetTranscriber
+
+    gpu, cpu = _Model(), _Model()
+    opened: list[str] = []
+    monkeypatch.setattr(ParakeetTranscriber, "_open", _opener(gpu, cpu, opened))
+    transcriber = ParakeetTranscriber.load(tmp_path, "gpu")
+    assert transcriber.device == "gpu"
+    gpu.fails = 1  # the game took the card's memory
+    assert transcriber.transcribe(np.zeros(16_000, dtype=np.float32), 16_000) == "hello"
+    assert transcriber.device == "cpu"
+    assert opened == ["gpu", "cpu"]
+    transcriber.transcribe(np.zeros(16_000, dtype=np.float32), 16_000)
+    assert cpu.calls == 2  # stays on the processor
+
+
+def test_a_processor_failure_is_a_plain_model_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tycho.stt.parakeet import ParakeetTranscriber
+
+    monkeypatch.setattr(ParakeetTranscriber, "_open", _opener(_Model(), _Model(fails=1), []))
+    with pytest.raises(ModelError, match="Couldn't load the speech model"):
+        ParakeetTranscriber.load(tmp_path, "cpu")
