@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+
+from tycho.game import gamelog
 from tycho.game.gamelog import QUANTUM_ROUTE, GameLog
 
 # Lines as the game writes them (the author's Game.log, 2026-10-30 and 31), shortened.
@@ -79,3 +82,42 @@ def test_no_log_means_nothing_is_known(tmp_path: Path) -> None:
     log = GameLog(tmp_path / "Game.log")
     assert log.facts() == frozenset()
     assert not log.readable
+
+
+# --- A long backlog (audit, 2026-11-03) ------------------------------------------------
+
+FILLER = "<2026-10-31T19:00:00.000Z> [Notice] <Something> nothing Tycho needs to know\n"
+
+
+def test_a_long_backlog_is_read_only_in_its_last_part(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(gamelog, "MAX_BACKLOG_BYTES", 2_000)
+    path = _log(tmp_path, PLOTTED, FILLER * 100, ARRIVED, FILLER * 100)
+    log = GameLog(path)
+    log.facts()
+    assert log._offset == path.stat().st_size  # pyright: ignore[reportPrivateUsage]
+    _append(path, FILLER * 100, PLOTTED)
+    assert QUANTUM_ROUTE in log.facts()  # a route plotted in the part read is seen
+
+
+def test_skipping_forgets_what_the_skipped_part_might_have_changed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Known before, but the skipped part could hold "arrived": refuse rather than guess.
+    path = _log(tmp_path, PLOTTED)
+    log = GameLog(path)
+    assert QUANTUM_ROUTE in log.facts()
+    monkeypatch.setattr(gamelog, "MAX_BACKLOG_BYTES", 2_000)
+    _append(path, FILLER * 100)
+    assert QUANTUM_ROUTE not in log.facts()
+
+
+def test_a_line_cut_by_the_skip_is_never_half_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(gamelog, "MAX_BACKLOG_BYTES", len(PLOTTED) - 10)
+    path = _log(tmp_path, FILLER * 50, PLOTTED)  # the skip lands inside PLOTTED's start
+    log = GameLog(path)
+    # Its tail still says "calculated route to", but not "Successfully": unknown.
+    assert QUANTUM_ROUTE not in log.facts()

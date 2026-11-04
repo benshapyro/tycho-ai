@@ -6,13 +6,21 @@ transcribe only the speech (#58).
 blocks, so it works on a gated headset and next to a loud fan alike.
 """
 
+import logging
 import threading
 from collections import deque
 
 import numpy as np
 from numpy.typing import NDArray
 
+log = logging.getLogger(__name__)
+
 type Samples = NDArray[np.float32]
+
+MAX_CLIP_SECONDS = 30.0
+"""The longest clip kept. A button stuck down (or a key shared with in-game voice)
+would otherwise record for ever and send minutes of audio to speech recognition
+(audit, 2026-11-03); the longest real request is a few sentences."""
 
 BLOCK_SECONDS = 0.02
 """Levels are measured over 20 ms blocks, the microphone's own block size."""
@@ -79,6 +87,8 @@ class ClipBuffer:
         self._preroll_frames = 0
         self._preroll_limit = round(samplerate * preroll_seconds)
         self._clip: list[Samples] | None = None
+        self._clip_frames = 0
+        self._clip_limit = round(samplerate * MAX_CLIP_SECONDS)
         self._lock = threading.Lock()
 
     @property
@@ -89,7 +99,9 @@ class ClipBuffer:
     def feed(self, block: Samples) -> None:
         with self._lock:
             if self._clip is not None:
-                self._clip.append(block)
+                if self._clip_frames < self._clip_limit:
+                    self._clip.append(block)
+                    self._clip_frames += len(block)
                 return
             self._preroll.append(block)
             self._preroll_frames += len(block)
@@ -102,6 +114,7 @@ class ClipBuffer:
     def start(self) -> None:
         with self._lock:
             self._clip = list(self._preroll)
+            self._clip_frames = self._preroll_frames
 
     def quiet_seconds(self) -> float:
         """How long the clip being recorded has been quiet at its end (0 if not recording)."""
@@ -114,8 +127,17 @@ class ClipBuffer:
     def stop(self) -> Samples:
         with self._lock:
             clip, self._clip = self._clip or [], None
+            full = self._clip_frames >= self._clip_limit
+            self._clip_frames = 0
             self._preroll.clear()
             self._preroll_frames = 0
+        if full:
+            log.warning(
+                "Push-to-talk was held for over %.0f s, so only the first %.0f s are used. "
+                "Is the button stuck?",
+                MAX_CLIP_SECONDS,
+                MAX_CLIP_SECONDS,
+            )
         if not clip:
             return np.zeros(0, dtype=np.float32)
         return np.concatenate(clip)

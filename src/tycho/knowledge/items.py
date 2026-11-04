@@ -16,6 +16,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
+from tycho.knowledge.fresh import Fresh
 from tycho.knowledge.wiki import WikiError, WikiSource
 from tycho.text import name_score, normalize
 
@@ -89,8 +90,7 @@ class Items:
 
     def __init__(self, source: WikiSource, clock: Callable[[], float] = time.monotonic) -> None:
         self._source = source
-        self._clock = clock
-        self._fetched: dict[str, tuple[float, Any]] = {}
+        self._fetched: Fresh[Mapping[str, Any]] = Fresh(FRESH_SECONDS, clock)
 
     async def find(self, asked: str) -> Found | Unclear | Missing:
         """Raises ``WikiError`` if the API can't be reached."""
@@ -149,13 +149,13 @@ class Items:
 
     async def _get(self, path: str, params: Mapping[str, str | int]) -> Any:
         key = f"{path}?{sorted(params.items())}"
-        if (hit := self._fetched.get(key)) and self._clock() - hit[0] < FRESH_SECONDS:
-            return hit[1]
+        if (hit := self._fetched.get(key)) is not None:
+            return hit
         data = await self._source.get(path, params)
         if not isinstance(data, Mapping):
             raise WikiError(f"{path}: unexpected answer")
         answer = cast(Mapping[str, Any], data)
-        self._fetched[key] = (self._clock(), answer)
+        self._fetched.keep(key, answer)
         return answer
 
 
