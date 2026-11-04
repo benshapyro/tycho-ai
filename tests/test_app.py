@@ -303,3 +303,43 @@ def test_check_says_how_to_move_speech_to_the_graphics_card(
     finding = app.speech_finding(settings.Settings())
     assert finding.level == level
     assert says in finding.detail
+
+
+def test_check_json_is_one_document_with_a_fix_for_each_problem(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # For agents setting Tycho up: no reading of the printed text (agent setup, 2026-11-04).
+    monkeypatch.setattr(app, "find_install", _no_game)
+    assert app.main(["check", "--quick", "--json"]) == 1  # no button, no game: not ready
+    document = json.loads(capsys.readouterr().out)
+    assert document["ready"] is False
+    by_what = {f["what"]: f for f in document["findings"]}
+    assert by_what["Push-to-talk"]["level"] == "fail"
+    assert by_what["Push-to-talk"]["fix"].endswith("tycho bind")
+    assert by_what["Brain"]["fix"].endswith("tycho key set anthropic")
+    assert "game_root" in by_what["Star Citizen"]["fix"]
+    assert by_what["Settings"]["fix"] is None
+
+
+def _no_game(current: settings.Settings) -> object:
+    raise FileNotFoundError("Star Citizen isn't installed in any folder Tycho knows")
+
+
+def test_tycho_model_status_and_download(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tycho.stt import ModelStore
+
+    monkeypatch.setattr(app.paths, "models_dir", lambda: Path("nowhere-yet"))
+    assert app.main(["model", "status"]) == 1
+    assert "tycho model download" in capsys.readouterr().out
+    fetched: list[str] = []
+
+    def ensure(self: ModelStore, spec: object, progress: object = None) -> Path:
+        fetched.append("ensure")
+        return Path("nowhere-yet")
+
+    monkeypatch.setattr(ModelStore, "ensure", ensure)
+    assert app.main(["model", "download"]) == 0
+    assert fetched == ["ensure"]
+    assert "Done." in capsys.readouterr().out

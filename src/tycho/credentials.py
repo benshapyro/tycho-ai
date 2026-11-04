@@ -101,8 +101,24 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
 
+NOT_A_TERMINAL = (
+    "Run this in a terminal window, where you can paste the key: it's hidden as you type "
+    "and stored only in Windows Credential Manager. Tycho doesn't read a key piped in by a "
+    "script or an AI agent, so it never ends up in a transcript. An agent can open a window "
+    'for you:\n  start "Tycho key" cmd /k tycho key set {name}'
+)
+
+
+def _interactive() -> bool:
+    """Whether a person is typing: a key piped in could be sitting in a log or transcript."""
+    return sys.stdin.isatty()
+
+
 def _run(command: str, name: str) -> int:
     if command == "set":
+        if not _interactive():
+            print(NOT_A_TERMINAL.format(name=name), file=sys.stderr)
+            return 2
         value = getpass.getpass(f"Paste your {name} API key (input is hidden): ").strip()
         if not value:
             print("Nothing entered; no key stored.")
