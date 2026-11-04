@@ -74,10 +74,14 @@ class WebSearch:
         *,
         model: str = MODEL,
         today: Callable[[], datetime.date] = datetime.date.today,
+        log_queries: bool = False,
     ) -> None:
+        """``log_queries``: put the query (the player's question, reworded) in the log
+        file. Only with ``keep_transcripts`` (audit, 2026-11-03)."""
         self._client = client
         self._model = model
         self._today = today
+        self._log_queries = log_queries
 
     @property
     def name(self) -> str:
@@ -134,8 +138,8 @@ class WebSearch:
         usage = message.usage
         cost = (usage.input_tokens * PRICES[0] + usage.output_tokens * PRICES[1]) / 1_000_000
         log.debug(
-            "Web search %r in %.0f ms: %d in, %d out, %d sites, about $%.5f",
-            query,
+            "Web search%s in %.0f ms: %d in, %d out, %d sites, about $%.5f",
+            f" {query!r}" if self._log_queries else "",
             (time.perf_counter() - started) * 1000,
             usage.input_tokens,
             usage.output_tokens,

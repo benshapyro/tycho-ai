@@ -260,3 +260,14 @@ def test_check_for_updates_false_never_asks_github(
     checked = [f.what for f in app._live_checks(current)]  # pyright: ignore[reportPrivateUsage]
     assert asked == (["run", "check"] if allowed else [])
     assert checked == (["Updates", "Focus"] if allowed else ["Focus"])
+
+
+def test_tycho_credits_names_the_sources_and_says_its_unofficial(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # ADR 15's credits screen, and CIG's fankit disclaimer (audit, 2026-11-03).
+    assert app.main(["credits"]) == 0
+    out = capsys.readouterr().out
+    for expected in ("api.star-citizen.wiki", "UEX Corp", "starcitizen.tools", "CC-BY-4.0"):
+        assert expected in out
+    assert "not affiliated with the" in out
