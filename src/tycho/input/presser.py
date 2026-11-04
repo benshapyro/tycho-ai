@@ -14,6 +14,7 @@ This module presses keys; it doesn't decide whether an action is allowed.
 That's the safety gate's job, upstream.
 """
 
+import logging
 import threading
 import time
 from collections.abc import Callable
@@ -22,6 +23,8 @@ from typing import Literal, Protocol
 
 from tycho.input.keys import Code
 from tycho.input.plan import Press
+
+log = logging.getLogger(__name__)
 
 _SLICE_SECONDS = 0.01
 
@@ -100,7 +103,7 @@ class Presser:
         except OSError as e:
             return Receipt(press.action, "failed", taps, str(e))
         finally:
-            self._release(held)
+            self._release(held, press.action)
 
     def _tap(self, press: Press, held: list[Code], cancel: threading.Event) -> bool:
         """One press of the whole chord. Returns False if cancelled part way."""
@@ -143,14 +146,22 @@ class Presser:
         while (left := until - self._clock()) > 0:
             self._sleep(min(_SLICE_SECONDS, left))
 
-    def _release(self, held: list[Code]) -> None:
+    def _release(self, held: list[Code], action: str) -> None:
         """Let go of everything still down, newest first. A failed release is tried once
-        more, and a key that still won't release doesn't stop the others."""
+        more, and a key that still won't release doesn't stop the others, but is
+        reported: the game may think it's still held."""
         while held:
             code = held.pop()
-            for _ in range(2):
+            for attempt in range(2):
                 try:
                     self._sender.up(code)
                     break
-                except OSError:
-                    continue
+                except OSError as e:
+                    if attempt == 1:
+                        log.error(
+                            "Windows wouldn't let go of a key (%s) after %s: %s. If the game "
+                            "acts as if it's held, press that key once yourself.",
+                            code,
+                            action,
+                            e,
+                        )
