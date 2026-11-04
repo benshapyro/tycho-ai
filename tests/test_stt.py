@@ -429,3 +429,43 @@ def test_the_graphics_card_gets_the_lean_settings(
         [("CUDAExecutionProvider", dict(LEAN_CUDA)), "CPUExecutionProvider"],
         ["CPUExecutionProvider"],
     ]
+
+
+def test_the_small_parts_can_run_on_the_processor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Off by default: slower with the card idle (298 against 240 ms), to try with the
+    # game running (#58).
+    import onnx_asr
+
+    from tycho.stt import parakeet
+    from tycho.stt.parakeet import SMALL_PARTS_ON_CPU, ParakeetTranscriber
+
+    assert SMALL_PARTS_ON_CPU is False
+    asked: list[dict[str, object]] = []
+    moved: list[Path] = []
+
+    def load_model(name: str, folder: Path, **kwargs: object) -> object:
+        asked.append(kwargs)
+        return _Model()
+
+    def decoder_on_cpu(model: object, folder: Path) -> None:
+        moved.append(folder)
+
+    monkeypatch.setattr(onnx_asr, "load_model", load_model)
+    monkeypatch.setattr(parakeet, "_decoder_on_cpu", decoder_on_cpu)
+    ParakeetTranscriber._open(tmp_path, "gpu", small_parts_on_cpu=True)  # pyright: ignore[reportPrivateUsage]
+    assert asked[-1]["preprocessor_config"] == {"use_numpy_preprocessors": True}
+    assert moved == [tmp_path]
+    ParakeetTranscriber._open(tmp_path, "gpu")  # pyright: ignore[reportPrivateUsage]
+    assert "preprocessor_config" not in asked[-1]
+    assert moved == [tmp_path]
+
+
+def test_a_decoder_that_cant_be_found_is_left_where_it_is(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    from tycho.stt import parakeet
+
+    parakeet._decoder_on_cpu(_Model(), tmp_path)  # pyright: ignore[reportPrivateUsage]
+    assert "stays where it is" in caplog.text

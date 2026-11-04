@@ -31,6 +31,10 @@ LEAN_CUDA: Mapping[str, str] = {
 }
 """CUDA settings that keep the speech model's graphics memory small, so it can share the
 card with the game (Ben's run with Star Citizen open, 2026-11-03)."""
+SMALL_PARTS_ON_CPU = False
+"""Run the preprocessor and the small decoder on the processor, and only the encoder on
+the graphics card: the decoder runs about 30 times a phrase, and each tiny GPU call waits
+behind the game's frames (#58). Off until measured with the game running."""
 CUDA_OPTIONS: Mapping[str, str] = LEAN_CUDA
 """What Tycho uses: see tools/bench/gpu_memory.py for the measurements behind it."""
 
@@ -77,19 +81,29 @@ class ParakeetTranscriber:
 
     @classmethod
     def _open(
-        cls, folder: Path, device: Device, cuda_options: Mapping[str, str] | None = None
+        cls,
+        folder: Path,
+        device: Device,
+        cuda_options: Mapping[str, str] | None = None,
+        small_parts_on_cpu: bool | None = None,
     ) -> Self:
         import onnx_asr  # imports ONNX Runtime: slow, so only when actually loading
         import onnxruntime as ort  # pyright: ignore[reportMissingTypeStubs]
 
         ort.set_default_logger_severity(3)  # pyright: ignore[reportUnknownMemberType] - errors only
         providers: list[str | tuple[str, dict[str, str]]] = ["CPUExecutionProvider"]
+        split = SMALL_PARTS_ON_CPU if small_parts_on_cpu is None else small_parts_on_cpu
+        extra: dict[str, Any] = {}
         if device == "gpu":
             options = CUDA_OPTIONS if cuda_options is None else cuda_options
             providers.insert(0, ("CUDAExecutionProvider", dict(options)))
+            if split:  # the features, computed in NumPy on the processor
+                extra["preprocessor_config"] = {"use_numpy_preprocessors": True}
         model = onnx_asr.load_model(  # pyright: ignore[reportUnknownMemberType] - ORT's types
-            PARAKEET_V2.name, folder, providers=providers
+            PARAKEET_V2.name, folder, providers=providers, **extra
         )
+        if device == "gpu" and split:
+            _decoder_on_cpu(model, folder)
         return cls(model, device_in_use(model, device), folder)
 
     def transcribe(self, samples: Samples, samplerate: int) -> str:
@@ -115,6 +129,23 @@ class ParakeetTranscriber:
 
     def _recognize(self, samples: Samples) -> str:
         return str(self._model.recognize(samples, sample_rate=SAMPLERATE)).strip()
+
+
+DECODER_FILE = "decoder_joint-model.onnx"
+
+
+def _decoder_on_cpu(model: Any, folder: Path) -> None:
+    """Swap the model's decoder for one on the processor. Reads an onnx-asr internal
+    (pinned version), like ``device_in_use``; if it has changed, the model is left as is."""
+    import onnxruntime as ort  # pyright: ignore[reportMissingTypeStubs]
+
+    asr = getattr(model, "asr", None)
+    if asr is None or not hasattr(asr, "_decoder_joint"):
+        log.warning("Couldn't move the speech decoder to the processor; it stays where it is")
+        return
+    asr._decoder_joint = ort.InferenceSession(  # pyright: ignore[reportUnknownMemberType]
+        str(folder / DECODER_FILE), providers=["CPUExecutionProvider"]
+    )
 
 
 def _first_line(error: Exception) -> str:

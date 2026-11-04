@@ -154,6 +154,8 @@ class CommandMatcher:
                 if other is not command:
                     raise ValueError(f"{' '.join(words)!r} is in both {other.id} and {command.id}")
                 self._phrases.append((words, command))
+        # Each phrase as the matcher compares it: its words run together.
+        self._joined = ["".join(words) for words, _ in self._phrases]
 
     @classmethod
     def default(cls, user_file: Path | None = None) -> CommandMatcher:
@@ -210,10 +212,17 @@ class CommandMatcher:
         # Each command's best score, whether or not it clears the threshold: a close
         # runner-up makes the winner uncertain even when the runner-up itself is too weak.
         best: dict[str, tuple[float, Command]] = {}
-        for phrase, command in self._phrases:
+        # A phrase whose length alone keeps it below the threshold less the margin can't
+        # win, or come close enough to make the winner uncertain: skip it (#58). Long
+        # requests compared every phrase letter by letter, up to 40 ms.
+        lowest = self._threshold - self._margin
+        for (phrase, command), joined in zip(self._phrases, self._joined, strict=True):
+            longer = max(len(heard), len(joined), 1)
+            if 1 - abs(len(heard) - len(joined)) / longer < lowest:
+                continue
             if _MEANING_WORDS.intersection(phrase) != meaning:
                 continue
-            score = similarity(heard, "".join(phrase))
+            score = similarity(heard, joined)
             if score > best.get(command.id, (-1.0, command))[0]:
                 best[command.id] = (score, command)
         ranked = sorted(best.values(), key=lambda s: -s[0])

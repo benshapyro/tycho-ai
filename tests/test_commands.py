@@ -254,3 +254,25 @@ def test_no_command_uses_a_reply_to_a_question_as_a_phrase() -> None:
     assert reply_to_question("Confirm.") == "confirm"
     assert reply_to_question("never mind") == "cancel"
     assert reply_to_question("confirm landing") is None  # whole utterances only
+
+
+def test_phrases_too_far_off_in_length_are_never_compared(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A long question compared every phrase letter by letter: up to 40 ms (#58). A phrase
+    # whose length alone keeps it below the threshold less the margin can't change the
+    # result (checked on 3,363 requests against the old matcher), so it's skipped.
+    from tycho.commands import matcher as module
+
+    calls: list[str] = []
+    real = module.similarity
+
+    def counted(a: str, b: str) -> float:
+        calls.append(b)
+        return real(a, b)
+
+    monkeypatch.setattr(module, "similarity", counted)
+    matcher = CommandMatcher.default()
+    result = matcher.match("can you tell me how the refining process works in star citizen")
+    assert isinstance(result, Defer)
+    assert len(calls) < 20  # of about 450 phrases
