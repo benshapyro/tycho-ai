@@ -594,3 +594,10 @@ def test_claude_sees_a_few_phrases_per_command_the_short_ones_first() -> None:
     down = next(line for line in lines if "lower the landing gear" in line)
     assert down == "v_toggle_landing_system | lower the landing gear; gear down; drop the gear"
     assert all(line.count(";") <= 2 for line in lines)
+
+
+def test_claude_is_told_to_name_what_was_sent_not_a_result() -> None:
+    # The game ignores some keys in the wrong state, and Tycho can't see it (#29).
+    text = briefing(KEYBINDS, MATCHER)
+    assert "Name what was sent, never a result" in text
+    assert '"Max power to engines", not "Engines are at' in text
