@@ -104,3 +104,24 @@ def test_the_commands_skill_examples_load(tmp_path: Path) -> None:
     assert [s.wait_seconds for s in sequence.steps] == [0.0, 1.0, 0.0]
     fleet = next(b for b in blocks if "ships = [" in b)
     assert tomllib.loads(fleet)["ships"] == ["Cutlass Black", "MISC Prospector"]
+
+
+def test_contributor_skills_are_the_same_for_claude_code_and_codex() -> None:
+    # Claude Code reads .claude/skills and Codex reads .agents/skills: one copy each,
+    # kept identical. Edit one, then copy it over.
+    claude = {
+        p.relative_to(ROOT / ".claude" / "skills")
+        for p in (ROOT / ".claude" / "skills").rglob("*")
+        if p.is_file()
+    }
+    codex = {
+        p.relative_to(ROOT / ".agents" / "skills")
+        for p in (ROOT / ".agents" / "skills").rglob("*")
+        if p.is_file()
+    }
+    assert claude == codex
+    assert claude
+    for path in claude:
+        assert (ROOT / ".claude" / "skills" / path).read_bytes() == (
+            ROOT / ".agents" / "skills" / path
+        ).read_bytes(), f"{path} differs between .claude/skills and .agents/skills"
