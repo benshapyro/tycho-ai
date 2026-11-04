@@ -8,6 +8,7 @@ Install the extra packages these tools need with `uv sync --group bench`.
 |---|---|---|
 | Speech-to-text | `engines/*.py`, `report.py` | none |
 | Fast-path commands | `commands_report.py` | none |
+| Speech model's graphics memory | `gpu_memory.py` | none |
 | Language model ("brain") | `brain_report.py` | `anthropic`, optionally `cerebras` |
 | Fast router (Jev) | `jev_report.py` | `typesafe` |
 | Voices | `tts/elevenlabs_tts.py`, `tts/kokoro_tts.py`, `tts/design_voices.py` | `elevenlabs` for the ElevenLabs scripts |
@@ -34,6 +35,15 @@ uv run python tools/bench/commands_report.py $r      # what each transcript woul
 `commands_report.py` scores every transcript against [`tools/spike/expected.toml`](../spike/expected.toml): **right**, **slow** (handed to the language model when the fast path should have caught it) or **wrong** (the wrong action, or acting when it should have asked). Wrong must stay at zero. It then lists the key each command would press with your own keybinds, read from your game install.
 
 Models go to `%LOCALAPPDATA%\tycho\models`. Set `TYCHO_MODELS` to put them elsewhere, and `UV_CACHE_DIR` and `HF_HOME` to move the package and download caches.
+
+### Graphics memory
+
+```powershell
+uv run python tools/bench/gpu_memory.py $r               # with Star Citizen closed
+uv run python tools/bench/gpu_memory.py $r --with-game   # with it open, to see it share the card
+```
+
+Loads Parakeet on the graphics card with ONNX Runtime's default CUDA settings and with Tycho's lean ones (`LEAN_CUDA` in `src/tycho/stt/parakeet.py`), each in a process of its own, and reports load time, warm latency (p50, p90) and the card's memory in use above where it started. Measured on 2026-11-04 with the game closed: 3.5 GB with the defaults, 3.0 GB lean, the same speed and the same transcripts.
 
 ## What's measured
 

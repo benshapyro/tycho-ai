@@ -1,7 +1,10 @@
 """Choosing where speech recognition runs: the graphics card if it has room, else the processor.
 
-The GPU session reserved about 3.5 GB of graphics memory in the benchmark, with
-Star Citizen already using about 8 GB. Revisited after the frame-rate test (#23).
+With ONNX Runtime's default CUDA settings the model took about 3.5 GB of graphics
+memory; with Tycho's lean ones (stt/parakeet.py) it peaks at 3.0 GB, at the same speed
+(tools/bench/gpu_memory.py, 2026-11-04). Star Citizen takes most of the rest, and frees
+and takes memory as it plays, so this is a guess: if the card fails anyway, the
+transcriber falls back to the processor.
 """
 
 import importlib.util
@@ -12,8 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-GPU_MEMORY_NEEDED_MB = 4_500
-"""The 3.5 GB the model reserved, plus room so the game isn't squeezed."""
+GPU_MEMORY_NEEDED_MB = 4_000
+"""The 3.0 GB the model takes at its peak, plus room so the game isn't squeezed."""
 
 type Setting = Literal["auto", "gpu", "cpu"]
 
