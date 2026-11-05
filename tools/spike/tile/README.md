@@ -30,6 +30,17 @@ The engines run in their own process, and the test only watches from outside. No
 ## What we learned on the desktop (2026-11-04)
 
 - **Starting tkinter takes the foreground before any window is shown.** Windows lets a program started from the foreground window (here, the terminal) take the foreground once, and tkinter's hidden main window does. Setting the window's styles can't prevent it, so the engine records which window was in front before creating any UI and gives it back afterwards. The real Tile needs the same.
+- **Both engines pass the three window checks on the desktop:** focus never taken, clicks pass through, stays on top.
+  - Qt needs no focus workaround: its show-without-activating flag is enough.
+- **Cost on the desktop:**
+
+  | Engine | RAM | Graphics memory | Warm start |
+  |---|---|---|---|
+  | tk | 47 MB | too small to measure | 0.3 s |
+  | qt | 324 MB (Chromium processes) | about +40 MB | 2.9 s |
+
+  Qt's graphics memory is small next to the speech model's 3 GB. Its RAM cost is the main price of drawing the Tile with web technology.
+- **Qt's see-through glass shows busy backgrounds through the card.** In front of text it's readable but noisy, so the default see-through level may need to be lower than 20%. Judge it over the game.
 - **Screenshots can miss the Tile.** A plain screen copy leaves out layered windows unless it asks for them (`CAPTUREBLT`). Some capture or streaming tools may not show the Tile.
 
 ## Next play session
