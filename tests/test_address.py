@@ -70,5 +70,6 @@ def test_spaces_and_line_breaks_in_a_name_become_single_spaces() -> None:
 def test_call_me_by_voice() -> None:
     assert parse("call_me", "Ace", "Commander").value == "Ace"
     assert parse("call_me", "nothing", "Commander").value == ""
+    assert parse("call_me", "off", "Commander").value == ""  # "stop calling me commander"
     with pytest.raises(Refused, match="up to 40 letters"):
         parse("call_me", "<script>", "Commander")

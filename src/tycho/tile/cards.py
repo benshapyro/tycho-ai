@@ -99,6 +99,7 @@ class Card:
 
 _CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2060-\u206f]")
 _MARKUP = re.compile(r"[*`#<>]+")
+_NUMBERED = re.compile(r"^(?:step\s*)?\d+\s*[.):-]\s*", re.IGNORECASE)
 
 
 def clean(text: object, limit: int) -> str:
@@ -121,6 +122,8 @@ def from_tool(arguments: Mapping[str, object]) -> Card:
     if kind == "route" and len(rows) != 2:
         kind = "list"  # a route is a buy and a sell; anything else reads as a list
     rows = rows[: MAX_ROWS.get(kind, DEFAULT_ROWS)]
+    if kind == "steps":  # the Tile numbers steps itself
+        rows = tuple(Row(_NUMBERED.sub("", r.text) or r.text, r.detail, r.value) for r in rows)
     if not rows and not body:
         raise ValueError(f"the {kind} card has nothing on it")
     return Card(
@@ -223,10 +226,11 @@ TOOL_SCHEMA: Mapping[str, object] = {
 }
 
 TOOL_DESCRIPTION = """\
-Answer out loud and put the details on the Tile, a small panel over the game. Use it \
-only when the eye beats the ear: more than about three items or numbers, exact text \
-the player must find or type, or steps to follow. Not for one-line answers, small talk \
-or anything you press. Fill the card from look-up results when you have them.
+Answer in one short spoken sentence and put the details on the Tile, a small panel \
+over the game the player can glance at. Use it whenever an answer has more than about \
+three items or numbers (prices, a route, specs, a recipe's amounts), steps to follow, \
+news, or exact words the player must find or type. Not for one-line answers, small \
+talk or anything you press. Fill the card from look-up results when you have them.
 Kinds and their rows (text | detail | value):
 - list: places or items, best first (place | where | price). Mark nothing dim.
 - route: exactly two rows, buy then sell (place | "Buy" or "Sell" | price per SCU); \
