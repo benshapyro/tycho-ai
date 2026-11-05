@@ -23,6 +23,7 @@ from tycho.settings import Settings, SettingsError
 from tycho.stt import PARAKEET_V2, DeviceChoice, ModelError, ModelStore
 
 if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when running
+    from tycho.address import Address
     from tycho.audio.source import AudioSource
     from tycho.input import FocusCheck, KeySender
     from tycho.runtime import (
@@ -167,6 +168,7 @@ def run_command(current: Settings, *, verbose: bool = False) -> int:
 
 
 def _run(current: Settings, log_file: Path) -> int:
+    from tycho.address import Address, Pronouncing
     from tycho.audio.microphone import Microphone
     from tycho.feedback import SoundDevicePlayer, SoundFeedback
     from tycho.input.windows import WindowsFocusCheck, WindowsKeySender
@@ -188,12 +190,16 @@ def _run(current: Settings, log_file: Path) -> int:
     action_log = FileActionLog()
     log.info("Action log: %s", action_log.path)
     feedback = SoundFeedback(SoundDevicePlayer(), current.feedback_volume)
-    speaker = load_speaker(current)
+    voice = load_speaker(current)
+    address = Address.from_settings(current)
+    speaker = Pronouncing(voice, address) if voice is not None else None
     # What a setting changed by voice changes in the running session (#111). A name
     # missing here applies at the next start; the session is added once it's built.
     live: Live = {"feedback_volume": lambda v: feedback.set_volume(_float(v))}
-    if isinstance(speaker, ElevenLabsSpeaker):
-        live["voice_volume"] = lambda v: speaker.set_volume(_float(v))
+    if isinstance(voice, ElevenLabsSpeaker):
+        live["voice_volume"] = lambda v: voice.set_volume(_float(v))
+    for name in ("call_me", "call_me_says", "call_me_how_often"):
+        live[name] = lambda v, name=name: address.set(name, v)
     with Microphone(device=microphone_device(current.microphone)) as mic:
         log.info("Microphone: %s", mic.name)
         session = build_session(
@@ -206,8 +212,9 @@ def _run(current: Settings, log_file: Path) -> int:
             focus=WindowsFocusCheck(),
             feedback=feedback,
             action_log=action_log,
-            make_brain=lambda matcher: load_brain(matcher, current, live),
+            make_brain=lambda matcher: load_brain(matcher, current, live, address),
             speaker=speaker,
+            address=address,
         )
         live["confirm_seconds"] = lambda v: session.set_confirm_seconds(_float(v))
         log.info("Listening. Hold %s and speak; press Ctrl+C to stop.", describe(binding))
@@ -418,10 +425,14 @@ def anthropic_key() -> str | None:
 
 
 def load_brain(
-    matcher: CommandMatcher, current: Settings, live: Live | None = None
+    matcher: CommandMatcher,
+    current: Settings,
+    live: Live | None = None,
+    address: Address | None = None,
 ) -> Brain | None:
     """Claude, if the player has stored an Anthropic key. Without one, the fast path only.
-    ``live`` applies settings changed by voice to the running session."""
+    ``live`` applies settings changed by voice to the running session; ``address`` is
+    what to call the player (#15), read fresh for each request."""
     key = anthropic_key()
     if key is None:
         log.info(
@@ -459,9 +470,12 @@ def load_brain(
                 log_queries=current.keep_transcripts,
             )
         )
-    return ClaudeBrain(
-        matcher, api_key=key, lookups=lookups, about=lambda: fleet.describe(ships.library)
-    )
+
+    def about() -> str:
+        parts = [fleet.describe(ships.library), address.header() if address else ""]
+        return "\n".join(p for p in parts if p)
+
+    return ClaudeBrain(matcher, api_key=key, lookups=lookups, about=about)
 
 
 VOICE_KEY_HELP = f"{TYCHO} key set elevenlabs"
@@ -525,6 +539,7 @@ def build_session(
     make_brain: Callable[[CommandMatcher], Brain | None] | None = None,
     speaker: Speaker | None = None,
     on_result: Callable[[Result], None] | None = None,
+    address: Address | None = None,
 ) -> Session:
     """The talking loop, wired the way ``tycho run`` wires it."""
     from tycho.game.gamelog import GameLog
@@ -556,6 +571,7 @@ def build_session(
         confirm_seconds=current.confirm_seconds,
         log_transcripts=current.keep_transcripts,
         on_result=on_result,
+        address=(lambda: address.name) if address is not None else (lambda: ""),
     )
 
 

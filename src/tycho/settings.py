@@ -12,6 +12,7 @@ only go one way by voice: ``lower_only`` means lower, or off.
 """
 
 import os
+import re
 import tempfile
 import tomllib
 from collections.abc import Mapping
@@ -29,6 +30,7 @@ CURRENT_VERSION = 1
 type Device = Literal["auto", "gpu", "cpu"]
 type VoiceRule = Literal["yes", "lower_only", "no"]
 type Applies = Literal["now", "restart"]
+type HowOften = Literal["sparingly", "often"]
 
 
 def _rule(voice: VoiceRule, applies: Applies = "restart", how: str = "") -> dict[str, Any]:
@@ -37,6 +39,10 @@ def _rule(voice: VoiceRule, applies: Applies = "restart", how: str = "") -> dict
 
 
 FILE_OR_APP = "in settings.toml (or the settings screen, when there is one)"
+
+NAME = re.compile(r"[\w .'-]{0,40}")
+"""What Tycho may call the player: letters, digits, spaces, apostrophes, hyphens and
+full stops, up to 40. It goes into every request to the brain, so nothing else."""
 
 
 class SettingsError(Exception):
@@ -114,6 +120,24 @@ class Settings(BaseModel):
         "ships. Each search costs about 1 cent of your Anthropic credit.",
         json_schema_extra=_rule("lower_only", how=FILE_OR_APP),
     )
+    call_me: str = Field(
+        default="Commander",
+        description="What Tycho calls you: a name, nickname, callsign or rank. Empty means "
+        'nothing. Say "call me Ace".',
+        json_schema_extra=_rule("yes", "now"),
+    )
+    call_me_says: str = Field(
+        default="",
+        description="How Tycho's voice should say it, if it gets it wrong: e.g. Zile for Xyl. "
+        "Empty means as written.",
+        json_schema_extra=_rule("yes", "now"),
+    )
+    call_me_how_often: HowOften = Field(
+        default="sparingly",
+        description="How often Tycho uses it: sparingly (greetings, warnings and "
+        "confirmations of big actions) or often.",
+        json_schema_extra=_rule("yes", "now"),
+    )
     check_for_updates: bool = Field(
         default=True,
         description="When Tycho starts, ask GitHub whether a newer version is out, and say so. "
@@ -126,6 +150,16 @@ class Settings(BaseModel):
     def _valid_binding(cls, value: str | None) -> str | None:
         if value is not None:
             Binding.parse(value)  # raises ValueError with a readable message
+        return value
+
+    @field_validator("call_me", "call_me_says")
+    @classmethod
+    def _plain_name(cls, value: str) -> str:
+        value = " ".join(value.split())
+        if not NAME.fullmatch(value):
+            raise ValueError(
+                "use up to 40 letters, digits, spaces, apostrophes, hyphens or full stops"
+            )
         return value
 
     @field_validator("version")

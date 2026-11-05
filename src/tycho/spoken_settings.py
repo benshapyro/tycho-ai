@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import cast
 
 import annotated_types
+from pydantic import ValidationError
 
 from tycho import settings
 from tycho.brain.lookups import LookupResult, failure
@@ -95,6 +96,13 @@ def parse(name: str, said: str, current: object) -> Parsed:
         raise Refused(f"{name} is on or off, not {said!r}")
     if kind is float:
         return _number(name, text, current, field.metadata)
+    if kind is str:
+        value = "" if text in ("nothing", "none", "nobody", "no name") else said.strip()
+        try:
+            Settings.model_validate({name: value})
+        except ValidationError as e:
+            raise Refused(f"{name}: {e.errors()[0]['msg']}") from e
+        return Parsed(" ".join(value.split()))
     options = typing.get_args(getattr(kind, "__value__", kind))
     if options and all(isinstance(o, str) for o in options):
         for option in cast(tuple[str, ...], options):
