@@ -47,7 +47,7 @@ All four of these pass: `ruff format --check`, `ruff check`, `pyright`, and `pyt
 - `src/tycho/eval/`: scoring for benchmarks.
 - `src/tycho/credentials.py`: API keys.
 - `plugins/tycho/` and `.claude-plugin/marketplace.json`: the skills players' agents use to set Tycho up (`tycho-setup`) and write their own commands (`tycho-commands`), shipped as a Claude Code plugin; the README links them for other agents. `tests/test_agent_skills.py` keeps them true to the command line and file formats: change them with the CLI.
-- `tools/bench/`: benchmarks and the brain eval (see its README). `tools/spike/`: the recorder, phrase lists, expected results and brain cases, the recommended-keybinds profile builder (`make_layout.py`), the in-game press tool (`press.py`) and the self-test (`selftest.py`).
+- `tools/bench/`: benchmarks and the brain eval (see its README). `tools/spike/`: the recorder, phrase lists, expected results and brain cases, the recommended-keybinds profile builder (`make_layout.py`), the in-game press tool (`press.py`), the self-test (`selftest.py`), and the Tile's window test (`tile/`).
 
 The project folder may still be named `ultimo` locally; the project is Tycho ([ADR 7](docs/adr/0007-name-tycho.md)).
 

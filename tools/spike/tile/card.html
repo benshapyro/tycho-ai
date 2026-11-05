@@ -1,0 +1,60 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Tile test card</title>
+<!-- The Tile's card look (see the mockup on issue #2), cycling through samples. Local fonts only. -->
+<style>
+  :root { --acc: #f5901e; --line: color-mix(in srgb, var(--acc) 55%, transparent); --c: 12px; }
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body { font-family: "Bahnschrift SemiCondensed", "Bahnschrift", "Segoe UI", sans-serif; color: #e4ebf5; padding: 6px; }
+  .card {
+    border: 1px solid var(--line); padding: 12px 16px 16px; position: relative;
+    clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
+    background:
+      linear-gradient(to bottom right, transparent calc(50% - .8px), var(--line) 50%, transparent calc(50% + .8px)) top left / var(--c) var(--c) no-repeat border-box,
+      linear-gradient(to bottom right, transparent calc(50% - .8px), var(--line) 50%, transparent calc(50% + .8px)) bottom right / var(--c) var(--c) no-repeat border-box,
+      rgba(8, 14, 24, .8);
+    box-shadow: inset 0 0 18px color-mix(in srgb, var(--acc) 14%, transparent);
+    animation: in .22s ease-out;
+  }
+  @keyframes in { from { opacity: 0; transform: translateX(8px); } }
+  .kick { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--acc); font-weight: 600; display: flex; gap: 8px; }
+  .kick .meta { margin-left: auto; color: #8c99ae; }
+  h3 { margin: 4px 0 10px; font-size: 20px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+  .row { display: flex; justify-content: space-between; padding: 5px 8px; background: #ffffff08; margin-top: 3px; border-left: 2px solid transparent; }
+  .row.best { border-left-color: var(--acc); background: color-mix(in srgb, var(--acc) 14%, transparent); }
+  .num { font-family: "Cascadia Mono", Consolas, monospace; }
+  .row.best .num { color: var(--acc); }
+  .bar { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--acc); transform-origin: left; animation: fade 4s linear forwards; }
+  @keyframes fade { to { transform: scaleX(0); } }
+</style>
+<div id="tile"></div>
+<script>
+  const cards = [
+    ["Sell · Laranite", "UEX · 4 min ago", "Best places to sell", [["Everus Harbor", "3,048"], ["Area18 TDD", "3,012"], ["Port Tressler", "2,987"]]],
+    ["Route · 96 SCU", "UEX · 2 min ago", "Medical supplies", [["Lorville → Area18", ""], ["Profit, full load", "61,728"]]],
+    ["Your fleet · Mining", "fleet.toml", "Best for mining", [["Prospector", "Mines"], ["Cutlass Black", "Hauls"]]]
+  ];
+  const colours = ["#f5901e", "#7fd1b9", "#9fd8ff"];
+  let i = 0;
+  function show() {
+    const [k, meta, title, rows] = cards[i % cards.length];
+    document.documentElement.style.setProperty("--acc", colours[i % colours.length]);
+    const tile = document.getElementById("tile");
+    tile.replaceChildren();
+    const card = document.createElement("div"); card.className = "card";
+    const kick = document.createElement("div"); kick.className = "kick";
+    kick.append("✦ " + k); const m = document.createElement("span"); m.className = "meta"; m.textContent = meta; kick.append(m);
+    const h = document.createElement("h3"); h.textContent = title;
+    card.append(kick, h);
+    rows.forEach(([name, value], n) => {
+      const r = document.createElement("div"); r.className = "row" + (n === 0 ? " best" : "");
+      const a = document.createElement("span"); a.textContent = name;
+      const b = document.createElement("span"); b.className = "num"; b.textContent = value;
+      r.append(a, b); card.append(r);
+    });
+    const bar = document.createElement("div"); bar.className = "bar"; card.append(bar);
+    tile.append(card);
+    i++;
+  }
+  show(); setInterval(show, 4000);
+</script>
