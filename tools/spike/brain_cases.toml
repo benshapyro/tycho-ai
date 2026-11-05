@@ -827,3 +827,111 @@ heard = "how fast is the Atlas quantum drive"
 expect = ["reply"]
 mentions = [['259']]
 tag = "items"
+
+# --- Tycho's own settings (#111) ------------------------------------------------
+# Graded on a scratch settings file. settings: what it holds first; before: changes
+# already made by voice; settings_after / settings_below / settings_unchanged: after.
+# By voice the confirm time only gets shorter, and transcripts, web search and the
+# update check only switch off (the author's calls, 2026-11-05).
+
+[[case]]
+heard = "turn your voice down a bit"
+expect = ["reply"]
+settings_below = { voice_volume = 0.8 }
+tag = "settings"
+
+[[case]]
+heard = "set your voice to forty percent"
+expect = ["reply"]
+settings_after = { voice_volume = 0.4 }
+tag = "settings"
+
+[[case]]
+heard = "make the beeps quieter"
+expect = ["reply"]
+settings_below = { feedback_volume = 0.5 }
+settings_after = { voice_volume = 0.8 }
+tag = "settings"
+
+[[case]]
+heard = "mute the sounds"
+expect = ["reply"]
+settings_after = { feedback_volume = 0.0 }
+tag = "settings"
+
+[[case]]
+heard = "give me less time to confirm"
+expect = ["reply"]
+settings_below = { confirm_seconds = 5.0 }
+tag = "settings"
+
+[[case]]
+heard = "give me ten seconds to confirm"
+expect = ["reply"]
+settings_unchanged = true
+mentions = [["settings\\.toml", "file", "settings screen"]]
+tag = "settings"
+
+[[case]]
+heard = "stop keeping transcripts"
+expect = ["reply"]
+settings = { keep_transcripts = true }
+settings_after = { keep_transcripts = false }
+tag = "settings"
+
+[[case]]
+heard = "start keeping transcripts"
+expect = ["reply"]
+settings_unchanged = true
+mentions = [["settings\\.toml", "file", "settings screen"]]
+tag = "settings"
+
+[[case]]
+heard = "don't search the web anymore"
+expect = ["reply"]
+settings_after = { web_search = false }
+tag = "settings"
+
+[[case]]
+heard = "turn web search back on"
+expect = ["reply"]
+settings = { web_search = false }
+settings_unchanged = true
+tag = "settings"
+
+[[case]]
+heard = "switch to the PTU"
+expect = ["reply"]
+settings_after = { game_channel = "PTU" }
+mentions = [["restart", "next start", "next time", "starts"]]
+tag = "settings"
+
+[[case]]
+heard = "what's your voice volume at"
+expect = ["reply"]
+settings = { voice_volume = 0.6 }
+settings_unchanged = true
+mentions = [["60"]]
+tag = "settings"
+
+[[case]]
+heard = "change my push to talk button"
+expect = ["reply"]
+settings_unchanged = true
+mentions = [["tycho bind"]]
+tag = "settings"
+
+[[case]]
+heard = "undo that"
+expect = ["reply"]
+before = [["voice_volume", "40%"]]
+recent = [["voice at forty percent", "Changed voice_volume from 80% to 40%"]]
+settings_after = { voice_volume = 0.8 }
+tag = "settings"
+
+[[case]]
+heard = "lights on and turn your voice down"
+expect = ["actions"]
+must = [["v_lights", "v_lights_on"]]
+settings_below = { voice_volume = 0.8 }
+tag = "settings"
