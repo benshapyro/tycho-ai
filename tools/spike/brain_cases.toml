@@ -956,3 +956,53 @@ expect = ["reply"]
 settings_after = { call_me = "" }
 tag = "settings"
 
+# --- The Tile: cards only when the eye beats the ear (#2) ----------------------
+
+[[case]]
+heard = "where's the best place to sell laranite"
+expect = ["reply"]
+card = ["list"]
+tag = "tile"
+
+[[case]]
+heard = "best trade route from lorville with 96 SCU"
+expect = ["reply"]
+card = ["route", "list"]
+tag = "tile"
+
+[[case]]
+heard = "tell me about the corsair"
+expect = ["reply"]
+card = ["ship"]
+tag = "tile"
+
+[[case]]
+heard = "how do I refuel my ship"
+expect = ["reply"]
+card = ["steps"]
+tag = "tile"
+
+[[case]]
+heard = "what do I need to craft an FS-9"
+expect = ["reply"]
+card = ["recipe", "list"]
+tag = "tile"
+
+[[case]]
+heard = "what's a good first fighter"
+expect = ["reply"]
+no_card = true
+tag = "tile"
+
+[[case]]
+heard = "thanks tycho, nice work"
+expect = ["reply"]
+no_card = true
+tag = "tile"
+
+[[case]]
+heard = "who makes the cutlass black"
+expect = ["reply"]
+no_card = true
+tag = "tile"
+

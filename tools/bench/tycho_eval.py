@@ -15,6 +15,9 @@ Settings requests ("turn your voice down") go through the settings tool, on a sc
 settings file each case sets up ("settings", and "before" for changes already made);
 "settings_after", "settings_below" and "settings_unchanged" grade what it holds after.
 
+The Tile is on, as it is by default (``--no-tile`` turns it off). "card" lists the
+kinds of card a case may show, and "no_card" says it must show none (#2).
+
 Ship questions go through the ship look-up by default. ``--ships table`` puts a
 table of every ship in the briefing instead, and ``--ships none`` gives Claude
 neither, to measure the two designs ADR 15 compares.
@@ -90,6 +93,9 @@ class Outcome:
     """Look-ups the brain made for this request."""
     searched: bool = False
     """Whether the brain searched the web for this request."""
+    card: str = ""
+    """The kind of card it showed on the Tile, if any."""
+    card_rows: list[str] = field(default_factory=list[str])
     verdict: str = ""
     notes: list[str] = field(default_factory=list[str])
 
@@ -148,6 +154,10 @@ def grade(outcome: Outcome, rule: dict[str, Any], valid: set[str]) -> str:
         for group in rule.get("mentions", []):
             if not any(re.search(p, outcome.say, re.IGNORECASE) for p in group):
                 return f"missing {'/'.join(group)}"
+    if rule.get("no_card") and outcome.card:
+        return f"showed a {outcome.card} card, expected none"
+    if (kinds := rule.get("card")) and outcome.card not in kinds:
+        return f"showed {outcome.card or 'no card'}, expected {'/'.join(kinds)}"
     return "pass"
 
 
@@ -239,6 +249,11 @@ async def run_case(
         outcome.looked_up = (counted.calls if counted else 0) - before
     if isinstance(decision, Reply):
         outcome.kind, outcome.say = "reply", decision.text
+        if decision.card is not None:
+            outcome.card = decision.card.kind
+            outcome.card_rows = [
+                " | ".join(p for p in (r.text, r.detail, r.value) if p) for r in decision.card.rows
+            ] + list(decision.card.body)
         return outcome
     outcome.kind, outcome.say = "actions", decision.say
     try:
@@ -271,6 +286,7 @@ async def main() -> None:
         help="ship data as a look-up tool (default), a table in the briefing, or neither",
     )
     parser.add_argument("--no-web", action="store_true", help="don't offer web search")
+    parser.add_argument("--no-tile", action="store_true", help="don't offer Tile cards")
     args = parser.parse_args()
 
     data: dict[str, Any] = tomllib.loads(args.cases.read_text("utf-8"))
@@ -319,6 +335,7 @@ async def main() -> None:
         reference=reference,
         # As tycho run does: the fleet, then what to call the player (#15).
         about=lambda: "\n".join(p for p in (fleet.describe(library), Address().header()) if p),
+        cards=lambda: not args.no_tile,
     )
     await brain.warm(keybinds)
     lexicon = Lexicon.default()
@@ -348,6 +365,8 @@ async def main() -> None:
         print(f"{mark} {outcome.route:5} {outcome.ms:5.0f} ms  {outcome.heard!r} -> {what}")
         if outcome.say:
             print(f"{'':16}says ({len(outcome.say.split())} words): {outcome.say}")
+        if outcome.card:
+            print(f"{'':16}card ({outcome.card}): {' / '.join(outcome.card_rows)}")
         if outcome.verdict != "pass" or outcome.notes:
             print(f"{'':16}{'; '.join([outcome.verdict, *outcome.notes])}")
 

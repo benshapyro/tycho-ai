@@ -5,6 +5,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
 
+from tycho.tile import Card
+
 type Status = Literal[
     "done",
     "empty",  # too short, or nothing was said
@@ -64,6 +66,8 @@ class Result:
     """The game itself announces everything that was done, so Tycho needn't."""
     question: str = ""
     """For "asking": what Tycho asks, from the gate's own words ("Eject? Say confirm.")."""
+    card: Card | None = None
+    """The details of a reply, for the Tile (#2)."""
     confirmed: bool = False
     """The player said "confirm" to a question Tycho asked about this request."""
     timings: dict[str, float] = field(default_factory=dict[str, float])

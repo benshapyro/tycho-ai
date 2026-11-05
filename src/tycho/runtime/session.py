@@ -43,6 +43,7 @@ from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime.messages import Result, Status, Trace
 from tycho.runtime.ports import ActionLog, Brain, Feedback, GameState, Speaker, Transcriber
 from tycho.text import normalize
+from tycho.tile import Card
 from tycho.voice import SpeechError
 
 log = logging.getLogger(__name__)
@@ -112,6 +113,7 @@ class _Progress:
     announced: bool = False
     question: str = ""
     keydown_ms: float | None = None
+    card: Card | None = None
 
 
 def reply_to_question(text: str) -> str | None:
@@ -413,7 +415,7 @@ class Session:
                         )
                     trace.mark("brain")
                     if isinstance(decision, Reply):
-                        progress.say = decision.text
+                        progress.say, progress.card = decision.text, decision.card
                         return self._result(
                             request, "replied", trace, heard, text, progress=progress
                         )
@@ -539,6 +541,7 @@ class Session:
             say=progress.say,
             announced=progress.announced,
             question=progress.question,
+            card=progress.card,
             timings=dict(trace.stages),
             total_ms=trace.total_ms,
             keydown_ms=progress.keydown_ms,

@@ -12,6 +12,7 @@ from dataclasses import dataclass, field, replace
 from tycho import safety
 from tycho.commands import Command, CommandMatcher
 from tycho.game.keybinds import Keybinds
+from tycho.tile import Card, from_tool
 
 MAX_ACTIONS = 8
 """More than this in one request is a misunderstanding, not a plan."""
@@ -36,6 +37,8 @@ class RunSequence:
 class Reply:
     text: str
     """An answer, or a question back to the player. Nothing is pressed."""
+    card: Card | None = None
+    """The details, for the Tile (#2): said in a line, read on the card."""
 
 
 type Decision = RunActions | RunSequence | Reply
@@ -94,6 +97,14 @@ def parse_tool_call(
         if not isinstance(sequence, str) or sequence not in sequences:
             raise BrainError(f"run_sequence: {sequence!r} isn't one of your sequences")
         return RunSequence(sequence, say)
+    if name == "show_card":
+        try:
+            card = from_tool(args)
+        except ValueError as e:
+            raise BrainError(f"show_card: {e}") from e
+        if not say:
+            raise BrainError("show_card: nothing to say")
+        return Reply(say, card)
     raise BrainError(f"unknown tool {name!r}")
 
 
