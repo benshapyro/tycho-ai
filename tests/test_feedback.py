@@ -68,3 +68,17 @@ def test_a_missing_output_device_never_stops_tycho() -> None:
     feedback = SoundFeedback(FakePlayer(fail=True), volume=0.5)
     feedback.done()  # logged, not raised
     feedback.not_done()
+
+
+def test_the_volume_can_change_while_running() -> None:
+    """Settings by voice (#111): the next sound uses the new volume."""
+    player = FakePlayer()
+    feedback = SoundFeedback(player, volume=1.0)
+    feedback.done()
+    feedback.set_volume(0.25)
+    feedback.done()
+    feedback.set_volume(0.0)
+    feedback.done()
+    loud, quiet = (float(np.abs(s).max()) for s in player.played)
+    assert quiet < loud / 4
+    assert len(player.played) == 2  # silent: nothing played at zero

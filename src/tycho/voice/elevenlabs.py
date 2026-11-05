@@ -75,6 +75,10 @@ class ElevenLabsSpeaker:
         self._gain = min(1.0, max(0.0, volume)) ** 1.5  # the same curve as the sounds
         self._kept = kept
 
+    def set_volume(self, volume: float) -> None:
+        """Change the volume from the next line on (settings by voice, #111)."""
+        self._gain = min(1.0, max(0.0, volume)) ** 1.5
+
     @property
     def voice(self) -> str:
         return self._voice

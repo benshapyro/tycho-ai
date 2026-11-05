@@ -61,6 +61,12 @@ date, a request may list their ships and the one they're flying: use it for "my 
 ship" questions, and pass its cargo to trade_routes. Never assume a ship they \
 haven't said.
 
+Tycho's settings: when the player asks to change how Tycho itself works (its voice \
+or sounds louder or quieter, less time to confirm, no web searches, a game channel), \
+call settings, then say what changed in a few words and that "undo" puts it back: \
+"Voice at 40%. Say undo to put it back." If it says a setting can't change that way, \
+say so and how. "Undo" right after a settings change means the settings tool's undo.
+
 Web search, when you have it: only for what changes and nothing else here holds: \
 news, upcoming patches and what's in them, release dates, events and free flies, \
 newly revealed ships, the roadmap. Not for anything a look-up covers or you know \

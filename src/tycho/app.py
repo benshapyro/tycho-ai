@@ -35,6 +35,7 @@ if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when run
         Speaker,
         Transcriber,
     )
+    from tycho.spoken_settings import Live
     from tycho.stt.parakeet import ParakeetTranscriber
 
 log = logging.getLogger("tycho")
@@ -170,6 +171,7 @@ def _run(current: Settings, log_file: Path) -> int:
     from tycho.feedback import SoundDevicePlayer, SoundFeedback
     from tycho.input.windows import WindowsFocusCheck, WindowsKeySender
     from tycho.runtime.actionlog import FileActionLog
+    from tycho.voice.elevenlabs import ElevenLabsSpeaker
 
     log.info("Tycho %s. Log file: %s", __version__, log_file)
     start_update_check(current)
@@ -185,6 +187,13 @@ def _run(current: Settings, log_file: Path) -> int:
     transcriber = load_transcriber(current)
     action_log = FileActionLog()
     log.info("Action log: %s", action_log.path)
+    feedback = SoundFeedback(SoundDevicePlayer(), current.feedback_volume)
+    speaker = load_speaker(current)
+    # What a setting changed by voice changes in the running session (#111). A name
+    # missing here applies at the next start; the session is added once it's built.
+    live: Live = {"feedback_volume": lambda v: feedback.set_volume(_float(v))}
+    if isinstance(speaker, ElevenLabsSpeaker):
+        live["voice_volume"] = lambda v: speaker.set_volume(_float(v))
     with Microphone(device=microphone_device(current.microphone)) as mic:
         log.info("Microphone: %s", mic.name)
         session = build_session(
@@ -195,11 +204,12 @@ def _run(current: Settings, log_file: Path) -> int:
             audio=mic,
             sender=WindowsKeySender(),
             focus=WindowsFocusCheck(),
-            feedback=SoundFeedback(SoundDevicePlayer(), current.feedback_volume),
+            feedback=feedback,
             action_log=action_log,
-            make_brain=lambda matcher: load_brain(matcher, current),
-            speaker=load_speaker(current),
+            make_brain=lambda matcher: load_brain(matcher, current, live),
+            speaker=speaker,
         )
+        live["confirm_seconds"] = lambda v: session.set_confirm_seconds(_float(v))
         log.info("Listening. Hold %s and speak; press Ctrl+C to stop.", describe(binding))
         try:
             asyncio.run(serve(session, store))
@@ -208,6 +218,12 @@ def _run(current: Settings, log_file: Path) -> int:
     if mic.overflows:
         log.warning("The microphone dropped audio %d time(s)", mic.overflows)
     return 0
+
+
+def _float(value: object) -> float:
+    if not isinstance(value, int | float):
+        raise TypeError(f"expected a number, not {value!r}")
+    return float(value)
 
 
 def load_keybinds(current: Settings, binding: Binding) -> KeybindStore:
@@ -401,8 +417,11 @@ def anthropic_key() -> str | None:
         return None
 
 
-def load_brain(matcher: CommandMatcher, current: Settings) -> Brain | None:
-    """Claude, if the player has stored an Anthropic key. Without one, the fast path only."""
+def load_brain(
+    matcher: CommandMatcher, current: Settings, live: Live | None = None
+) -> Brain | None:
+    """Claude, if the player has stored an Anthropic key. Without one, the fast path only.
+    ``live`` applies settings changed by voice to the running session."""
     key = anthropic_key()
     if key is None:
         log.info(
@@ -419,6 +438,7 @@ def load_brain(matcher: CommandMatcher, current: Settings) -> Brain | None:
     from tycho.knowledge.item_lookup import ItemLookup
     from tycho.knowledge.trade_lookup import trade_lookups
     from tycho.knowledge.web import WebSearch
+    from tycho.spoken_settings import SettingsTool
 
     log.info("Brain: %s, for anything the built-in phrasings don't cover", MODEL)
     if not current.web_search:
@@ -430,6 +450,7 @@ def load_brain(matcher: CommandMatcher, current: Settings) -> Brain | None:
         FleetUpdate(fleet, lambda: ships.library),
         ItemLookup(WikiApi()),
         *trade_lookups(UexApi()),
+        SettingsTool(live=live),
     ]
     if current.web_search:
         lookups.append(

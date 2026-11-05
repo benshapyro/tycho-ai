@@ -43,7 +43,8 @@ All four of these pass: `ruff format --check`, `ruff check`, `pyright`, and `pyt
 - `src/tycho/runtime/`: the talking loop (ADR 11). The session that joins every stage, the messages and per-stage timings, the transcriber, feedback and action-log boundaries, the action log file, and the single-instance lock.
 - `src/tycho/safety.py`: the safety gate. Every press goes through `safety.check`, which allows, refuses or asks (ADR 13); the confirm-grade list lives here.
 - `src/tycho/app.py`: the command line (`run`, `check`, `bind`, `sounds`, `gpu`, `key`, `credits`) and the wiring that joins the parts. `src/tycho/feedback.py`: the done, not-done and question sounds. `src/tycho/logs.py`: logging and key redaction. `src/tycho/text.py`: text normalising and similarity.
-- `src/tycho/settings.py` and `src/tycho/paths.py`: the settings schema, and the only place file locations are decided.
+- `src/tycho/settings.py` and `src/tycho/paths.py`: the settings schema, and the only place file locations are decided. Each setting's schema entry says whether it can change by voice (`yes`, `lower_only` or `no`) and when a change applies.
+- `src/tycho/spoken_settings.py`: settings by voice (#111). The brain's `settings` tool (get, set, undo), reading what was said, and the voice rules. A new setting needs a rule; a test checks.
 - `src/tycho/eval/`: scoring for benchmarks.
 - `src/tycho/credentials.py`: API keys.
 - `plugins/tycho/` and `.claude-plugin/marketplace.json`: the skills players' agents use to set Tycho up (`tycho-setup`) and write their own commands (`tycho-commands`), shipped as a Claude Code plugin; the README links them for other agents. `tests/test_agent_skills.py` keeps them true to the command line and file formats: change them with the CLI.
