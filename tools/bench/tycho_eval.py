@@ -11,6 +11,10 @@ Answers to questions must answer: a reply that only points the player elsewhere
 ("check the wiki") fails a case marked ``answer = true``, and a case's ``mentions``
 (the true numbers and names) must all be in the reply.
 
+Settings requests ("turn your voice down") go through the settings tool, on a scratch
+settings file each case sets up ("settings", and "before" for changes already made);
+"settings_after", "settings_below" and "settings_unchanged" grade what it holds after.
+
 Ship questions go through the ship look-up by default. ``--ships table`` puts a
 table of every ship in the briefing instead, and ``--ships none`` gives Claude
 neither, to measure the two designs ADR 15 compares.
@@ -52,6 +56,7 @@ from tycho.knowledge.store import ensure
 from tycho.knowledge.trade_lookup import trade_lookups
 from tycho.knowledge.web import WebSearch
 from tycho.lexicon import Lexicon
+from tycho.spoken_settings import SettingsTool
 
 CASES = Path(__file__).resolve().parents[1] / "spike" / "brain_cases.toml"
 RESULTS = Path(__file__).resolve().parents[2] / "recordings" / "tycho_eval.results.jsonl"
@@ -156,6 +161,28 @@ def grade_fleet(fleet: Fleet, rule: dict[str, Any]) -> str:
             return f"fleet still has {name}"
     if "flying_after" in rule and fleet.flying != rule["flying_after"]:
         return f"flying {fleet.flying!r}, expected {rule['flying_after']!r}"
+    return "pass"
+
+
+def grade_settings(path: Path, start: settings.Settings, rule: dict[str, Any]) -> str:
+    """What a case says the settings should hold afterwards: "settings_after" (exact),
+    "settings_below" (lower than the value given), and "settings_unchanged"."""
+    now = settings.load(path)
+    if rule.get("settings_unchanged") and now != start:
+        changed = {k: v for k, v in now.model_dump().items() if getattr(start, k) != v}
+        return f"settings changed: {changed}"
+    for name, expected in rule.get("settings_after", {}).items():
+        value = getattr(now, name)
+        same = (
+            abs(value - expected) < 1e-6
+            if isinstance(value, float) and isinstance(expected, int | float)
+            else value == expected
+        )
+        if not same:
+            return f"{name} is {value!r}, expected {expected!r}"
+    for name, limit in rule.get("settings_below", {}).items():
+        if not getattr(now, name) < limit:
+            return f"{name} is {getattr(now, name)!r}, expected below {limit!r}"
     return "pass"
 
 
@@ -272,7 +299,11 @@ async def main() -> None:
             counted = _Counted(ShipLookup(WikiApi(), paths.knowledge_dir(), library=library))
     web = [] if args.no_web else [WebSearch(anthropic.AsyncAnthropic(api_key=key))]
     # A fleet in a scratch file, set by each case ("fleet", "flying"): never the player's own.
-    fleet = Fleet(Path(tempfile.mkdtemp()) / "fleet.toml")
+    scratch = Path(tempfile.mkdtemp())
+    fleet = Fleet(scratch / "fleet.toml")
+    # Settings too: a fresh tool per case, so undo never reaches into an earlier case.
+    settings_file = scratch / "settings.toml"
+    settings_tool = _Counted(SettingsTool(settings_file))
     brain = ClaudeBrain(
         MATCHER,
         api_key=key,
@@ -281,6 +312,7 @@ async def main() -> None:
             FleetUpdate(fleet, lambda: library),
             ItemLookup(WikiApi()),
             *trade_lookups(UexApi()),
+            settings_tool,
             *web,
         ],
         reference=reference,
@@ -292,10 +324,19 @@ async def main() -> None:
     outcomes: list[Outcome] = []
     for rule in rules:
         fleet.ships, fleet.flying = list(rule.get("fleet", [])), str(rule.get("flying", ""))
+        start = settings.Settings.model_validate(rule.get("settings", {}))
+        settings.save(start, settings_file)
+        settings_tool.inner = SettingsTool(settings_file)
+        if before := rule.get("before"):
+            changes = [{"name": n, "value": v} for n, v in before]
+            await settings_tool.inner.run({"action": "set", "changes": changes})
+            start = settings.load(settings_file)
         outcome = await run_case(rule, lexicon, brain, keybinds, counted)
         outcome.verdict = grade(outcome, rule, valid)
         if outcome.verdict == "pass":
             outcome.verdict = grade_fleet(fleet, rule)
+        if outcome.verdict == "pass":
+            outcome.verdict = grade_settings(settings_file, start, rule)
         outcomes.append(outcome)
         mark = "  " if outcome.verdict == "pass" else "XX"
         what = ", ".join(outcome.actions) if outcome.kind == "actions" else outcome.kind

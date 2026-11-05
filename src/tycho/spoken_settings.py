@@ -57,8 +57,11 @@ web search, keeping transcripts, update checks, game channel, speech recognition
 device. action "get" reads them all, with which can change by voice. action "set" \
 changes the ones named; a value can be relative ("-10%" for a bit quieter, "+2" \
 seconds). action "undo" puts back the last change made by voice. Some settings only \
-go down or off by voice, and some never change by voice: the result says so, and how \
-to change them instead. Never change a setting the player didn't ask about."""
+go down or off by voice: the result says so, and how to change them instead. Never by \
+voice, so don't call this for them: the push-to-talk button (the player runs \
+`tycho bind` and presses the new button), the microphone and the game folder (in \
+settings.toml). "Sounds" may mean the beeps or the voice too: change what was asked. \
+Never change a setting the player didn't ask about."""
 
 
 @dataclass(frozen=True, slots=True)
