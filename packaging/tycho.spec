@@ -34,6 +34,7 @@ a = Analysis(  # noqa: F821
         "keyring.backends.Windows",  # chosen explicitly when entry points are lost (#78)
         "tycho.ptt.joystick",  # imported on first use
         "tycho.stt.parakeet",
+        "tycho.tile.display",  # the Tile, opened when Tycho runs (ADR 16)
     ],
     excludes=[
         "nvidia",

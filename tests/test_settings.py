@@ -106,3 +106,16 @@ def test_paths_follow_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     assert paths.logs_dir() == tmp_path / "data" / "logs"
     monkeypatch.setenv("TYCHO_MODELS", str(tmp_path / "big"))
     assert paths.models_dir() == tmp_path / "big"
+
+
+def test_tile_cards_to_hide_are_card_kinds_and_never_the_question() -> None:
+    assert Settings(tile_hide="Headlines; ship, confirm").tile_hide == "headlines, ship"
+    with pytest.raises(ValueError, match="no card is called"):
+        Settings(tile_hide="news")
+
+
+def test_every_tile_setting_changes_now_by_voice() -> None:
+    names = [n for n in Settings.model_fields if n == "tile" or n.startswith("tile_")]
+    assert len(names) == 13
+    for name in names:
+        assert settings.rule(name) == {"voice": "yes", "applies": "now"}, name

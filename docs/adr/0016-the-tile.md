@@ -69,8 +69,10 @@ Built-in commands, one-line answers and small talk stay audio-only. The briefing
   - the HUD colours in each ship.
 
   The window test in `tools/spike/tile/` checks these.
-- **Next steps:**
-  - drawing the cards;
-  - the window;
-  - a `Display` boundary for the session (the talk light, the confirm card, "keep that up", "clear", "show me that");
-  - the Tile settings, by voice like the rest (#111).
+- **Built (5 November 2026):**
+  - the drawing (`tycho.tile.draw`);
+  - the window (`tycho.tile.window`);
+  - the `Display` boundary in the session: the talk light, the confirm card, "keep that up", "clear", "show that again" and "show me that";
+  - 13 Tile settings, each changeable by voice at once, with a sample card after a change.
+
+  The colour follows the ship the player said they're flying, until the log reader (#30) knows it for itself. Still to come: reduce motion, and a pick from any colour.

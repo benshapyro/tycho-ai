@@ -276,3 +276,19 @@ def test_an_invalid_update_writes_nothing(tmp_path: Path) -> None:
     with pytest.raises(SettingsError):
         settings.update({"voice_volume": 7.0}, path)
     assert path.read_text("utf-8") == "voice_volume = 0.3\n"
+
+
+@pytest.mark.parametrize(
+    ("name", "said", "value"),
+    [
+        ("tile_size", "extra large", "extra large"),
+        ("tile_corner", "top left", "top left"),
+        ("tile_see_through", "40%", 0.4),
+        ("tile_see_through", "max", 0.6),
+        ("tile", "off", False),
+        ("tile_colour", "orange", "orange"),
+    ],
+)
+def test_tile_settings_by_voice(name: str, said: str, value: object) -> None:
+    current = getattr(Settings(), name)
+    assert parse(name, said, current).value == value

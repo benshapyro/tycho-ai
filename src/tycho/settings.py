@@ -24,6 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from tycho import paths
 from tycho.game.install import Channel
 from tycho.ptt.binding import Binding
+from tycho.tile.cards import ALL_KINDS
 
 CURRENT_VERSION = 1
 
@@ -31,6 +32,13 @@ type Device = Literal["auto", "gpu", "cpu"]
 type VoiceRule = Literal["yes", "lower_only", "no"]
 type Applies = Literal["now", "restart"]
 type HowOften = Literal["sparingly", "often"]
+type TileSize = Literal["small", "medium", "large", "extra large"]
+type Corner = Literal["top right", "top left", "bottom right", "bottom left"]
+type TileColour = Literal[
+    "ship", "tycho", "orange", "amber", "green", "teal", "blue", "white", "red", "pink"
+]
+type CardsAtOnce = Literal["one", "two"]
+type CardsStay = Literal["shorter", "normal", "longer"]
 
 
 def _rule(voice: VoiceRule, applies: Applies = "restart", how: str = "") -> dict[str, Any]:
@@ -138,6 +146,83 @@ class Settings(BaseModel):
         "confirmations of big actions) or often.",
         json_schema_extra=_rule("yes", "now"),
     )
+    tile: bool = Field(
+        default=True,
+        description="Show the Tile, the small panel over the game, for answers better read "
+        "than heard. Off, Tycho says everything out loud.",
+        json_schema_extra=_rule("yes", "now"),
+    )
+    tile_size: TileSize = Field(
+        default="medium",
+        description="How big the Tile's text is. The Tile grows with it.",
+        json_schema_extra=_rule("yes", "now"),
+    )
+    tile_corner: Corner = Field(
+        default="top right",
+        description="Which corner of the screen the Tile sits in.",
+        json_schema_extra=_rule("yes", "now"),
+    )
+    tile_nudge_in: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=0.4,
+        description="How far in from the side the Tile sits, as a share of the screen's "
+        "width, to clear a ship's own display.",
+        json_schema_extra=_rule("yes", "now"),
+    )
+    tile_nudge_down: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=0.6,
+        description="How far from the top (or bottom) edge the Tile sits, as a share of the "
+        "screen's height.",
+        json_schema_extra=_rule("yes", "now"),
+    )
+    tile_colour: TileColour = Field(
+        default="ship",
+        description="The Tile's highlight colour: the ship's own (from the one you said "
+        "you're flying), Tycho's, or one you pick. Warnings keep their own colours.",
+        json_schema_extra=_rule("yes", "now"),
+    )
+    tile_see_through: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=0.6,
+        description="How see-through the Tile's background is. Text never fades.",
+        json_schema_extra=_rule("yes", "now"),
+    )
+    tile_high_contrast: bool = Field(
+        default=False,
+        description="A solid background and brighter text and lines.",
+        json_schema_extra=_rule("yes", "now"),
+    )
+    tile_cards_at_once: CardsAtOnce = Field(
+        default="one",
+        description="One card at a time (a kept card shrinks to a strip), or two.",
+        json_schema_extra=_rule("yes", "now"),
+    )
+    tile_cards_stay: CardsStay = Field(
+        default="normal",
+        description="How long cards stay before they fade.",
+        json_schema_extra=_rule("yes", "now"),
+    )
+    tile_talk_light: bool = Field(
+        default=True,
+        description="A small light on the Tile while you talk and while Tycho thinks.",
+        json_schema_extra=_rule("yes", "now"),
+    )
+    tile_quiet: bool = Field(
+        default=False,
+        description="Quiet mode: only questions waiting on you, warnings and notices show.",
+        json_schema_extra=_rule("yes", "now"),
+    )
+    tile_hide: str = Field(
+        default="",
+        description="Kinds of card not to show, separated by commas: list, route, recipe, "
+        "ship, fleet, steps, headlines, warning, notice, long. Tycho still says them. "
+        "Questions waiting on you always show.",
+        json_schema_extra=_rule("yes", "now"),
+    )
     check_for_updates: bool = Field(
         default=True,
         description="When Tycho starts, ask GitHub whether a newer version is out, and say so. "
@@ -161,6 +246,14 @@ class Settings(BaseModel):
                 "use up to 40 letters, digits, spaces, apostrophes, hyphens or full stops"
             )
         return value
+
+    @field_validator("tile_hide")
+    @classmethod
+    def _card_kinds(cls, value: str) -> str:
+        kinds = [k.strip().lower() for k in value.replace(";", ",").split(",") if k.strip()]
+        if unknown := [k for k in kinds if k not in ALL_KINDS]:
+            raise ValueError(f"no card is called {', '.join(unknown)}")
+        return ", ".join(dict.fromkeys(k for k in kinds if k != "confirm"))
 
     @field_validator("version")
     @classmethod

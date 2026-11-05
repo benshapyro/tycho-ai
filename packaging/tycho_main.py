@@ -20,6 +20,9 @@ LAZY_IMPORTS = (
     "tycho.voice.playback",
     "anthropic",
     "tycho.brain.claude",
+    # The Tile (ADR 16): drawn with Pillow, whose text needs its FreeType module.
+    "PIL._imagingft",
+    "tycho.tile.display",
 )
 
 
