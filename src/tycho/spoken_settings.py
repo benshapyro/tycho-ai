@@ -13,7 +13,8 @@ presses a key. Every rule comes from the schema (``settings.rule``):
 A change is saved at once, with everything else in the file left as it is. Settings
 that apply ``now`` change the running session through ``live``; the rest apply at the
 next start, and the result says so. ``undo`` puts back the last change made by voice,
-whatever its rule, since it only restores what the player had before.
+whatever its rule, since it only restores what the player had before, and only for
+a few minutes: a later "undo" more likely means something else.
 """
 
 import asyncio
@@ -21,6 +22,7 @@ import json
 import logging
 import math
 import threading
+import time
 import typing
 from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass
@@ -37,6 +39,9 @@ log = logging.getLogger(__name__)
 
 UNDO_DEPTH = 10
 """How many voice changes "undo" can walk back, newest first."""
+UNDO_SECONDS = 180.0
+"""How long after a change "undo" still means it. Later, the player most likely means
+something else (the last key press), so an old change stays as it is."""
 
 type Live = MutableMapping[str, Callable[[object], None]]
 """What applies a ``now`` setting to the running session, by setting name. Filled in as
@@ -155,10 +160,17 @@ def shown(name: str, value: object) -> object:
 class SettingsTool:
     """The ``settings`` tool. Satisfies ``brain.lookups.Lookup``."""
 
-    def __init__(self, path: Path | None = None, live: Live | None = None) -> None:
+    def __init__(
+        self,
+        path: Path | None = None,
+        live: Live | None = None,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         self._path = path
         self._live: Live = live if live is not None else {}
-        self._undo: list[dict[str, object]] = []
+        self._clock = clock
+        self._undo: list[tuple[float, dict[str, object]]] = []
+        """(when, the values before) for each change by voice, oldest first."""
         self._changing = threading.Lock()
 
     @property
@@ -254,7 +266,7 @@ class SettingsTool:
         if updates:
             before = {name: getattr(current, name) for name in updates}
             updated = settings.update(updates, self._path)
-            self._undo = [*self._undo, before][-UNDO_DEPTH:]
+            self._undo = [*self._undo, (self._clock(), before)][-UNDO_DEPTH:]
             result["changed"] = self._applied(before, updated, notes)
             result["undo"] = 'say "undo" to put it back'
         if problems:
@@ -262,9 +274,13 @@ class SettingsTool:
         return _result(result)
 
     def _undo_last(self) -> LookupResult:
+        fresh = self._clock() - UNDO_SECONDS
+        self._undo = [entry for entry in self._undo if entry[0] >= fresh]
         if not self._undo:
-            return failure("there's no change by voice to undo")
-        before = self._undo.pop()
+            return failure(
+                "there's no recent change by voice to undo; to change a setting, ask for it"
+            )
+        _, before = self._undo.pop()
         current = settings.load(self._path)
         now = {name: getattr(current, name) for name in before}
         updated = settings.update(before, self._path)

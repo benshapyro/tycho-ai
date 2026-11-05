@@ -10,7 +10,15 @@ import pytest
 
 from tycho import settings
 from tycho.settings import Settings, SettingsError
-from tycho.spoken_settings import Parsed, Refused, SettingsTool, check_rule, parse, voice_names
+from tycho.spoken_settings import (
+    UNDO_SECONDS,
+    Parsed,
+    Refused,
+    SettingsTool,
+    check_rule,
+    parse,
+    voice_names,
+)
 
 
 def _run(tool: SettingsTool, action: str, *changes: tuple[str, str]) -> tuple[bool, Any]:
@@ -195,7 +203,20 @@ def test_undo_puts_back_the_last_change_even_one_that_only_goes_down(tmp_path: P
     assert settings.load(path) == Settings()
     error, result = _run(tool, "undo")
     assert error
-    assert "nothing" in result["error"] or "no change" in result["error"]
+    assert "no recent change" in result["error"]
+
+
+def test_undo_only_means_a_recent_change(tmp_path: Path) -> None:
+    """Minutes later, "undo" more likely means the last key press: the change stays."""
+    now = [1000.0]
+    path = _file(tmp_path)
+    tool = SettingsTool(path, clock=lambda: now[0])
+    _run(tool, "set", ("voice_volume", "40%"))
+    now[0] += UNDO_SECONDS + 1
+    error, result = _run(tool, "undo")
+    assert error
+    assert "no recent change" in result["error"]
+    assert settings.load(path).voice_volume == 0.4
 
 
 def test_get_lists_the_settings_with_how_each_can_change(tmp_path: Path) -> None:
