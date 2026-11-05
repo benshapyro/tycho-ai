@@ -56,6 +56,50 @@ MAKER_ACCENTS: Final[dict[str, str]] = {
 """Estimated HUD colour by the manufacturer prefix of a ship's game name."""
 
 
+PICKS: Final[dict[str, str]] = {
+    "orange": "#f5901e",
+    "amber": "#f2b84b",
+    "green": "#6fd39b",
+    "teal": "#58ddd1",
+    "blue": "#4fb3ff",
+    "white": "#f2f4f7",
+    "red": "#ff647c",
+    "pink": "#ff8fc8",
+}
+"""Colours the player can pick for the Tile ("keep the Tile orange")."""
+
+MAKER_NAMES: Final[dict[str, str]] = {
+    "aegis": "AEGS",
+    "anvil": "ANVL",
+    "argo": "ARGO",
+    "aopoa": "XIAN",
+    "banu": "BANU",
+    "consolidated": "CNOU",
+    "crusader": "CRUS",
+    "drake": "DRAK",
+    "esperia": "ESPR",
+    "gatac": "GAMA",
+    "greycat": "GRIN",
+    "kruger": "KRIG",
+    "misc": "MISC",
+    "musashi": "MISC",
+    "mirai": "MRAI",
+    "origin": "ORIG",
+    "roberts": "RSI",
+    "rsi": "RSI",
+    "tumbril": "TMBL",
+}
+"""A maker's name, by its first word, to its prefix: for ships still in concept,
+which have no game name yet."""
+
+
+def accent_for_maker(maker: str) -> str:
+    """The accent for a maker's name ("Drake Interplanetary"), or Tycho's own."""
+    first = maker.strip().split(" ", 1)[0].lower() if maker.strip() else ""
+    prefix = MAKER_NAMES.get(first)
+    return MAKER_ACCENTS[prefix] if prefix else TYCHO_ACCENT
+
+
 def accent_for(ship: str | None) -> str:
     """The accent for a ship's game name (``DRAK_Cutlass_Black``), or Tycho's own."""
     if not ship:
@@ -75,7 +119,12 @@ class Fonts:
 
 FONTS: Final = Fonts()
 
-TEXT_SIZES: Final[dict[str, float]] = {"small": 0.85, "medium": 1.0, "large": 1.2, "xl": 1.4}
+TEXT_SIZES: Final[dict[str, float]] = {
+    "small": 0.85,
+    "medium": 1.0,
+    "large": 1.2,
+    "extra large": 1.4,
+}
 """How much bigger than medium each text size is. The Tile grows with its text."""
 
 SEE_THROUGH: Final = (0, 60)

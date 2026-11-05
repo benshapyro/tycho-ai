@@ -276,3 +276,15 @@ def test_phrases_too_far_off_in_length_are_never_compared(
     result = matcher.match("can you tell me how the refining process works in star citizen")
     assert isinstance(result, Defer)
     assert len(calls) < 20  # of about 450 phrases
+
+
+def test_no_command_uses_the_tiles_words_as_a_phrase() -> None:
+    from tycho.runtime.session import TILE_WORDS, tile_command
+
+    words = {phrase for phrases in TILE_WORDS.values() for phrase in phrases}
+    for command in CommandMatcher.default().commands:
+        for phrase in command.say:
+            assert phrase not in words, (command.id, phrase)
+    assert tile_command("Keep that up.") == "pin"
+    assert tile_command("Clear the Tile") == "clear"
+    assert tile_command("clear the target") is None  # whole utterances only

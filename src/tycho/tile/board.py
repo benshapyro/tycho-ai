@@ -62,7 +62,7 @@ class Board:
         self.at_once = at_once
         self.stay = stay
         self.quiet = quiet
-        self.hidden = frozenset(hidden)
+        self.hidden: frozenset[Kind] = frozenset(hidden)
         self._shown: list[Shown] = []
         """Newest first."""
 

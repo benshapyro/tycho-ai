@@ -1006,3 +1006,15 @@ expect = ["reply"]
 no_card = true
 tag = "tile"
 
+[[case]]
+heard = "make the tile bigger"
+expect = ["reply"]
+settings_after = { tile_size = "large" }
+tag = "settings"
+
+[[case]]
+heard = "hide the tile"
+expect = ["reply"]
+settings_after = { tile = false }
+tag = "settings"
+

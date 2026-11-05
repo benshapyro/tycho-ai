@@ -41,9 +41,18 @@ from tycho.input import NotPressable, Press, Presser, UnsupportedKey, plan
 from tycho.lexicon import Lexicon
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime.messages import Result, Status, Trace
-from tycho.runtime.ports import ActionLog, Brain, Feedback, GameState, Speaker, Transcriber
+from tycho.runtime.ports import (
+    ActionLog,
+    Brain,
+    Display,
+    Feedback,
+    GameState,
+    Speaker,
+    Transcriber,
+)
 from tycho.text import normalize
 from tycho.tile import Card
+from tycho.tile.cards import long_answer
 from tycho.voice import SpeechError
 
 log = logging.getLogger(__name__)
@@ -65,6 +74,20 @@ CONFIRM_SECONDS = 5.0
 CONFIRM_WORDS = frozenset({"confirm", "confirmed", "affirmative"})
 CANCEL_WORDS = frozenset({"cancel", "abort", "negative", "belay that", "never mind", "nevermind"})
 """Replies to a question. Whole utterances only, and no command may use them as phrases."""
+TILE_WORDS: dict[str, frozenset[str]] = {
+    "pin": frozenset(
+        {"keep that up", "keep it up", "keep that", "pin that", "pin it", "leave that up"}
+    ),
+    "clear": frozenset(
+        {"clear", "clear that", "clear the tile", "clear tile", "hide that", "dismiss that"}
+    ),
+    "again": frozenset({"show that again", "show it again", "bring that back", "bring it back"}),
+    "show": frozenset(
+        {"show me that", "show that", "show me", "put that on the tile", "put it on the tile"}
+    ),
+}
+"""What the player says to the Tile (ADR 16), while it's on. Whole utterances only, so
+"clear the target" is still the game's; no command may use them as phrases."""
 
 POLL_RETRY_SECONDS = 1.0
 """How long to wait before reading push-to-talk again after it failed."""
@@ -116,6 +139,12 @@ class _Progress:
     card: Card | None = None
 
 
+def tile_command(text: str) -> str | None:
+    """``"pin"``, ``"clear"``, ``"again"`` or ``"show"`` if the whole utterance is one."""
+    said = " ".join(normalize(text))
+    return next((what for what, words in TILE_WORDS.items() if said in words), None)
+
+
 def reply_to_question(text: str) -> str | None:
     """``"confirm"`` or ``"cancel"`` if the whole utterance is one of those replies."""
     said = " ".join(normalize(text))
@@ -158,6 +187,7 @@ class Session:
         tail_seconds: float = TAIL_SECONDS,
         clock: Callable[[], float] = time.monotonic,
         address: Callable[[], str] = lambda: "",
+        display: Display | None = None,
     ) -> None:
         self._tail_seconds = tail_seconds
         self._tail_pending = False
@@ -189,6 +219,9 @@ class Session:
         self._on_result = on_result
         self._address = address
         """What to call the player, at the end of a confirm question (#15)."""
+        self._display = display
+        self._last_reply: tuple[str, Card | None] = ("", None)
+        """The brain's last answer, for "show me that" (ADR 16)."""
         self._poll_interval = poll_interval
         self._clock = clock
         self._ids = itertools.count(1)
@@ -244,9 +277,13 @@ class Session:
                 self._feedback.not_done()
                 return
             self._listening = True
+            if self._display is not None:
+                self._display.listening()
         elif self._listening:
             self._listening = False
             self._tail_pending = True
+            if self._display is not None:
+                self._display.thinking()
             self._current = asyncio.create_task(self._serve(next(self._ids)))
 
     async def idle(self) -> Result | None:
@@ -375,6 +412,12 @@ class Session:
         trace.mark("correct")
         # A question lasts until the player next says something, whatever it is.
         question, self._question = self._question, None
+        if question is not None and self._display is not None:
+            self._display.answered()
+        tile = tile_command(text) if self._display is not None and self._display.on else None
+        if tile is not None:
+            trace.mark("match")
+            return self._tile(request, tile, trace, heard, text)
         if (reply := reply_to_question(text)) is not None:
             trace.mark("match")
             if question is None or self._clock() > question.deadline:
@@ -516,6 +559,31 @@ class Session:
         trace.mark("press")
         return end("done")
 
+    def _tile(self, request: int, what: str, trace: Trace, heard: str, text: str) -> Result:
+        """Keep, clear or bring back a card, or show the last answer to read."""
+        display = self._display
+        assert display is not None  # noqa: S101 - only called with a display
+        if what == "pin":
+            done = display.pin()
+        elif what == "again":
+            done = display.again()
+        elif what == "clear":
+            display.clear()
+            done = True
+        else:
+            said, card = self._last_reply
+            if card is not None:
+                done = display.show(card, pinned=True)
+            else:
+                done = bool(said) and display.show(long_answer(said))
+        progress = _Progress(commands=(f"tile_{what}",))
+        if done:
+            return self._result(request, "done", trace, heard, text, progress=progress)
+        detail = "nothing on the Tile for that" if what != "show" else "nothing to show"
+        return self._result(
+            request, "not_understood", trace, heard, text, detail, progress=progress
+        )
+
     def _result(
         self,
         request: int,
@@ -581,6 +649,7 @@ class Session:
             elif result.status == "asking" and result.question:
                 log.info("Tycho asks: %s", result.question, extra=logs.CONSOLE_ONLY)
         self._remember(result)
+        self._to_tile(result)
         if result.commands and self._action_log is not None:
             self._record(self._action_log, result, spoken=speak)
         if self._speaker is not None and speak:
@@ -595,6 +664,20 @@ class Session:
             self._feedback.not_done()
         if self._on_result is not None:
             self._on_result(result)
+
+    def _to_tile(self, result: Result) -> None:
+        """The talk light goes out, and a reply's card or the gate's question goes up."""
+        display = self._display
+        if display is None:
+            return
+        if not self._listening:  # a barge-in: the light is already the new request's
+            display.idle()
+        if result.status == "replied":
+            self._last_reply = (result.say, result.card)
+            if result.card is not None:
+                display.show(result.card)
+        elif result.status == "asking" and result.question:
+            display.ask(result.question, self._confirm_seconds)
 
     def _should_speak(self, result: Result) -> bool:
         return self._speaker is not None and self._would_speak(result)

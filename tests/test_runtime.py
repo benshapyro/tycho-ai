@@ -15,6 +15,7 @@ import pytest
 
 from tests.fakes.fake_audio import FakeAudioSource
 from tests.fakes.fake_brain import FakeBrain
+from tests.fakes.fake_display import FakeDisplay
 from tests.fakes.fake_input import FakeInputSource
 from tests.fakes.fake_keys import FakeFocus, FakeKeySender
 from tests.fakes.fake_runtime import (
@@ -35,6 +36,7 @@ from tycho.ptt.binding import Binding
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime import AlreadyRunning, Result, Session, SingleInstance
 from tycho.runtime.session import FILLERS, KEEP_CHARACTERS
+from tycho.tile import Card, Row
 
 RATE = 16_000
 PTT = Binding.parse("mouse:0x06")
@@ -107,6 +109,7 @@ def rig(
     speaker: FakeSpeaker | None = None,
     matcher: CommandMatcher = _MATCHER,
     address: Callable[[], str] = lambda: "",
+    display: FakeDisplay | None = None,
 ) -> Rig:
     audio, keys, feedback = FakeAudioSource(RATE), FakeKeySender(), FakeFeedback()
     actions = FakeActionLog()
@@ -133,6 +136,7 @@ def rig(
         poll_interval=0.001,
         clock=clock,
         address=address,
+        display=display,
     )
     return Rig(session, audio, keys, feedback, transcriber, results, actions)
 
@@ -1256,3 +1260,102 @@ def test_a_chain_stops_when_windows_refuses_a_press_part_way() -> None:
     assert result.status == "failed"
     assert result.pressed == ("v_atc_request",)
     assert r.keys.held() == set()
+
+
+# --- The Tile (ADR 16) -------------------------------------------------------------
+
+_SELL = Card("list", title="Best places to sell", rows=(Row("Everus Harbor", value="3,048"),))
+
+
+def test_the_talk_light_follows_push_to_talk() -> None:
+    display = FakeDisplay()
+    _conversation("landing gear", display=display)
+    assert display.calls[:3] == ["listening", "thinking", "idle"]
+    assert display.light is None
+
+
+def test_a_reply_with_a_card_puts_it_on_the_tile_and_says_the_line() -> None:
+    display, speaker = FakeDisplay(), FakeSpeaker()
+    brain = FakeBrain(Reply("Best is Everus Harbor. More on the Tile.", _SELL))
+    r = _conversation("where to sell laranite", display=display, brain=brain, speaker=speaker)
+    assert r.results[0].card == _SELL
+    assert display.shown == [_SELL]
+    assert speaker.spoken == ["Best is Everus Harbor. More on the Tile."]
+
+
+def test_a_question_shows_its_countdown_and_answering_takes_it_down() -> None:
+    display = FakeDisplay()
+    _conversation("eject", "confirm", display=display, address=lambda: "Ace")
+    asks = [c for c in display.calls if c.startswith("ask")]
+    assert asks == ["ask v_eject? Say confirm, Ace. (5 s)"]
+    assert display.calls.index("answered") > display.calls.index(asks[0])
+
+
+def test_keep_that_up_pins_the_card_and_clear_takes_it_down() -> None:
+    display = FakeDisplay()
+    brain = FakeBrain(Reply("Best is Everus Harbor.", _SELL))
+    r = _conversation(
+        "where to sell laranite", "keep that up", "clear", display=display, brain=brain
+    )
+    assert [x.status for x in r.results] == ["replied", "done", "done"]
+    assert [x.commands for x in r.results[1:]] == [("tile_pin",), ("tile_clear",)]
+    assert display.board.view() == ()
+    assert r.feedback.played[-2:] == ["done", "done"]
+
+
+def test_nothing_to_keep_is_not_done() -> None:
+    r = _conversation("keep that up", display=FakeDisplay())
+    assert r.results[0].status == "not_understood"
+    assert r.feedback.played == ["not_done"]
+
+
+def test_show_me_that_puts_the_last_answer_up_to_read() -> None:
+    display = FakeDisplay()
+    brain = FakeBrain(Reply("Quantum fuel is a tank of its own; a jump uses it by distance."))
+    _conversation("how does quantum fuel work", "show me that", display=display, brain=brain)
+    assert [c.kind for c in display.shown] == ["long"]
+    assert display.shown[0].body == (
+        "Quantum fuel is a tank of its own; a jump uses it by distance.",
+    )
+    assert display.board.view()[0].pinned
+
+
+def test_show_me_that_brings_back_the_last_card_kept() -> None:
+    display = FakeDisplay()
+    brain = FakeBrain(Reply("Best is Everus Harbor.", _SELL))
+    _conversation("where to sell laranite", "clear", "show me that", display=display, brain=brain)
+    assert display.calls[-2] == "show list pinned"
+
+
+def test_with_the_tile_off_its_words_go_to_the_brain_as_usual() -> None:
+    brain = FakeBrain(Reply("The Tile is off."))
+    r = _conversation("keep that up", display=FakeDisplay(on=False), brain=brain)
+    assert r.results[0].status == "replied"
+    assert [x.text for x in brain.asked] == ["keep that up"]
+
+
+def test_clear_the_target_is_still_the_games() -> None:
+    display = FakeDisplay()
+    r = _conversation("clear the target", display=display)
+    assert "clear" not in display.calls
+    assert r.results[0].commands != ("tile_clear",)
+
+
+def test_a_barge_in_leaves_the_light_on_for_the_new_request() -> None:
+    hold = threading.Event()
+    display = FakeDisplay()
+
+    async def scenario() -> None:
+        r = rig("where to sell laranite", "landing gear", hold=hold, display=display)
+        r.say()
+        await asyncio.sleep(0.05)
+        r.session.handle(Edge.PRESSED)  # talking again before the first is done
+        await asyncio.sleep(0.05)
+        assert display.light == "listening"
+        hold.set()
+        r.audio.hear(SPEECH)
+        r.session.handle(Edge.RELEASED)
+        await r.session.idle()
+        await r.session.close()
+
+    run(scenario)

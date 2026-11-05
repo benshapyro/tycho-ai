@@ -5,6 +5,7 @@ from typing import Protocol
 from tycho.audio.clip import Samples
 from tycho.brain import BrainRequest, Decision
 from tycho.game.keybinds import Keybinds
+from tycho.tile import Card
 
 
 class Transcriber(Protocol):
@@ -71,3 +72,40 @@ class GameState(Protocol):
     """
 
     def facts(self) -> frozenset[str]: ...
+
+
+class Display(Protocol):
+    """The Tile, the panel over the game (ADR 16). Every call returns at once."""
+
+    @property
+    def on(self) -> bool: ...
+
+    def listening(self) -> None:
+        """Push-to-talk is held: the talk light pulses."""
+        ...
+
+    def thinking(self) -> None: ...
+
+    def idle(self) -> None: ...
+
+    def show(self, card: Card, *, pinned: bool = False) -> bool:
+        """False if the Tile is off or the player hid this kind: say it, don't show it."""
+        ...
+
+    def ask(self, question: str, seconds: float) -> None:
+        """The safety gate's question, with its countdown."""
+        ...
+
+    def answered(self) -> None:
+        """The question was answered or replaced: its card goes."""
+        ...
+
+    def pin(self) -> bool:
+        """ "Keep that up". False if there's nothing to keep."""
+        ...
+
+    def again(self) -> bool:
+        """ "Show that again": a kept card that gave way. False if there's none."""
+        ...
+
+    def clear(self) -> None: ...

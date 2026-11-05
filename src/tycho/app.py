@@ -26,9 +26,11 @@ if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when run
     from tycho.address import Address
     from tycho.audio.source import AudioSource
     from tycho.input import FocusCheck, KeySender
+    from tycho.knowledge.ships import ShipLibrary
     from tycho.runtime import (
         ActionLog,
         Brain,
+        Display,
         Feedback,
         GameState,
         Result,
@@ -38,6 +40,7 @@ if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when run
     )
     from tycho.spoken_settings import Live
     from tycho.stt.parakeet import ParakeetTranscriber
+    from tycho.tile.display import TileDisplay
 
 log = logging.getLogger("tycho")
 
@@ -173,6 +176,7 @@ def _run(current: Settings, log_file: Path) -> int:
     from tycho.feedback import SoundDevicePlayer, SoundFeedback
     from tycho.input.windows import WindowsFocusCheck, WindowsKeySender
     from tycho.runtime.actionlog import FileActionLog
+    from tycho.tile.display import TileDisplay
     from tycho.voice.elevenlabs import ElevenLabsSpeaker
 
     log.info("Tycho %s. Log file: %s", __version__, log_file)
@@ -200,6 +204,14 @@ def _run(current: Settings, log_file: Path) -> int:
         live["voice_volume"] = lambda v: voice.set_volume(_float(v))
     for name in ("call_me", "call_me_says", "call_me_how_often"):
         live[name] = lambda v, name=name: address.set(name, v)
+    # The Tile (ADR 16): a window of its own, never anything in the game.
+    display: TileDisplay | None = TileDisplay(current)
+    if not display.start():
+        display = None
+    else:
+        for name in Settings.model_fields:
+            if name == "tile" or name.startswith("tile_"):
+                live[name] = lambda v, name=name: display.change(name, v)
     with Microphone(device=microphone_device(current.microphone)) as mic:
         log.info("Microphone: %s", mic.name)
         session = build_session(
@@ -212,9 +224,10 @@ def _run(current: Settings, log_file: Path) -> int:
             focus=WindowsFocusCheck(),
             feedback=feedback,
             action_log=action_log,
-            make_brain=lambda matcher: load_brain(matcher, current, live, address),
+            make_brain=lambda matcher: load_brain(matcher, current, live, address, display),
             speaker=speaker,
             address=address,
+            display=display,
         )
         live["confirm_seconds"] = lambda v: session.set_confirm_seconds(_float(v))
         log.info("Listening. Hold %s and speak; press Ctrl+C to stop.", describe(binding))
@@ -222,6 +235,8 @@ def _run(current: Settings, log_file: Path) -> int:
             asyncio.run(serve(session, store))
         finally:
             action_log.close()
+            if display is not None:
+                display.close()
     if mic.overflows:
         log.warning("The microphone dropped audio %d time(s)", mic.overflows)
     return 0
@@ -429,10 +444,12 @@ def load_brain(
     current: Settings,
     live: Live | None = None,
     address: Address | None = None,
+    display: TileDisplay | None = None,
 ) -> Brain | None:
     """Claude, if the player has stored an Anthropic key. Without one, the fast path only.
     ``live`` applies settings changed by voice to the running session; ``address`` is
-    what to call the player (#15), read fresh for each request."""
+    what to call the player (#15), read fresh for each request. With a ``display``,
+    Claude may show cards while the Tile is on, in the colour of the ship being flown."""
     key = anthropic_key()
     if key is None:
         log.info(
@@ -475,7 +492,30 @@ def load_brain(
         parts = [fleet.describe(ships.library), address.header() if address else ""]
         return "\n".join(p for p in parts if p)
 
-    return ClaudeBrain(matcher, api_key=key, lookups=lookups, about=about)
+    if display is not None:
+        display.ship_accent = lambda: ship_accent(fleet.flying, ships.library)
+    return ClaudeBrain(
+        matcher,
+        api_key=key,
+        lookups=lookups,
+        about=about,
+        cards=lambda: display is not None and display.on,
+    )
+
+
+def ship_accent(flying: str, library: ShipLibrary | None) -> str | None:
+    """The Tile's colour for the ship the player said they're flying, if Tycho knows it."""
+    from tycho.knowledge.ships import Ship
+    from tycho.tile.design import MAKER_ACCENTS, accent_for, accent_for_maker
+
+    if not flying or library is None:
+        return None
+    found = library.find(flying)
+    if not isinstance(found, Ship):
+        return None
+    if found.key.split("_", 1)[0].upper() in MAKER_ACCENTS:
+        return accent_for(found.key)
+    return accent_for_maker(found.maker)
 
 
 VOICE_KEY_HELP = f"{TYCHO} key set elevenlabs"
@@ -540,6 +580,7 @@ def build_session(
     speaker: Speaker | None = None,
     on_result: Callable[[Result], None] | None = None,
     address: Address | None = None,
+    display: Display | None = None,
 ) -> Session:
     """The talking loop, wired the way ``tycho run`` wires it."""
     from tycho.game.gamelog import GameLog
@@ -572,6 +613,7 @@ def build_session(
         log_transcripts=current.keep_transcripts,
         on_result=on_result,
         address=(lambda: address.name) if address is not None else (lambda: ""),
+        display=display,
     )
 
 
