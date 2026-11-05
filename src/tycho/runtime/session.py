@@ -155,6 +155,7 @@ class Session:
         poll_interval: float = 0.005,
         tail_seconds: float = TAIL_SECONDS,
         clock: Callable[[], float] = time.monotonic,
+        address: Callable[[], str] = lambda: "",
     ) -> None:
         self._tail_seconds = tail_seconds
         self._tail_pending = False
@@ -184,6 +185,8 @@ class Session:
         self._samplerate = samplerate
         self._log_transcripts = log_transcripts
         self._on_result = on_result
+        self._address = address
+        """What to call the player, at the end of a confirm question (#15)."""
         self._poll_interval = poll_interval
         self._clock = clock
         self._ids = itertools.count(1)
@@ -475,7 +478,9 @@ class Session:
         if questions:
             # Spoken from the gate's own words, never the brain's: the player must hear
             # what they'd be confirming, not what the brain says it is.
-            progress.question = f"{', '.join(dict.fromkeys(asking_about))}? Say confirm."
+            name = self._address()
+            ending = f"Say confirm, {name}." if name else "Say confirm."
+            progress.question = f"{', '.join(dict.fromkeys(asking_about))}? {ending}"
             deadline = self._clock() + self._confirm_seconds
             self._question = _Question(
                 request, tuple(commands), deadline, progress.by_brain, progress.say

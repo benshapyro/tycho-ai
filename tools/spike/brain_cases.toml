@@ -935,3 +935,24 @@ expect = ["actions"]
 must = [["v_lights", "v_lights_on"]]
 settings_below = { voice_volume = 0.8 }
 tag = "settings"
+
+# --- What Tycho calls the player (#15) ------------------------------------------
+
+[[case]]
+heard = "call me Ace"
+expect = ["reply"]
+settings_after = { call_me = "Ace" }
+tag = "settings"
+
+[[case]]
+heard = "you can call me Captain Reyes from now on"
+expect = ["reply"]
+settings_after = { call_me = "Captain Reyes" }
+tag = "settings"
+
+[[case]]
+heard = "stop calling me commander"
+expect = ["reply"]
+settings_after = { call_me = "" }
+tag = "settings"
+

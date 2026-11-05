@@ -42,6 +42,7 @@ import anthropic
 from brain_report import GLOBAL_NEVER  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
 
 from tycho import paths, safety, settings
+from tycho.address import Address
 from tycho.app import anthropic_key, find_install, load_commands
 from tycho.brain import BrainError, BrainRequest, Exchange, Reply, commands_for
 from tycho.brain.claude import ClaudeBrain
@@ -316,7 +317,8 @@ async def main() -> None:
             *web,
         ],
         reference=reference,
-        about=lambda: fleet.describe(library),
+        # As tycho run does: the fleet, then what to call the player (#15).
+        about=lambda: "\n".join(p for p in (fleet.describe(library), Address().header()) if p),
     )
     await brain.warm(keybinds)
     lexicon = Lexicon.default()

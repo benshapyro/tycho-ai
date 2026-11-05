@@ -106,6 +106,7 @@ def rig(
     search_seconds: float = 12.0,
     speaker: FakeSpeaker | None = None,
     matcher: CommandMatcher = _MATCHER,
+    address: Callable[[], str] = lambda: "",
 ) -> Rig:
     audio, keys, feedback = FakeAudioSource(RATE), FakeKeySender(), FakeFeedback()
     actions = FakeActionLog()
@@ -131,6 +132,7 @@ def rig(
         on_result=results.append,
         poll_interval=0.001,
         clock=clock,
+        address=address,
     )
     return Rig(session, audio, keys, feedback, transcriber, results, actions)
 
@@ -1004,6 +1006,13 @@ def test_a_question_says_what_it_would_do_in_the_gates_words() -> None:
     assert r.results[0].status == "asking"
     assert speaker.spoken == ["v_eject? Say confirm."]  # the action's own label, not the brain's
     assert r.feedback.played == []
+
+
+def test_a_question_ends_with_what_the_player_is_called() -> None:
+    """#15: confirmations of big actions use the player's name."""
+    speaker = FakeSpeaker()
+    _conversation("eject", speaker=speaker, address=lambda: "Ace")
+    assert speaker.spoken == ["v_eject? Say confirm, Ace."]
 
 
 def test_without_a_voice_a_question_is_the_tone() -> None:

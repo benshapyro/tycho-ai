@@ -21,6 +21,7 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
   - news and upcoming patches, from RSI's sites.
 - **Knows your fleet,** so "which of my ships is best for mining?" is about your ships.
 - **Settings by voice:** "turn your voice down a bit", "less time to confirm", "stop searching the web". "Undo" puts back the last change.
+- **Calls you what you like:** "Commander" by default, or "call me Ace", or nothing at all. It uses the name sparingly.
 - **A log of every key it pressed.**
 - **Speech recognition on your PC,** on the graphics card when it has room and on the processor otherwise.
 - **An installer, an update notice, and setup by an AI agent.**
@@ -30,7 +31,6 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
 These are plans, not promises. Each links its issue.
 
 - **The Tile** ([#2](https://github.com/benshapyro/tycho-ai/issues/2)): a small panel over the game for things better read than heard, such as prices, routes and confirmations. Its colour follows your ship.
-- **"Call me Ace"** ([#15](https://github.com/benshapyro/tycho-ai/issues/15)): choose what Tycho calls you.
 - **A setup and settings app** ([#12](https://github.com/benshapyro/tycho-ai/issues/12), [#10](https://github.com/benshapyro/tycho-ai/issues/10)): guided first run, settings, your commands and fleet.
 - **Choose your model** ([#112](https://github.com/benshapyro/tycho-ai/issues/112)): OpenAI and other providers, once they pass Tycho's tests.
 - **Learns from misses and fixes itself** ([#51](https://github.com/benshapyro/tycho-ai/issues/51)): offers to add phrases you rephrased, and repairs keybinds after a patch, always with your OK.
@@ -129,7 +129,7 @@ uv run python tools/spike/make_layout.py --install
 
 ## Settings and logs
 
-Settings are in `%APPDATA%\tycho\settings.toml`. You can also change them by voice: "voice at 40%", "sounds a bit quieter", "give me less time to confirm", "stop keeping transcripts", "switch to PTU". Volumes and the confirm time change at once; the rest apply when Tycho next starts, and Tycho says which. "Undo" puts back the last change. A misheard sentence must never weaken a safeguard or your privacy, so by voice the confirm time only gets shorter, and transcripts, web search and the update check only switch off: making them longer, or switching them on, is done in the file. The push-to-talk button (`tycho bind`), the microphone and the game folder never change by voice.
+Settings are in `%APPDATA%\tycho\settings.toml`. You can also change them by voice: "voice at 40%", "sounds a bit quieter", "give me less time to confirm", "stop keeping transcripts", "switch to PTU", "call me Ace", "stop calling me Commander". Volumes and the confirm time change at once; the rest apply when Tycho next starts, and Tycho says which. "Undo" puts back the last change. A misheard sentence must never weaken a safeguard or your privacy, so by voice the confirm time only gets shorter, and transcripts, web search and the update check only switch off: making them longer, or switching them on, is done in the file. The push-to-talk button (`tycho bind`), the microphone and the game folder never change by voice. If the voice says your name wrong, set `call_me_says` to how it sounds (`Zile` for `Xyl`); the console and logs keep your spelling.
 
 Logs are in `%LOCALAPPDATA%\tycho\logs`: `tycho.jsonl` for everything, `actions.jsonl` for every key Tycho pressed. Set `keep_transcripts = true` to also log what you said and what Tycho said, which helps when something goes wrong. It stays on your PC. Set `TYCHO_MODELS` to keep the speech model on another drive. When it starts, Tycho asks GitHub whether a newer version is out and says so (it never updates itself); set `check_for_updates = false` to turn that off.
 
