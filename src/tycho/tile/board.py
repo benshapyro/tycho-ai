@@ -40,6 +40,8 @@ class Shown:
     """When it goes, on the board's clock; None while pinned."""
     strip: bool = False
     """Shrunk to a strip with its title: a pinned card that gave way to a newer one."""
+    since: float = 0.0
+    """When it went up, on the board's clock: for the timer bar along its foot."""
 
     @property
     def pinned(self) -> bool:
@@ -80,8 +82,9 @@ class Board:
         if seconds is None and card.kind == "confirm":
             seconds = card.seconds
         self._make_room()
-        until = None if pinned else self._clock() + (seconds or lifetime(card, self.stay))
-        self._shown.insert(0, Shown(card, until))
+        now = self._clock()
+        until = None if pinned else now + (seconds or lifetime(card, self.stay))
+        self._shown.insert(0, Shown(card, until, since=now))
         return True
 
     def _make_room(self) -> None:
