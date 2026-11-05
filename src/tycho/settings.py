@@ -148,8 +148,8 @@ class Settings(BaseModel):
     )
     tile: bool = Field(
         default=True,
-        description="Show the Tile, the small panel over the game, for answers better read "
-        "than heard. Off, Tycho says everything out loud.",
+        description="Show the Tile (on) or hide it (off): the small panel over the game, "
+        "for answers better read than heard. Off, Tycho says everything out loud.",
         json_schema_extra=_rule("yes", "now"),
     )
     tile_size: TileSize = Field(
@@ -216,9 +216,10 @@ class Settings(BaseModel):
         description="Quiet mode: only questions waiting on you, warnings and notices show.",
         json_schema_extra=_rule("yes", "now"),
     )
-    tile_hide: str = Field(
+    tile_hidden_cards: str = Field(
         default="",
-        description="Kinds of card not to show, separated by commas: list, route, recipe, "
+        description="Kinds of card not to show while the Tile is on, separated by commas "
+        "(to hide the whole Tile, turn tile off): list, route, recipe, "
         "ship, fleet, steps, headlines, warning, notice, long. Tycho still says them. "
         "Questions waiting on you always show.",
         json_schema_extra=_rule("yes", "now"),
@@ -247,7 +248,7 @@ class Settings(BaseModel):
             )
         return value
 
-    @field_validator("tile_hide")
+    @field_validator("tile_hidden_cards")
     @classmethod
     def _card_kinds(cls, value: str) -> str:
         kinds = [k.strip().lower() for k in value.replace(";", ",").split(",") if k.strip()]

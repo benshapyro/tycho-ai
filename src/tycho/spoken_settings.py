@@ -48,10 +48,17 @@ type Live = MutableMapping[str, Callable[[object], None]]
 """What applies a ``now`` setting to the running session, by setting name. Filled in as
 the parts it changes are built; a name missing from it applies at the next start."""
 
-_TRUE = {"on", "true", "yes", "1", "enable", "enabled"}
-_FALSE = {"off", "false", "no", "0", "disable", "disabled", "none"}
+_TRUE = {"on", "true", "yes", "1", "enable", "enabled", "show", "shown", "visible"}
+_FALSE = {"off", "false", "no", "0", "disable", "disabled", "none", "hide", "hidden", "invisible"}
+"""Hide, hidden and invisible are for "hide the Tile" (eval, 2026-11-05)."""
 NO_NAME = frozenset({"nothing", "none", "nobody", "no name", "off", "no", "empty", ""})
 """What clears a text setting, such as what Tycho calls the player."""
+ORDERED = frozenset({"tile_size", "tile_cards_stay"})
+"""Choices in order, so "bigger" is one step up: "make the Tile bigger" (eval, 2026-11-05)."""
+_STEPS = {
+    **dict.fromkeys(("bigger", "larger", "up", "more", "longer"), 1),
+    **dict.fromkeys(("smaller", "down", "less", "shorter"), -1),
+}
 
 DESCRIPTION = """\
 Read or change Tycho's own settings, when the player asks about or for a change to \
@@ -107,9 +114,17 @@ def parse(name: str, said: str, current: object) -> Parsed:
         return Parsed(" ".join(value.split()))
     options = typing.get_args(getattr(kind, "__value__", kind))
     if options and all(isinstance(o, str) for o in options):
-        for option in cast(tuple[str, ...], options):
+        choices = cast(tuple[str, ...], options)
+        for option in choices:
             if text == option.lower():
                 return Parsed(option)
+        # Claude says "+20%" for bigger, as it would for a volume (eval, 2026-11-05).
+        step = _STEPS.get(text) or {"+": 1, "-": -1}.get(text[:1], 0)
+        if name in ORDERED and current in choices and step:
+            at = choices.index(cast(str, current)) + step
+            if 0 <= at < len(choices):
+                return Parsed(choices[at])
+            return Parsed(cast(str, current), f"{current} is already as far as it goes")
         raise Refused(f"{name} is one of {', '.join(options)}, not {said!r}")
     raise Refused(f"{name} can't be set by voice")
 
