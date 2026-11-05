@@ -36,7 +36,7 @@ import statistics
 import tempfile
 import time
 import tomllib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -273,6 +273,12 @@ def _asks(commands: tuple[Command, ...], actions: list[str]) -> bool:
 
 
 MATCHER = load_commands()
+LIVE: dict[str, Callable[[object], None]] = {
+    name: lambda _value: None
+    for name in settings.Settings.model_fields
+    if settings.rule(name)["applies"] == "now"
+}
+"""As tycho run wires them, so the brain hears "applies now" where the player would."""
 
 
 async def main() -> None:
@@ -320,7 +326,7 @@ async def main() -> None:
     fleet = Fleet(scratch / "fleet.toml")
     # Settings too: a fresh tool per case, so undo never reaches into an earlier case.
     settings_file = scratch / "settings.toml"
-    settings_tool = _Counted(SettingsTool(settings_file))
+    settings_tool = _Counted(SettingsTool(settings_file, live=LIVE))
     brain = ClaudeBrain(
         MATCHER,
         api_key=key,
@@ -345,7 +351,7 @@ async def main() -> None:
         fleet.ships, fleet.flying = list(rule.get("fleet", [])), str(rule.get("flying", ""))
         start = settings.Settings.model_validate(rule.get("settings", {}))
         settings.save(start, settings_file)
-        settings_tool.inner = SettingsTool(settings_file)
+        settings_tool.inner = SettingsTool(settings_file, live=LIVE)
         if before := rule.get("before"):
             changes = [{"name": n, "value": v} for n, v in before]
             await settings_tool.inner.run({"action": "set", "changes": changes})

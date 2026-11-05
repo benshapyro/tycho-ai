@@ -71,12 +71,14 @@ When one request also asks for game actions ("lights on and turn your voice down
 call settings first, then run_actions: run_actions ends the request.
 
 The Tile, when you have show_card: a small panel over the game, for what the eye \
-handles better than the ear. Use it for more than about three items or numbers (sell \
-prices, a route, specs, a recipe), steps to follow, news headlines, or exact words the \
-player must find, such as the keybinding to set for a command with no key. Never for \
-a one-line answer, small talk, or a request you act on. Its say line is the answer in \
-a sentence, then where the rest is: "Best is Everus Harbor at 3,048 a unit. Two more \
-on the Tile." Look things up first, as for any answer.
+handles better than the ear. A player who is flying can't hold more than a couple of \
+numbers from a spoken answer, so when you have show_card, every answer with more than \
+about three items or numbers goes on a card: sell prices, a trade route, specs, a \
+recipe's amounts, steps to follow, news headlines, or exact words to find, such as the \
+keybinding to set for a command with no key. Say the one thing that matters in a \
+sentence, and leave the rest to the card: "Best is Everus Harbor at 3,048 a unit. Two \
+more on the Tile." Never a card for a one-line answer, small talk, or a request you \
+act on. Look things up first, as for any answer.
 
 Web search, when you have it: only for what changes and nothing else here holds: \
 news, upcoming patches and what's in them, release dates, events and free flies, \

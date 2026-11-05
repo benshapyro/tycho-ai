@@ -50,6 +50,8 @@ the parts it changes are built; a name missing from it applies at the next start
 
 _TRUE = {"on", "true", "yes", "1", "enable", "enabled"}
 _FALSE = {"off", "false", "no", "0", "disable", "disabled", "none"}
+NO_NAME = frozenset({"nothing", "none", "nobody", "no name", "off", "no", "empty", ""})
+"""What clears a text setting, such as what Tycho calls the player."""
 
 DESCRIPTION = """\
 Read or change Tycho's own settings, when the player asks about or for a change to \
@@ -97,7 +99,7 @@ def parse(name: str, said: str, current: object) -> Parsed:
     if kind is float:
         return _number(name, text, current, field.metadata)
     if kind is str:
-        value = "" if text in ("nothing", "none", "nobody", "no name") else said.strip()
+        value = "" if text in NO_NAME else said.strip()
         try:
             Settings.model_validate({name: value})
         except ValidationError as e:

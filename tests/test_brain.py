@@ -685,4 +685,4 @@ def test_the_briefing_says_when_the_eye_beats_the_ear() -> None:
     text = briefing(KEYBINDS, MATCHER)
     assert "show_card" in text
     assert "Two more on the Tile" in text
-    assert "Never for a one-line answer" in " ".join(text.split())
+    assert "Never a card for a one-line answer" in " ".join(text.split())

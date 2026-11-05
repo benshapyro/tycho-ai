@@ -252,3 +252,15 @@ def test_the_accent_follows_the_ships_maker(ship: str, accent: str) -> None:
 @pytest.mark.parametrize("ship", [None, "", "Unknown_Ship", "nounderscore"])
 def test_no_known_maker_is_tychos_own_accent(ship: str | None) -> None:
     assert accent_for(ship) == TYCHO_ACCENT
+
+
+def test_steps_lose_the_numbers_claude_gives_them_since_the_tile_numbers_them() -> None:
+    texts = ["1. Target the refueling ship", "Step 2: Request docking", "3) Pay", "Land"]
+    rows = [{"text": x, "detail": "", "value": "", "dim": False} for x in texts]
+    card = from_tool(_call("steps", rows=rows))
+    assert [r.text for r in card.rows] == [
+        "Target the refueling ship",
+        "Request docking",
+        "Pay",
+        "Land",
+    ]
