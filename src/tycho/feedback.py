@@ -71,6 +71,11 @@ class SoundFeedback:
     def __init__(self, player: Player, volume: float, rate: int = SAMPLERATE) -> None:
         self._player = player
         self._rate = rate
+        self.set_volume(volume)
+
+    def set_volume(self, volume: float) -> None:
+        """Change the volume from the next sound on (settings by voice, #111)."""
+        rate = self._rate
         gain = LOUDEST * min(1.0, max(0.0, volume)) ** 1.5  # gentler at the low end of the slider
         self._done = (done_sound(rate) * gain).astype(np.float32)
         self._not_done = (not_done_sound(rate) * gain).astype(np.float32)

@@ -194,6 +194,10 @@ class Session:
         self._keys = ThreadPoolExecutor(1, thread_name_prefix="tycho-keys")
         self._closed = False
 
+    def set_confirm_seconds(self, seconds: float) -> None:
+        """How long to wait for "confirm", from the next question on (#111)."""
+        self._confirm_seconds = seconds
+
     async def run(self, stop: asyncio.Event) -> None:
         """Listen for push-to-talk until ``stop`` is set, then shut down safely."""
         loop = asyncio.get_running_loop()
