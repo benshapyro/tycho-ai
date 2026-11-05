@@ -42,6 +42,7 @@ from tycho.brain.decisions import (
 from tycho.brain.lookups import LOOKUP_SECONDS, Lookup, LookupResult, run_lookup
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Keybinds
+from tycho.tile.cards import TOOL_DESCRIPTION, TOOL_SCHEMA
 
 log = logging.getLogger(__name__)
 
@@ -65,6 +66,16 @@ class _Turn:
 
     waiting: Callable[[], None] | None = None
     searched: bool = False
+
+
+SHOW_CARD: ToolParam = {
+    "name": "show_card",
+    "description": TOOL_DESCRIPTION,
+    "strict": True,
+    "input_schema": dict(TOOL_SCHEMA),
+}
+"""Offered only while the Tile is on, so Claude never says "on the Tile" without one."""
+ACTS = frozenset({"run_actions", "run_sequence", "show_card"})
 
 
 def _tools(sequences: list[str], lookups: Iterable[Lookup] = ()) -> list[ToolParam]:
@@ -149,10 +160,12 @@ class ClaudeBrain:
         lookups: Sequence[Lookup] = (),
         reference: str = "",
         about: Callable[[], str] = lambda: "",
+        cards: Callable[[], bool] = lambda: False,
     ) -> None:
         """``reference`` is extra text for the end of the cached briefing, such as
         the ship table being measured against the ship look-up (ADR 15). ``about``
-        says what Tycho knows about the player, for each request's header."""
+        says what Tycho knows about the player, for each request's header. ``cards``
+        says whether the Tile is on, so whether Claude may show a card (#2)."""
         # The session gives up after its own deadline; one quick retry fits inside it.
         self._client = client or anthropic.AsyncAnthropic(
             api_key=api_key, timeout=anthropic.Timeout(8.0, connect=3.0), max_retries=1
@@ -162,11 +175,12 @@ class ClaudeBrain:
         self._today = today
         self._sequences = sorted(c.id for c in matcher.commands if c.is_sequence)
         self._lookups = {lookup.name: lookup for lookup in lookups}
-        if clash := {"run_actions", "run_sequence"} & self._lookups.keys():
+        if clash := ACTS & self._lookups.keys():
             raise ValueError(f"a look-up can't be named {', '.join(sorted(clash))}")
         self._tools = _tools(self._sequences, lookups)
         self._reference = reference
         self._about = about
+        self._cards = cards
         self._for: Keybinds | None = None
         self._system: list[TextBlockParam] = []
         self._actions: frozenset[str] = frozenset()
@@ -188,7 +202,7 @@ class ClaudeBrain:
             message = await self._client.messages.create(
                 model=self._model,
                 system=self._system,
-                tools=self._tools,
+                tools=self._offered(),
                 tool_choice={"type": "auto", "disable_parallel_tool_use": True},
                 output_config={"effort": EFFORT},
                 max_tokens=0,
@@ -210,7 +224,7 @@ class ClaudeBrain:
             for _ in range(MAX_CALLS):
                 decided, message, looking = await self._call(messages, started, turn)
                 if decided is not None:
-                    if turn.searched:
+                    if turn.searched and not isinstance(decided, Reply):
                         log.warning("The brain chose to act after a web search; not pressing")
                         return Reply(NO_PRESS_AFTER_SEARCH)
                     return decided
@@ -244,7 +258,7 @@ class ClaudeBrain:
             async with self._client.messages.stream(
                 model=self._model,
                 system=self._system,
-                tools=self._tools,
+                tools=self._offered(),
                 tool_choice={"type": "auto", "disable_parallel_tool_use": True},
                 output_config={"effort": EFFORT},
                 max_tokens=MAX_TOKENS,
@@ -286,6 +300,13 @@ class ClaudeBrain:
                 task.cancel()
             raise
         return None, message, looking
+
+    def _offered(self) -> list[ToolParam]:
+        """The tools for this call: ``show_card`` only while the Tile is on. Turning
+        the Tile on or off changes the cached prefix, so it costs one cache write."""
+        if not self._cards():
+            return self._tools
+        return [*self._tools[:2], SHOW_CARD, *self._tools[2:]]
 
     def _brief(self, keybinds: Keybinds) -> None:
         """Rebuild the briefing only when the keybinds change, so the cache holds."""

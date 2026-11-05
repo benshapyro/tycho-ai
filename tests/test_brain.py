@@ -601,3 +601,88 @@ def test_claude_is_told_to_name_what_was_sent_not_a_result() -> None:
     text = briefing(KEYBINDS, MATCHER)
     assert "Name what was sent, never a result" in text
     assert '"Max power to engines", not "Engines are at' in text
+
+
+# --- The Tile's cards (#2) --------------------------------------------------------
+
+_CARD = {
+    "say": "Best is Everus Harbor at 3,048. Two more on the Tile.",
+    "kind": "list",
+    "label": "Sell · Laranite",
+    "title": "Best places to sell",
+    "source": "UEX",
+    "rows": [
+        {"text": "Everus Harbor", "detail": "Hurston", "value": "3,048", "dim": False},
+        {"text": "Area18 TDD", "detail": "ArcCorp", "value": "3,012", "dim": False},
+    ],
+    "hero_label": "",
+    "hero_value": "",
+    "text": "",
+}
+
+
+def test_a_card_is_a_reply_with_the_details_to_read() -> None:
+    decision = parse_tool_call("show_card", _CARD, ACTIONS, SEQUENCES)
+    assert isinstance(decision, Reply)
+    assert decision.text == _CARD["say"]
+    assert decision.card is not None
+    assert decision.card.rows[0].value == "3,048"
+
+
+@pytest.mark.parametrize(
+    ("change", "problem"),
+    [
+        ({"kind": "confirm"}, "isn't a card"),
+        ({"say": ""}, "nothing to say"),
+        ({"rows": []}, "nothing on it"),
+    ],
+)
+def test_a_card_claude_cant_show_is_a_brain_error(change: dict[str, Any], problem: str) -> None:
+    with pytest.raises(BrainError, match=problem):
+        parse_tool_call("show_card", _CARD | change, ACTIONS, SEQUENCES)
+
+
+def _offered(tile: bool) -> list[str]:
+    client = _Client([_tool_stop("show_card", _CARD)] if tile else [], _final("Fine."))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), cards=lambda: tile)
+    asyncio.run(brain.decide(BrainRequest("where to sell laranite", KEYBINDS)))
+    return [t["name"] for t in client.requests[0]["tools"]]
+
+
+def test_claude_may_show_a_card_only_while_the_tile_is_on() -> None:
+    assert "show_card" not in _offered(tile=False)
+    assert _offered(tile=True)[:3] == ["run_sequence", "run_actions", "show_card"]
+
+
+def test_turning_the_tile_on_or_off_takes_effect_at_the_next_request() -> None:
+    tile = [False]
+    client = _Calls(([], _final("Fine.")), ([], _final("Fine.")))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), cards=lambda: tile[0])
+    asyncio.run(brain.decide(BrainRequest("hello", KEYBINDS)))
+    tile[0] = True
+    asyncio.run(brain.decide(BrainRequest("hello", KEYBINDS)))
+    names = [[t["name"] for t in r["tools"]] for r in client.requests]
+    assert "show_card" not in names[0]
+    assert "show_card" in names[1]
+
+
+def test_a_card_after_a_web_search_is_shown_since_nothing_is_pressed() -> None:
+    card = _CARD | {"kind": "headlines", "say": "Three things stand out."}
+    client = _Calls(_searches(), ([_tool_stop("show_card", card, "toolu_2")], None))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=[_web()], cards=lambda: True)
+    decision = asyncio.run(brain.decide(BrainRequest("whats in the next patch", KEYBINDS)))
+    assert isinstance(decision, Reply)
+    assert decision.card is not None
+    assert decision.card.kind == "headlines"
+
+
+def test_a_look_up_cant_take_the_cards_name() -> None:
+    with pytest.raises(ValueError, match="show_card"):
+        ClaudeBrain(MATCHER, client=cast(Any, _Client([])), lookups=[FakeLookup("show_card")])
+
+
+def test_the_briefing_says_when_the_eye_beats_the_ear() -> None:
+    text = briefing(KEYBINDS, MATCHER)
+    assert "show_card" in text
+    assert "Two more on the Tile" in text
+    assert "Never for a one-line answer" in " ".join(text.split())
