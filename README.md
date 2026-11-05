@@ -8,6 +8,36 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
 
 **Status: pre-alpha (0.3).** Common commands run instantly on your PC. Claude handles everything said differently, plus questions, and Tycho answers aloud with an ElevenLabs voice. Anything you can't undo (ejecting, firing) waits for you to say "confirm". Install it with the installer from [Releases](https://github.com/benshapyro/tycho-ai/releases/latest), or from source with a terminal and about 15 minutes.
 
+## Works today
+
+- **Instant built-in commands**, almost 90 of them, through your own keybinds. Add your own phrases and sequences.
+- **Claude for anything said differently,** for multi-step requests, and for questions.
+- **Spoken replies** in an ElevenLabs voice, plus sounds that tell you whether the keys went in.
+- **Asks before anything you can't undo,** and waits for you to say "confirm". Push-to-talk stops it at any point.
+- **Answers about the game:**
+  - ships, from the current patch's game files;
+  - trade prices and routes, live from UEX;
+  - weapons, armor, components and crafting;
+  - news and upcoming patches, from RSI's sites.
+- **Knows your fleet,** so "which of my ships is best for mining?" is about your ships.
+- **A log of every key it pressed.**
+- **Speech recognition on your PC,** on the graphics card when it has room and on the processor otherwise.
+- **An installer, an update notice, and setup by an AI agent.**
+
+## Coming
+
+These are plans, not promises. Each links its issue.
+
+- **The Tile** ([#2](https://github.com/benshapyro/tycho-ai/issues/2)): a small panel over the game for things better read than heard, such as prices, routes and confirmations. Its colour follows your ship.
+- **Settings by voice** ([#111](https://github.com/benshapyro/tycho-ai/issues/111)): "turn your voice down", "hide the Tile".
+- **"Call me Ace"** ([#15](https://github.com/benshapyro/tycho-ai/issues/15)): choose what Tycho calls you.
+- **A setup and settings app** ([#12](https://github.com/benshapyro/tycho-ai/issues/12), [#10](https://github.com/benshapyro/tycho-ai/issues/10)): guided first run, settings, your commands and fleet.
+- **Choose your model** ([#112](https://github.com/benshapyro/tycho-ai/issues/112)): OpenAI and other providers, once they pass Tycho's tests.
+- **Learns from misses and fixes itself** ([#51](https://github.com/benshapyro/tycho-ai/issues/51)): offers to add phrases you rephrased, and repairs keybinds after a patch, always with your OK.
+- **Reads the game's log** ([#30](https://github.com/benshapyro/tycho-ai/issues/30)): knows which ship you're in and where you are, without being told.
+- **Looks at your screen when you ask** ([#31](https://github.com/benshapyro/tycho-ai/issues/31)): it captures only the game window and keeps nothing.
+- **Callouts** ([#4](https://github.com/benshapyro/tycho-ai/issues/4)) and an **optional wake word** ([#3](https://github.com/benshapyro/tycho-ai/issues/3)).
+
 ## Set up with an AI agent
 
 If you use an AI agent on your PC (Claude Code, Codex, Cursor, Gemini CLI or another), it can install and set up Tycho for you. It runs the installer and Tycho's checks, and fixes what they find. It opens a window when it needs you: to paste an API key, which it never sees, or to press your push-to-talk button.

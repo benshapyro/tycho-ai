@@ -45,6 +45,8 @@ Write the notes for players, not developers:
 - the SHA-256 line, `SHA-256 of \`TychoSetup-<version>.exe\`: \`<hash>\``, which the `tycho-setup` skill checks against;
 - the unofficial-fan-project notice from `NOTICE`.
 
+Also, in the release PR, move anything this release ships from the README's **Coming** list to **Works today**, and add new plans to **Coming** with their issue links.
+
 `git log --oneline <last tag>..main` lists what changed. Then create the release as a draft:
 
 ```
