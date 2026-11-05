@@ -21,6 +21,10 @@ Start it, switch to the game and play as usual. A sample card cycles in the top-
 
 The engines run in their own process, and the test only watches from outside. Nothing here touches the game: no injection, no reading its memory, no keys sent.
 
+## Previews
+
+`uv run python tools/spike/tile/preview.py [out_dir] [--accent "#f5901e"] [--scale 1.2] [--see-through 20]` draws every card, as the Tile will (`tycho.tile.draw`), over a busy dark background, into PNGs (`recordings/tile-preview` by default, which git ignores) and one sheet of all of them (`all.png`).
+
 ## Engines
 
 - **tk:** tkinter, already in Python. It can make only one exact colour see-through, so edges are hard and the background solid. That's enough for the window checks.

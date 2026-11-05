@@ -58,6 +58,8 @@ Built-in commands, one-line answers and small talk stay audio-only. The briefing
 
 ## Consequences
 
+- **Pillow (13.0) and what it builds in.** Its Windows wheel builds in FreeType, HarfBuzz, libpng, libjpeg-turbo, zlib-ng and a few image codecs, all permissive. FreeType is dual-licensed; Tycho uses it under the FreeType License (BSD-style, with a credit), not GPLv2, and Pillow's licence file with that credit goes into THIRD-PARTY-NOTICES. Raqm and FriBiDi (LGPL) aren't in the wheel. The fonts are Windows' own (Bahnschrift, Consolas); the mockup's free fonts (Saira, Share Tech Mono) can be bundled later.
+- **Measured cost of drawing:** 7 to 15 ms for a new card, under 1 ms a frame after, since a card is drawn once and kept; only the timer bar, the countdown and the talk light are drawn again.
 - **More drawing code.** Cards are drawn in Python, so the 10 layouts and their small animations (fade, the talk light's pulse, the confirm countdown) are code to write and test. That includes tests of the drawn images.
 - **Starting the window takes the foreground once.** The desktop test found this. The Tile records the window in front before it starts, and gives the foreground back.
 - **Screen capture.** A plain screen copy leaves out layered windows. Some streaming or capture tools may not show the Tile.
