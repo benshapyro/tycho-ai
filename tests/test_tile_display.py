@@ -129,7 +129,7 @@ def test_with_the_tile_off_nothing_shows() -> None:
 
 
 def test_the_question_shows_even_in_quiet_mode_and_goes_when_answered() -> None:
-    display, _ = _display(tile_quiet=True, tile_hide="list, confirm")
+    display, _ = _display(tile_quiet=True, tile_hidden_cards="list, confirm")
     assert not display.show(SELL)
     display.ask("Eject? Say confirm.", 5.0)
     _image(display.frame(SCREEN))

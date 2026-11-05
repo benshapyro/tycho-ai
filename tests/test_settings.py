@@ -109,9 +109,12 @@ def test_paths_follow_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
 
 
 def test_tile_cards_to_hide_are_card_kinds_and_never_the_question() -> None:
-    assert Settings(tile_hide="Headlines; ship, confirm").tile_hide == "headlines, ship"
+    assert (
+        Settings(tile_hidden_cards="Headlines; ship, confirm").tile_hidden_cards
+        == "headlines, ship"
+    )
     with pytest.raises(ValueError, match="no card is called"):
-        Settings(tile_hide="news")
+        Settings(tile_hidden_cards="news")
 
 
 def test_every_tile_setting_changes_now_by_voice() -> None:

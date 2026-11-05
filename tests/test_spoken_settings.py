@@ -286,9 +286,24 @@ def test_an_invalid_update_writes_nothing(tmp_path: Path) -> None:
         ("tile_see_through", "40%", 0.4),
         ("tile_see_through", "max", 0.6),
         ("tile", "off", False),
+        ("tile", "hidden", False),  # "hide the Tile"
+        ("tile", "show", True),
         ("tile_colour", "orange", "orange"),
+        ("tile_size", "bigger", "large"),  # one step from medium
+        ("tile_size", "smaller", "small"),
+        ("tile_size", "+20%", "large"),  # how Claude says bigger
+        ("tile_size", "-1", "small"),
+        ("tile_cards_stay", "longer", "longer"),
     ],
 )
 def test_tile_settings_by_voice(name: str, said: str, value: object) -> None:
     current = getattr(Settings(), name)
     assert parse(name, said, current).value == value
+
+
+def test_a_step_past_the_end_stays_put_and_says_so() -> None:
+    parsed = parse("tile_size", "bigger", "extra large")
+    assert parsed.value == "extra large"
+    assert "already" in parsed.note
+    with pytest.raises(Refused):
+        parse("tile_corner", "bigger", "top right")  # corners have no order

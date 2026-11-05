@@ -181,7 +181,7 @@ class TileDisplay:
         self._board.at_once = 2 if s.tile_cards_at_once == "two" else 1
         self._board.stay = STAY[s.tile_cards_stay]
         self._board.quiet = s.tile_quiet
-        hidden = {k.strip() for k in s.tile_hide.split(",") if k.strip()}
+        hidden = {k.strip() for k in s.tile_hidden_cards.split(",") if k.strip()}
         kinds: frozenset[Kind] = frozenset(k for k in ALL_KINDS if k in hidden)
         self._board.hidden = kinds
 
