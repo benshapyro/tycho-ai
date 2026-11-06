@@ -64,7 +64,7 @@ def test_a_ship_not_sold_in_game_names_the_closest() -> None:
     _, ships = _tools()
     result = _run(ships, ship="Idris")
     assert result["not_found"].startswith("no ship called 'Idris' is sold in game; closest: ")
-    assert "Prospector" in result["not_found"] or "Cutlass" in result["not_found"]
+    assert result["not_found"].endswith("closest: Prospector, Cutlass Black, Cutlass Steel")
 
 
 def test_a_ship_said_with_its_maker_or_filler_is_found() -> None:
@@ -72,6 +72,8 @@ def test_a_ship_said_with_its_maker_or_filler_is_found() -> None:
     _, ships = _tools()
     for said in ("MISC Prospector", "the prospector", "a prospecter"):
         assert _run(ships, ship=said)["ship"] == "Prospector", said
+    assert "nearest" not in _run(ships, ship="MISC Prospector")
+    assert "nearest" in _run(ships, ship="a prospecter")  # said a little wrong: said so
     assert _run(ships, ship="Drake Cutlass Black")["ship"] == "Cutlass Black"
 
 
@@ -87,3 +89,16 @@ def test_shops_without_a_price_are_left_out() -> None:
     result = _run(ships, ship="Cutlass Steel")
     assert result["shops"] == []
     assert "no in-game price" in result["note"]
+
+
+def test_a_variant_not_sold_isnt_passed_off_as_another() -> None:
+    """Review of #173: "Cutlass Blue" became "cutlass", and the Black's shops came
+    back with nothing saying so."""
+    _, ships = _tools()
+    result = _run(ships, ship="Cutlass Blue")
+    assert result.get("not_found") or "nearest" in result
+
+
+def test_an_ore_that_isnt_one_says_so() -> None:
+    refining, _ = _tools()
+    assert "isn't an ore" in _run(refining, ore="medical supplies", place="")["note"]

@@ -6,11 +6,9 @@ its methods are rated 1 to 3 for yield, cost and speed. Its ship prices are wher
 each ship is sold in the game, in aUEC.
 """
 
-import difflib
 import json
 import logging
 from collections.abc import Mapping
-from dataclasses import replace
 from typing import Any
 
 from tycho.brain.lookups import LookupResult, failure
@@ -110,7 +108,6 @@ class RefiningLookup(_UexLookup):
         try:
             # Refineries take ore: "laranite" is Laranite (Raw) here.
             commodity, _ = trade.commodity_match(said if _says_raw(said) else f"raw {said}")
-            commodity = commodity if commodity.raw else replace(commodity, raw=True)
             place = trade.place(asked) if asked else None
             yields = await trade.refinery_yields()
             methods = await trade.refining_methods()
@@ -141,7 +138,8 @@ class RefiningLookup(_UexLookup):
         }
         if not rows:
             at = f" at {place.value}" if place else ""
-            body["note"] = f"UEX has no refinery yields for {commodity.name}{at}"
+            what = "" if commodity.raw else " (it isn't an ore)"
+            body["note"] = f"UEX has no refinery yields for {commodity.name}{what}{at}"
         return self._result(body)
 
 
@@ -194,22 +192,19 @@ class ShipPurchases(_UexLookup):
         }
         if others:
             body["also_matches"] = others
+        if normalize(ship) != words:
+            # Not quite what was said: "Cutlass Blue" when only the Black is sold.
+            body["nearest"] = f"UEX lists no {' '.join(words)!r} exactly; this is the nearest"
         if not rows:
             body["note"] = f"UEX has no in-game price for the {ship} yet"
         return self._result(body)
 
 
 def _ship_words(said: str, names: list[str]) -> list[str]:
-    """What was said, less the words no ship's name has, nor anything like it: the
-    maker ("MISC Prospector": UEX names have none) and filler ("the Cutlass"). A word
-    said a little wrong stays. If nothing would be left, everything said stays."""
-    vocabulary = {w for n in names for w in normalize(n)}
-    kept = [
-        w
-        for w in normalize(said)
-        if w not in NOT_SHIP_WORDS
-        and (w in vocabulary or difflib.get_close_matches(w, vocabulary, n=1, cutoff=0.75))
-    ]
+    """What was said, less the maker ("MISC Prospector": UEX names have none) and
+    filler ("the Cutlass"). Every other word stays, so "Cutlass Blue" isn't taken
+    for any Cutlass. If nothing would be left, everything said stays."""
+    kept = [w for w in normalize(said) if w not in NOT_SHIP_WORDS]
     return kept or normalize(said)
 
 
