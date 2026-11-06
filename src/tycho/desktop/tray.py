@@ -10,6 +10,7 @@ If Explorer restarts, the icon is added again.
 """
 
 import ctypes
+import itertools
 import logging
 import os
 import sys
@@ -75,6 +76,10 @@ def glyph(colour: tuple[int, int, int] = (0x9F, 0xD8, 0xFF), size: int = _ICON) 
         width=round(1.6 * k),
     )
     return image.resize((size, size), Image.Resampling.LANCZOS)
+
+
+_ICONS = itertools.count()
+"""Numbers the icons made in this process."""
 
 
 class TrayIcon:
@@ -164,7 +169,8 @@ class TrayIcon:
             return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
 
         instance = win32.kernel32().GetModuleHandleW(None)
-        name = f"TychoTray{os.getpid()}"
+        # One name per icon: the starting star and the real one may overlap briefly.
+        name = f"TychoTray{os.getpid()}-{next(_ICONS)}"
         wc = win32.WNDCLASSEXW()
         wc.cbSize = ctypes.sizeof(win32.WNDCLASSEXW)
         wc.lpfnWndProc = proc
