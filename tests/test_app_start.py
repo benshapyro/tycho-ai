@@ -342,3 +342,40 @@ def test_a_crash_box_shows_tycho_s_last_words_not_the_traceback(
         ]
     assert "Tycho stopped: the model file is damaged" in shown[0]
     assert "Traceback" not in shown[0]
+
+
+def test_tycho_can_be_quit_while_it_starts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review of #157 (#162): during the first download, only Task Manager stopped it."""
+    import tycho.desktop.tray
+
+    monkeypatch.setattr(tycho.desktop.tray, "TrayIcon", _Tray)
+    quit_with: list[int] = []
+    monkeypatch.setattr(app.os, "_exit", quit_with.append)
+    starting = app._Starting(None)  # pyright: ignore[reportPrivateUsage]
+    keys = [item.key for item in _Tray.made[-1].menu()]
+    assert "quit" in keys
+    starting._chosen("quit")  # pyright: ignore[reportPrivateUsage]
+    assert quit_with == [0]
+    starting.close()
+
+
+def test_the_still_starting_message_comes_to_the_front(monkeypatch: pytest.MonkeyPatch) -> None:
+    import ctypes
+
+    import tycho.desktop.tray
+
+    flags: list[int] = []
+
+    class User32:
+        @staticmethod
+        def MessageBoxW(_owner: object, _text: str, _title: str, how: int) -> int:
+            flags.append(how)
+            return 1
+
+    monkeypatch.setattr(tycho.desktop.tray, "TrayIcon", _Tray)
+    monkeypatch.setattr(ctypes, "windll", type("Windll", (), {"user32": User32})())
+    starting = app._Starting(None)  # pyright: ignore[reportPrivateUsage]
+    starting.say()
+    starting.close()
+    assert flags[0] & 0x10000  # MB_SETFOREGROUND
+    assert flags[0] & 0x40000  # MB_TOPMOST
