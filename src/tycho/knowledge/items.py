@@ -102,7 +102,7 @@ class Items:
         queries = list(dict.fromkeys(q for s in said for q in spellings(s)))
         pages = await asyncio.gather(*(self._in_time(self._search(q)) for q in queries))
         if all(page is None for page in pages):
-            raise WikiError("the Wiki API took too long")
+            raise WikiError("the Wiki API took too long or didn't answer")
         records: dict[str, Mapping[str, Any]] = {}
         for page in pages:
             for record in page or []:
@@ -119,7 +119,15 @@ class Items:
         if best < MATCH:
             return Missing(asked, tuple(str(r.get("name")) for _, r in scored[:CHOICES]))
         tied = [r for score, r in scored if score >= best - TIE]
-        exact = [r for r in tied if _words(r) in readings]
+        # A name exactly as heard wins over one exactly as a swapped version (#174):
+        # "F S nine" is the FS-9, even with an SF-9 there too.
+        heard = _readings(words)
+        exact = (
+            [r for r in tied if _words(r) in heard]
+            or [r for r in tied if _words(r) in readings]
+            # Only against a swapped version: a vague name ("Morozov") still asks which.
+            or [r for r in tied if len(said) > 1 and any(set(h) <= set(_words(r)) for h in heard)]
+        )
         if len(tied) == 1 or exact:
             return Found((exact or tied)[0])
         return Unclear(asked, tuple(str(r.get("name")) for r in tied[:CHOICES]))
@@ -143,6 +151,10 @@ class Items:
             return await asyncio.wait_for(call, QUERY_SECONDS)
         except TimeoutError:
             log.debug("A Wiki API query took over %.1f s; going on without it", QUERY_SECONDS)
+            return None
+        except WikiError as e:
+            # One spelling's query failing (a rate limit, say) doesn't fail the others.
+            log.debug("A Wiki API query failed (%s); going on without it", e)
             return None
 
     async def _search(self, query: str) -> list[Mapping[str, Any]]:
@@ -188,7 +200,12 @@ def spoken(asked: str) -> str:
     out: list[str] = []
     joined = False
     for word in asked.split():
-        bare = word.strip(".,")
+        bare = word.strip(".,;:!?")
+        if bare.lower() in FILLER and not (bare.lower() == "a" and _in_code(out)):
+            # "a S 38" is the S-38, and "the, uh, S F nine" the FS-9; but in "p four a
+            # r", after part of a code, "a" is a letter.
+            joined = False
+            continue
         if len(bare) == 1 and bare.isalpha() and out and joined:
             out[-1] += bare
             continue  # still in the code: a number may follow
@@ -201,14 +218,23 @@ def spoken(asked: str) -> str:
         else:
             out.append(NUMBERS.get(bare.lower(), word))
         joined = False
-    return " ".join(w for w in out if w.lower() not in {"uh", "um", "erm"})
+    return " ".join(out)
+
+
+def _in_code(written: list[str]) -> bool:
+    """Whether the last word written is part of a code: letters said one by one, or
+    letters and a number ("p4")."""
+    last = written[-1] if written else ""
+    return bool(last) and ((len(last) <= 3 and last.isalpha()) or any(c.isdigit() for c in last))
 
 
 def swapped(asked: str) -> list[str]:
     """For a code said letter by letter, the same with its letters in another order:
     speech-to-text often swaps letters said quickly ("S F nine" for the FS-9). Two or
     three letters only, so at most five more tries."""
-    letters = [w.strip(".,") for w in asked.split()]
+    letters = [w.strip(".,;:!?") for w in asked.split()]
+    while letters and letters[0].lower() in FILLER:  # "a S F nine": the article goes
+        letters = letters[1:]
     run: list[str] = []
     for word in letters:
         if len(word) == 1 and word.isalpha():
@@ -228,7 +254,7 @@ def swapped(asked: str) -> list[str]:
 
 def spellings(asked: str) -> list[str]:
     """The ways to ask the API for a name, most faithful first."""
-    words = [w for w in asked.strip().split() if w.lower() not in FILLER]
+    words = [w for w in asked.strip().split() if w.strip(".,;:!?").lower() not in FILLER]
     said = " ".join(words)
     lower = said.lower()
     tries = [said, _CODE.sub(r"\1-\2", lower)]
