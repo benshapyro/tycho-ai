@@ -173,6 +173,7 @@ SHIP_PRICES = [
         "terminal_name": "Astro Armada",
     },
     {"vehicle_name": "Prospector", "id_terminal": 12, "price_buy": 2_783_020},
+    *({"vehicle_name": "Cutlass Steel", "id_terminal": n, "price_buy": 0} for n in range(1, 8)),
 ]
 
 

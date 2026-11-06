@@ -63,5 +63,27 @@ def test_a_ship_is_bought_cheapest_first() -> None:
 def test_a_ship_not_sold_in_game_names_the_closest() -> None:
     _, ships = _tools()
     result = _run(ships, ship="Idris")
-    assert "isn't" in result["not_found"] or "no ship" in result["not_found"]
-    assert "closest" in result["not_found"]
+    assert result["not_found"].startswith("no ship called 'Idris' is sold in game; closest: ")
+    assert "Prospector" in result["not_found"] or "Cutlass" in result["not_found"]
+
+
+def test_a_ship_said_with_its_maker_or_filler_is_found() -> None:
+    """Review of #173: UEX's names have no maker, so "MISC Prospector" missed."""
+    _, ships = _tools()
+    for said in ("MISC Prospector", "the prospector", "a prospecter"):
+        assert _run(ships, ship=said)["ship"] == "Prospector", said
+    assert _run(ships, ship="Drake Cutlass Black")["ship"] == "Cutlass Black"
+
+
+def test_a_ship_name_that_fits_several_variants_names_the_others() -> None:
+    _, ships = _tools()
+    result = _run(ships, ship="cutlass")
+    assert result["ship"] == "Cutlass Black"  # the first, not the last alphabetically
+    assert result["also_matches"] == ["Cutlass Steel"]
+
+
+def test_shops_without_a_price_are_left_out() -> None:
+    _, ships = _tools()
+    result = _run(ships, ship="Cutlass Steel")
+    assert result["shops"] == []
+    assert "no in-game price" in result["note"]

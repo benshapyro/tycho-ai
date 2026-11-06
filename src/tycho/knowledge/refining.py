@@ -6,6 +6,7 @@ its methods are rated 1 to 3 for yield, cost and speed. Its ship prices are wher
 each ship is sold in the game, in aUEC.
 """
 
+import difflib
 import json
 import logging
 from collections.abc import Mapping
@@ -24,6 +25,18 @@ SECONDS = 4.0
 SHOWN = 5
 SHIP_MATCH = 0.75
 """How close a ship's name must be to what was said."""
+
+NOT_SHIP_WORDS = frozenset(
+    {
+        *("a", "an", "the", "my", "in", "game", "ingame", "ship", "new", "one"),
+        # Makers: UEX's ship names leave them out ("Prospector", not "MISC Prospector").
+        *("misc", "rsi", "drake", "anvil", "aegis", "origin", "crusader", "argo", "esperia"),
+        *("consolidated", "outland", "tumbril", "banu", "aopoa", "kruger", "greycat"),
+        *("mirai", "gatac", "roberts", "space", "industries", "musashi", "industrial"),
+    }
+)
+"""Never part of what's matched: filler, and the makers' names. Short words like
+"misc" and "a" are too near words in real names ("Mis", "Hull A") to tell apart."""
 
 CREDIT = "In what you say aloud, credit UEX once, in a few words."
 
@@ -160,24 +173,49 @@ class ShipPurchases(_UexLookup):
         except WikiError as e:
             return failure(f"UEX didn't answer ({e}); answer without it")
         names = sorted({str(p.get("vehicle_name") or "") for p in prices} - {""})
-        words = normalize(said)
-        scored = sorted(((name_score(words, normalize(n)), n) for n in names), reverse=True)
-        if not scored or scored[0][0] < SHIP_MATCH:
+        words = _ship_words(said, names)
+        # Best first; among names as good, the first alphabetically ("a Cutlass" is the
+        # Cutlass Black), with the others named.
+        scored = sorted((-name_score(words, normalize(n)), n) for n in names)
+        if not scored or -scored[0][0] < SHIP_MATCH:
             closest = ", ".join(n for _, n in scored[:3])
             return self._result(
                 {"not_found": f"no ship called {said!r} is sold in game; closest: {closest}"}
             )
-        ship = scored[0][1]
+        best, ship = scored[0]
+        others = [n for score, n in scored[1:] if score <= best + 0.03][:4]
         rows = sorted(
-            (p for p in prices if p.get("vehicle_name") == ship),
+            (p for p in prices if p.get("vehicle_name") == ship and _priced(p)),
             key=lambda p: float(p.get("price_buy") or 0),
         )
-        return self._result(
-            {
-                "ship": ship,
-                "shops": [_shop(self._trade, p) for p in rows[:SHOWN] if p.get("price_buy")],
-            }
-        )
+        body: dict[str, object] = {
+            "ship": ship,
+            "shops": [_shop(self._trade, p) for p in rows[:SHOWN]],
+        }
+        if others:
+            body["also_matches"] = others
+        if not rows:
+            body["note"] = f"UEX has no in-game price for the {ship} yet"
+        return self._result(body)
+
+
+def _ship_words(said: str, names: list[str]) -> list[str]:
+    """What was said, less the words no ship's name has, nor anything like it: the
+    maker ("MISC Prospector": UEX names have none) and filler ("the Cutlass"). A word
+    said a little wrong stays. If nothing would be left, everything said stays."""
+    vocabulary = {w for n in names for w in normalize(n)}
+    kept = [
+        w
+        for w in normalize(said)
+        if w not in NOT_SHIP_WORDS
+        and (w in vocabulary or difflib.get_close_matches(w, vocabulary, n=1, cutoff=0.75))
+    ]
+    return kept or normalize(said)
+
+
+def _priced(row: Mapping[str, Any]) -> bool:
+    price = row.get("price_buy")
+    return isinstance(price, int | float) and price > 0
 
 
 def _says_raw(said: str) -> bool:
