@@ -6,7 +6,7 @@ Instructions for AI coding agents working on Tycho, an unofficial voice co-pilot
 
 - Install: `uv sync`
 - Test: `uv run pytest`
-- Build the installed app: `uv sync --group build`, then `uv run pyinstaller packaging/tycho.spec --noconfirm` (dist/tycho/tycho.exe), then `uv run python tools/notices.py dist/tycho` for THIRD-PARTY-NOTICES.txt (it fails on any GPL, LGPL or non-commercial licence). The installer is built in CI (`.github/workflows/build.yml`) with Inno Setup from `packaging/tycho.iss`. The build must never include CUDA libraries, pygame or pysdl2-dll's DLLs other than SDL2.dll: CI fails if it does.
+- Build the installed app: `uv sync --group build`, then `uv run pyinstaller packaging/tycho.spec --noconfirm` (dist/tycho/tycho.exe for the terminal, and tycho-app.exe, the Start menu's Tycho, with no terminal), then `uv run python tools/notices.py dist/tycho` for THIRD-PARTY-NOTICES.txt (it fails on any GPL, LGPL or non-commercial licence). The installer is built in CI (`.github/workflows/build.yml`) with Inno Setup from `packaging/tycho.iss`. The build must never include CUDA libraries, pygame or pysdl2-dll's DLLs other than SDL2.dll: CI fails if it does.
 - Lint: `uv run ruff check`
 - Format: `uv run ruff format`
 - Type check: `uv run pyright` (strict mode)
