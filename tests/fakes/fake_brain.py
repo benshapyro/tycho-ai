@@ -9,14 +9,20 @@ from tycho.game.keybinds import Keybinds
 class FakeBrain:
     """Answers each request with the next scripted decision, or raises it if it's an
     exception. ``hang`` makes every call wait forever, to test the deadline.
-    ``search`` acts as if each answer needed a web search: it says it's waiting first."""
+    ``search`` acts as if each answer needed a web search: it says it's waiting first.
+    ``look`` acts as if each needed another look-up (prices, a ship)."""
 
     def __init__(
-        self, *script: Decision | Exception, hang: bool = False, search: bool = False
+        self,
+        *script: Decision | Exception,
+        hang: bool = False,
+        search: bool = False,
+        look: bool = False,
     ) -> None:
         self._script = list(script)
         self._hang = hang
         self._search = search
+        self._look = look
         self.asked: list[BrainRequest] = []
         self.warmed = 0
 
@@ -29,6 +35,9 @@ class FakeBrain:
             await asyncio.Event().wait()
         if self._search and request.waiting is not None:
             request.waiting()
+            await asyncio.sleep(0.02)
+        if self._look and request.looking is not None:
+            request.looking()
             await asyncio.sleep(0.02)
         answer = self._script.pop(0)
         if isinstance(answer, Exception):

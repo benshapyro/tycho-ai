@@ -27,7 +27,7 @@ import itertools
 import logging
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
@@ -93,6 +93,7 @@ POLL_RETRY_SECONDS = 1.0
 """How long to wait before reading push-to-talk again after it failed."""
 
 BRAIN_SECONDS = 8.0
+"""How long to wait for the brain before saying it couldn't answer (ADR 14)."""
 KEEP_CHARACTERS = 40
 """Lines this short ("Gear down.", "Which Constellation?") repeat, so the speaker
 keeps their audio: the next time they're free and start at once."""
@@ -101,7 +102,10 @@ SEARCH_SECONDS = 12.0
 FILLERS = ("Let me check.", "Checking the latest.", "One moment, looking that up.")
 """Said while a web search runs (about 4 s), taking turns, so the wait isn't
 silence (ADR 15). Kept as audio after the first time, so they start at once."""
-"""How long to wait for the brain before saying it couldn't answer (ADR 14)."""
+CHECKING = ("Checking.", "Looking that up.", "One moment.")
+"""Said when any other look-up starts (prices, routes, a ship): Claude takes 1-4 s
+to choose one, and the answer can take as long again. Kept as audio, like FILLERS,
+so they cost the voice service once."""
 FOLLOW_UP_SECONDS = 30.0
 """Exchanges this recent go to the brain with the next request (ADR 10, ADR 14)."""
 FOLLOW_UP_LIMIT = 4
@@ -209,6 +213,7 @@ class Session:
         self._filling: asyncio.Task[None] | None = None
         """The filler line, while it plays; the answer waits for it rather than cut it off."""
         self._fillers = itertools.cycle(FILLERS)
+        self._checking = itertools.cycle(CHECKING)
         self._speech_warming: asyncio.Task[None] | None = None
         self._recent: list[Exchange] = []
         self._recent_at = 0.0
@@ -473,6 +478,7 @@ class Session:
                                 self._keybinds(),
                                 tuple(self._follow_ups()),
                                 waiting=searching,
+                                looking=lambda: self._fill(self._checking),
                             )
                         )
                     trace.mark("brain")
@@ -721,12 +727,13 @@ class Session:
             self._speak(speaker, text, instead, keep=keep, after=filler)
         )
 
-    def _fill(self) -> None:
-        """A web search has started: say a short line while it runs."""
+    def _fill(self, lines: Iterator[str] | None = None) -> None:
+        """A look-up has started (a web search, unless ``lines`` says): say a short
+        line while it runs."""
         if self._speaker is None or self._closed:
             return
         self._stop_speaking()
-        line = next(self._fillers)
+        line = next(lines or self._fillers)
         self._speech = self._filling = asyncio.create_task(
             self._speak(self._speaker, line, lambda: None, keep=True)
         )

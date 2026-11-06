@@ -30,6 +30,7 @@ from tycho.brain.briefing import (
     unbound_commands,
 )
 from tycho.brain.claude import (
+    LAST_CALL,
     MAX_CALLS,
     NO_PRESS_AFTER_SEARCH,
     ClaudeBrain,
@@ -489,6 +490,60 @@ def test_looking_things_up_forever_is_a_brain_error() -> None:
     with pytest.raises(BrainError, match="still looking"):
         _ask(client, FakeLookup())
     assert len(client.requests) == MAX_CALLS
+
+
+def test_before_the_last_call_claude_is_told_to_answer_now() -> None:
+    """Play session: three look-ups for gold, then the error sound. Before the last
+    call Claude is told to answer with what it found; it keeps every tool, since
+    taking them away made it write show_card out as text, which was read aloud."""
+    calls = [_looks_up(use_id=f"toolu_{n}") for n in range(MAX_CALLS - 1)]
+    client = _Calls(*calls, ([], _final("Gold sells best at Area 18.")))
+    decision = _ask(client, FakeLookup())
+    assert getattr(decision, "text", "") == "Gold sells best at Area 18."
+    last = client.requests[-1]
+    assert last["tool_choice"]["type"] == "auto"
+    assert {"type": "text", "text": LAST_CALL} in last["messages"][-1]["content"]
+    assert all(
+        {"type": "text", "text": LAST_CALL} not in m["content"]
+        for r in client.requests[:-1]
+        for m in r["messages"]
+        if isinstance(m["content"], list)
+    )
+
+
+def test_a_tool_call_written_as_text_is_never_spoken() -> None:
+    client = _Calls(([], _final('show_card({"say": "Buy at Rod\'s", "kind": "route"})')))
+    with pytest.raises(BrainError, match="tool call as text"):
+        _ask(client)
+
+
+def test_settings_and_the_fleet_dont_say_checking() -> None:
+    """Review of #145: "turn your voice down" got "Checking." before "Done."."""
+    instant = FakeLookup("settings", '{"done": true}', instant=True)
+    looked: list[str] = []
+    client = _Calls(_looks_up("settings"), ([], _final("Done.")))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=(instant,))
+    request = BrainRequest("voice down a bit", KEYBINDS, looking=lambda: looked.append(""))
+    assert asyncio.run(brain.decide(request)) == Reply("Done.")
+    assert looked == []
+
+
+def test_the_real_settings_and_fleet_tools_are_instant() -> None:
+    from tycho.knowledge.fleet import FleetUpdate
+    from tycho.spoken_settings import SettingsTool
+
+    assert SettingsTool.instant
+    assert FleetUpdate.instant
+
+
+def test_a_look_up_says_its_checking_once() -> None:
+    looked: list[str] = []
+    calls = [_looks_up(use_id=f"toolu_{n}") for n in range(2)]
+    client = _Calls(*calls, ([], _final("Area 18.")))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=(FakeLookup(),))
+    request = BrainRequest("where do I sell gold", KEYBINDS, looking=lambda: looked.append(""))
+    assert asyncio.run(brain.decide(request)) == Reply("Area 18.")
+    assert len(looked) == 1
 
 
 def test_a_look_up_cant_take_the_name_of_an_act() -> None:

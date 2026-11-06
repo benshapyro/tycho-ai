@@ -32,6 +32,8 @@ COMMODITIES = [
     commodity(30, "Caranite", "CARA"),
     commodity(58, "Quantainium", "QUAN"),
     commodity(60, "Medical Supplies", "MEDS"),
+    commodity(20, "Gold", "GOLD"),
+    commodity(21, "Gold (Ore)", "GOLD"),
 ]
 AREA18 = terminal(12, "Area18", city_name="Area 18", id_city=1, planet_name="ArcCorp", id_planet=4)
 ARC_L1 = terminal(

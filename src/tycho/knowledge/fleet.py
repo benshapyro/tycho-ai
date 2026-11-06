@@ -107,6 +107,9 @@ class Fleet:
 class FleetUpdate:
     """The ``update_fleet`` tool. Satisfies ``brain.lookups.Lookup``."""
 
+    instant = True
+    """It answers at once, so Tycho doesn't say "Checking." first."""
+
     def __init__(self, fleet: Fleet, library: Callable[[], ShipLibrary | None]) -> None:
         """``library`` gives the ship data once it has loaded (``ShipLookup.library``)."""
         self._fleet = fleet

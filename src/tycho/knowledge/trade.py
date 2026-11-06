@@ -31,6 +31,9 @@ TOP = 5
 MAX_ORIGINS = 4
 """Terminals asked about at once when a route starts at a station, city or outpost."""
 RAW_WORDS = frozenset({"raw", "ore", "unrefined"})
+REFINED_WORDS = frozenset({"refined"})
+"""UEX names a refined commodity plainly ("Gold"), and its ore "Gold (Ore)" or "(Raw)"."""
+RAW_MARKS = ("(raw)", "(ore)")
 FILLER = frozenset({"the", "a", "an", "at", "in", "on", "near", "of", "some", "price", "prices"})
 COMMODITY_TERMINALS = frozenset({"commodity", "commodity_raw"})
 PLACE_FIELDS = (
@@ -101,7 +104,7 @@ class Trade:
                     int(c["id"]),
                     str(c["name"]),
                     str(c.get("code") or ""),
-                    "(raw)" in str(c["name"]).lower(),
+                    any(mark in str(c["name"]).lower() for mark in RAW_MARKS),
                 )
                 for c in commodities
                 if c.get("is_available_live") and c.get("name")
@@ -115,14 +118,11 @@ class Trade:
         """The commodity the player meant. Raises ``TradeError`` with the closest names."""
         words = [w for w in normalize(asked) if w not in FILLER]
         raw = any(w in RAW_WORDS for w in words)
-        words = [w for w in words if w not in RAW_WORDS]
+        words = [w for w in words if w not in RAW_WORDS and w not in REFINED_WORDS]
         if not words:
             raise TradeError("name a commodity")
         scored = sorted(
-            (
-                (_score(words, normalize(c.name.replace("(Raw)", "")), c.code), c)
-                for c in self.commodities
-            ),
+            ((_score(words, normalize(_plain(c.name)), c.code), c) for c in self.commodities),
             key=lambda pair: (-pair[0], pair[1].raw != raw, len(pair[1].name)),
         )
         best = scored[0][0] if scored else 0.0
@@ -130,7 +130,7 @@ class Trade:
             closest = ", ".join(c.name for _, c in scored[:3])
             raise TradeError(f"no commodity called {asked!r}; closest: {closest}")
         tied = [c for score, c in scored if score >= best - 0.03]
-        names = {c.name.replace(" (Raw)", "") for c in tied}
+        names = {_plain(c.name) for c in tied}  # Gold and Gold (Ore) are one choice
         if len(names) > 1:
             raise TradeError(f"{asked!r} could be {', '.join(sorted(names)[:4])}: pick one")
         return next((c for c in tied if c.raw == raw), tied[0])
@@ -230,6 +230,13 @@ def top(
     """The best rows by ``key``, leaving out zeros (not traded there)."""
     priced = [r for r in rows if isinstance(r.get(key), int | float) and r[key] > 0]
     return sorted(priced, key=lambda r: r[key] if cheapest else -r[key])[:TOP]
+
+
+def _plain(name: str) -> str:
+    """A commodity's name without its ore mark: "Gold (Ore)" is "Gold"."""
+    for mark in ("(Raw)", "(Ore)"):
+        name = name.replace(mark, "")
+    return name.strip()
 
 
 def _score(said: list[str], name: list[str], code: str) -> float:

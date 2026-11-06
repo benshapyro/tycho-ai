@@ -65,6 +65,7 @@ class _Turn:
     """What one request has done so far, across its calls to Claude."""
 
     waiting: Callable[[], None] | None = None
+    looking: Callable[[], None] | None = None
     searched: bool = False
 
 
@@ -219,9 +220,9 @@ class ClaudeBrain:
         # The fleet line matches ship names, which is too slow for the event loop.
         about = await asyncio.to_thread(self._about)
         messages = history(request.recent, request.text, self._today(), about)
-        turn = _Turn(waiting=request.waiting)
+        turn = _Turn(waiting=request.waiting, looking=request.looking)
         try:
-            for _ in range(MAX_CALLS):
+            for call in range(MAX_CALLS):
                 decided, message, looking = await self._call(messages, started, turn)
                 if decided is not None:
                     if turn.searched and not isinstance(decided, Reply):
@@ -235,10 +236,17 @@ class ClaudeBrain:
                     reply = spoken(" ".join(b.text for b in message.content if b.type == "text"))
                     if not reply:
                         raise BrainError(f"no answer (stopped: {message.stop_reason})")
+                    if _TOOL_AS_TEXT.match(reply):
+                        # 'show_card({"say": ...' read out is gibberish to the player.
+                        raise BrainError("it wrote a tool call as text")
                     return Reply(reply[:400])
                 results = await asyncio.gather(*(task for _, task in looking))
                 messages.append({"role": "assistant", "content": message.content})
-                messages.append({"role": "user", "content": _results(looking, results)})
+                content: list[Any] = [*_results(looking, results)]
+                if call == MAX_CALLS - 2:
+                    # The next call is the last: answer with what's here, a card included.
+                    content.append({"type": "text", "text": LAST_CALL})
+                messages.append({"role": "user", "content": content})
         except anthropic.AuthenticationError as e:
             raise BrainError("the Anthropic key was refused") from e
         except anthropic.APIConnectionError as e:
@@ -280,6 +288,10 @@ class ClaudeBrain:
                                 if turn.waiting is not None:
                                     turn.waiting()
                                     turn.waiting = None  # once a request
+                                turn.looking = None  # not after a search's line
+                            elif turn.looking is not None and not getattr(chosen, "instant", False):
+                                turn.looking()  # not for settings or the fleet: they're instant
+                                turn.looking = None  # once a request
                             seconds = float(getattr(chosen, "seconds", LOOKUP_SECONDS))
                             lookup = run_lookup(chosen, block.input, seconds)
                             looking.append((block.id, asyncio.create_task(lookup)))
@@ -333,6 +345,15 @@ def _results(
 
 
 _MARKUP = re.compile(r"[*`#]+")
+
+
+LAST_CALL = (
+    "No more look-ups for this request. Answer now with what you found: speak, or "
+    "use show_card. If something wasn't found, say so briefly."
+)
+"""Added to the results before the last call, so a third look-up isn't the end."""
+_TOOL_AS_TEXT = re.compile(r"^\s*[a-z_]+\s*\(\s*\{")
+"""A tool call written as text: never said out loud."""
 
 
 def spoken(text: str) -> str:

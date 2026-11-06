@@ -17,9 +17,12 @@ class FakeLookup:
         *,
         hang: bool = False,
         from_the_web: bool = False,
+        instant: bool = False,
     ) -> None:
-        """``from_the_web``: acts like the web search, slow and unchecked."""
+        """``from_the_web``: acts like the web search, slow and unchecked. ``instant``:
+        acts like settings or the fleet, which answer at once."""
         self.from_the_web = from_the_web
+        self.instant = instant
         self._name = name
         self._answer = answer
         self._hang = hang
