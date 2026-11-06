@@ -1,4 +1,5 @@
-# PyInstaller build for Tycho (#9): one folder, a console app, nothing GPL or LGPL.
+# PyInstaller build for Tycho (#9): one folder, two programs sharing it (tycho.exe for
+# the terminal, tycho-app.exe for the Start menu, #146), nothing GPL or LGPL.
 #
 #   uv sync --group build --no-group gpu
 #   uv run pyinstaller packaging/tycho.spec --noconfirm
@@ -84,7 +85,16 @@ exe = EXE(  # noqa: F821
     [],
     exclude_binaries=True,
     name="tycho",
-    console=True,
+    console=True,  # for the terminal: `tycho check`, `tycho bind`, and agents
     upx=False,  # UPX-packed executables are flagged by antivirus more often
 )
-coll = COLLECT(exe, a.binaries, a.datas, name="tycho", upx=False)  # noqa: F821
+app = EXE(  # noqa: F821
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name="tycho-app",
+    console=False,  # the Start menu's Tycho: the tray icon and the window, no terminal (#146)
+    upx=False,
+)
+coll = COLLECT(exe, app, a.binaries, a.datas, name="tycho", upx=False)  # noqa: F821

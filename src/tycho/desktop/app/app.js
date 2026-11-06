@@ -93,7 +93,7 @@
     } else {
       ok = s.ready;
       body = `<div class="card frame"><h3>${firstRun ? "Ready" : "All set"}</h3>
-        <p>${firstRun ? "Tycho starts listening when you press Start. Its star sits by the clock: click it to open this window again." : "Changes apply when Tycho next starts."}</p>
+        <p>${firstRun ? "Tycho starts listening when you press Start. Its star sits by the clock (if you don't see it, it's under the ^ arrow there): click it to open this window again, or open Tycho from the Start menu." : "Changes apply when Tycho next starts."}</p>
         <p class="note">Play in Borderless Window mode so the Tile can show over the game. Then hold your button and try “gear down”.</p>
         <span class="err" id="finishErr"></span></div>`;
     }
@@ -117,7 +117,7 @@
         const r = await api.finish_setup();
         if (!r.ok) { $("#finishErr").textContent = r.problem; b.disabled = false; return; }
         if (!firstRun) { view = "status"; render(); }
-        else page.innerHTML = `<h1>Starting Tycho…</h1><p class="lede">This window closes in a moment. Tycho's star appears by the clock.</p>`;
+        else page.innerHTML = `<h1>Starting Tycho…</h1><p class="lede">This window closes in a moment. Tycho's star appears by the clock, or under the ^ arrow there. To open this window again, click the star or open Tycho from the Start menu.</p>`;
         return;
       }
       step = Math.max(0, Math.min(STEPS.length - 1, step + delta));

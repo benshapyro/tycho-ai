@@ -67,8 +67,19 @@ def test_places_are_found_most_sensibly(said: str, field: str, value: str) -> No
     assert (place.field, place.value) == (field, value)
 
 
-def test_a_place_that_fits_several_asks_which() -> None:
-    with pytest.raises(TradeError, match="could be"):
+def test_a_place_that_fits_a_few_is_the_likeliest_with_the_others_named() -> None:
+    """#147: a best guess, not a question back, which cost a call to Claude."""
+    place, others = _trade().place_match("Lagrange")
+    assert "Lagrange" in place.value
+    assert others
+    assert all("Lagrange" in o for o in others)
+
+
+def test_a_place_that_fits_many_asks_which(monkeypatch: pytest.MonkeyPatch) -> None:
+    import tycho.knowledge.trade
+
+    monkeypatch.setattr(tycho.knowledge.trade, "GUESS_AMONG", 1)
+    with pytest.raises(TradeError, match="name one"):
         _trade().place("Lagrange")
     with pytest.raises(TradeError, match="no place called"):
         _trade().place("nowhere special")
@@ -136,8 +147,8 @@ def _prices() -> CommodityPrices:
     return prices
 
 
-def _routes() -> TradeRoutes:
-    _, routes = trade_lookups(FakeTradeUex())
+def _routes(uex: FakeTradeUex | None = None) -> TradeRoutes:
+    _, routes = trade_lookups(uex or FakeTradeUex())
     assert isinstance(routes, TradeRoutes)
     return routes
 
@@ -206,15 +217,44 @@ def test_routes_to_one_place_and_of_one_commodity() -> None:
     assert only["profit_for_cargo"] == 959 * 46
 
 
-def test_a_name_that_misses_is_an_error_that_says_what_to_try() -> None:
+def test_a_name_that_misses_is_an_answer_not_an_error() -> None:
+    """#147: Claude retries an error, three times over in the play session. A miss
+    says what wasn't found and the closest names, for Claude to tell the player."""
     error, result = _run(_prices(), {"commodity": "unobtainium", "place": ""})
-    assert error
-    assert "closest" in result["error"]
+    assert not error
+    assert "closest" in result["not_found"]
+    assert "closest names" in result["answer"]
     error, result = _run(
         _routes(), {"start": "nowhere", "commodity": "", "end": "", "cargo_scu": 0}
     )
-    assert error
-    assert "no place called" in result["error"]
+    assert not error
+    assert "no place called" in result["not_found"]
+
+
+def test_routes_for_a_commodity_from_anywhere() -> None:
+    """Play session: "best route for buying and selling refined gold?" was answered
+    "Where are you starting from?". With a commodity, no start is needed."""
+    uex = FakeTradeUex()
+    error, result = _run(
+        _routes(uex), {"start": "", "commodity": "laranite", "end": "", "cargo_scu": 0}
+    )
+    assert not error
+    assert result["start"] == "anywhere"
+    assert result["commodity"] == "Laranite"
+    assert [r["sell_at"] for r in result["routes"]] == ["New Babbage", "Area18"]
+    assert ("/commodities_routes", {"id_commodity": 47}) in uex.calls
+
+
+def test_routes_with_neither_a_start_nor_a_commodity_say_what_to_ask() -> None:
+    error, result = _run(_routes(), {"start": "", "commodity": "", "end": "", "cargo_scu": 0})
+    assert not error
+    assert "ask where" in result["not_found"]
+
+
+def test_an_assumed_match_names_the_others() -> None:
+    error, result = _run(_prices(), {"commodity": "laranite", "place": "Lagrange"})
+    assert not error
+    assert result["also_places"]
 
 
 def test_without_uex_it_says_so_and_tries_again_next_time() -> None:
@@ -234,3 +274,18 @@ def test_the_tool_schemas_suit_strict_tool_use() -> None:
         assert schema["additionalProperties"] is False
         assert set(schema["required"]) == set(schema["properties"])  # type: ignore[arg-type]
         assert "UEX" in lookup.description
+
+
+def test_a_start_and_a_commodity_ask_uex_once_and_keep_the_start() -> None:
+    """Play session: gold from Pyro found nothing, because only four of the system's
+    terminals were asked. With a commodity, one request covers every start."""
+    uex = FakeTradeUex()
+    _, result = _run(
+        _routes(uex), {"start": "Hurston", "commodity": "laranite", "end": "", "cargo_scu": 0}
+    )
+    assert [(r["buy_at"], r["sell_at"]) for r in result["routes"]] == [
+        ("Lorville", "New Babbage"),
+        ("Lorville", "Area18"),
+    ]
+    routes = [query for path, query in uex.calls if path == "/commodities_routes"]
+    assert routes == [{"id_commodity": 47}]
