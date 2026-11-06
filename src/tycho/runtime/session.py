@@ -93,6 +93,7 @@ POLL_RETRY_SECONDS = 1.0
 """How long to wait before reading push-to-talk again after it failed."""
 
 BRAIN_SECONDS = 8.0
+"""How long to wait for the brain before saying it couldn't answer (ADR 14)."""
 KEEP_CHARACTERS = 40
 """Lines this short ("Gear down.", "Which Constellation?") repeat, so the speaker
 keeps their audio: the next time they're free and start at once."""
@@ -105,7 +106,6 @@ CHECKING = ("Checking.", "Looking that up.", "One moment.")
 """Said when any other look-up starts (prices, routes, a ship): Claude takes 1-4 s
 to choose one, and the answer can take as long again. Kept as audio, like FILLERS,
 so they cost the voice service once."""
-"""How long to wait for the brain before saying it couldn't answer (ADR 14)."""
 FOLLOW_UP_SECONDS = 30.0
 """Exchanges this recent go to the brain with the next request (ADR 10, ADR 14)."""
 FOLLOW_UP_LIMIT = 4

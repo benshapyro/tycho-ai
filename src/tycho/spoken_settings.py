@@ -188,6 +188,9 @@ def shown(name: str, value: object) -> object:
 class SettingsTool:
     """The ``settings`` tool. Satisfies ``brain.lookups.Lookup``."""
 
+    instant = True
+    """It answers at once, so Tycho doesn't say "Checking." first."""
+
     def __init__(
         self,
         path: Path | None = None,

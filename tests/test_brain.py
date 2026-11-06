@@ -517,6 +517,25 @@ def test_a_tool_call_written_as_text_is_never_spoken() -> None:
         _ask(client)
 
 
+def test_settings_and_the_fleet_dont_say_checking() -> None:
+    """Review of #145: "turn your voice down" got "Checking." before "Done."."""
+    instant = FakeLookup("settings", '{"done": true}', instant=True)
+    looked: list[str] = []
+    client = _Calls(_looks_up("settings"), ([], _final("Done.")))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=(instant,))
+    request = BrainRequest("voice down a bit", KEYBINDS, looking=lambda: looked.append(""))
+    assert asyncio.run(brain.decide(request)) == Reply("Done.")
+    assert looked == []
+
+
+def test_the_real_settings_and_fleet_tools_are_instant() -> None:
+    from tycho.knowledge.fleet import FleetUpdate
+    from tycho.spoken_settings import SettingsTool
+
+    assert SettingsTool.instant
+    assert FleetUpdate.instant
+
+
 def test_a_look_up_says_its_checking_once() -> None:
     looked: list[str] = []
     calls = [_looks_up(use_id=f"toolu_{n}") for n in range(2)]
