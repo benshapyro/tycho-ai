@@ -309,3 +309,34 @@ def test_a_guessed_end_is_named() -> None:
         _routes(), {"start": "Hurston", "commodity": "", "end": "Lagrange", "cargo_scu": 0}
     )
     assert result["also_ends"]
+
+
+def test_a_capped_commodity_list_falls_back_to_the_starts_routes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#171: UEX stops a commodity's routes at 500, so a start can be missing from it."""
+    import tycho.knowledge.trade_lookup
+
+    uex = FakeTradeUex()
+    real = uex._routes  # pyright: ignore[reportPrivateUsage]
+
+    def capped(query: dict[str, Any]) -> list[dict[str, Any]]:
+        if "id_commodity" in query:  # the cap reached, with none from Hurston
+            return [r for r in real({"id_terminal_origin": 12}) if r["id_commodity"] == 70]
+        return real(query)
+
+    monkeypatch.setattr(uex, "_routes", capped)
+    monkeypatch.setattr(tycho.knowledge.trade_lookup, "ROUTES_CAP", 1)
+    _, result = _run(
+        _routes(uex), {"start": "Hurston", "commodity": "laranite", "end": "", "cargo_scu": 0}
+    )
+    assert [r["sell_at"] for r in result["routes"]] == ["New Babbage", "Area18"]
+
+
+def test_an_uncapped_empty_list_doesnt_ask_again() -> None:
+    uex = FakeTradeUex()
+    _, result = _run(
+        _routes(uex), {"start": "Pyro", "commodity": "laranite", "end": "", "cargo_scu": 0}
+    )
+    assert result["routes"] == []
+    assert [path for path, _ in uex.calls].count("/commodities_routes") == 1

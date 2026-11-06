@@ -255,6 +255,7 @@ class _Tray:
     def __init__(self, tip: Any, menu: Any, chosen: Any) -> None:
         self.tip = tip
         self.menu = menu
+        self.chosen = chosen
         _Tray.made.append(self)
 
     made: ClassVar[list[_Tray]] = []
@@ -354,7 +355,7 @@ def test_tycho_can_be_quit_while_it_starts(monkeypatch: pytest.MonkeyPatch) -> N
     starting = app._Starting(None)  # pyright: ignore[reportPrivateUsage]
     keys = [item.key for item in _Tray.made[-1].menu()]
     assert "quit" in keys
-    starting._chosen("quit")  # pyright: ignore[reportPrivateUsage]
+    _Tray.made[-1].chosen("quit")  # as the tray calls it (review of #180)
     assert quit_with == [0]
     starting.close()
 
@@ -379,3 +380,33 @@ def test_the_still_starting_message_comes_to_the_front(monkeypatch: pytest.Monke
     starting.close()
     assert flags[0] & 0x10000  # MB_SETFOREGROUND
     assert flags[0] & 0x40000  # MB_TOPMOST
+
+
+def test_once_listening_a_second_start_opens_the_trays_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#159: serve_with_tray hands OpenRequests to the window it opens."""
+    from types import SimpleNamespace
+
+    import tycho.desktop.host
+    import tycho.desktop.tray
+
+    asked: list[str] = []
+
+    class Host:
+        def __init__(self, _voice: object) -> None:
+            self.on_quit: Any = None
+
+        def ask(self, request: str) -> None:
+            asked.append(request)
+
+        def run(self, _open: object) -> None:
+            requests.target()  # a second start while Tycho listens
+
+    monkeypatch.setattr(tycho.desktop.tray, "TrayIcon", _Tray)
+    monkeypatch.setattr(tycho.desktop.host, "Host", Host)
+    monkeypatch.setattr(app, "app_window", lambda **_options: _Window(_Requests()))
+    requests = _Requests()
+    session = SimpleNamespace(paused=False)
+    assert app.serve_with_tray(session, object(), {}, None, requests)  # type: ignore[arg-type]
+    assert asked == ["open"]

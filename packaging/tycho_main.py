@@ -91,6 +91,8 @@ def windowed(argv: list[str]) -> int:
 
         tail.write(f"\nTycho stopped: {e}")
         lines = _last_lines(tail.text)  # before logging, which writes the traceback here too
+        if not logging.getLogger("tycho").handlers:  # it stopped before logging began
+            app.logs.setup()
         logging.getLogger("tycho").exception("Tycho stopped")
         code = 1
     else:

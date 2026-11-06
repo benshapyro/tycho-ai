@@ -461,6 +461,8 @@ class _Starting:
         checked before use, so the next start carries on safely."""
         if key == "quit":
             log.info("Quit while starting")
+            if sys.stdout is not None and sys.stdout.isatty():
+                print("\nStopped.", flush=True)  # after the download's progress line
             os._exit(0)  # the main thread is inside the download, which can't be told
 
     def doing(self, now: str) -> None:

@@ -930,3 +930,8 @@ def test_a_uex_miss_or_question_back_isnt_credited() -> None:
     miss = _Credited("trade_routes", '{"not_found": "no start or commodity"}')
     client = _Calls(_looks_up("trade_routes"), ([], _final("Where are you starting from?")))
     assert _ask(client, miss) == Reply("Where are you starting from?")
+
+
+def test_uex_said_with_dots_is_a_credit() -> None:
+    client = _Calls(_looks_up("commodity_prices"), ([], _final("U.E.X. has Orison top.")))
+    assert _ask(client, _Credited("commodity_prices")) == Reply("U.E.X. has Orison top.")

@@ -335,7 +335,8 @@ class ClaudeBrain:
                         if turn.refused:
                             # Only the first act in a reply may be pressed, even when that
                             # one was refused (#176): this one waits for the next call.
-                            looking.append((block.id, _answered(failure(SECOND_ACT))))
+                            refused = SECOND_ACT.format(tool=block.name)
+                            looking.append((block.id, _answered(failure(refused))))
                             continue
                         try:
                             decided = parse_tool_call(
@@ -440,8 +441,8 @@ INSTANT_SECONDS = 1.0
 """How long an act waits for a fleet or settings note from the same reply."""
 
 SECOND_ACT = (
-    "Nothing was pressed: an earlier action in this reply was refused. Pick the actions "
-    "again, all in one run_actions call."
+    "Not done: an earlier action in this reply was refused, so {tool} wasn't used. Call "
+    "it again on its own if it's still wanted."
 )
 
 
@@ -453,7 +454,8 @@ def _found(result: LookupResult) -> bool:
 def _credited(reply: Reply, credits: list[str]) -> Reply:
     """The answer, naming each source it used that it didn't name itself: Claude is
     asked to credit UEX, but with the details on a card it often doesn't (#164)."""
-    missing = [c for c in credits if c.lower() not in reply.text.lower()]
+    said = reply.text.replace(".", "")  # "U.E.X." names UEX too
+    missing = [c for c in credits if not re.search(rf"\b{re.escape(c)}\b", said, re.IGNORECASE)]
     if not missing:
         return reply
     return dataclasses.replace(reply, text=f"{reply.text} From {' and '.join(missing)}.")
