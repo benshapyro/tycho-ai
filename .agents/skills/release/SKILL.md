@@ -37,9 +37,9 @@ The file name must carry the new version. Use the installer from the merge commi
 
 ## 4. Draft the release
 
-Write the notes for players, not developers:
+Write the notes for players, not developers. Assume the reader has never heard of Tycho and isn't technical: plain words, short sections, and a concrete example for each change (what you say, and what Tycho does). Explain any term (the Tile, push-to-talk) the first time it appears.
 
-- what's new since the last release, by what a player notices;
+- what's new since the last release, by what a player notices, most noticeable first; fixes and work behind the scenes go last, in a line or two;
 - how to install (link the README's Install section; SmartScreen's **More info**, then **Run anyway**, while the installer is unsigned);
 - known limits;
 - the SHA-256 line, `SHA-256 of \`TychoSetup-<version>.exe\`: \`<hash>\``, which the `tycho-setup` skill checks against;

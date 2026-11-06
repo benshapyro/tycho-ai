@@ -82,7 +82,7 @@ The app may do what voice can't: lengthen the confirm time, turn transcripts on,
   - the threads and the tray icon (#126);
   - the window, the bridge, Status (the same checks as `tycho check`), Settings from the schema with the Tile's preview drawn by the Tile itself, and Keys.
   - the first run (`tycho run` opens the window on setup when there's no push-to-talk or no game; Tycho starts when it's done), and push-to-talk, the microphone and the game folder changeable in Settings. The "say gear down" test waits for the voice loop to be running during setup.
-  - the Commands page: every command and sequence with its phrases and the player's key, what to bind for one with no key, and the player's own phrases added and removed (a built-in command with a phrase added is copied into their commands.toml, as the agent skill does).
+  - the Commands page: every command and sequence with its phrases and the player's key, what to bind for one with no key, and the player's own phrases added and removed. A phrase for a built-in command goes in a `[[phrases]]` entry, which adds phrases without copying the command, so later releases' changes to it still reach the player (#134).
 - Build order:
   1. the threads and the tray icon;
   2. the bridge and the first run;

@@ -23,6 +23,7 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
 - **Settings by voice:** "turn your voice down a bit", "less time to confirm", "stop searching the web". "Undo" puts back the last change.
 - **Calls you what you like:** "Commander" by default, or "call me Ace", or nothing at all. It uses the name sparingly.
 - **The Tile:** a small see-through panel over the game for what's better read than heard: prices, routes, specs, recipes, steps, and the countdown when Tycho asks you to confirm. Its colour follows your ship. It needs Borderless Window mode, and hasn't been tried in a play session yet ([#2](https://github.com/benshapyro/tycho-ai/issues/2)).
+- **Its own window and a tray icon:** a guided first run (the game, your push-to-talk button, a microphone test, your keys), Status, Settings, and Commands, where you see everything you can say and add your own phrases.
 - **A log of every key it pressed.**
 - **Speech recognition on your PC,** on the graphics card when it has room and on the processor otherwise.
 - **An installer, an update notice, and setup by an AI agent.**
@@ -31,7 +32,7 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
 
 These are plans, not promises. Each links its issue.
 
-- **A setup and settings app** ([#12](https://github.com/benshapyro/tycho-ai/issues/12), [#10](https://github.com/benshapyro/tycho-ai/issues/10)): guided first run, settings, your commands and fleet.
+- **Your fleet and logs in Tycho's window** ([#12](https://github.com/benshapyro/tycho-ai/issues/12)).
 - **Choose your model** ([#112](https://github.com/benshapyro/tycho-ai/issues/112)): OpenAI and other providers, once they pass Tycho's tests.
 - **Learns from misses and fixes itself** ([#51](https://github.com/benshapyro/tycho-ai/issues/51)): offers to add phrases you rephrased, and repairs keybinds after a patch, always with your OK.
 - **Reads the game's log** ([#30](https://github.com/benshapyro/tycho-ai/issues/30)): knows which ship you're in and where you are, without being told.
@@ -119,6 +120,12 @@ Without an ElevenLabs key, Tycho's replies are shown in its window and it plays 
   id = "space_mode"
   say = ["space mode"]
   actions = ["v_master_mode_set_scm"]
+  ```
+  To give a built-in command more ways to say it, without replacing it (the Commands page in Tycho's window writes these for you):
+  ```toml
+  [[phrases]]
+  command = "landing_gear"
+  say = ["wheels down", "drop the wheels"]
   ```
   A phrase you add there is taken away from the built-in command that had it. `uv run tycho check` says whether your file loads.
 
