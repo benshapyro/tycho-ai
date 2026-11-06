@@ -190,6 +190,16 @@ def _run(current: Settings, log_file: Path, *, window: bool = True) -> int:
 
     log.info("Tycho %s. Log file: %s", __version__, log_file)
     start_update_check(current)
+    if window and sys.platform == "win32":
+        from tycho.desktop.setup import needs_setup
+
+        if needs_setup(current):
+            # A first run (no push-to-talk, or no game): the window asks, not the terminal.
+            log.info("Opening Tycho's window to set up")
+            if not first_run():
+                print("Setup isn't finished, so Tycho isn't listening. Run it again to finish.")
+                return 1
+            current = settings.load()
     binding = current.push_to_talk_binding
     if binding is None:
         print("First, choose your push-to-talk button.")
@@ -286,6 +296,7 @@ def serve_with_tray(
         findings=findings,
         key_check=ProviderKeyCheck(),
         ship_accent=display.ship_accent if display is not None else lambda: None,
+        choose_folder=lambda: window.choose_folder(),
     )
     window = AppWindow(bridge)
     host.on_quit = window.close
@@ -310,6 +321,38 @@ def serve_with_tray(
         host.run(window.open)
     finally:
         tray.close()
+
+
+def first_run() -> bool:
+    """The window, on setup, before Tycho starts listening (ADR 17). True once the
+    player finishes it; False if they close the window first."""
+    import dataclasses
+    import threading
+
+    from tycho.desktop.bridge import Bridge
+    from tycho.desktop.keys import ProviderKeyCheck
+    from tycho.desktop.window import AppWindow
+
+    finished = threading.Event()
+
+    def finish() -> None:
+        finished.set()
+        # A moment for the page to say "Starting Tycho…" before it goes.
+        threading.Timer(0.8, window.close).start()
+
+    def findings() -> list[Mapping[str, str]]:
+        return [dataclasses.asdict(f) for f in _checks(settings.load(), quick=True, ask=False)]
+
+    bridge = Bridge(
+        findings=findings,
+        key_check=ProviderKeyCheck(),
+        choose_folder=lambda: window.choose_folder(),
+        finish=finish,
+        first_run=True,
+    )
+    window = AppWindow(bridge)
+    window.open()
+    return finished.is_set()
 
 
 def _float(value: object) -> float:

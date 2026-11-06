@@ -138,3 +138,32 @@ class Microphone:
         if status.input_overflow:
             self.overflows += 1
         self._buffer.feed(np.array(indata[:, 0], dtype=np.float32))
+
+
+def input_devices() -> list[str]:
+    """The microphones Windows offers, by name, its default first: those of PortAudio's
+    default host API only (each microphone is listed once per host API), and none of
+    Windows' stand-ins ("Microsoft Sound Mapper"). Empty if PortAudio can't list them."""
+    try:
+        devices = sd.query_devices()
+        default = sd.default.device[0]
+        api = sd.query_hostapis(sd.default.hostapi) if sd.default.hostapi >= 0 else None
+    except Exception:
+        log.debug("Couldn't list microphones", exc_info=True)
+        return []
+    ours = set(api["devices"]) if api is not None else set(range(len(devices)))
+    names: list[str] = []
+    for index, device in enumerate(devices):
+        name = str(device.get("name", ""))
+        if index not in ours or device.get("max_input_channels", 0) <= 0:
+            continue
+        if not name or name in names or name.startswith(_STAND_INS):
+            continue
+        if index == default:
+            names.insert(0, name)
+        else:
+            names.append(name)
+    return names
+
+
+_STAND_INS = ("Microsoft Sound Mapper", "Primary Sound Capture Driver")

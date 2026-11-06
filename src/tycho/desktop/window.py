@@ -82,6 +82,16 @@ class AppWindow:
             except Exception:
                 log.debug("Bringing the window forward failed", exc_info=True)
 
+    def choose_folder(self) -> str | None:
+        """Windows' own folder dialog, over the window; None if the player cancels."""
+        with self._lock:
+            window = self._window
+        if window is None:
+            return None
+        webview: Any = importlib.import_module("webview")
+        chosen = window.create_file_dialog(webview.FileDialog.FOLDER)
+        return str(chosen[0]) if chosen else None
+
     def close(self) -> None:
         """Tycho is quitting: close the window, and never open another."""
         with self._lock:
