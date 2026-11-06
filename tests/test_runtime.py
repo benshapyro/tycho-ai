@@ -106,6 +106,7 @@ def rig(
     brain: FakeBrain | None = None,
     brain_seconds: float = 8.0,
     search_seconds: float = 12.0,
+    looking_seconds: float = 7.0,
     speaker: FakeSpeaker | None = None,
     matcher: CommandMatcher = _MATCHER,
     address: Callable[[], str] = lambda: "",
@@ -129,6 +130,7 @@ def rig(
         brain=brain,
         brain_seconds=brain_seconds,
         search_seconds=search_seconds,
+        looking_seconds=looking_seconds,
         speaker=speaker,
         samplerate=RATE,
         log_transcripts=log_transcripts,
@@ -1188,6 +1190,55 @@ def test_a_web_search_gets_longer_than_the_usual_deadline() -> None:
     )
     assert r.results[0].status == "replied"
     assert speaker.spoken[-1] == "4.11 is on the roadmap."
+
+
+class _SlowLookUp(FakeBrain):
+    """A look-up starts at once, then Claude answers after ``after`` seconds."""
+
+    def __init__(self, after: float) -> None:
+        super().__init__()
+        self._after = after
+
+    async def decide(self, request: BrainRequest) -> Decision:
+        if request.looking is not None:
+            request.looking()
+        await asyncio.sleep(self._after)
+        return Reply("Rod's Fuel pays the most.")
+
+
+def test_a_look_up_gets_longer_than_the_usual_deadline() -> None:
+    """Play session (#150): two look-ups in a row ran past 8 s, after "Checking.",
+    and ended in the error sound."""
+    r = _conversation(
+        "best place to get lindinium",
+        brain=_SlowLookUp(0.6),
+        speaker=FakeSpeaker(),
+        brain_seconds=0.2,
+        looking_seconds=3.0,
+    )
+    assert r.results[0].status == "replied"
+
+
+def test_a_look_up_never_shortens_the_deadline() -> None:
+    r = _conversation(
+        "best place to get lindinium",
+        brain=_SlowLookUp(0.3),
+        speaker=FakeSpeaker(),
+        brain_seconds=1.0,
+        looking_seconds=0.05,  # shorter than what's left: the usual deadline holds
+    )
+    assert r.results[0].status == "replied"
+
+
+def test_a_look_up_still_has_a_deadline() -> None:
+    r = _conversation(
+        "best place to get lindinium",
+        brain=_SlowLookUp(5.0),
+        speaker=FakeSpeaker(),
+        brain_seconds=0.1,
+        looking_seconds=0.2,
+    )
+    assert r.results[0].status == "failed"
 
 
 def test_short_lines_are_kept_and_long_ones_arent() -> None:
