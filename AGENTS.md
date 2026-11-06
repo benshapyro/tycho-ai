@@ -62,6 +62,14 @@ The project folder may still be named `ultimo` locally; the project is Tycho ([A
 
 They're in `.claude/skills/` (Claude Code) and `.agents/skills/` (Codex and others), as identical copies: edit one, copy it to the other (`tests/test_agent_skills.py` checks).
 
+## Reviews
+
+- The Claude review (`.github/workflows/claude-code-review.yml`) runs on Opus when a PR is opened or marked ready, and again when the `claude-review` label is added. It reads the whole PR and checks each finding. Its summary lists what it read and anything it couldn't do: a review with a "Couldn't:" line, or a "denied tools" warning on the run, is incomplete, not clean.
+- **Fix in the PR only what's blocking:** it breaks a player's normal path, a safety rule, security or keys. Everything else becomes a GitHub issue labelled `from-review`, cleared before the next release. Nothing reaches players before a release.
+- **One push for all of a review's fixes**, then add `claude-review` only if the fixes were substantial. Each review costs about $1.50-2; reviewing every push cost $10+ on one PR.
+- Unresolved review threads block the merge. The review resolves its own threads once the code fixes them; otherwise the maintainer resolves them.
+- For a large change, also run an independent review before merging.
+
 ## Conventions
 
 - Python 3.14, `src/` layout, `asyncio`. Never block the event loop: use `asyncio.to_thread` for blocking calls.
@@ -70,6 +78,5 @@ They're in `.claude/skills/` (Claude Code) and `.agents/skills/` (Codex and othe
 - Key sequences must be cancellable and must release every held key in a `finally` block.
 - Commits follow Conventional Commits: `feat(input): ...`, `fix(stt): ...`.
 - Every change goes through a pull request: branch from `main`, push, open a PR, and merge only when CI and the Claude review pass. `main` is protected; never push to it directly.
-- The Claude review (`.github/workflows/claude-code-review.yml`) reads the whole PR on Opus and checks each finding. Its summary lists what it read and anything it couldn't do: a review with a "Couldn't:" line, or a "denied tools" warning on the run, is incomplete, not clean. For a large change, also run an independent review before merging.
 - Pin every GitHub Action to a full commit SHA, with the version in a comment. The repo refuses tag refs like `@v4`.
 - Significant decisions get an ADR in `docs/adr/`, using the next free number.
