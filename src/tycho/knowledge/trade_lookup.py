@@ -20,13 +20,13 @@ log = logging.getLogger(__name__)
 SOURCE = "UEX (uexcorp.space), prices reported by players"
 SECONDS = 5.0
 """A route from a station asks UEX about each of its terminals at once."""
-MISS = "say briefly what wasn't found, and the closest names if there are any"
 SPEAKING = (
     "In what you say aloud, credit UEX once, in a few words, even when the details go "
     "on a card (show_card's say); say how old a price is only when "
     "its hours_ago is over 6. Prices are aUEC per SCU. A result with also_matches, "
-    "also_places or also_starts is for the likeliest match: answer for it and name the "
-    "others in a few words; don't look up again to check."
+    "also_places, also_starts or also_ends is for the likeliest match: answer for it and "
+    "name the others in a few words; don't look up again to check. A result with "
+    "not_found: say briefly what wasn't found, and the closest names if it gives any."
 )
 
 PRICES = f"""\
@@ -77,7 +77,7 @@ class _TradeLookup:
     def _miss(self, problem: str) -> LookupResult:
         """A name UEX doesn't have: an answer, not an error (#147). Claude retries an
         error, and a retry costs a second; this one it says to the player."""
-        return self._result({"not_found": problem, "answer": MISS})
+        return self._result({"not_found": problem})
 
 
 class CommodityPrices(_TradeLookup):
@@ -200,7 +200,11 @@ class TradeRoutes(_TradeLookup):
                 if near:
                     assumed["also_starts"] = list(near)
             end_said = str(arguments.get("end") or "").strip()
-            end = trade.place(end_said) if end_said else None
+            end = None
+            if end_said:
+                end, far = trade.place_match(end_said)
+                if far:
+                    assumed["also_ends"] = list(far)
             commodity = None
             if commodity_said:
                 commodity, others = trade.commodity_match(commodity_said)
@@ -219,12 +223,17 @@ class TradeRoutes(_TradeLookup):
             return self._miss(str(e))
         except WikiError as e:
             return failure(f"UEX didn't answer ({e}); answer without live routes")
-        if end is not None:
-            rows = [r for r in rows if trade.in_place(r, end, "_destination")]
-        if commodity is not None:
-            rows = [r for r in rows if int(r.get("id_commodity") or 0) == commodity.id]
-        if start is not None:
-            rows = [r for r in rows if trade.in_place(r, start, "_origin")]
+
+        def kept(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            if end is not None:
+                rows = [r for r in rows if trade.in_place(r, end, "_destination")]
+            if commodity is not None:
+                rows = [r for r in rows if int(r.get("id_commodity") or 0) == commodity.id]
+            if start is not None:
+                rows = [r for r in rows if trade.in_place(r, start, "_origin")]
+            return rows
+
+        rows = kept(rows)
         best = sorted(rows, key=lambda r: -_profit(r, cargo))[:5]
         body: dict[str, object] = {
             "start": start.value if start is not None else "anywhere",

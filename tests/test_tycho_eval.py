@@ -144,3 +144,73 @@ def test_a_look_up_that_times_out_is_noted_as_an_error() -> None:
     assert result.is_error
     assert [name for name, _ in journal] == ["trade_routes"]
     assert journal[0][1]
+
+
+class _ScriptedBrain:
+    """Logs "Brain replied" as ClaudeBrain does for each call that ends in a message,
+    then decides: ``replies`` such calls before the decision."""
+
+    def __init__(self, replies: int, decision: object) -> None:
+        self.replies = replies
+        self.decision = decision
+
+    async def decide(self, request: object) -> object:
+        import logging
+
+        for _ in range(self.replies):
+            logging.getLogger("tycho.brain.claude").debug("Brain replied in 1 ms: about $0.0001")
+        return self.decision
+
+
+@pytest.mark.parametrize(
+    ("replies", "kind", "calls"),
+    [
+        (1, "reply", 1),  # an answer in words: one call, logged
+        (1, "card", 2),  # a look-up, then show_card, which ends its call unlogged
+        (0, "act", 1),  # an act ends its only call unlogged
+    ],
+)
+def test_run_case_counts_calls_to_claude(replies: int, kind: str, calls: int) -> None:
+    """Review of #161: the counting itself wasn't tested."""
+    import logging
+
+    from tycho.brain import Reply, RunActions
+    from tycho.lexicon import Lexicon
+    from tycho.tile.cards import from_tool
+
+    e = _eval()
+    card = from_tool({"say": "x", "kind": "list", "title": "Gold", "rows": [{"text": "Area18"}]})
+    decision = {
+        "reply": Reply("Gold sells best at Area 18."),
+        "card": Reply("Gold sells best at Area 18.", card),
+        "act": RunActions(("v_toggle_landing_system",), "Gear."),
+    }[kind]
+    costs = e._Costs()  # pyright: ignore[reportPrivateUsage]
+    logger = logging.getLogger("tycho.brain")
+    level = logger.level
+    logger.addHandler(costs)
+    logger.setLevel(logging.DEBUG)
+    try:
+        rule = {"heard": "xyzzy plugh frobnicate", "expect": ["reply", "actions"]}
+        outcome = asyncio.run(
+            e.run_case(
+                rule,
+                Lexicon.default(),
+                _ScriptedBrain(replies, decision),
+                _keybinds(),
+                None,
+                [],
+                costs,
+            )
+        )
+    finally:
+        logger.removeHandler(costs)
+        logger.setLevel(level)
+    assert outcome.route == "brain"
+    assert outcome.calls == calls
+
+
+def _keybinds() -> object:
+    from tests.test_runtime import KEYBINDS
+
+    return KEYBINDS
