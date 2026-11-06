@@ -181,6 +181,7 @@ def test_the_keybinds_are_read_once_a_while_and_none_without_the_game(
 
     monkeypatch.setattr(tycho.app, "find_install", find_install)
     monkeypatch.setattr(KeybindStore, "load", load)
+    monkeypatch.setattr("tycho.desktop.bridge.time.monotonic", lambda: 100.0)  # no 30 s edge
     bridge = _bridge(path)
     assert bridge._keybinds() == "the keybinds"  # pyright: ignore[reportPrivateUsage]
     assert bridge._keybinds() == "the keybinds"  # pyright: ignore[reportPrivateUsage]

@@ -318,3 +318,43 @@ def test_a_refusal_names_the_command_that_has_the_phrase(user_file: Path) -> Non
         result = commands.add_phrase(target, "punch it")
         assert result["ok"] is False
         assert f"({owner})" in str(result["problem"])
+
+
+@pytest.mark.parametrize(
+    ("text", "said"),
+    [
+        # one bracket pair: a table, not a list of them; adding must not replace it (#142)
+        ('[phrases]\ncommand = "landing_gear"\nsay = ["wheels down"]  # mine\n', "list of tables"),
+        # a clash already in the file, not the new phrase's
+        (
+            '[[phrases]]\ncommand = "eject"\nsay = ["xyzzy"]\n'
+            '\n[[phrases]]\ncommand = "startup"\nsay = ["xyzzy"]\n',
+            "is in both",
+        ),
+    ],
+)
+def test_a_file_that_doesnt_load_is_refused_not_rewritten(
+    user_file: Path, text: str, said: str
+) -> None:
+    user_file.write_text(text, "utf-8")
+    result = Commands(user_file, lambda: KEYBINDS).add_phrase("landing_gear", "drop the wheels")
+    assert result["ok"] is False
+    assert "has a mistake" in str(result["problem"])
+    assert said in str(result["problem"])
+    assert user_file.read_text("utf-8") == text
+
+
+def test_asks_first_counts_setup_and_only_the_action_pressed(user_file: Path) -> None:
+    user_file.write_text(
+        '[[command]]\nid = "eject_mode"\nsay = ["eject mode"]\nsetup = ["v_eject"]\n'
+        'actions = ["v_lights"]\n'
+        '\n[[command]]\nid = "lights_or_boom"\nsay = ["lights or boom"]\n'
+        'actions = ["v_lights", "v_self_destruct"]\n'
+        '\n[[sequence]]\nid = "safe_lights"\nsay = ["safe lights"]\nsteps = ["lights_or_boom"]\n',
+        "utf-8",
+    )
+    rows = _rows(Commands(user_file, lambda: KEYBINDS))
+    assert rows["eject_mode"]["confirm"] is True  # its setup presses eject
+    assert rows["lights_or_boom"]["confirm"] is False  # it presses the lights, which are bound
+    assert rows["safe_lights"]["confirm"] is False
+    assert _rows(Commands(user_file, lambda: None))["lights_or_boom"]["confirm"] is True
