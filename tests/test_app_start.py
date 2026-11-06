@@ -10,7 +10,7 @@ import threading
 import time
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -185,6 +185,7 @@ def test_the_windowed_app_shows_a_problem_in_a_message_box(
             return 1
 
     monkeypatch.setattr(app, "main", fails)
+    monkeypatch.setattr(app, "WINDOWED", False)  # windowed() sets it: put it back after
     monkeypatch.setattr(ctypes, "windll", type("Windll", (), {"user32": User32})())
     monkeypatch.setattr(sys, "stdout", sys.stdout)  # restored after the test
     monkeypatch.setattr(sys, "stderr", sys.stderr)
@@ -203,6 +204,7 @@ def test_the_windowed_app_is_quiet_when_tycho_quits_normally(
     entry = _entry_point()
     shown: list[str] = []
     monkeypatch.setattr(app, "main", lambda _argv: 0)
+    monkeypatch.setattr(app, "WINDOWED", False)
     monkeypatch.setattr(
         ctypes,
         "windll",
@@ -214,3 +216,92 @@ def test_the_windowed_app_is_quiet_when_tycho_quits_normally(
     monkeypatch.setattr(sys, "stderr", sys.stderr)
     assert entry.windowed([]) == 0
     assert shown == []
+
+
+class _NoTray:
+    failed = "the taskbar isn't there"
+
+    def __init__(self, *_args: object) -> None:
+        pass
+
+    def start(self) -> bool:
+        return False
+
+    def refresh(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
+def test_with_no_terminal_a_tray_that_wont_start_stops_tycho_with_a_reason(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Review of #157: it ended silently, with code 0, so no message box appeared."""
+    import tycho.desktop.tray
+
+    monkeypatch.setattr(app, "WINDOWED", True)
+    monkeypatch.setattr(tycho.desktop.tray, "TrayIcon", _NoTray)
+    monkeypatch.setattr(app, "app_window", lambda **_options: _Window(_Requests()))
+    from types import SimpleNamespace
+
+    session = SimpleNamespace(paused=False)
+    ok = app.serve_with_tray(session, object(), {}, None)  # type: ignore[arg-type]
+    assert ok is False
+    assert "couldn't put its icon" in capsys.readouterr().err
+
+
+class _Tray:
+    def __init__(self, tip: Any, menu: Any, chosen: Any) -> None:
+        self.tip = tip
+        self.menu = menu
+        _Tray.made.append(self)
+
+    made: ClassVar[list[_Tray]] = []
+
+    def start(self) -> bool:
+        return True
+
+    def refresh(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
+def test_while_starting_the_star_says_what_its_doing_and_a_second_start_says_wait(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review of #157: after setup, the 2.5 GB speech model downloads with nothing on
+    screen, and a second start did nothing."""
+    import ctypes
+
+    import tycho.desktop.tray
+
+    shown: list[str] = []
+
+    class User32:
+        @staticmethod
+        def MessageBoxW(_owner: object, text: str, _title: str, _flags: int) -> int:
+            shown.append(text)
+            return 1
+
+    monkeypatch.setattr(tycho.desktop.tray, "TrayIcon", _Tray)
+    monkeypatch.setattr(ctypes, "windll", type("Windll", (), {"user32": User32})())
+    requests = _Requests()
+    starting = app._Starting(requests)  # type: ignore[arg-type]  # pyright: ignore[reportPrivateUsage]
+    starting.doing("Getting the speech model (2.5 GB, once): 42%")
+    assert _Tray.made[-1].tip() == "Tycho: Getting the speech model (2.5 GB, once): 42%…"
+    requests.target()
+    assert "still starting" in shown[0]
+    assert "42%" in shown[0]
+    starting.close()
+    assert requests.target is not starting.say  # the tray's opener takes over from here
+
+
+def test_download_progress_reaches_the_star() -> None:
+    seen: list[str] = []
+    show = app._download_progress(doing=seen.append)  # pyright: ignore[reportPrivateUsage]
+    show("encoder-model.onnx.data", 1_200_000_000, 2_400_000_000)
+    show("vocab.txt", 10, 20)  # a small file isn't the wait
+    assert seen == ["Getting the speech model (2.5 GB, once): 50%"]
