@@ -9,6 +9,7 @@ its most distinctive word alone), and the results are ranked here.
 """
 
 import asyncio
+import itertools
 import logging
 import re
 import time
@@ -29,7 +30,7 @@ FRESH_SECONDS = 600.0
 PER_QUERY = 20
 QUERY_SECONDS = 2.5
 """Each query's limit: a spelling or a recipe that takes longer is left out."""
-FILLER = frozenset({"the", "a", "an", "my", "this", "that", "item"})
+FILLER = frozenset({"the", "a", "an", "my", "this", "that", "item", "uh", "um", "erm"})
 GENERIC = frozenset(
     {
         "rifle",
@@ -94,10 +95,12 @@ class Items:
 
     async def find(self, asked: str) -> Found | Unclear | Missing:
         """Raises ``WikiError`` if the API can't be reached."""
-        words = [w for w in normalize(asked) if w not in FILLER]
+        said = [spoken(asked), *swapped(asked)]
+        words = [w for w in normalize(said[0]) if w not in FILLER]
         if not words:
             return Missing(asked, ())
-        pages = await asyncio.gather(*(self._in_time(self._search(q)) for q in spellings(asked)))
+        queries = list(dict.fromkeys(q for s in said for q in spellings(s)))
+        pages = await asyncio.gather(*(self._in_time(self._search(q)) for q in queries))
         if all(page is None for page in pages):
             raise WikiError("the Wiki API took too long")
         records: dict[str, Mapping[str, Any]] = {}
@@ -105,7 +108,9 @@ class Items:
             for record in page or []:
                 if record.get("type") not in NOT_ITEMS:
                     records.setdefault(str(record.get("uuid") or record.get("name")), record)
-        readings = _readings(words)
+        readings = [
+            r for s in said for r in _readings([w for w in normalize(s) if w not in FILLER])
+        ]
         scored = sorted(
             ((_score(readings, r), r) for r in records.values()),
             key=lambda pair: (-pair[0], len(str(pair[1].get("name") or ""))),
@@ -157,6 +162,68 @@ class Items:
         answer = cast(Mapping[str, Any], data)
         self._fetched.keep(key, answer)
         return answer
+
+
+NUMBERS = {
+    "zero": "0",
+    "one": "1",
+    "two": "2",
+    "three": "3",
+    "four": "4",
+    "five": "5",
+    "six": "6",
+    "seven": "7",
+    "eight": "8",
+    "nine": "9",
+    "ten": "10",
+    "eleven": "11",
+    "twelve": "12",
+}
+"""Numbers as speech-to-text writes them, said as part of a model code ("S F nine")."""
+
+
+def spoken(asked: str) -> str:
+    """A name as it was said, made written: letters said one at a time are joined and
+    numbers become digits ("S F nine" is "SF 9", #153). Other words are as said."""
+    out: list[str] = []
+    joined = False
+    for word in asked.split():
+        bare = word.strip(".,")
+        if len(bare) == 1 and bare.isalpha() and out and joined:
+            out[-1] += bare
+            continue  # still in the code: a number may follow
+        elif len(bare) == 1 and bare.isalpha():
+            out.append(bare)
+            joined = True
+            continue
+        elif (digit := NUMBERS.get(bare.lower(), bare)).isdigit() and joined:
+            out[-1] += digit  # a code's number joins its letters: "SF9", "P4"
+        else:
+            out.append(NUMBERS.get(bare.lower(), word))
+        joined = False
+    return " ".join(w for w in out if w.lower() not in {"uh", "um", "erm"})
+
+
+def swapped(asked: str) -> list[str]:
+    """For a code said letter by letter, the same with its letters in another order:
+    speech-to-text often swaps letters said quickly ("S F nine" for the FS-9). Two or
+    three letters only, so at most five more tries."""
+    letters = [w.strip(".,") for w in asked.split()]
+    run: list[str] = []
+    for word in letters:
+        if len(word) == 1 and word.isalpha():
+            run.append(word)
+        elif run:
+            break
+    if not 2 <= len(run) <= 3:
+        return []
+    said = spoken(asked)
+    code = "".join(run)
+    return [
+        said.replace(code, "".join(order), 1)
+        for order in dict.fromkeys(itertools.permutations(run))
+        if "".join(order) != code
+    ]
 
 
 def spellings(asked: str) -> list[str]:
