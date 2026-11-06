@@ -32,6 +32,10 @@ def _trade(uex: FakeTradeUex | None = None, clock: Any = None) -> Trade:
         ("quant", "Quantainium"),  # the start of the name
         ("QUAN", "Quantainium"),  # the code
         ("medical supplies", "Medical Supplies"),
+        ("gold", "Gold"),  # not "Gold or Gold (Ore)?": UEX calls the ore that (play session)
+        ("refined gold", "Gold"),
+        ("gold ore", "Gold (Ore)"),
+        ("raw gold", "Gold (Ore)"),
     ],
 )
 def test_commodities_are_found_by_what_players_call_them(said: str, expected: str) -> None:

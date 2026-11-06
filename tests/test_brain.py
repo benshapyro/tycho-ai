@@ -491,6 +491,19 @@ def test_looking_things_up_forever_is_a_brain_error() -> None:
     assert len(client.requests) == MAX_CALLS
 
 
+def test_the_last_call_answers_with_what_was_found() -> None:
+    """Play session: three look-ups for gold, then the error sound. The last call
+    offers no look-ups, so Claude says what it found instead."""
+    calls = [_looks_up(use_id=f"toolu_{n}") for n in range(MAX_CALLS - 1)]
+    client = _Calls(*calls, ([], _final("Gold sells best at Area 18.")))
+    decision = _ask(client, FakeLookup())
+    assert getattr(decision, "text", "") == "Gold sells best at Area 18."
+    assert [r["tool_choice"]["type"] for r in client.requests] == [
+        *(["auto"] * (MAX_CALLS - 1)),
+        "none",
+    ]
+
+
 def test_a_look_up_cant_take_the_name_of_an_act() -> None:
     with pytest.raises(ValueError, match="run_actions"):
         ClaudeBrain(MATCHER, client=cast(Any, _Calls()), lookups=[FakeLookup(name="run_actions")])

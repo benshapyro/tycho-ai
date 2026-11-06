@@ -221,8 +221,9 @@ class ClaudeBrain:
         messages = history(request.recent, request.text, self._today(), about)
         turn = _Turn(waiting=request.waiting)
         try:
-            for _ in range(MAX_CALLS):
-                decided, message, looking = await self._call(messages, started, turn)
+            for call in range(MAX_CALLS):
+                last = call == MAX_CALLS - 1
+                decided, message, looking = await self._call(messages, started, turn, last)
                 if decided is not None:
                     if turn.searched and not isinstance(decided, Reply):
                         log.warning("The brain chose to act after a web search; not pressing")
@@ -248,18 +249,23 @@ class ClaudeBrain:
         raise BrainError(f"still looking things up after {MAX_CALLS} tries")
 
     async def _call(
-        self, messages: list[MessageParam], started: float, turn: _Turn
+        self, messages: list[MessageParam], started: float, turn: _Turn, last: bool = False
     ) -> tuple[Decision | None, Any, list[tuple[str, asyncio.Task[LookupResult]]]]:
         """One call to Claude: an act if it picked one (the stream is left there),
         otherwise the whole message and the look-ups it started. Notes in ``turn``
-        whether a look-up from the web started."""
+        whether a look-up from the web started. On the ``last`` call Claude can't
+        use a tool, so it answers with what it found rather than look again."""
         looking: list[tuple[str, asyncio.Task[LookupResult]]] = []
         try:
             async with self._client.messages.stream(
                 model=self._model,
                 system=self._system,
                 tools=self._offered(),
-                tool_choice={"type": "auto", "disable_parallel_tool_use": True},
+                tool_choice=(
+                    {"type": "none"}
+                    if last
+                    else {"type": "auto", "disable_parallel_tool_use": True}
+                ),
                 output_config={"effort": EFFORT},
                 max_tokens=MAX_TOKENS,
                 messages=messages,
