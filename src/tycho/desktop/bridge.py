@@ -24,9 +24,11 @@ import typing
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
 
-from tycho import __version__, credentials, settings
+from tycho import __version__, credentials, paths, settings
 from tycho.desktop import setup
+from tycho.desktop.commands import Commands
 from tycho.desktop.keys import KeyCheck
+from tycho.game.keybinds import Keybinds
 from tycho.settings import Settings, SettingsError
 
 log = logging.getLogger(__name__)
@@ -56,6 +58,8 @@ SETUP_CHOICES = frozenset({"game_root", "push_to_talk", "microphone"})
 KEYS: dict[str, str] = {"anthropic": "Anthropic", "elevenlabs": "ElevenLabs"}
 UNDO_DEPTH = 20
 DEVICES_SECONDS = 10.0
+KEYBINDS_SECONDS = 30.0
+"""How long the keybinds are kept for the Commands page."""
 """How long the list of microphones is kept between redraws."""
 
 
@@ -77,6 +81,7 @@ class Bridge:
         choose_folder: Callable[[], str | None] = lambda: None,
         finish: Callable[[], None] = lambda: None,
         first_run: bool = False,
+        commands: Commands | None = None,
     ) -> None:
         """``apply`` changes a setting in the running Tycho (the live callbacks);
         ``findings`` are the checks ``tycho check`` makes; ``key_check`` tries a key
@@ -93,6 +98,7 @@ class Bridge:
         self._choose_folder = choose_folder
         self._finish = finish
         self._first_run = first_run
+        self._commands = commands or Commands(paths.commands_file(), self._keybinds)
         self._capture = threading.Event()
         """Set to stop a push-to-talk capture the player has left."""
         self._undo: list[tuple[str, object]] = []
@@ -270,6 +276,20 @@ class Bridge:
             return {"ok": False, "problem": str(e)}
         return {"ok": True, "removed": removed, "applies": "restart"}
 
+    # --- commands ----------------------------------------------------------------------
+
+    def commands(self) -> dict[str, object]:
+        """Every command and sequence: phrases, the player's own, keys, what to bind."""
+        return self._commands.rows()
+
+    def add_phrase(self, command_id: object, phrase: object) -> dict[str, object]:
+        """One more phrase for a command, in the player's commands.toml."""
+        return self._commands.add_phrase(command_id, phrase)
+
+    def remove_phrase(self, command_id: object, phrase: object) -> dict[str, object]:
+        """Take one of the player's own phrases away."""
+        return self._commands.remove_phrase(command_id, phrase)
+
     # --- setup: the choices made with their own controls -------------------------------
 
     def setup_state(self) -> dict[str, object]:
@@ -387,6 +407,23 @@ class Bridge:
         key = (ptt, current.game_channel, str(current.game_root))
         found = self._cached("conflicts", key, lambda: self._pc.conflicts(ptt, current))
         return list(cast(list[str], found))
+
+    def _keybinds(self) -> Keybinds | None:
+        """The player's keybinds, for the Commands page: kept a while, since reading them
+        parses the game's files, and they change only when the player rebinds in game."""
+        current = settings.load(self._path)
+        key = (current.game_channel, str(current.game_root), time.monotonic() // KEYBINDS_SECONDS)
+
+        def read() -> Keybinds | None:
+            from tycho.app import find_install
+            from tycho.game.store import GameDataError, KeybindStore
+
+            try:
+                return KeybindStore.load(find_install(current)).keybinds
+            except FileNotFoundError, GameDataError, OSError:
+                return None
+
+        return cast("Keybinds | None", self._cached("keybinds", key, read))
 
     def _devices(self, fresh: bool = False) -> list[str]:
         # Microphones come and go, so a new list each time setup is shown, not each click.

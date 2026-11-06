@@ -273,12 +273,15 @@ def test_nothing_private_is_offered_to_the_page() -> None:
     assert sorted(public) == sorted(
         [
             "about",
+            "add_phrase",
             "cancel_capture",
             "capture_push_to_talk",
             "choose_game_folder",
+            "commands",
             "finish_setup",
             "keys",
             "microphone_level",
+            "remove_phrase",
             "remove_key",
             "set",
             "set_channel",
