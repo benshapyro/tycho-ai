@@ -210,8 +210,11 @@ def test_the_kept_lines_stay_within_their_room_dropping_the_least_used(tmp_path:
     rig = Rig(_audio, kept=tmp_path)  # each line is 4,800 bytes
     for line in ("One.", "Two.", "Three."):
         asyncio.run(rig.speaker.speak(line, keep=True))
-    files = {f.name: f for f in tmp_path.iterdir()}
-    oldest = sorted(files.values(), key=lambda f: f.stat().st_mtime)
+    # Which file holds which line, from the speaker itself: sorting by time can't
+    # tell files written in the same instant apart on Windows (#175).
+    found = [rig.speaker._file_for(line) for line in ("One.", "Two.", "Three.")]  # pyright: ignore[reportPrivateUsage]
+    oldest = [f for f in found if f is not None and f.exists()]
+    assert len(oldest) == 3
     for age, file in enumerate(oldest):
         os.utime(file, (1000 + age, 1000 + age))  # One, Two, Three: oldest first
     asyncio.run(rig.speaker.speak("One.", keep=True))  # used again: now the newest
