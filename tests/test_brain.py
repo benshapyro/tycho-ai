@@ -3,6 +3,7 @@
 import asyncio
 import datetime
 import re
+import time
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
@@ -370,8 +371,8 @@ def test_an_action_with_nothing_close_bound_is_said_not_pressed() -> None:
 
 def test_claude_can_only_pick_actions_the_player_has_bound() -> None:
     client = _Calls(*[_picks(["v_unbound"], f"toolu_{n}") for n in range(MAX_CALLS)])
-    with pytest.raises(BrainError, match="still looking"):
-        _ask(client)  # never pressed, however often it asks
+    with pytest.raises(BrainError, match="isn't one of your bound"):
+        _ask(client)  # never pressed, however often it asks; and the log says why (#167)
 
 
 def test_a_text_answer_is_a_reply() -> None:
@@ -793,14 +794,6 @@ def test_a_fleet_note_with_an_act_is_kept_and_the_act_pressed() -> None:
     assert fleet.asked == [{"flying": "Pitbull"}]
 
 
-def test_only_the_first_act_in_a_reply_is_pressed() -> None:
-    first = _tool_stop(
-        "run_actions", {"actions": ["v_toggle_landing_system"], "say": "Gear."}, "toolu_1"
-    )
-    second = _tool_stop("run_actions", {"actions": ["v_eject"], "say": "Bye."}, "toolu_2")
-    assert _ask(_Calls(_reply(first, second))) == RunActions(("v_toggle_landing_system",), "Gear.")
-
-
 def test_look_ups_in_one_reply_run_together() -> None:
     ships = FakeLookup("ship_lookup", '{"name": "Cutlass Black", "cargo_scu": 46}')
     routes = FakeLookup("trade_routes", '{"routes": []}')
@@ -812,3 +805,64 @@ def test_look_ups_in_one_reply_run_together() -> None:
     assert _ask(client, ships, routes) == Reply("Haul laranite.")
     results = client.requests[1]["messages"][-1]["content"]
     assert [r["tool_use_id"] for r in results] == ["toolu_1", "toolu_2"]  # one call, not two
+
+
+def test_a_tool_call_written_mid_reply_isnt_spoken() -> None:
+    """#155: only a reply that began with one was caught."""
+    client = _Calls(([], _final('Here you go. show_card({"say": "x", "kind": "list"})')))
+    assert _ask(client) == Reply("Here you go.")
+
+
+def test_after_a_refused_act_a_later_one_in_the_reply_isnt_pressed() -> None:
+    """#176: the first act was refused, and a second in the same reply was pressed."""
+    bad = _tool_stop("run_actions", {"actions": ["v_unbound"], "say": ""}, "toolu_1")
+    good = _tool_stop(
+        "run_actions", {"actions": ["v_toggle_landing_system"], "say": "Gear."}, "toolu_2"
+    )
+    client = _Calls(_reply(bad, good), ([], _final("Which one did you mean?")))
+    assert _ask(client) == Reply("Which one did you mean?")
+    results = client.requests[1]["messages"][-1]["content"]
+    assert [r["tool_use_id"] for r in results] == ["toolu_1", "toolu_2"]
+    assert "earlier action in this reply was refused" in results[1]["content"]
+
+
+def test_a_refused_act_isnt_told_to_answer_now() -> None:
+    """#167: LAST_CALL beside "pick again" told Claude two things at once."""
+    calls = [_looks_up(use_id="toolu_0"), _picks(["v_unbound"], "toolu_1")]
+    client = _Calls(*calls, _picks(["v_toggle_landing_system"], "toolu_2"))
+    assert _ask(client, FakeLookup()) == RunActions(("v_toggle_landing_system",), "Done.")
+    last: list[dict[str, Any]] = client.requests[2]["messages"][-1]["content"]
+    assert {"type": "text", "text": LAST_CALL} not in last
+
+
+def test_no_checking_line_for_a_look_up_an_act_cuts_short() -> None:
+    """#176: "Checking." was said for a look-up the act then cancelled."""
+    looked: list[str] = []
+    lookup = _tool_stop("ship_lookup", {"name": "Cutlass"}, "toolu_1")
+    act = _tool_stop(
+        "run_actions", {"actions": ["v_toggle_landing_system"], "say": "Gear."}, "toolu_2"
+    )
+    brain = ClaudeBrain(
+        MATCHER, client=cast(Any, _Calls(_reply(lookup, act))), lookups=(FakeLookup(),)
+    )
+    request = BrainRequest("gear", KEYBINDS, looking=lambda: looked.append(""))
+    assert isinstance(asyncio.run(brain.decide(request)), RunActions)
+    assert looked == []
+
+
+def test_look_ups_in_one_reply_run_at_the_same_time() -> None:
+    """#176: two look-ups in a reply take as long as one, not twice as long."""
+
+    class Slow(FakeLookup):
+        async def run(self, arguments: Any) -> Any:
+            await asyncio.sleep(0.3)
+            return await super().run(arguments)
+
+    both = _reply(
+        _tool_stop("ship_lookup", {"name": "Cutlass"}, "toolu_1"),
+        _tool_stop("trade_routes", {"start": "Lorville"}, "toolu_2"),
+    )
+    client = _Calls(both, ([], _final("Haul laranite.")))
+    started = time.perf_counter()
+    assert _ask(client, Slow("ship_lookup"), Slow("trade_routes")) == Reply("Haul laranite.")
+    assert time.perf_counter() - started < 0.55  # 0.6 s if one after the other
