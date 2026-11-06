@@ -48,6 +48,8 @@ this: without it, give profit per SCU. {SPEAKING}"""
 
 class _TradeLookup:
     seconds = SECONDS
+    credit = "UEX"
+    """Said with any answer from it, if Claude didn't (Ben: credit UEX once)."""
 
     def __init__(self, trade: Trade) -> None:
         self._trade = trade
