@@ -70,5 +70,6 @@ They're in `.claude/skills/` (Claude Code) and `.agents/skills/` (Codex and othe
 - Key sequences must be cancellable and must release every held key in a `finally` block.
 - Commits follow Conventional Commits: `feat(input): ...`, `fix(stt): ...`.
 - Every change goes through a pull request: branch from `main`, push, open a PR, and merge only when CI and the Claude review pass. `main` is protected; never push to it directly.
+- The Claude review (`.github/workflows/claude-code-review.yml`) reads the whole PR on Opus and checks each finding. Its summary lists what it read and anything it couldn't do: a review with a "Couldn't:" line, or a "denied tools" warning on the run, is incomplete, not clean. For a large change, also run an independent review before merging.
 - Pin every GitHub Action to a full commit SHA, with the version in a comment. The repo refuses tag refs like `@v4`.
 - Significant decisions get an ADR in `docs/adr/`, using the next free number.
