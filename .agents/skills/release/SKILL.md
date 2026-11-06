@@ -47,6 +47,8 @@ Write the notes for players, not developers:
 
 Also, in the release PR, move anything this release ships from the README's **Coming** list to **Works today**, and add new plans to **Coming** with their issue links.
 
+Before the release PR, check the open issues labelled `from-review` (`gh issue list --label from-review`): review findings that weren't blocking when their PR merged. Fix them, or ask the maintainer which may wait for the next release.
+
 `git log --oneline <last tag>..main` lists what changed. Then create the release as a draft:
 
 ```

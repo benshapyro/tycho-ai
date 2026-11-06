@@ -8,10 +8,16 @@ name: Claude Code Review
 # even when its own tools were denied. On two PRs it said that while an independent
 # review found ten real bugs in each. So this is our own prompt, with the tools to read
 # the code, a check of every finding, and a report of any tool that failed.
+#
+# When it runs (2026-11-06): a full review costs about $1.50-2 of the maintainer's
+# subscription, and reviewing every push cost $10+ on one PR. So it runs when a PR is
+# opened or marked ready, and again only when the `claude-review` label is added (the
+# label is taken off after, to be added again). Fix everything from one review in one
+# push, then add the label if the fixes were substantial.
 
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
+    types: [opened, ready_for_review, reopened, labeled]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
@@ -19,7 +25,7 @@ on:
       - "NOTICE"
 
 concurrency:
-  # A newer push replaces a review still running on the old one.
+  # A newer request replaces a review still running.
   group: claude-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
@@ -28,7 +34,8 @@ jobs:
     # Not drafts, and not forks: GitHub withholds secrets from fork runs anyway.
     if: >-
       github.event.pull_request.draft == false &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.action != 'labeled' || github.event.label.name == 'claude-review')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -77,11 +84,21 @@ jobs:
             3. Verify each candidate before you report it: read the code again, follow the
                values, and write the concrete inputs or steps that make it fail. Drop anything
                you can't show going wrong.
-            4. For each verified finding, post an inline comment on the line with
-               mcp__github_inline_comment__create_inline_comment (confirmed: true): what's
-               wrong, the failure scenario, and the fix if it's clear.
-            5. Then post one summary with `gh pr comment <n> --body "..."`:
-               - "## Code review", then the findings by severity (or "No bugs found").
+            4. Sort what's left (AGENTS.md "Reviews"):
+               - Blocking: it breaks a player's normal path, a safety rule, security or
+                 their keys. Post each as an inline comment on its line with
+                 mcp__github_inline_comment__create_inline_comment (confirmed: true): what's
+                 wrong, the failure scenario, and the fix if it's clear. Unresolved inline
+                 comments block the merge, so post only blocking ones there.
+               - Not blocking: edge cases, rare platforms, wording, tidying, weak tests.
+                 Don't comment inline; list them in the summary, each ready to become a
+                 GitHub issue (a title and two lines).
+            5. If this PR has earlier review threads (`gh api graphql` for
+               pullRequest.reviewThreads), check each unresolved one against the code now.
+               Resolve those the code has fixed (the resolveReviewThread mutation) and say
+               which in the summary; leave the rest open.
+            6. Then post one summary with `gh pr comment <n> --body "..."`:
+               - "## Code review", then "Blocking" and "Not blocking" (or "No bugs found").
                - "Read:" the files you read in full.
                - "Couldn't:" any command or tool that failed or was denied, and what you
                  couldn't check because of it. If you couldn't read the diff or a changed
@@ -90,7 +107,7 @@ jobs:
             --model claude-opus-5-5
             --effort high
             --max-turns 80
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Read,Glob,Grep,Task,Agent,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh api repos/*/pulls/*:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git blame:*)"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Read,Glob,Grep,Task,Agent,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh api repos/*/pulls/*:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git blame:*),Bash(gh api graphql:*)"
 
       - name: Say which tools were denied
         # The log only counts denials. Name them (tool and command, never output), so a
@@ -109,3 +126,11 @@ jobs:
           else
             echo "No tools were denied."
           fi
+
+      - name: Take the claude-review label off, to be added again
+        if: always() && github.event.action == 'labeled'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --remove-label claude-review
+
