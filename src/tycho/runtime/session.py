@@ -99,6 +99,13 @@ KEEP_CHARACTERS = 40
 keeps their audio: the next time they're free and start at once."""
 SEARCH_SECONDS = 12.0
 """Once a web search starts, the brain has this long from then (searches take 4-8 s)."""
+LOOKING_SECONDS = 7.0
+"""As each other look-up starts ("Checking." is said for the first), the brain has at
+least this long from then: a look-up and Claude's answer to it take 3-5 s, and two in
+a row ran past BRAIN_SECONDS in the play session (#150). Never less than
+BRAIN_SECONDS, and never past LOOKING_LIMIT."""
+LOOKING_LIMIT = 15.0
+"""However many look-ups, an answer comes or fails this long after the request."""
 FILLERS = ("Let me check.", "Checking the latest.", "One moment, looking that up.")
 """Said while a web search runs (about 4 s), taking turns, so the wait isn't
 silence (ADR 15). Kept as audio after the first time, so they start at once."""
@@ -182,6 +189,8 @@ class Session:
         brain: Brain | None = None,
         brain_seconds: float = BRAIN_SECONDS,
         search_seconds: float = SEARCH_SECONDS,
+        looking_seconds: float = LOOKING_SECONDS,
+        looking_limit: float = LOOKING_LIMIT,
         speaker: Speaker | None = None,
         confirm_seconds: float = CONFIRM_SECONDS,
         samplerate: int = 16_000,
@@ -208,6 +217,8 @@ class Session:
         self._brain = brain
         self._brain_seconds = brain_seconds
         self._search_seconds = search_seconds
+        self._looking_seconds = looking_seconds
+        self._looking_limit = looking_limit
         self._speaker = speaker
         self._speech: asyncio.Task[None] | None = None
         self._filling: asyncio.Task[None] | None = None
@@ -472,13 +483,28 @@ class Session:
                             budget.reschedule(loop.time() + self._search_seconds)
                             self._fill()
 
+                        asked = loop.time()
+                        checking: list[bool] = []
+
+                        def looking() -> None:
+                            # Only ever later, and never past the limit: an early look-up
+                            # keeps the usual deadline, and each one after moves it on.
+                            later = min(
+                                loop.time() + self._looking_seconds, asked + self._looking_limit
+                            )
+                            if (when := budget.when()) is None or later > when:
+                                budget.reschedule(later)
+                            if not checking:  # "Checking." once a request
+                                checking.append(True)
+                                self._fill(self._checking)
+
                         decision = await self._brain.decide(
                             BrainRequest(
                                 text,
                                 self._keybinds(),
                                 tuple(self._follow_ups()),
                                 waiting=searching,
-                                looking=lambda: self._fill(self._checking),
+                                looking=looking,
                             )
                         )
                     trace.mark("brain")

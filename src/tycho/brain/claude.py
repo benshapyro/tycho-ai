@@ -294,8 +294,9 @@ class ClaudeBrain:
                                     turn.waiting = None  # once a request
                                 turn.looking = None  # not after a search's line
                             elif turn.looking is not None and not getattr(chosen, "instant", False):
-                                turn.looking()  # not for settings or the fleet: they're instant
-                                turn.looking = None  # once a request
+                                # Each look-up: the session moves its deadline back, and says
+                                # "Checking." the first time. Not for settings or the fleet.
+                                turn.looking()
                             seconds = float(getattr(chosen, "seconds", LOOKUP_SECONDS))
                             lookup = run_lookup(chosen, block.input, seconds)
                             task = asyncio.create_task(lookup)
