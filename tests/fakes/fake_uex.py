@@ -184,4 +184,6 @@ class FakeTradeUex:
             return [r for r in ROUTES if r["id_terminal_origin"] == query["id_terminal_origin"]]
         if "id_planet_origin" in query:
             return [r for r in ROUTES if r["id_planet_origin"] == query["id_planet_origin"]]
+        if "id_commodity" in query:  # one commodity's routes, from anywhere
+            return [r for r in ROUTES if r["id_commodity"] == query["id_commodity"]]
         raise WikiError("missing_one_required_inputs")
