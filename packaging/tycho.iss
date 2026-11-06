@@ -49,8 +49,9 @@ Type: filesandordirs; Name: "{app}\_internal"
 Source: "..\dist\tycho\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-; Through cmd /k, so if Tycho stops with a problem the window stays open to read it.
-Name: "{group}\Tycho"; Filename: "{cmd}"; Parameters: "/k ""{app}\tycho.exe"" run"; IconFilename: "{app}\tycho.exe"; Comment: "Start listening"
+; The app itself: no terminal, just Tycho's star by the clock and its window (#146).
+; Starting it again while it runs opens the running Tycho's window.
+Name: "{group}\Tycho"; Filename: "{app}\tycho-app.exe"; IconFilename: "{app}\tycho.exe"; Comment: "Start Tycho, or open its window"
 Name: "{group}\Tycho check"; Filename: "{cmd}"; Parameters: "/k ""{app}\tycho.exe"" check"; IconFilename: "{app}\tycho.exe"; Comment: "Check the setup, in plain words"
 Name: "{group}\Uninstall Tycho"; Filename: "{uninstallexe}"
 
@@ -59,7 +60,8 @@ Name: "{group}\Uninstall Tycho"; Filename: "{uninstallexe}"
 Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Check: NeedsAddPath(ExpandConstant('{app}'))
 
 [Run]
-Filename: "{cmd}"; Parameters: "/k ""{app}\tycho.exe"" check"; Description: "Check the setup now"; Flags: postinstall nowait skipifsilent
+; Start Tycho: on a first install, its window opens on setup (#146).
+Filename: "{app}\tycho-app.exe"; Description: "Start Tycho"; Flags: postinstall nowait skipifsilent
 
 [Code]
 function NeedsAddPath(Folder: string): Boolean;

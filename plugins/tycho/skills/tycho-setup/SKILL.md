@@ -156,14 +156,13 @@ Tell them it listens to the microphone for a few seconds (they should say someth
 
 ## 6. First run
 
-When the user is ready, start Tycho in a window that stays open:
+When the user is ready, start Tycho. It has no terminal: its star appears by the clock (or under the ^ arrow there), and its window opens on setup if anything is still missing:
 
 ```powershell
-$tycho = "$env:LOCALAPPDATA\Programs\Tycho\tycho.exe"
-Start-Process cmd -ArgumentList "/k", "`"`"$tycho`" run`""
+Start-Process "$env:LOCALAPPDATA\Programs\Tycho\tycho-app.exe"
 ```
 
-From then on they can start it from Start, **Tycho**. Tell them how it works:
+From then on they start it from Start, **Tycho**. Opening it again while it runs brings up its window, as does clicking the star. Tell them how it works:
 
 - Hold the button, speak, and let go: "landing gear", "request landing", "flight ready". Questions work too, with a key: "best place to sell quantanium?".
 - Tycho presses keys only while Star Citizen is the window in front.
