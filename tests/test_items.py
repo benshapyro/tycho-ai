@@ -8,10 +8,10 @@ from typing import Any
 import httpx2
 import pytest
 
-from tests.fakes.fake_items import FakeItemsWiki
+from tests.fakes.fake_items import FakeItemsWiki, item
 from tycho.knowledge import WikiApi, WikiError, items
 from tycho.knowledge.item_lookup import ItemLookup
-from tycho.knowledge.items import Found, Items, Missing, Unclear, facts, spellings
+from tycho.knowledge.items import Found, Items, Missing, Unclear, facts, spellings, spoken, swapped
 
 # --- Names --------------------------------------------------------------------------------------
 
@@ -208,3 +208,42 @@ def test_a_failed_request_never_names_what_was_searched() -> None:
     with pytest.raises(WikiError) as caught:
         asyncio.run(api.get("/api/v2/items", {"filter[name]": "my secret gun"}))
     assert str(caught.value) == "/api/v2/items: HTTP 503"
+
+
+@pytest.mark.parametrize(
+    ("said", "written"),
+    [
+        ("S F nine", "SF9"),
+        ("uh S F nine", "SF9"),
+        ("F S nine", "FS9"),
+        ("p four a r", "p4 ar"),
+        ("the Atlas", "Atlas"),
+        ("Cutlass", "Cutlass"),
+        ("a S 38 pistol", "S38 pistol"),  # the article never starts a code (#174 review)
+        ("the, uh, S F nine", "SF9"),  # filler with punctuation is dropped
+    ],
+)
+def test_a_code_said_aloud_is_written_as_a_code(said: str, written: str) -> None:
+    assert spoken(said) == written
+
+
+def test_letters_said_quickly_are_tried_in_the_other_order() -> None:
+    assert swapped("S F nine") == ["FS9"]
+    assert swapped("fs9 lmg") == []  # typed or heard as one word: kept as it is
+    assert len(swapped("X B C one")) == 5
+    assert swapped("a S F nine") == ["FS9"]  # the article isn't a letter
+
+
+def test_the_fs9_is_found_when_its_letters_are_heard_swapped() -> None:
+    """Play session: "What do you need to craft the uh S F nine?" found nothing."""
+    found = _find("S F nine")
+    assert isinstance(found, Found)
+    assert found.record["name"] == "FS-9 LMG"
+
+
+def test_a_code_heard_in_the_right_order_beats_its_swapped_version() -> None:
+    """Review of #174: with an FS-9 and an SF-9 both there, "F S nine" is the FS-9."""
+    wiki = FakeItemsWiki(extra=[item("SF-9 Knife")])
+    found = _find("F S nine", wiki)
+    assert isinstance(found, Found)
+    assert found.record["name"] == "FS-9 LMG"

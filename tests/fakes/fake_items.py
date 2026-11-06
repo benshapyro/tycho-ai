@@ -121,7 +121,14 @@ class FakeItemsWiki:
     """``slow`` holds queries (name filters) that take ``delay`` seconds, as a query
     the real API hasn't seen before can."""
 
-    def __init__(self, *, slow: frozenset[str] = frozenset(), delay: float = 1.0) -> None:
+    def __init__(
+        self,
+        *,
+        slow: frozenset[str] = frozenset(),
+        delay: float = 1.0,
+        extra: list[dict[str, Any]] | None = None,
+    ) -> None:
+        self.extra = extra or []
         self.slow = slow
         self.delay = delay
         self.offline = False
@@ -136,7 +143,7 @@ class FakeItemsWiki:
             name = str(query.get("filter[name]", ""))
             if name in self.slow:
                 await asyncio.sleep(self.delay)
-            found = [i for i in ITEMS if name.lower() in i["name"].lower()]
+            found = [i for i in [*ITEMS, *self.extra] if name.lower() in i["name"].lower()]
             return {"data": found[: int(query.get("limit", 30))], "meta": {"total": len(found)}}
         if path == "/api/v2/blueprints":
             name = query.get("filter[output.name]")
