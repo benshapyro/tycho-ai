@@ -4,13 +4,14 @@ The list joins the built-in commands, the player's commands.toml and their keybi
 each command's phrases (the built-in ones and the player's), the key it presses, and
 for one with no key, the game action to bind.
 
-Adding a phrase to a built-in command writes a copy of that command into the player's
-commands.toml, with their phrase added: an entry with a built-in's id replaces it
-(ADR 14, and the tycho-commands skill). Removing the player's last phrase from such a
-copy removes the copy, so the built-in is back as it was. The file is edited with
-tomlkit, which keeps the player's own entries and comments as they are, and a change is
-written only after the new file loads as Tycho would load it. Changes apply when
-Tycho next starts.
+Adding a phrase to one of the player's own commands adds it to that entry's ``say``.
+Adding one to a built-in command writes a ``[[phrases]]`` entry for it instead, which
+only adds phrases: the built-in isn't copied, so later releases' changes to it still
+reach the player (#134, and the tycho-commands skill). An emptied ``[[phrases]]`` entry
+is left in the file, since removing a table can take the comments below it. The file is
+edited with tomlkit, which keeps the player's own entries and comments as they are, and
+a change is written only after the new file loads as Tycho would load it. Changes apply
+when Tycho next starts.
 """
 
 # tomlkit's containers are loosely typed.
@@ -75,7 +76,7 @@ class Commands:
             problem = f"Your commands file can't be used, so only the built-in ones are: {e}"
             matcher = CommandMatcher.default()
         keybinds = self._keybinds()
-        mine = _phrases(self._user_entries())
+        mine = _phrases(self._user_data())
         rows: list[Row] = []
         for command in matcher.commands:
             yours = mine.get(command.id, [])
@@ -131,14 +132,13 @@ class Commands:
             "game": keybinds is not None,
         }
 
-    def _user_entries(self) -> dict[str, dict[str, Any]]:
+    def _user_data(self) -> dict[str, Any]:
         if not self._path.exists():
             return {}
         try:
-            data = tomllib.loads(self._path.read_text("utf-8-sig"))
+            return tomllib.loads(self._path.read_text("utf-8-sig"))
         except OSError, UnicodeDecodeError, tomllib.TOMLDecodeError:
             return {}
-        return _by_id(data)
 
     # --- changing --------------------------------------------------------------------
 
@@ -162,7 +162,7 @@ class Commands:
         if not isinstance(say, Array):
             say = tomlkit.array()
             entry["say"] = say
-        if said in [str(p) for p in say]:
+        if said in [str(p) for p in say] or said in self._said(str(command_id)):
             return {"ok": False, "problem": f"“{said}” is already one of its phrases."}
         say.append(said)
         took = self._owner(said, command_id)
@@ -184,15 +184,15 @@ class Commands:
         say = entry.get("say") if entry is not None else None
         if not isinstance(say, Array) or said not in [str(p) for p in say]:
             return {"ok": False, "problem": "That isn't one of your phrases."}
+        if said not in _phrases(self._user_data()).get(str(command_id), []):
+            return {"ok": False, "problem": "That isn't one of your phrases."}  # a built-in one
         del say[[str(p) for p in say].index(said)]  # tomlkit arrays keep their comments
-        built_in = _built_in().get(str(command_id))
-        if entry is not None and built_in is not None and _is_plain_copy(entry, built_in):
-            _drop(doc, str(command_id))  # nothing of the player's left: the built-in is back
         return self._write(doc)
 
     def _entry(self, command_id: object, *, create: bool) -> tuple[Any, Table | None]:
-        """The player's file as a document, and its entry for ``command_id``; with
-        ``create``, a copy of the built-in one when the file has none yet."""
+        """The player's file as a document, and where its phrases for ``command_id``
+        go: their own entry with that id, or else its ``[[phrases]]`` entry; with
+        ``create``, a new ``[[phrases]]`` entry for a built-in command."""
         text = self._path.read_text("utf-8-sig") if self._path.exists() else NEW_FILE
         doc = tomlkit.parse(text)
         if not isinstance(command_id, str):
@@ -203,21 +203,30 @@ class Commands:
                 for table in tables:
                     if table.get("id") == command_id:
                         return doc, table
-        built_in = _built_in().get(command_id)
-        if built_in is None or not create:
+        tables = doc.get("phrases")
+        if isinstance(tables, AoT):
+            for table in tables:
+                if table.get("command") == command_id:
+                    return doc, table
+        if command_id not in _built_in() or not create:
             return doc, None
-        kind = str(built_in["_kind"])
         table = tomlkit.table()
-        table.comment(f"{command_id}: the built-in command, with your phrases (Tycho's window)")
-        for key, value in built_in.items():
-            if key != "_kind":
-                table[key] = value
-        tables = doc.get(kind)
+        table.comment("more ways to say a built-in command (Tycho's window)")
+        table["command"] = command_id
+        table["say"] = tomlkit.array()
         if not isinstance(tables, AoT):
-            doc[kind] = tomlkit.aot()
-            tables = doc[kind]
+            doc["phrases"] = tomlkit.aot()
+            tables = doc["phrases"]
         cast(AoT, tables).append(table)
         return doc, cast(AoT, tables)[-1]
+
+    def _said(self, command_id: str) -> tuple[str, ...]:
+        """Every phrase the command has now, built-in and the player's."""
+        try:
+            command = CommandMatcher.default(self._path).get(command_id)
+        except CommandFileError:
+            return ()
+        return command.say if command is not None else ()
 
     def _owner(self, said: str, command_id: object) -> str:
         """The built-in command that had this phrase, which it now leaves (ADR 14)."""
@@ -303,45 +312,25 @@ def _by_id(data: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     return entries
 
 
-def _phrases(entries: Mapping[str, Mapping[str, Any]]) -> dict[str, list[str]]:
-    """The player's own phrases for each id: those not in the built-in entry it copies."""
+def _phrases(data: Mapping[str, Any]) -> dict[str, list[str]]:
+    """The player's own phrases for each id: their ``[[phrases]]``, and those of their
+    entries not in the built-in entry with the same id (an older copy of it)."""
     built_in = _built_in()
     out: dict[str, list[str]] = {}
-    for entry_id, entry in entries.items():
+    for entry_id, entry in _by_id(data).items():
         theirs = [str(p) for p in entry.get("say", [])]
         base = {str(p) for p in built_in.get(entry_id, {}).get("say", [])}
         out[entry_id] = [p for p in theirs if p not in base]
+    for raw in data.get("phrases", []):
+        if isinstance(raw, dict) and isinstance(raw.get("command"), str):
+            mine = out.setdefault(raw["command"], [])
+            mine += [str(p) for p in raw.get("say", []) if str(p) not in mine]
     return out
 
 
 def _built_in() -> dict[str, dict[str, Any]]:
     text = resources.files("tycho.commands").joinpath("commands.toml").read_text("utf-8")
     return _by_id(tomllib.loads(text))
-
-
-def _is_plain_copy(entry: Table, built_in: Mapping[str, Any]) -> bool:
-    """The entry is the built-in, unchanged but for phrases, and has none of its own."""
-    mine = {k: v for k, v in entry.unwrap().items()}
-    theirs = {k: v for k, v in built_in.items() if k != "_kind"}
-    same_but_say = {k: v for k, v in mine.items() if k != "say"} == {
-        k: v for k, v in theirs.items() if k != "say"
-    }
-    return same_but_say and set(mine.get("say", [])) <= set(theirs.get("say", []))
-
-
-def _drop(doc: Any, command_id: str) -> None:
-    for kind in ("command", "sequence"):
-        tables = doc.get(kind)
-        if isinstance(tables, AoT):
-            kept = [t for t in tables if t.get("id") != command_id]
-            if len(kept) != len(tables):
-                if kept:
-                    new = tomlkit.aot()
-                    for table in kept:
-                        new.append(table)
-                    doc[kind] = new
-                else:
-                    del doc[kind]
 
 
 def _readable(error: str, temp: str) -> str:

@@ -10,7 +10,8 @@ Tycho matches common phrases on the player's PC and presses the game action for 
 - **Where:** `%APPDATA%\tycho\commands.toml`. Create it if it isn't there.
 - **The built-in list:** https://github.com/benshapyro/tycho-ai/blob/main/src/tycho/commands/commands.toml. Read it to see the format, and to see what already exists.
 - **Taking a phrase:** a phrase in the player's file is taken away from the built-in command that had it.
-- **Replacing a built-in:** an entry with a built-in's `id` replaces that command.
+- **More ways to say a built-in:** use a `[[phrases]]` entry (below), not a copy of the command. A copy replaces the built-in and stops getting Tycho's fixes to it.
+- **Replacing a built-in:** an entry with a built-in's `id` replaces that command. Do this only to change what it presses.
 
 `tycho` below means `& "$env:LOCALAPPDATA\Programs\Tycho\tycho.exe"` (installed) or `uv run tycho` (from source).
 
@@ -56,6 +57,19 @@ actions = ["v_master_mode_set_scm"]      # game actions, best first
 | `setup = ["..."]` | Actions pressed first to put the game in a known mode. Each needs its own key; there are no fallbacks. |
 | `settle_seconds` | How long to wait after `setup` (0 to a few seconds). |
 | `requires = ["quantum_route_set"]` | Press nothing unless the game's log shows a quantum route is plotted. This is the only fact Tycho can check. |
+
+## More ways to say a command
+
+To give any command, built-in or the player's, more phrases without changing it:
+
+```toml
+[[phrases]]
+command = "landing_gear"              # the command's id
+say = ["wheels down", "drop the wheels"]
+```
+
+- **One per command:** add to its `say` rather than writing a second entry. Tycho's window writes these entries too.
+- **Taken phrases:** like any phrase in the player's file, each is taken from the built-in command that had it.
 
 ## A sequence
 
