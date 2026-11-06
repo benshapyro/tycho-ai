@@ -119,3 +119,24 @@ input[type="range"] { width: 150px; accent-color: var(--acc); }
   main { padding: 18px 14px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* Setup (ADR 17): the steps, from the approved mockup. */
+.steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 18px; padding: 0; list-style: none; }
+.steps li { display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; font-size: 13px; color: var(--dim); }
+.steps li b { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--rule); font-family: var(--f-num); font-weight: 400; font-size: 12px; }
+.steps li.done { color: var(--good); }
+.steps li.done b { border-color: var(--good); }
+.steps li.now { color: var(--acc); }
+.steps li.now b { border-color: var(--acc); background: var(--acc-soft); }
+.card h3 { margin: 0; font-family: var(--f-label); font-weight: 600; font-size: 19px; letter-spacing: .08em; text-transform: uppercase; }
+.card p { margin: 0; max-width: 64ch; }
+.ptt { display: grid; place-items: center; gap: 10px; padding: 22px; background: var(--well); text-align: center; }
+.ptt .key { font-size: 22px; color: var(--acc); }
+.ok-line { color: var(--good); font-size: 14px; overflow-wrap: anywhere; }
+.warn-line { color: var(--caution); font-size: 14px; }
+.setup { display: grid; gap: 6px; justify-items: end; }
+.setup select { width: 100%; }
+.card .bar, main > .bar { max-width: 720px; }
+/* While a push-to-talk capture listens, nothing else can be clicked but Cancel. */
+.capturing nav button, .capturing main button:not(#cancelCapture), .capturing main select, .capturing main input { pointer-events: none; opacity: .45; }
+

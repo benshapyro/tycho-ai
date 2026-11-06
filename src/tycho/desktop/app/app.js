@@ -39,8 +39,150 @@
       <p class="lede">${bad ? `${bad} thing${bad > 1 ? "s" : ""} to look at.` : "Everything is working."} The same checks as <span class="num">tycho check</span>.</p>
       <div class="checks">${findings.map((f) => `<div class="check ${esc(f.level)}"><span class="mark">${mark[f.level] || "·"}</span>
         <span><b>${esc(f.what)}</b><small>${esc(f.detail)}</small>${f.fix ? `<span class="fix">${esc(f.fix)}</span>` : ""}</span></div>`).join("")}</div>
-      <div class="bar"><span class="dim" style="font-size:13px">Tycho also checks each time it starts.</span><button class="btn frame" type="button" id="again">Check again</button></div>`;
+      <div class="bar"><span class="dim" style="font-size:13px">Tycho also checks each time it starts.</span>
+        <span class="keyrow"><button class="btn frame" type="button" id="redo">Run setup again</button><button class="btn frame" type="button" id="again">Check again</button></span></div>`;
     $("#again").addEventListener("click", status);
+    $("#redo").addEventListener("click", () => { view = "setup"; step = 0; render(); });
+  }
+
+  /* ---------- setup: the first run, or again from Status ---------- */
+  const STEPS = ["Game", "Push-to-talk", "Microphone", "Keys", "Done"];
+  let step = 0;
+  let firstRun = false;
+  function stepper() {
+    return `<ol class="steps">${STEPS.map((s, i) => `<li class="${i < step ? "done" : i === step ? "now" : ""}"><b>${i < step ? "✓" : i === STEPS.length - 1 ? "✦" : i + 1}</b>${esc(s)}</li>`).join("")}</ol>`;
+  }
+  function stepNav(nextOk, next = "Next") {
+    return `<div class="bar"><button class="btn frame" type="button" data-step="-1" ${step === 0 ? "disabled" : ""}>Back</button>
+      <button class="btn primary frame" type="button" data-step="1" ${nextOk ? "" : "disabled"}>${esc(next)}</button></div>`;
+  }
+  const levelWords = {
+    good: "Good level: Tycho will hear you clearly.",
+    quiet: "Quiet. Speak up, or raise the microphone's level in Windows' sound settings.",
+    clipping: "Too loud: it's clipping. Lower the microphone's level in Windows.",
+    silent: "Heard nothing. Say something while it listens, and check the microphone isn't muted.",
+  };
+  async function setupView() {
+    const s = await api.setup_state();
+    const lede = firstRun
+      ? "A few steps, about two minutes. Tycho starts listening when you're done."
+      : "Change anything you chose the first time. Changes apply when Tycho restarts.";
+    let body = "";
+    let ok = true;
+    if (step === 0) {
+      ok = s.game.found;
+      body = `<div class="card frame"><h3>Which game?</h3>
+        <div class="seg" role="group" aria-label="Game channel">${s.channels.map((c) => `<button type="button" aria-pressed="${c === s.game.channel}" data-channel="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+        ${s.game.found ? `<p class="ok-line">✓ Found Star Citizen ${esc(s.game.channel)} in <span class="num">${esc(s.game.folder)}</span></p>`
+          : `<p class="err">${esc(s.game.problem)}. Choose the folder it's in (the RSI Launcher shows it under Settings, Games, Library Folder).</p>`}
+        <div class="keyrow"><button class="btn frame" type="button" id="folder">Choose the folder…</button><span class="err" id="folderErr"></span></div>
+        <p class="note">Tycho reads your keybinds from the game's files and never changes them.</p></div>`;
+    } else if (step === 1) {
+      ok = s.push_to_talk.set;
+      body = `<div class="card frame"><h3>Push-to-talk</h3>
+        <p>Hold it, speak, let go. A mouse side button or a spare joystick button works well.</p>
+        <div class="ptt"><span class="key num" id="pttName">${esc(s.push_to_talk.name || "None yet")}</span>
+          <button class="btn primary frame" type="button" id="capture">${s.push_to_talk.set ? "Choose another button" : "Choose a button"}</button></div>
+        ${s.push_to_talk.conflicts.map((c) => `<p class="warn-line">${esc(c)}</p>`).join("")}</div>`;
+    } else if (step === 2) {
+      body = `<div class="card frame"><h3>Microphone</h3>
+        ${micSelect(s.microphone)}
+        <div class="keyrow"><button class="btn frame" type="button" id="micTest">Test: say something</button><span class="note" id="micMsg">It listens for a moment and tells you how you sound.</span></div></div>`;
+    } else if (step === 3) {
+      body = `<p class="note">An Anthropic key lets Tycho understand anything said your way and answer questions; without one, only the built-in phrases work. ElevenLabs gives Tycho its voice; without it, Tycho answers with sounds and the Tile.</p>${await keysView()}`;
+    } else {
+      ok = s.ready;
+      body = `<div class="card frame"><h3>${firstRun ? "Ready" : "All set"}</h3>
+        <p>${firstRun ? "Tycho starts listening when you press Start. Its star sits by the clock: click it to open this window again." : "Changes apply when Tycho next starts."}</p>
+        <p class="note">Play in Borderless Window mode so the Tile can show over the game. Then hold your button and try “gear down”.</p>
+        <span class="err" id="finishErr"></span></div>`;
+    }
+    const last = step === STEPS.length - 1;
+    page.innerHTML = `<h1>${firstRun ? "Welcome to Tycho" : "Setup"}</h1><p class="lede">${lede}</p>${stepper()}${body}${stepNav(ok, last ? (firstRun ? "Start Tycho" : "Done") : "Next")}`;
+    bindSetup(s);
+  }
+  function micSelect(mic) {
+    const options = [["", "Windows' default microphone"], ...mic.devices.map((d) => [d, d])];
+    // A saved microphone that isn't listed (a number, part of a name, or unplugged now)
+    // is shown as itself, so choosing nothing never overwrites it.
+    if (mic.setting && !mic.devices.includes(mic.setting)) options.push([mic.setting, `${mic.setting} (saved, not connected now)`]);
+    const later = firstRun ? "" : `<span class="note">Plugged one in just now? Restart Tycho to see it here.</span>`;
+    return `<select class="input" id="mic" aria-label="Microphone">${options.map(([v, l]) => `<option value="${esc(v)}" ${v === mic.setting ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>${later}`;
+  }
+  function bindSetup() {
+    page.querySelectorAll("[data-step]").forEach((b) => b.addEventListener("click", async () => {
+      const delta = Number(b.dataset.step);
+      if (delta > 0 && step === STEPS.length - 1) {
+        b.disabled = true;
+        const r = await api.finish_setup();
+        if (!r.ok) { $("#finishErr").textContent = r.problem; b.disabled = false; return; }
+        if (!firstRun) { view = "status"; render(); }
+        else page.innerHTML = `<h1>Starting Tycho…</h1><p class="lede">This window closes in a moment. Tycho's star appears by the clock.</p>`;
+        return;
+      }
+      step = Math.max(0, Math.min(STEPS.length - 1, step + delta));
+      render();
+    }));
+    page.querySelectorAll("[data-channel]").forEach((b) => b.addEventListener("click", async () => {
+      const r = await api.set_channel(b.dataset.channel);
+      if (!r.ok) toast(r.problem);
+      render();
+    }));
+    $("#folder")?.addEventListener("click", chooseFolder);
+    $("#capture")?.addEventListener("click", () => capture($("#capture"), $("#pttName")));
+    bindMic();
+    if (step === 3) bindKeys();
+  }
+  async function chooseFolder() {
+    const r = await api.choose_game_folder();
+    if (!r.ok && !r.cancelled) $("#folderErr").textContent = r.problem;
+    else if (r.ok) {
+      if (r.applies === "restart") toast("Game folder saved. Applies when Tycho restarts.", true);
+      render();
+    }
+  }
+  let capturing = false;
+  async function capture(button, nameEl) {
+    // While it listens, the rest of the page waits: leaving would save the next key
+    // pressed (Ctrl+V into a key box) as push-to-talk. Cancel stops it.
+    capturing = true;
+    document.body.classList.add("capturing");
+    button.disabled = true;
+    nameEl.textContent = "Press the button now…";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "btn frame";
+    cancel.id = "cancelCapture";
+    cancel.textContent = "Cancel";
+    cancel.addEventListener("click", () => api.cancel_capture());
+    button.after(cancel);
+    let r;
+    try {
+      r = await api.capture_push_to_talk();
+    } finally {
+      capturing = false;
+      document.body.classList.remove("capturing");
+      cancel.remove();
+      button.disabled = false;
+    }
+    if (r.cancelled) { render(); return; }
+    if (!r.ok) { toast(r.problem); render(); return; }
+    toast(`Push-to-talk: ${r.name}.${r.conflicts.length ? " It also does something in the game." : ""}${r.applies === "restart" ? " Applies when Tycho restarts." : ""}`, true);
+    render();
+  }
+  function bindMic() {
+    $("#mic")?.addEventListener("change", async (e) => {
+      const r = await api.set_microphone(e.target.value);
+      toast(r.ok ? `Microphone: ${e.target.value || "Windows' default"}.${r.applies === "restart" ? " Applies when Tycho restarts." : ""}` : r.problem, r.ok);
+    });
+    $("#micTest")?.addEventListener("click", async () => {
+      const b = $("#micTest"), msg = $("#micMsg");
+      b.disabled = true; msg.textContent = "Listening… say something.";
+      const r = await api.microphone_level();
+      b.disabled = false;
+      msg.textContent = r.ok ? levelWords[r.verdict] || r.verdict : r.problem;
+      msg.className = r.ok && r.verdict === "good" ? "ok-line" : "warn-line";
+    });
   }
   function badge(bad) {
     $("#statusBadge").textContent = bad ? `${bad} !` : "";
@@ -73,15 +215,21 @@
       case "choice":
         return `<div class="seg" role="group" aria-label="${esc(r.label)}">${r.choices.map((c) => `<button type="button" aria-pressed="${v === c}" data-pick="${esc(r.name)}" data-v="${esc(c)}">${esc(c)}</button>`).join("")}</div>`;
       case "setup":
-        return `<span class="setup"><span class="num">${esc(v ?? "found by itself")}</span>${esc(r.how || "Changed in setup")}</span>`;
+        if (r.name === "push_to_talk")
+          return `<span class="setup"><span class="num" id="setPtt">${esc(v ?? "None yet")}</span><button class="btn frame" type="button" id="setCapture">Change</button></span>`;
+        if (r.name === "microphone")
+          return `<span class="setup" style="width:100%">${micSelect({ setting: v ?? "", devices: setupState?.microphone.devices || [] })}<button class="btn frame" type="button" id="micTest">Test</button><span class="note" id="micMsg"></span></span>`;
+        return `<span class="setup"><span class="num">${esc(v ?? "found by itself")}</span><button class="btn frame" type="button" id="setFolder">Choose…</button><span class="err" id="folderErr"></span></span>`;
       default:
         return `<input class="input" value="${esc(v ?? "")}" data-text="${esc(r.name)}" aria-label="${esc(r.label)}" style="max-width:220px">`;
     }
   }
   const row = (r) => `<div class="set"><div><b>${esc(r.label)}</b>${r.description ? `<p>${esc(r.description)}</p>` : ""}<div class="meta">${chips(r)}</div></div><div class="ctl">${control(r)}</div></div>`;
 
+  let setupState = null;
   async function settingsView() {
     data = await api.settings();
+    if (tab === "Game and controls") setupState = await api.setup_state();
     const names = [...data.groups.map((g) => g.name), "Keys"];
     if (!names.includes(tab)) tab = names[0];
     const tabs = `<div class="tabs" role="tablist">${names.map((n) => `<button type="button" role="tab" aria-selected="${n === tab}" data-tab="${esc(n)}">${esc(n)}</button>`).join("")}</div>`;
@@ -128,6 +276,9 @@
     });
     page.querySelectorAll("[data-pick]").forEach((b) => b.addEventListener("click", () => change(b.dataset.pick, b.dataset.v, `${label(b.dataset.pick)}: ${b.dataset.v}`)));
     page.querySelectorAll("[data-text]").forEach((i) => i.addEventListener("change", () => change(i.dataset.text, i.value, `${label(i.dataset.text)}: ${i.value || "none"}`)));
+    $("#setCapture")?.addEventListener("click", () => capture($("#setCapture"), $("#setPtt")));
+    $("#setFolder")?.addEventListener("click", chooseFolder);
+    bindMic();
   }
 
   /* ---------- keys ---------- */
@@ -164,9 +315,11 @@
 
   /* ---------- shell ---------- */
   async function render() {
+    if (capturing) api.cancel_capture();
     document.querySelectorAll("nav [data-view]").forEach((b) => b.setAttribute("aria-current", b.dataset.view === view ? "page" : "false"));
     try {
       if (view === "status") await status();
+      else if (view === "setup") await setupView();
       else await settingsView();
     } catch (e) {
       page.innerHTML = `<h1>Something went wrong</h1><p class="lede">${esc(e && e.message ? e.message : e)}</p>`;
@@ -178,6 +331,8 @@
     api = bridge;
     const about = await api.about();
     $("#ver").textContent = about.version;
+    firstRun = Boolean(about.first_run);
+    if (firstRun) view = "setup";
     await render();
   }
   if (window.TYCHO_FAKE) start(window.TYCHO_FAKE);

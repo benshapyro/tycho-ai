@@ -9,6 +9,7 @@ uses no memory while they play; the tray icon opens it again.
 import importlib
 import logging
 import threading
+from collections.abc import Callable
 from importlib import resources
 from typing import Any
 
@@ -40,13 +41,14 @@ class AppWindow:
         self._lock = threading.Lock()
         self._stopping = False
 
-    def open(self) -> None:
+    def open(self) -> bool:
+        """Run the window until it closes. False if it couldn't open at all."""
         # Imported here: pythonnet starts .NET, which only the window needs.
         webview: Any = importlib.import_module("webview")
 
         with self._lock:
             if self._stopping:  # Tycho began quitting as the window was asked for
-                return
+                return True
             self._window = webview.create_window(
                 "Tycho",
                 html=page(),
@@ -60,9 +62,16 @@ class AppWindow:
             webview.start(gui="edgechromium", private_mode=True)
         except Exception as e:  # no WebView2 runtime, or it failed: Tycho carries on
             log.warning("The window couldn't open (%s). Windows' web view: %s", e, WEBVIEW2)
+            return False
         finally:
             with self._lock:
                 self._window = None
+            # The page has gone: anything it was waiting on must stop, or a push-to-talk
+            # capture would save the next key pressed in the game.
+            cancel: Callable[[], object] | None = getattr(self._bridge, "cancel_capture", None)
+            if cancel is not None:
+                cancel()
+        return True
 
     @property
     def is_open(self) -> bool:
@@ -81,6 +90,16 @@ class AppWindow:
                 window.on_top = False
             except Exception:
                 log.debug("Bringing the window forward failed", exc_info=True)
+
+    def choose_folder(self) -> str | None:
+        """Windows' own folder dialog, over the window; None if the player cancels."""
+        with self._lock:
+            window = self._window
+        if window is None:
+            return None
+        webview: Any = importlib.import_module("webview")
+        chosen = window.create_file_dialog(webview.FileDialog.FOLDER)
+        return str(chosen[0]) if chosen else None
 
     def close(self) -> None:
         """Tycho is quitting: close the window, and never open another."""
