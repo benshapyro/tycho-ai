@@ -1084,3 +1084,21 @@ must = [["v_power_set_off", "v_power_toggle"]]
 never = ["v_power_set_on"]
 flying_after = "Pitbull"
 tag = "fleet"
+
+# Mining (#151): where a resource is, from the game files.
+[[case]]
+heard = "where are the best places to get lindinium"
+expect = ["reply"]
+mentions = [['Nyx', 'Glaciem', 'Keeger']]
+tools = ["mining_lookup"]
+max_calls = 2
+no_errors = true
+tag = "mining"
+
+[[case]]
+heard = "where can I mine quantanium in stanton"
+expect = ["reply"]
+tools = ["mining_lookup"]
+max_calls = 2
+no_errors = true
+tag = "mining"

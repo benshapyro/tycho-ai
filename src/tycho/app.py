@@ -738,6 +738,7 @@ def load_brain(
     from tycho.knowledge import ShipLookup, UexApi, WikiApi
     from tycho.knowledge.fleet import Fleet, FleetUpdate
     from tycho.knowledge.item_lookup import ItemLookup
+    from tycho.knowledge.mining import MiningLookup
     from tycho.knowledge.trade_lookup import trade_lookups
     from tycho.knowledge.web import WebSearch
     from tycho.spoken_settings import SettingsTool
@@ -751,6 +752,7 @@ def load_brain(
         ships,
         FleetUpdate(fleet, lambda: ships.library),
         ItemLookup(WikiApi()),
+        MiningLookup(WikiApi()),
         *trade_lookups(UexApi()),
         SettingsTool(live=live),
     ]

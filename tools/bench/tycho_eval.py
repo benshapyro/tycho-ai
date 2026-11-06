@@ -56,6 +56,7 @@ from tycho.game.store import KeybindStore
 from tycho.knowledge import ShipLookup, UexApi, WikiApi
 from tycho.knowledge.fleet import Fleet, FleetUpdate
 from tycho.knowledge.item_lookup import ItemLookup
+from tycho.knowledge.mining import MiningLookup
 from tycho.knowledge.store import ensure
 from tycho.knowledge.trade_lookup import trade_lookups
 from tycho.knowledge.web import WebSearch
@@ -388,6 +389,7 @@ async def main() -> None:
             *([counted] if counted else []),
             _Counted(FleetUpdate(fleet, lambda: library), journal),
             _Counted(ItemLookup(WikiApi()), journal),
+            _Counted(MiningLookup(WikiApi()), journal),
             *(_Counted(lookup, journal) for lookup in trade_lookups(UexApi())),
             settings_tool,
             *(_Counted(lookup, journal) for lookup in web),
