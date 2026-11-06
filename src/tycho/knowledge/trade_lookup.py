@@ -22,7 +22,8 @@ SECONDS = 5.0
 """A route from a station asks UEX about each of its terminals at once."""
 MISS = "say briefly what wasn't found, and the closest names if there are any"
 SPEAKING = (
-    "In the answer, credit UEX once, in a few words; say how old a price is only when "
+    "In what you say aloud, credit UEX once, in a few words, even when the details go "
+    "on a card (show_card's say); say how old a price is only when "
     "its hours_ago is over 6. Prices are aUEC per SCU. A result with also_matches, "
     "also_places or also_starts is for the likeliest match: answer for it and name the "
     "others in a few words; don't look up again to check."
