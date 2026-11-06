@@ -14,6 +14,7 @@ only go one way by voice: ``lower_only`` means lower, or off.
 import os
 import re
 import tempfile
+import threading
 import tomllib
 from collections.abc import Mapping
 from pathlib import Path
@@ -364,6 +365,15 @@ def update(changes: Mapping[str, object], path: Path | None = None) -> Settings:
     in the file, including hand edits since Tycho started and entries it doesn't know.
     Raises ``SettingsError`` if the result isn't valid; nothing is written then."""
     path = path or paths.settings_file()
+    with _WRITING:
+        return _update(changes, path)
+
+
+_WRITING = threading.Lock()
+"""``update`` reads, changes and writes the file: two at once would lose one change."""
+
+
+def _update(changes: Mapping[str, object], path: Path) -> Settings:
     current = load(path)
     try:
         updated = Settings.model_validate({**current.model_dump(), **changes})

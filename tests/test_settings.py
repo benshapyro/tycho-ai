@@ -122,3 +122,26 @@ def test_every_tile_setting_changes_now_by_voice() -> None:
     assert len(names) == 13
     for name in names:
         assert settings.rule(name) == {"voice": "yes", "applies": "now"}, name
+
+
+def test_changes_from_two_threads_at_once_are_both_kept(tmp_path: Path) -> None:
+    import threading
+
+    path = tmp_path / "settings.toml"
+    settings.save(Settings(), path)
+    names = ["tile_quiet", "tile_high_contrast", "keep_transcripts", "tile_talk_light"]
+    values = {
+        "tile_quiet": True,
+        "tile_high_contrast": True,
+        "keep_transcripts": True,
+        "tile_talk_light": False,
+    }
+    threads = [
+        threading.Thread(target=settings.update, args=({n: values[n]}, path)) for n in names * 5
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    saved = settings.load(path)
+    assert all(getattr(saved, n) == values[n] for n in names)

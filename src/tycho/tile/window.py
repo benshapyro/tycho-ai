@@ -25,6 +25,8 @@ from typing import Final
 
 from PIL import Image
 
+from tycho import win32
+
 log = logging.getLogger(__name__)
 
 WS_POPUP = 0x80000000
@@ -106,7 +108,7 @@ class TileWindow:
 
     def close(self) -> None:
         if self._hwnd:
-            _user32().PostMessageW(self._hwnd, _WM_CLOSE, 0, 0)
+            win32.user32().PostMessageW(self._hwnd, _WM_CLOSE, 0, 0)
         if self._thread is not None:
             self._thread.join(2.0)
 
@@ -123,12 +125,12 @@ class TileWindow:
             self._ready.set()
 
     def _loop(self) -> None:
-        user32 = _user32()
+        user32 = win32.user32()
         with contextlib.suppress(AttributeError, OSError):  # older Windows lacks it
             user32.SetThreadDpiAwarenessContext(_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
         previous = user32.GetForegroundWindow()
 
-        @_WNDPROC
+        @win32.WNDPROC
         def proc(hwnd: int, msg: int, wparam: int, lparam: int) -> int:
             if msg == _WM_TIMER:
                 self._tick()
@@ -143,10 +145,10 @@ class TileWindow:
                 return 0
             return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
 
-        instance = _kernel32().GetModuleHandleW(None)
+        instance = win32.kernel32().GetModuleHandleW(None)
         name = f"TychoTile{os.getpid()}"
-        wc = _WNDCLASSEXW()
-        wc.cbSize = ctypes.sizeof(_WNDCLASSEXW)
+        wc = win32.WNDCLASSEXW()
+        wc.cbSize = ctypes.sizeof(win32.WNDCLASSEXW)
         wc.lpfnWndProc = proc
         wc.hInstance = instance
         wc.lpszClassName = name
@@ -176,7 +178,7 @@ class TileWindow:
             frame = None
         if isinstance(frame, _Same):
             return
-        user32 = _user32()
+        user32 = win32.user32()
         if frame is None:
             if self._shown:
                 user32.ShowWindow(self._hwnd, _SW_HIDE)
@@ -195,12 +197,12 @@ class TileWindow:
         )
 
     def _update(self, image: Image.Image, x: int, y: int) -> None:
-        user32, gdi32 = _user32(), _gdi32()
+        user32, gdi32 = win32.user32(), win32.gdi32()
         w, h = image.size
         screen_dc = user32.GetDC(None)
         memory_dc = gdi32.CreateCompatibleDC(screen_dc)
-        info = _BITMAPINFO()
-        info.bmiHeader.biSize = ctypes.sizeof(_BITMAPINFOHEADER)
+        info = win32.BITMAPINFO()
+        info.bmiHeader.biSize = ctypes.sizeof(win32.BITMAPINFOHEADER)
         info.bmiHeader.biWidth = w
         info.bmiHeader.biHeight = -h  # top-down
         info.bmiHeader.biPlanes = 1
@@ -216,7 +218,7 @@ class TileWindow:
             pixels = bgra_premultiplied(image)
             ctypes.memmove(bits.value, pixels, len(pixels))
             old = gdi32.SelectObject(memory_dc, bitmap)
-            blend = _BLENDFUNCTION(_AC_SRC_OVER, 0, 255, _AC_SRC_ALPHA)
+            blend = win32.BLENDFUNCTION(_AC_SRC_OVER, 0, 255, _AC_SRC_ALPHA)
             ok = user32.UpdateLayeredWindow(
                 self._hwnd,
                 screen_dc,
@@ -240,10 +242,10 @@ class TileWindow:
 
 def screen_of_foreground() -> Screen:
     """The monitor the game (the window in front) is on, or the main one."""
-    user32 = _user32()
+    user32 = win32.user32()
     monitor = user32.MonitorFromWindow(user32.GetForegroundWindow(), _MONITOR_DEFAULTTOPRIMARY)
-    info = _MONITORINFO()
-    info.cbSize = ctypes.sizeof(_MONITORINFO)
+    info = win32.MONITORINFO()
+    info.cbSize = ctypes.sizeof(win32.MONITORINFO)
     if not monitor or not user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
         return Screen(0, 0, 1920, 1080)
     r = info.rcMonitor  # the whole monitor: a borderless game covers the taskbar too
@@ -252,7 +254,7 @@ def screen_of_foreground() -> Screen:
 
 def _give_back(previous: int) -> None:
     """If this process took the foreground anyway, hand it back to who had it."""
-    user32 = _user32()
+    user32 = win32.user32()
     now = user32.GetForegroundWindow()
     if not previous or not now or now == previous:
         return
@@ -261,178 +263,3 @@ def _give_back(previous: int) -> None:
     if pid.value == os.getpid():
         log.debug("The Tile took the foreground; giving it back")
         user32.SetForegroundWindow(previous)
-
-
-# --- Win32 definitions ------------------------------------------------------------
-
-_WNDPROC = ctypes.WINFUNCTYPE(
-    ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM
-)
-
-
-class _WNDCLASSEXW(ctypes.Structure):
-    _fields_ = [
-        ("cbSize", wintypes.UINT),
-        ("style", wintypes.UINT),
-        ("lpfnWndProc", _WNDPROC),
-        ("cbClsExtra", ctypes.c_int),
-        ("cbWndExtra", ctypes.c_int),
-        ("hInstance", wintypes.HINSTANCE),
-        ("hIcon", wintypes.HICON),
-        ("hCursor", wintypes.HANDLE),
-        ("hbrBackground", wintypes.HBRUSH),
-        ("lpszMenuName", wintypes.LPCWSTR),
-        ("lpszClassName", wintypes.LPCWSTR),
-        ("hIconSm", wintypes.HICON),
-    ]
-
-
-class _BITMAPINFOHEADER(ctypes.Structure):
-    _fields_ = [
-        ("biSize", wintypes.DWORD),
-        ("biWidth", wintypes.LONG),
-        ("biHeight", wintypes.LONG),
-        ("biPlanes", wintypes.WORD),
-        ("biBitCount", wintypes.WORD),
-        ("biCompression", wintypes.DWORD),
-        ("biSizeImage", wintypes.DWORD),
-        ("biXPelsPerMeter", wintypes.LONG),
-        ("biYPelsPerMeter", wintypes.LONG),
-        ("biClrUsed", wintypes.DWORD),
-        ("biClrImportant", wintypes.DWORD),
-    ]
-
-
-class _BITMAPINFO(ctypes.Structure):
-    _fields_ = [("bmiHeader", _BITMAPINFOHEADER), ("bmiColors", wintypes.DWORD * 3)]
-
-
-class _BLENDFUNCTION(ctypes.Structure):
-    _fields_ = [
-        ("BlendOp", ctypes.c_ubyte),
-        ("BlendFlags", ctypes.c_ubyte),
-        ("SourceConstantAlpha", ctypes.c_ubyte),
-        ("AlphaFormat", ctypes.c_ubyte),
-    ]
-
-
-class _MONITORINFO(ctypes.Structure):
-    _fields_ = [
-        ("cbSize", wintypes.DWORD),
-        ("rcMonitor", wintypes.RECT),
-        ("rcWork", wintypes.RECT),
-        ("dwFlags", wintypes.DWORD),
-    ]
-
-
-_libs: dict[str, ctypes.WinDLL] = {}
-
-
-def _lib(name: str) -> ctypes.WinDLL:
-    """A Windows DLL, typed once on first use (so importing this never fails elsewhere)."""
-    if name not in _libs:
-        lib = ctypes.WinDLL(name, use_last_error=True)
-        _libs[name] = lib
-        if name == "user32":
-            _type_user32(lib)
-        elif name == "gdi32":
-            _type_gdi32(lib)
-        elif name == "kernel32":
-            lib.GetModuleHandleW.restype = wintypes.HMODULE
-            lib.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
-    return _libs[name]
-
-
-def _user32() -> ctypes.WinDLL:
-    return _lib("user32")
-
-
-def _gdi32() -> ctypes.WinDLL:
-    return _lib("gdi32")
-
-
-def _kernel32() -> ctypes.WinDLL:
-    return _lib("kernel32")
-
-
-def _type_user32(u: ctypes.WinDLL) -> None:
-    H, P = wintypes.HWND, ctypes.c_void_p
-    u.DefWindowProcW.restype = ctypes.c_ssize_t
-    u.DefWindowProcW.argtypes = [H, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
-    u.RegisterClassExW.restype = wintypes.ATOM
-    u.RegisterClassExW.argtypes = [P]
-    u.UnregisterClassW.argtypes = [wintypes.LPCWSTR, wintypes.HINSTANCE]
-    u.CreateWindowExW.restype = H
-    u.CreateWindowExW.argtypes = [
-        wintypes.DWORD,
-        wintypes.LPCWSTR,
-        wintypes.LPCWSTR,
-        wintypes.DWORD,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        H,
-        wintypes.HMENU,
-        wintypes.HINSTANCE,
-        wintypes.LPVOID,
-    ]
-    u.DestroyWindow.argtypes = [H]
-    u.PostMessageW.argtypes = [H, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
-    u.GetMessageW.argtypes = [P, H, wintypes.UINT, wintypes.UINT]
-    u.TranslateMessage.argtypes = [P]
-    u.DispatchMessageW.argtypes = [P]
-    u.DispatchMessageW.restype = ctypes.c_ssize_t
-    u.SetTimer.restype = ctypes.c_size_t
-    u.SetTimer.argtypes = [H, ctypes.c_size_t, wintypes.UINT, P]
-    u.ShowWindow.argtypes = [H, ctypes.c_int]
-    u.SetWindowPos.argtypes = [
-        H,
-        H,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        wintypes.UINT,
-    ]
-    u.GetForegroundWindow.restype = H
-    u.SetForegroundWindow.argtypes = [H]
-    u.GetWindowThreadProcessId.argtypes = [H, ctypes.POINTER(wintypes.DWORD)]
-    u.GetDC.restype = wintypes.HDC
-    u.GetDC.argtypes = [H]
-    u.ReleaseDC.argtypes = [H, wintypes.HDC]
-    u.UpdateLayeredWindow.argtypes = [
-        H,
-        wintypes.HDC,
-        P,
-        P,
-        wintypes.HDC,
-        P,
-        wintypes.COLORREF,
-        P,
-        wintypes.DWORD,
-    ]
-    u.MonitorFromWindow.restype = wintypes.HMONITOR
-    u.MonitorFromWindow.argtypes = [H, wintypes.DWORD]
-    u.GetMonitorInfoW.argtypes = [wintypes.HMONITOR, P]
-    u.SetThreadDpiAwarenessContext.restype = P
-    u.SetThreadDpiAwarenessContext.argtypes = [ctypes.c_ssize_t]
-
-
-def _type_gdi32(g: ctypes.WinDLL) -> None:
-    P = ctypes.c_void_p
-    g.CreateCompatibleDC.restype = wintypes.HDC
-    g.CreateCompatibleDC.argtypes = [wintypes.HDC]
-    g.CreateDIBSection.restype = wintypes.HBITMAP
-    g.CreateDIBSection.argtypes = [
-        wintypes.HDC,
-        P,
-        wintypes.UINT,
-        ctypes.POINTER(ctypes.c_void_p),
-        wintypes.HANDLE,
-        wintypes.DWORD,
-    ]
-    g.SelectObject.restype = wintypes.HGDIOBJ
-    g.SelectObject.argtypes = [wintypes.HDC, wintypes.HGDIOBJ]
-    g.DeleteObject.argtypes = [wintypes.HGDIOBJ]
-    g.DeleteDC.argtypes = [wintypes.HDC]

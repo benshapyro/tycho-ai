@@ -1359,3 +1359,85 @@ def test_a_barge_in_leaves_the_light_on_for_the_new_request() -> None:
         await r.session.close()
 
     run(scenario)
+
+
+# --- Pausing from the tray (ADR 17) -------------------------------------------------
+
+
+def test_paused_push_to_talk_does_nothing() -> None:
+    async def scenario() -> Rig:
+        r = rig("landing gear")
+        r.session.pause(True)
+        r.say()
+        await r.session.idle()
+        assert r.session.paused
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert r.results == []
+    assert r.keys.events == []
+
+
+def test_resuming_listens_again() -> None:
+    async def scenario() -> Rig:
+        r = rig("landing gear")
+        r.session.pause(True)
+        r.session.pause(False)
+        r.say()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    assert [x.status for x in run(scenario).results] == ["done"]
+
+
+def test_a_press_held_when_pausing_still_ends_normally() -> None:
+    async def scenario() -> Rig:
+        r = rig("landing gear")
+        r.session.handle(Edge.PRESSED)
+        r.session.pause(True)  # paused while the button is down
+        r.audio.hear(SPEECH)
+        r.session.handle(Edge.RELEASED)
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert [x.status for x in r.results] == ["done"]
+
+
+def test_paused_push_to_talk_still_stops_what_is_running() -> None:
+    hold = threading.Event()
+
+    async def scenario() -> Rig:
+        r = rig("landing gear", hold=hold)
+        r.say()
+        await asyncio.sleep(0.05)
+        r.session.pause(True)
+        r.session.handle(Edge.PRESSED)  # "stop": as push-to-talk always is
+        hold.set()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert [x.status for x in r.results] == ["cancelled"]
+    assert r.keys.events == []
+
+
+def test_pausing_mid_request_leaves_the_light_until_it_ends() -> None:
+    display = FakeDisplay()
+
+    async def scenario() -> None:
+        r = rig("landing gear", display=display)
+        r.session.handle(Edge.PRESSED)
+        r.session.pause(True)
+        assert display.light == "listening"  # still recording
+        r.audio.hear(SPEECH)
+        r.session.handle(Edge.RELEASED)
+        await r.session.idle()
+        assert display.light is None  # the request ended, and with it the light
+        await r.session.close()
+
+    run(scenario)
