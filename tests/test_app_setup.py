@@ -143,8 +143,51 @@ def test_the_page_learns_whether_this_is_a_first_run(path: Path) -> None:
 def test_a_setup_choice_can_be_undone(path: Path) -> None:
     bridge = _bridge(path)
     bridge.set_microphone("Desk mic, MME")
-    assert bridge.undo()["name"] == "microphone"
+    undone = bridge.undo()
+    assert undone["name"] == "microphone"
+    assert undone["label"] == "Microphone"  # the setup view's toast says this (#131)
     assert settings.load(path).microphone is None
+
+
+def test_a_capture_that_fails_says_why_and_saves_nothing(path: Path) -> None:
+    pc = FakeSetupPC()
+    pc.capture_fails = RuntimeError("SDL couldn't start")
+    result = _bridge(path, pc).capture_push_to_talk()
+    assert result["ok"] is False
+    assert "SDL couldn't start" in str(result["problem"])  # #130
+    assert settings.load(path).push_to_talk == Settings().push_to_talk
+
+
+def test_the_keybinds_are_read_once_a_while_and_none_without_the_game(
+    path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tycho.app
+    from tycho.game.store import KeybindStore
+
+    loads: list[object] = []
+    game: list[object] = [object()]
+
+    def find_install(current: Settings) -> object:
+        if not game:
+            raise FileNotFoundError("no game")
+        return game[0]
+
+    class Store:
+        keybinds = "the keybinds"
+
+    def load(install: object) -> Store:
+        loads.append(install)
+        return Store()
+
+    monkeypatch.setattr(tycho.app, "find_install", find_install)
+    monkeypatch.setattr(KeybindStore, "load", load)
+    bridge = _bridge(path)
+    assert bridge._keybinds() == "the keybinds"  # pyright: ignore[reportPrivateUsage]
+    assert bridge._keybinds() == "the keybinds"  # pyright: ignore[reportPrivateUsage]
+    assert len(loads) == 1  # #137: kept, not read again for each redraw
+    game.clear()
+    settings.update({"game_channel": "PTU"}, path)  # another game: read again
+    assert bridge._keybinds() is None  # pyright: ignore[reportPrivateUsage]
 
 
 def test_microphones_are_listed_once_without_windows_stand_ins(

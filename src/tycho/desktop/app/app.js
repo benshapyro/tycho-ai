@@ -23,7 +23,7 @@
   $("#toastUndo").addEventListener("click", async () => {
     const r = await api.undo();
     $("#toast").hidden = true;
-    if (r.ok) toast(`${label(r.name)} put back.`);
+    if (r.ok) toast(`${r.label || label(r.name)} put back.`);
     else toast(r.problem);
     await render();
   });
@@ -159,6 +159,8 @@
     let r;
     try {
       r = await api.capture_push_to_talk();
+    } catch (e) {
+      r = { ok: false, problem: `Tycho couldn't listen for a button: ${e && e.message ? e.message : e}` };
     } finally {
       capturing = false;
       document.body.classList.remove("capturing");
@@ -314,9 +316,10 @@
   }
 
   /* ---------- commands ---------- */
-  let cmdFilter = "all", cmdQuery = "", cmdOpen = "";
+  let cmdFilter = "all", cmdQuery = "", cmdOpen = "", cmdData = null;
   async function commandsView(keepFocus = false) {
-    const d = await api.commands();
+    // Typing in the search box filters what was fetched; everything else fetches again.
+    const d = keepFocus && cmdData ? cmdData : (cmdData = await api.commands());
     const rows = d.rows;
     const noKey = rows.filter((r) => !r.sequence && !r.key && d.game).length;
     $("#noKeyBadge").textContent = noKey ? `${noKey} no key` : "";

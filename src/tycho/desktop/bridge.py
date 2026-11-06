@@ -58,9 +58,9 @@ SETUP_CHOICES = frozenset({"game_root", "push_to_talk", "microphone"})
 KEYS: dict[str, str] = {"anthropic": "Anthropic", "elevenlabs": "ElevenLabs"}
 UNDO_DEPTH = 20
 DEVICES_SECONDS = 10.0
+"""How long the list of microphones is kept between redraws."""
 KEYBINDS_SECONDS = 30.0
 """How long the keybinds are kept for the Commands page."""
-"""How long the list of microphones is kept between redraws."""
 
 
 type Apply = Callable[[str, object], bool]
@@ -245,7 +245,14 @@ class Bridge:
             except Exception:
                 log.exception("Couldn't apply %s in the running Tycho", name)
                 applies = "restart"
-        return {"ok": True, "changed": True, "name": name, "value": value, "applies": applies}
+        return {
+            "ok": True,
+            "changed": True,
+            "name": name,
+            "label": _label(name),  # the setup view has no settings list to look it up in
+            "value": value,
+            "applies": applies,
+        }
 
     def store_key(self, name: object, key: object) -> dict[str, object]:
         """Check a key with its provider, then store it in Windows Credential Manager."""
@@ -335,7 +342,11 @@ class Bridge:
         """Wait for the player to press the button they want, and save it."""
         self._capture.set()  # one capture at a time: a new one replaces the last
         self._capture = cancel = threading.Event()
-        found = self._pc.capture(setup.CAPTURE_SECONDS, cancel)
+        try:
+            found = self._pc.capture(setup.CAPTURE_SECONDS, cancel)
+        except Exception as e:  # a joystick library that won't start, a device gone
+            log.exception("Couldn't listen for a push-to-talk button")
+            return {"ok": False, "problem": f"Tycho couldn't listen for a button: {e}"}
         if cancel.is_set():
             return {"ok": False, "cancelled": True}
         if found is None:
