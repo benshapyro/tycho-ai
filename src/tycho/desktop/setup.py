@@ -6,6 +6,7 @@ These run on the bridge's threads, never the event loop, and none of them waits 
 terminal: the window is the only one asking.
 """
 
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -65,6 +66,9 @@ class WindowsPC:
         """``rescan``: look for microphones afresh each time. Only on a first run: while
         Tycho listens, its microphone stream is open, and a rescan would break it."""
         self._rescan = rescan
+        self._audio = threading.Lock()
+        """PortAudio isn't thread-safe, and each bridge call has a thread of its own: a
+        rescan must never run while the level test's stream is open."""
 
     def game(self, current: Settings) -> Game:
         from tycho.app import find_install
@@ -120,14 +124,15 @@ class WindowsPC:
     def microphones(self) -> list[str]:
         from tycho.audio.microphone import input_devices
 
-        return input_devices(rescan=self._rescan)
+        with self._audio:
+            return input_devices(rescan=self._rescan)
 
     def level(self, microphone: str | None) -> dict[str, object]:
         from tycho.app import microphone_device
         from tycho.audio.microphone import Microphone
 
         try:
-            with Microphone(device=microphone_device(microphone)) as mic:
+            with self._audio, Microphone(device=microphone_device(microphone)) as mic:
                 mic.start()
                 time.sleep(LEVEL_SECONDS)
                 clip = mic.stop()

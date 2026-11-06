@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import contextlib
 import logging
 import sys
 import time
@@ -366,9 +367,18 @@ def first_run() -> FirstRun:
 
     window = app_window(first_run=True, finish=finish)
     opened.append(window)
-    if not window.open():
-        return "no_window"
+    with _ctrl_c(window.close):  # the main thread is inside the window: Ctrl+C closes it
+        if not window.open():
+            return "no_window"
     return "done" if finished.is_set() else "closed"
+
+
+def _ctrl_c(on_ctrl_c: Callable[[], None]) -> contextlib.AbstractContextManager[object]:
+    if sys.platform != "win32":
+        return contextlib.nullcontext()
+    from tycho.runtime.console import CtrlCGuard
+
+    return CtrlCGuard(on_ctrl_c)
 
 
 def _float(value: object) -> float:

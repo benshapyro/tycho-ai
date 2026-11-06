@@ -237,3 +237,64 @@ def test_setup_and_tycho_check_judge_loudness_alike(peak: float, how: str) -> No
     assert setup.verdict(clip)["verdict"] == how
     check = app.microphone_level("Headset", clip).level
     assert check == {"silent": "fail", "quiet": "warn", "clipping": "warn", "good": "ok"}[how]
+
+
+class _Window:
+    """The first run's window, scripted: it opens, and the player finishes or closes it."""
+
+    def __init__(self, finish: object, finishes: bool) -> None:
+        self._finish = finish
+        self._finishes = finishes
+
+    def open(self) -> bool:
+        if self._finishes:
+            self._finish()  # type: ignore[operator]
+        return True
+
+    def close(self) -> None:
+        pass
+
+
+@pytest.mark.parametrize(("finishes", "outcome"), [(True, "done"), (False, "closed")])
+def test_the_first_run_ends_done_or_closed(
+    monkeypatch: pytest.MonkeyPatch, finishes: bool, outcome: str
+) -> None:
+    from tycho import app
+
+    def window(**options: object) -> _Window:
+        return _Window(options["finish"], finishes)
+
+    monkeypatch.setattr(app, "app_window", window)
+    monkeypatch.setattr("threading.Timer", _NoTimer)  # no real 0.8 s close
+    assert app.first_run() == outcome
+
+
+class _NoTimer:
+    def __init__(self, _seconds: float, _fn: object) -> None:
+        pass
+
+    def start(self) -> None:
+        pass
+
+
+def test_the_level_test_and_a_rescan_never_overlap() -> None:
+    import threading
+    import time as clock
+
+    pc = setup.WindowsPC(rescan=True)
+    inside: list[str] = []
+    overlapped: list[bool] = []
+
+    def hold(name: str) -> None:
+        with pc._audio:  # pyright: ignore[reportPrivateUsage]
+            overlapped.append(bool(inside))
+            inside.append(name)
+            clock.sleep(0.05)
+            inside.remove(name)
+
+    threads = [threading.Thread(target=hold, args=(n,)) for n in ("level", "rescan", "level")]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert overlapped == [False, False, False]
