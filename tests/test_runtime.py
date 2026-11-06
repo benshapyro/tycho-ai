@@ -106,6 +106,8 @@ def rig(
     brain: FakeBrain | None = None,
     brain_seconds: float = 8.0,
     search_seconds: float = 12.0,
+    looking_seconds: float = 7.0,
+    looking_limit: float = 15.0,
     speaker: FakeSpeaker | None = None,
     matcher: CommandMatcher = _MATCHER,
     address: Callable[[], str] = lambda: "",
@@ -129,6 +131,8 @@ def rig(
         brain=brain,
         brain_seconds=brain_seconds,
         search_seconds=search_seconds,
+        looking_seconds=looking_seconds,
+        looking_limit=looking_limit,
         speaker=speaker,
         samplerate=RATE,
         log_transcripts=log_transcripts,
@@ -1188,6 +1192,111 @@ def test_a_web_search_gets_longer_than_the_usual_deadline() -> None:
     )
     assert r.results[0].status == "replied"
     assert speaker.spoken[-1] == "4.11 is on the roadmap."
+
+
+class _SlowLookUp(FakeBrain):
+    """A look-up starts at once, then Claude answers after ``after`` seconds."""
+
+    def __init__(self, after: float) -> None:
+        super().__init__()
+        self._after = after
+
+    async def decide(self, request: BrainRequest) -> Decision:
+        if request.looking is not None:
+            request.looking()
+        await asyncio.sleep(self._after)
+        return Reply("Rod's Fuel pays the most.")
+
+
+def test_a_look_up_gets_longer_than_the_usual_deadline() -> None:
+    """Play session (#150): two look-ups in a row ran past 8 s, after "Checking.",
+    and ended in the error sound."""
+    r = _conversation(
+        "best place to get lindinium",
+        brain=_SlowLookUp(0.6),
+        speaker=FakeSpeaker(),
+        brain_seconds=0.2,
+        looking_seconds=3.0,
+    )
+    assert r.results[0].status == "replied"
+
+
+def test_a_look_up_never_shortens_the_deadline() -> None:
+    r = _conversation(
+        "best place to get lindinium",
+        brain=_SlowLookUp(0.3),
+        speaker=FakeSpeaker(),
+        brain_seconds=1.0,
+        looking_seconds=0.05,  # shorter than what's left: the usual deadline holds
+    )
+    assert r.results[0].status == "replied"
+
+
+def test_a_look_up_still_has_a_deadline() -> None:
+    r = _conversation(
+        "best place to get lindinium",
+        brain=_SlowLookUp(5.0),
+        speaker=FakeSpeaker(),
+        brain_seconds=0.1,
+        looking_seconds=0.2,
+    )
+    assert r.results[0].status == "failed"
+
+
+class _TwoLookUps(FakeBrain):
+    """A look-up at once, a second after ``gap``, then the answer after ``after``."""
+
+    def __init__(self, gap: float, after: float, search_first: bool = False) -> None:
+        super().__init__()
+        self._gap, self._after, self._search_first = gap, after, search_first
+
+    async def decide(self, request: BrainRequest) -> Decision:
+        if self._search_first and request.waiting is not None:
+            request.waiting()
+        assert request.looking is not None
+        request.looking()
+        await asyncio.sleep(self._gap)
+        request.looking()
+        await asyncio.sleep(self._after)
+        return Reply("Lindinium sells best at Orison.")
+
+
+def test_a_second_look_up_moves_the_deadline_again_and_says_checking_once() -> None:
+    """Review of #166: the play session's second look-up came 4.6 s in."""
+    speaker = FakeSpeaker()
+    r = _conversation(
+        "where can I get lindinium and the rest",
+        brain=_TwoLookUps(gap=0.3, after=0.3),
+        speaker=speaker,
+        brain_seconds=0.1,
+        looking_seconds=0.4,  # 0.3 + 0.3 is past the first look-up's 0.4
+    )
+    assert r.results[0].status == "replied"
+    assert sum(line in CHECKING for line in speaker.spoken) == 1
+
+
+def test_look_ups_stop_at_the_limit() -> None:
+    r = _conversation(
+        "where can I get lindinium and the rest",
+        brain=_TwoLookUps(gap=0.3, after=0.3),
+        speaker=FakeSpeaker(),
+        brain_seconds=0.1,
+        looking_seconds=0.4,
+        looking_limit=0.45,
+    )
+    assert r.results[0].status == "failed"
+
+
+def test_a_look_up_never_shortens_a_web_searchs_deadline() -> None:
+    r = _conversation(
+        "whats new and where do I sell gold",
+        brain=_TwoLookUps(gap=0.2, after=0.3, search_first=True),
+        speaker=FakeSpeaker(),
+        brain_seconds=0.1,
+        search_seconds=2.0,
+        looking_seconds=0.05,
+    )
+    assert r.results[0].status == "replied"
 
 
 def test_short_lines_are_kept_and_long_ones_arent() -> None:
