@@ -72,7 +72,9 @@ class _Turn:
     looking: Callable[[], None] | None = None
     searched: bool = False
     credits: list[str] = field(default_factory=list[str])
-    """Sources an answer must name, from the look-ups it used ("UEX", #164)."""
+    """Sources an answer must name, from the look-ups whose results it got ("UEX", #164)."""
+    sources: dict[str, str] = field(default_factory=dict[str, str])
+    """Each look-up's source, by its tool call's id, until its result is in."""
     unbound: UnboundAction | None = None
     """The last act refused for naming unbound actions, for the final error (#167)."""
     refused: bool = False
@@ -256,6 +258,12 @@ class ClaudeBrain:
                             raise BrainError("it wrote a tool call as text")
                     return _credited(Reply(reply[:400]), turn.credits)
                 results = await asyncio.gather(*(task for _, task in looking))
+                for (use_id, _), result in zip(looking, results, strict=True):
+                    # Credited only for what it found: not for a miss, an error, or a
+                    # look-up a card cut short (review of #179).
+                    credit = turn.sources.get(use_id, "")
+                    if credit and _found(result) and credit not in turn.credits:
+                        turn.credits.append(credit)
                 messages.append({"role": "assistant", "content": message.content})
                 content: list[Any] = [*_results(looking, results)]
                 if call == MAX_CALLS - 2:
@@ -316,12 +324,9 @@ class ClaudeBrain:
                                 # Told once the reply is known not to end in an act: the
                                 # session moves its deadline and says "Checking." (#176).
                                 checking += 1
-                            if (
-                                credit := getattr(chosen, "credit", "")
-                            ) and credit not in turn.credits:
-                                turn.credits.append(str(credit))
                             seconds = float(getattr(chosen, "seconds", LOOKUP_SECONDS))
                             lookup = run_lookup(chosen, block.input, seconds)
+                            turn.sources[block.id] = str(getattr(chosen, "credit", ""))
                             task = asyncio.create_task(lookup)
                             looking.append((block.id, task))
                             if getattr(chosen, "instant", False):
@@ -438,6 +443,11 @@ SECOND_ACT = (
     "Nothing was pressed: an earlier action in this reply was refused. Pick the actions "
     "again, all in one run_actions call."
 )
+
+
+def _found(result: LookupResult) -> bool:
+    """Whether a look-up's result holds data: not an error, not a miss."""
+    return not result.is_error and '"not_found"' not in result.content
 
 
 def _credited(reply: Reply, credits: list[str]) -> Reply:

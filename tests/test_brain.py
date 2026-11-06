@@ -886,8 +886,8 @@ def test_a_capitalised_tool_call_in_text_isnt_spoken() -> None:
         _ask(_Calls(([], _final('Show_card({"say": "x"})'))))
 
 
-class _Credited(FakeLookup):
-    credit = "UEX"
+def _Credited(name: str, answer: str = '{"sell": []}') -> FakeLookup:
+    return FakeLookup(name, answer, credit="UEX")
 
 
 def test_an_answer_from_uex_names_it_if_claude_didnt() -> None:
@@ -904,3 +904,29 @@ def test_an_answer_that_names_uex_is_left_alone() -> None:
 def test_an_answer_without_a_credited_look_up_is_left_alone() -> None:
     client = _Calls(_looks_up(), ([], _final("The Andromeda.")))
     assert _ask(client, FakeLookup()) == Reply("The Andromeda.")
+
+
+def test_a_card_answer_from_uex_names_it() -> None:
+    """#164's case: the details on a card, and the spoken line without UEX."""
+    card = _tool_stop(
+        "show_card",
+        {
+            "say": "Orison pays the most.",
+            "kind": "list",
+            "title": "Gold",
+            "rows": [{"text": "Orison"}],
+        },
+        "toolu_2",
+    )
+    client = _Calls(_looks_up("commodity_prices"), ([card], None))
+    decision = _ask(client, _Credited("commodity_prices"))
+    assert isinstance(decision, Reply)
+    assert decision.text == "Orison pays the most. From UEX."
+    assert decision.card is not None
+
+
+def test_a_uex_miss_or_question_back_isnt_credited() -> None:
+    """Review of #179: "Where are you starting from? From UEX." after a miss."""
+    miss = _Credited("trade_routes", '{"not_found": "no start or commodity"}')
+    client = _Calls(_looks_up("trade_routes"), ([], _final("Where are you starting from?")))
+    assert _ask(client, miss) == Reply("Where are you starting from?")
