@@ -215,6 +215,18 @@ class Trade:
     async def routes(self, params: Mapping[str, int]) -> list[dict[str, Any]]:
         return await self._fresh("/commodities_routes", params)
 
+    async def refinery_yields(self) -> list[dict[str, Any]]:
+        """Every refinery's yield bonus for every ore, in percent (UEX lists them all)."""
+        return await self._fresh("/refineries_yields", {})
+
+    async def refining_methods(self) -> list[dict[str, Any]]:
+        """The refining methods, each rated 1-3 for yield, cost and speed."""
+        return await self._fresh("/refineries_methods", {})
+
+    async def ship_prices(self) -> list[dict[str, Any]]:
+        """Where each ship is sold in the game, and for how much."""
+        return await self._fresh("/vehicles_purchases_prices_all", {})
+
     async def _fresh(self, path: str, params: Mapping[str, int]) -> list[dict[str, Any]]:
         key = f"{path}?{sorted(params.items())}"
         if (hit := self._fetched.get(key)) is not None:

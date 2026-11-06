@@ -1085,6 +1085,25 @@ never = ["v_power_set_on"]
 flying_after = "Pitbull"
 tag = "fleet"
 
+# Refining and buying ships with aUEC (#152), from UEX.
+[[case]]
+heard = "where should I refine my quantanium"
+expect = ["reply"]
+mentions = [['UEX']]
+tools = ["refining"]
+max_calls = 2
+no_errors = true
+tag = "trade"
+
+[[case]]
+heard = "where can I buy a prospector in game"
+expect = ["reply"]
+mentions = [['UEX'], ['\d']]
+tools = ["ship_purchases"]
+max_calls = 2
+no_errors = true
+tag = "trade"
+
 # Mining (#151): where a resource is, from the game files.
 [[case]]
 heard = "where are the best places to get lindinium"

@@ -299,6 +299,9 @@ def _profit(row: Mapping[str, Any], cargo: int) -> float:
 
 
 def trade_lookups(source: WikiSource) -> list[Lookup]:
-    """Both trade look-ups, sharing one set of UEX data."""
+    """The UEX look-ups, sharing one set of its data: prices, routes, refining (#152)
+    and where to buy a ship."""
+    from tycho.knowledge.refining import RefiningLookup, ShipPurchases
+
     trade = Trade(source)
-    return [CommodityPrices(trade), TradeRoutes(trade)]
+    return [CommodityPrices(trade), TradeRoutes(trade), RefiningLookup(trade), ShipPurchases(trade)]

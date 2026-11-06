@@ -155,6 +155,28 @@ ROUTES = [
 ]
 
 
+YIELDS = [
+    {"id_commodity": 48, "id_terminal": 12, "value": 3},  # Laranite (Raw) at Area18
+    {"id_commodity": 48, "id_terminal": 1, "value": 6},  # at ARC-L1
+    {"id_commodity": 58, "id_terminal": 1, "value": -2},  # Quantainium at ARC-L1
+]
+METHODS = [
+    {"name": "Cormack", "rating_yield": 1, "rating_cost": 2, "rating_speed": 3},
+    {"name": "Dinyx Solventation", "rating_yield": 3, "rating_cost": 1, "rating_speed": 1},
+]
+SHIP_PRICES = [
+    {"vehicle_name": "Cutlass Black", "id_terminal": 12, "price_buy": 2_100_000},
+    {
+        "vehicle_name": "Cutlass Black",
+        "id_terminal": 999,
+        "price_buy": 2_010_960,
+        "terminal_name": "Astro Armada",
+    },
+    {"vehicle_name": "Prospector", "id_terminal": 12, "price_buy": 2_783_020},
+    *({"vehicle_name": "Cutlass Steel", "id_terminal": n, "price_buy": 0} for n in range(1, 8)),
+]
+
+
 class FakeTradeUex:
     def __init__(self) -> None:
         self.offline = False
@@ -176,6 +198,12 @@ class FakeTradeUex:
                 return {"status": "ok", "data": RAW_PRICES.get(int(query["id_commodity"]), [])}
             case "/commodities_routes":
                 return {"status": "ok", "data": self._routes(query)}
+            case "/refineries_yields":
+                return {"status": "ok", "data": YIELDS}
+            case "/refineries_methods":
+                return {"status": "ok", "data": METHODS}
+            case "/vehicles_purchases_prices_all":
+                return {"status": "ok", "data": SHIP_PRICES}
             case _:
                 raise WikiError(f"{path}: not found")
 
