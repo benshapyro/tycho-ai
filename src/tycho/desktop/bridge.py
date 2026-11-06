@@ -18,6 +18,7 @@ import base64
 import dataclasses
 import io
 import logging
+import time
 import typing
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
@@ -53,19 +54,8 @@ SETUP_CHOICES = frozenset({"game_root", "push_to_talk", "microphone"})
 """Chosen with their own controls (a folder, a button press, a device), from setup."""
 KEYS: dict[str, str] = {"anthropic": "Anthropic", "elevenlabs": "ElevenLabs"}
 UNDO_DEPTH = 20
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class SetupTools:
-    """What setup asks of the PC; stand-ins in tests (``tycho.desktop.setup``)."""
-
-    game: Callable[[Settings], setup.Game] = setup.find_game
-    root: Callable[[str, str], str | None] = setup.game_root
-    capture: Callable[[float], str | None] = setup.capture_button
-    name: Callable[[str], str] = setup.button_name
-    conflicts: Callable[[str, Settings], list[str]] = setup.button_conflicts
-    microphones: Callable[[], list[str]] = setup.microphones
-    level: Callable[[str | None], dict[str, object]] = setup.level
+DEVICES_SECONDS = 10.0
+"""How long the list of microphones is kept between redraws."""
 
 
 type Apply = Callable[[str, object], bool]
@@ -82,7 +72,7 @@ class Bridge:
         settings_path: Any = None,
         key_check: KeyCheck | None = None,
         ship_accent: Callable[[], str | None] = lambda: None,
-        tools: SetupTools | None = None,
+        pc: setup.SetupPC | None = None,
         choose_folder: Callable[[], str | None] = lambda: None,
         finish: Callable[[], None] = lambda: None,
         first_run: bool = False,
@@ -95,7 +85,10 @@ class Bridge:
         self._path = settings_path
         self._key_check = key_check
         self._ship_accent = ship_accent
-        self._tools = tools or SetupTools()
+        self._pc = pc or setup.WindowsPC()
+        self._cache: dict[str, tuple[object, object]] = {}
+        """Slow look-ups (the game, its keybinds, the devices), kept while their inputs
+        stay the same: each Next or redraw shouldn't search the disk again."""
         self._choose_folder = choose_folder
         self._finish = finish
         self._first_run = first_run
@@ -279,29 +272,26 @@ class Bridge:
     def setup_state(self) -> dict[str, object]:
         """Everything setup shows: the game, push-to-talk, the microphone, the keys."""
         current = settings.load(self._path)
-        game = self._tools.game(current)
+        game = self._game(current)
         ptt = current.push_to_talk
         return {
             "game": dataclasses.asdict(game),
             "channels": list(_choices(Settings.model_fields["game_channel"].annotation)),
             "push_to_talk": {
                 "set": ptt is not None,
-                "name": self._tools.name(ptt) if ptt else "",
-                "conflicts": self._tools.conflicts(ptt, current) if ptt else [],
+                "name": self._pc.name(ptt) if ptt else "",
+                "conflicts": self._conflicts(ptt, current) if ptt else [],
             },
-            "microphone": {
-                "setting": current.microphone or "",
-                "devices": self._tools.microphones(),
-            },
+            "microphone": {"setting": current.microphone or "", "devices": self._devices()},
             "keys": self.keys(),
             "ready": ptt is not None and game.found,
         }
 
     def set_channel(self, channel: object) -> dict[str, object]:
         """Which version of the game: LIVE, PTU and so on."""
-        result = self._save_choice("game_channel", channel)
-        if result["ok"]:
-            result["game"] = dataclasses.asdict(self._tools.game(settings.load(self._path)))
+        result, current = self._save_choice("game_channel", channel)
+        if current is not None:
+            result["game"] = dataclasses.asdict(self._game(current))
         return result
 
     def choose_game_folder(self) -> dict[str, object]:
@@ -310,35 +300,40 @@ class Bridge:
         if not folder:
             return {"ok": False, "cancelled": True}
         channel = settings.load(self._path).game_channel
-        root = self._tools.root(folder, channel)
+        root = self._pc.root(folder, channel)
         if root is None:
             return {"ok": False, "problem": f"There's no {channel}\\Data.p4k in or under {folder}."}
-        result = self._save_choice("game_root", root)
-        if result["ok"]:
-            result["game"] = dataclasses.asdict(self._tools.game(settings.load(self._path)))
+        result, current = self._save_choice("game_root", root)
+        if current is not None:
+            result["game"] = dataclasses.asdict(self._game(current))
         return result
 
     def capture_push_to_talk(self) -> dict[str, object]:
         """Wait for the player to press the button they want, and save it."""
-        found = self._tools.capture(setup.CAPTURE_SECONDS)
+        found = self._pc.capture(setup.CAPTURE_SECONDS)
         if found is None:
             seconds = round(setup.CAPTURE_SECONDS)
             return {"ok": False, "problem": f"No button was pressed in {seconds} seconds."}
-        result = self._save_choice("push_to_talk", found)
-        if result["ok"]:
-            result["name"] = self._tools.name(found)
-            result["conflicts"] = self._tools.conflicts(found, settings.load(self._path))
+        result, current = self._save_choice("push_to_talk", found)
+        if current is not None:
+            result["name"] = self._pc.name(found)
+            result["conflicts"] = self._conflicts(found, current)
         return result
 
     def set_microphone(self, name: object) -> dict[str, object]:
-        """A microphone from the list, or empty for Windows' default."""
-        if not isinstance(name, str) or (name and name not in self._tools.microphones()):
+        """A microphone from the list, empty for Windows' default, or the one already
+        saved (which may be a number, or unplugged now)."""
+        if not isinstance(name, str):
             return {"ok": False, "problem": "That microphone isn't connected."}
-        return self._save_choice("microphone", name or None)
+        saved = settings.load(self._path).microphone or ""
+        if name and name != saved and name not in self._devices(fresh=True):
+            return {"ok": False, "problem": "That microphone isn't connected."}
+        result, _ = self._save_choice("microphone", name or None)
+        return result
 
     def microphone_level(self) -> dict[str, object]:
         """A short listen to the chosen microphone."""
-        return self._tools.level(settings.load(self._path).microphone)
+        return self._pc.level(settings.load(self._path).microphone)
 
     def finish_setup(self) -> dict[str, object]:
         """Setup is done: on a first run, Tycho starts."""
@@ -346,7 +341,7 @@ class Bridge:
         missing = [
             what
             for what, ok in (
-                ("the game", self._tools.game(current).found),
+                ("the game", self._game(current).found),
                 ("a push-to-talk button", current.push_to_talk is not None),
             )
             if not ok
@@ -356,16 +351,41 @@ class Bridge:
         self._finish()
         return {"ok": True, "first_run": self._first_run}
 
-    def _save_choice(self, name: str, value: object) -> dict[str, object]:
-        """A setup choice, saved; it applies when Tycho next starts."""
+    def _save_choice(self, name: str, value: object) -> tuple[dict[str, object], Settings | None]:
+        """A setup choice, saved; it applies when Tycho next starts. Also the settings
+        as saved, so the caller needn't read the file again."""
         before = getattr(settings.load(self._path), name)
         try:
-            after = getattr(settings.update({name: value}, self._path), name)
+            current = settings.update({name: value}, self._path)
         except SettingsError as e:
-            return {"ok": False, "problem": _plain(str(e))}
-        if after != before:
+            return {"ok": False, "problem": _plain(str(e))}, None
+        if getattr(current, name) != before:
             self._undo = [*self._undo, (name, before)][-UNDO_DEPTH:]
-        return {"ok": True, "applies": "restart" if not self._first_run else "start"}
+        return {"ok": True, "applies": "start" if self._first_run else "restart"}, current
+
+    # Slow look-ups, kept while their inputs are the same.
+
+    def _game(self, current: Settings) -> setup.Game:
+        key = (current.game_channel, str(current.game_root))
+        return cast(setup.Game, self._cached("game", key, lambda: self._pc.game(current)))
+
+    def _conflicts(self, ptt: str, current: Settings) -> list[str]:
+        key = (ptt, current.game_channel, str(current.game_root))
+        found = self._cached("conflicts", key, lambda: self._pc.conflicts(ptt, current))
+        return list(cast(list[str], found))
+
+    def _devices(self, fresh: bool = False) -> list[str]:
+        # Microphones come and go, so a new list each time setup is shown, not each click.
+        key = time.monotonic() // DEVICES_SECONDS if not fresh else time.monotonic()
+        return list(cast(list[str], self._cached("devices", key, self._pc.microphones)))
+
+    def _cached(self, what: str, key: object, look: Callable[[], object]) -> object:
+        hit = self._cache.get(what)
+        if hit is not None and hit[0] == key:
+            return hit[1]
+        value = look()
+        self._cache[what] = (key, value)
+        return value
 
 
 def _shown(name: str, value: object) -> object:

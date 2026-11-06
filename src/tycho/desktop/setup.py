@@ -1,23 +1,20 @@
 """What setup needs from the PC (ADR 17): the game's folders, a button press, the
-microphones and their level. Each is a function the bridge is given, so the bridge is
-tested with stand-ins and no hardware.
+microphones and their level. A hardware boundary, so a ``Protocol`` (``SetupPC``) with a
+fake in ``tests/fakes``; ``WindowsPC`` is the real one.
 
 These run on the bridge's threads, never the event loop, and none of them waits on the
 terminal: the window is the only one asking.
 """
 
-import logging
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 import numpy as np
 
-from tycho import settings
 from tycho.settings import Settings
-
-log = logging.getLogger(__name__)
 
 CAPTURE_SECONDS = 15.0
 LEVEL_SECONDS = 1.5
@@ -31,96 +28,124 @@ class Game:
     problem: str = ""
 
 
-def find_game(current: Settings) -> Game:
-    """The game Tycho would use with these settings, or why there's none."""
-    from tycho.app import find_install
+class SetupPC(Protocol):
+    def game(self, current: Settings) -> Game:
+        """The game Tycho would use with these settings, or why there's none."""
+        ...
 
-    try:
-        install = find_install(current)
-    except FileNotFoundError:
-        return Game(
-            False, current.game_channel, problem=f"Star Citizen {current.game_channel} wasn't found"
-        )
-    return Game(True, current.game_channel, str(install.folder))
+    def root(self, folder: str, channel: str) -> str | None:
+        """The folder to save as game_root, from whichever level the player picked."""
+        ...
 
+    def capture(self, seconds: float) -> str | None:
+        """The next button pressed, as a push_to_talk setting; None if none in time."""
+        ...
 
-def game_root(folder: str, channel: str) -> str | None:
-    """The folder to save as game_root, from whichever level the player picked."""
-    from tycho.game.install import root_from
+    def name(self, setting: str) -> str:
+        """A push_to_talk setting as the player knows it ("Mouse side (forward)")."""
+        ...
 
-    root = root_from(Path(folder), channel)
-    return str(root) if root is not None else None
+    def conflicts(self, setting: str, current: Settings) -> list[str]:
+        """What the button also does in the game."""
+        ...
 
+    def microphones(self) -> list[str]:
+        """The microphones connected now, as microphone settings, default first."""
+        ...
 
-def capture_button(seconds: float = CAPTURE_SECONDS) -> str | None:
-    """The next button pressed (keyboard, mouse but not left click, or joystick), as a
-    push_to_talk setting; None if nothing within ``seconds``."""
-    from tycho.app import input_sources
-    from tycho.ptt import windows as win
-    from tycho.ptt.monitor import capture_binding
-
-    found = capture_binding(
-        input_sources(None), ignore=frozenset({win.LEFT_MOUSE}), timeout=seconds
-    )
-    return str(found) if found is not None else None
+    def level(self, microphone: str | None) -> dict[str, object]:
+        """A short listen: ``ok``, ``name``, ``peak`` and a ``verdict``, or a ``problem``."""
+        ...
 
 
-def button_name(setting: str) -> str:
-    from tycho.app import describe
-    from tycho.ptt.binding import Binding
+class WindowsPC:
+    """The real PC. Satisfies ``SetupPC``."""
 
-    return describe(Binding.parse(setting))
+    def game(self, current: Settings) -> Game:
+        from tycho.app import find_install
+
+        try:
+            install = find_install(current)
+        except FileNotFoundError:
+            channel = current.game_channel
+            return Game(False, channel, problem=f"Star Citizen {channel} wasn't found")
+        return Game(True, current.game_channel, str(install.folder))
+
+    def root(self, folder: str, channel: str) -> str | None:
+        from tycho.game.install import root_from
+
+        found = root_from(Path(folder), channel)
+        return str(found) if found is not None else None
+
+    def capture(self, seconds: float) -> str | None:
+        """Keyboard, mouse (not left click) or joystick. The joystick source is made and
+        polled on this thread and closed after, as SDL requires: Tycho's own joystick
+        source, on its push-to-talk thread, is untouched."""
+        from tycho.app import input_sources
+        from tycho.ptt import windows as win
+        from tycho.ptt.monitor import capture_binding
+
+        sources = input_sources(None)
+        try:
+            found = capture_binding(sources, ignore=frozenset({win.LEFT_MOUSE}), timeout=seconds)
+        finally:
+            for source in sources:
+                close: Callable[[], None] | None = getattr(source, "close", None)
+                if close is not None:
+                    close()
+        return str(found) if found is not None else None
+
+    def name(self, setting: str) -> str:
+        from tycho.app import describe
+        from tycho.ptt.binding import Binding
+
+        return describe(Binding.parse(setting))
+
+    def conflicts(self, setting: str, current: Settings) -> list[str]:
+        from tycho.app import conflict_warnings, find_install
+        from tycho.game.store import GameDataError, KeybindStore
+        from tycho.ptt.binding import Binding
+
+        try:
+            store = KeybindStore.load(find_install(current))
+        except FileNotFoundError, GameDataError, OSError:
+            return []
+        return conflict_warnings(Binding.parse(setting), store)
+
+    def microphones(self) -> list[str]:
+        from tycho.audio.microphone import input_devices
+
+        return input_devices()
+
+    def level(self, microphone: str | None) -> dict[str, object]:
+        from tycho.app import microphone_device
+        from tycho.audio.microphone import Microphone
+
+        try:
+            with Microphone(device=microphone_device(microphone)) as mic:
+                mic.start()
+                time.sleep(LEVEL_SECONDS)
+                clip = mic.stop()
+                name = mic.name
+        except Exception as e:
+            return {"ok": False, "problem": str(e)}
+        return {"ok": True, "name": name, **verdict(clip)}
 
 
-def button_conflicts(setting: str, current: Settings) -> list[str]:
-    """What the button also does in the game, so the player can choose another."""
-    from tycho.app import conflict_warnings, find_install
-    from tycho.game.store import GameDataError, KeybindStore
-    from tycho.ptt.binding import Binding
-
-    try:
-        store = KeybindStore.load(find_install(current))
-    except FileNotFoundError, GameDataError, OSError:
-        return []
-    return conflict_warnings(Binding.parse(setting), store)
-
-
-def microphones() -> list[str]:
-    """The input devices Windows offers, by name, default first."""
-    from tycho.audio.microphone import input_devices
-
-    return input_devices()
-
-
-def level(microphone: str | None, seconds: float = LEVEL_SECONDS) -> dict[str, object]:
-    """How loud the microphone is right now: its peak, and what that means."""
-    from tycho.app import microphone_device
-    from tycho.audio.microphone import Microphone
-
-    try:
-        with Microphone(device=microphone_device(microphone)) as mic:
-            mic.start()
-            time.sleep(seconds)
-            clip = mic.stop()
-            name = mic.name
-    except Exception as e:
-        return {"ok": False, "problem": str(e)}
+def verdict(clip: np.ndarray[tuple[int], np.dtype[np.float32]]) -> dict[str, object]:
+    """How loud a clip is, and what that means for Tycho hearing the player."""
     peak = float(np.max(np.abs(clip))) if len(clip) else 0.0
     if peak < 0.003:
-        verdict = "silent"
+        word = "silent"
     elif peak < 0.05:
-        verdict = "quiet"
+        word = "quiet"
     elif peak > 0.98:
-        verdict = "clipping"
+        word = "clipping"
     else:
-        verdict = "good"
-    return {"ok": True, "name": name, "peak": round(peak, 4), "verdict": verdict}
+        word = "good"
+    return {"peak": round(peak, 4), "verdict": word}
 
 
-def needs_setup(current: Settings, game: Callable[[Settings], Game] = find_game) -> bool:
+def needs_setup(current: Settings, pc: SetupPC | None = None) -> bool:
     """Whether Tycho can't start without the player: no push-to-talk, or no game."""
-    return current.push_to_talk is None or not game(current).found
-
-
-def save(changes: Mapping[str, object], path: Path | None = None) -> Settings:
-    return settings.update(changes, path)
+    return current.push_to_talk is None or not (pc or WindowsPC()).game(current).found

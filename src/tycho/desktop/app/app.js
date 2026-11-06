@@ -103,6 +103,9 @@
   }
   function micSelect(mic) {
     const options = [["", "Windows' default microphone"], ...mic.devices.map((d) => [d, d])];
+    // A saved microphone that isn't listed (a number, part of a name, or unplugged now)
+    // is shown as itself, so choosing nothing never overwrites it.
+    if (mic.setting && !mic.devices.includes(mic.setting)) options.push([mic.setting, `${mic.setting} (saved, not connected now)`]);
     return `<select class="input" id="mic" aria-label="Microphone">${options.map(([v, l]) => `<option value="${esc(v)}" ${v === mic.setting ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
   }
   function bindSetup() {
@@ -124,14 +127,18 @@
       if (!r.ok) toast(r.problem);
       render();
     }));
-    $("#folder")?.addEventListener("click", async () => {
-      const r = await api.choose_game_folder();
-      if (!r.ok && !r.cancelled) $("#folderErr").textContent = r.problem;
-      else if (r.ok) render();
-    });
+    $("#folder")?.addEventListener("click", chooseFolder);
     $("#capture")?.addEventListener("click", () => capture($("#capture"), $("#pttName")));
     bindMic();
     if (step === 3) bindKeys();
+  }
+  async function chooseFolder() {
+    const r = await api.choose_game_folder();
+    if (!r.ok && !r.cancelled) $("#folderErr").textContent = r.problem;
+    else if (r.ok) {
+      if (r.applies === "restart") toast("Game folder saved. Applies when Tycho restarts.", true);
+      render();
+    }
   }
   async function capture(button, nameEl) {
     button.disabled = true;
@@ -249,11 +256,7 @@
     page.querySelectorAll("[data-pick]").forEach((b) => b.addEventListener("click", () => change(b.dataset.pick, b.dataset.v, `${label(b.dataset.pick)}: ${b.dataset.v}`)));
     page.querySelectorAll("[data-text]").forEach((i) => i.addEventListener("change", () => change(i.dataset.text, i.value, `${label(i.dataset.text)}: ${i.value || "none"}`)));
     $("#setCapture")?.addEventListener("click", () => capture($("#setCapture"), $("#setPtt")));
-    $("#setFolder")?.addEventListener("click", async () => {
-      const r = await api.choose_game_folder();
-      if (!r.ok && !r.cancelled) $("#folderErr").textContent = r.problem;
-      else if (r.ok) { toast("Game folder saved. Applies when Tycho restarts.", true); render(); }
-    });
+    $("#setFolder")?.addEventListener("click", chooseFolder);
     bindMic();
   }
 

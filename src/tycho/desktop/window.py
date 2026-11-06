@@ -40,13 +40,14 @@ class AppWindow:
         self._lock = threading.Lock()
         self._stopping = False
 
-    def open(self) -> None:
+    def open(self) -> bool:
+        """Run the window until it closes. False if it couldn't open at all."""
         # Imported here: pythonnet starts .NET, which only the window needs.
         webview: Any = importlib.import_module("webview")
 
         with self._lock:
             if self._stopping:  # Tycho began quitting as the window was asked for
-                return
+                return True
             self._window = webview.create_window(
                 "Tycho",
                 html=page(),
@@ -60,9 +61,11 @@ class AppWindow:
             webview.start(gui="edgechromium", private_mode=True)
         except Exception as e:  # no WebView2 runtime, or it failed: Tycho carries on
             log.warning("The window couldn't open (%s). Windows' web view: %s", e, WEBVIEW2)
+            return False
         finally:
             with self._lock:
                 self._window = None
+        return True
 
     @property
     def is_open(self) -> bool:

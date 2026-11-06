@@ -25,6 +25,7 @@ from tycho.stt import PARAKEET_V2, DeviceChoice, ModelError, ModelStore
 if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when running
     from tycho.address import Address
     from tycho.audio.source import AudioSource
+    from tycho.desktop.window import AppWindow
     from tycho.input import FocusCheck, KeySender
     from tycho.knowledge.ships import ShipLibrary
     from tycho.runtime import (
@@ -196,9 +197,13 @@ def _run(current: Settings, log_file: Path, *, window: bool = True) -> int:
         if needs_setup(current):
             # A first run (no push-to-talk, or no game): the window asks, not the terminal.
             log.info("Opening Tycho's window to set up")
-            if not first_run():
+            outcome = first_run()
+            if outcome == "closed":
                 print("Setup isn't finished, so Tycho isn't listening. Run it again to finish.")
                 return 1
+            if outcome == "no_window":
+                # No window on this PC (no WebView2): set up in the terminal, as before.
+                print("Tycho's window can't open on this PC, so setup is here in the terminal.")
             current = settings.load()
     binding = current.push_to_talk_binding
     if binding is None:
@@ -269,15 +274,11 @@ def serve_with_tray(
 ) -> None:
     """Run the session with Tycho's tray icon (ADR 17): pause, the Tile, the logs, quit.
     Without a tray (it couldn't start), the terminal only, as before."""
-    import dataclasses
     import os
 
-    from tycho.desktop.bridge import Bridge
     from tycho.desktop.host import Host
-    from tycho.desktop.keys import ProviderKeyCheck
     from tycho.desktop.menu import TrayMenu
     from tycho.desktop.tray import TrayIcon
-    from tycho.desktop.window import AppWindow
 
     host = Host(lambda stop: serve(session, store, stop))
 
@@ -287,18 +288,9 @@ def serve_with_tray(
         callback = live.get(name)
         return callback is not None and host.run_now(lambda: callback(value))
 
-    def findings() -> list[Mapping[str, str]]:
-        current = settings.load()
-        return [dataclasses.asdict(f) for f in _checks(current, quick=True, ask=False)]
-
-    bridge = Bridge(
-        apply=apply,
-        findings=findings,
-        key_check=ProviderKeyCheck(),
-        ship_accent=display.ship_accent if display is not None else lambda: None,
-        choose_folder=lambda: window.choose_folder(),
+    window = app_window(
+        apply=apply, ship_accent=display.ship_accent if display is not None else lambda: None
     )
-    window = AppWindow(bridge)
     host.on_quit = window.close
     host.window_open = lambda: window.is_open
     host.focus_window = window.focus
@@ -323,36 +315,58 @@ def serve_with_tray(
         tray.close()
 
 
-def first_run() -> bool:
-    """The window, on setup, before Tycho starts listening (ADR 17). True once the
-    player finishes it; False if they close the window first."""
+def app_window(
+    *,
+    apply: Callable[[str, object], bool] = lambda _name, _value: False,
+    ship_accent: Callable[[], str | None] = lambda: None,
+    first_run: bool = False,
+    finish: Callable[[], None] = lambda: None,
+) -> AppWindow:
+    """Tycho's window and its bridge, for the first run and for the tray alike."""
     import dataclasses
-    import threading
 
     from tycho.desktop.bridge import Bridge
     from tycho.desktop.keys import ProviderKeyCheck
     from tycho.desktop.window import AppWindow
 
+    def findings() -> list[Mapping[str, str]]:
+        current = settings.load()
+        return [dataclasses.asdict(f) for f in _checks(current, quick=True, ask=False)]
+
+    bridge = Bridge(
+        apply=apply,
+        findings=findings,
+        key_check=ProviderKeyCheck(),
+        ship_accent=ship_accent,
+        choose_folder=lambda: window.choose_folder(),
+        finish=finish,
+        first_run=first_run,
+    )
+    window = AppWindow(bridge)
+    return window
+
+
+type FirstRun = Literal["done", "closed", "no_window"]
+
+
+def first_run() -> FirstRun:
+    """The window, on setup, before Tycho starts listening (ADR 17): "done" once the
+    player finishes it, "closed" if they close it first, "no_window" if it can't open."""
+    import threading
+
     finished = threading.Event()
+    opened: list[AppWindow] = []
 
     def finish() -> None:
         finished.set()
         # A moment for the page to say "Starting Tycho…" before it goes.
-        threading.Timer(0.8, window.close).start()
+        threading.Timer(0.8, opened[0].close).start()
 
-    def findings() -> list[Mapping[str, str]]:
-        return [dataclasses.asdict(f) for f in _checks(settings.load(), quick=True, ask=False)]
-
-    bridge = Bridge(
-        findings=findings,
-        key_check=ProviderKeyCheck(),
-        choose_folder=lambda: window.choose_folder(),
-        finish=finish,
-        first_run=True,
-    )
-    window = AppWindow(bridge)
-    window.open()
-    return finished.is_set()
+    window = app_window(first_run=True, finish=finish)
+    opened.append(window)
+    if not window.open():
+        return "no_window"
+    return "done" if finished.is_set() else "closed"
 
 
 def _float(value: object) -> float:
@@ -1180,6 +1194,13 @@ class _PollThreadJoysticks:
 
     def is_pressed(self, binding: Binding) -> bool:
         return binding.kind is DeviceKind.JOYSTICK and self._get().is_pressed(binding)
+
+    def close(self) -> None:
+        """Let SDL go, on the thread that set it up (a capture from the app window)."""
+        source, self._source = self._source, None
+        close = getattr(source, "close", None)
+        if close is not None:
+            close()
 
 
 def _device_name(device: str) -> str:
