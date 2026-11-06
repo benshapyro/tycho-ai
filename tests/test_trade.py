@@ -223,7 +223,7 @@ def test_a_name_that_misses_is_an_answer_not_an_error() -> None:
     error, result = _run(_prices(), {"commodity": "unobtainium", "place": ""})
     assert not error
     assert "closest" in result["not_found"]
-    assert "closest names" in result["answer"]
+    assert "answer" not in result  # data only: how to say it is in the description
     error, result = _run(
         _routes(), {"start": "nowhere", "commodity": "", "end": "", "cargo_scu": 0}
     )
@@ -289,3 +289,41 @@ def test_a_start_and_a_commodity_ask_uex_once_and_keep_the_start() -> None:
     ]
     routes = [query for path, query in uex.calls if path == "/commodities_routes"]
     assert routes == [{"id_commodity": 47}]
+
+
+def test_a_commodity_that_fits_a_few_names_the_others(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review of #158: no test set also_matches, or asked when too many tie."""
+    trade = _trade()
+    commodity, others = trade.commodity_match("aranite")  # Laranite and Caranite tie
+    assert commodity.name in ("Laranite", "Caranite")
+    assert others
+    import tycho.knowledge.trade
+
+    monkeypatch.setattr(tycho.knowledge.trade, "GUESS_AMONG", 1)
+    with pytest.raises(TradeError, match="name one"):
+        trade.commodity_match("aranite")
+
+
+def test_a_guessed_end_is_named() -> None:
+    _, result = _run(
+        _routes(), {"start": "Hurston", "commodity": "", "end": "Lagrange", "cargo_scu": 0}
+    )
+    assert result["also_ends"]
+
+
+def test_routes_from_the_start_are_asked_when_the_commodity_list_misses_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review of #158: if UEX cut a commodity's route list short, the start's own
+    routes are asked for before saying there are none."""
+    uex = FakeTradeUex()
+    real = uex._routes  # pyright: ignore[reportPrivateUsage]
+
+    def capped(query: dict[str, Any]) -> list[dict[str, Any]]:
+        return [] if "id_commodity" in query else real(query)
+
+    monkeypatch.setattr(uex, "_routes", capped)
+    _, result = _run(
+        _routes(uex), {"start": "Hurston", "commodity": "laranite", "end": "", "cargo_scu": 0}
+    )
+    assert [r["sell_at"] for r in result["routes"]] == ["New Babbage", "Area18"]

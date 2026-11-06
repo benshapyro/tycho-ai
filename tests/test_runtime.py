@@ -1299,6 +1299,35 @@ def test_a_look_up_never_shortens_a_web_searchs_deadline() -> None:
     assert r.results[0].status == "replied"
 
 
+class _LookThenSearch(FakeBrain):
+    """The real order (#169): a look-up, then a web search, then a slow answer."""
+
+    async def decide(self, request: BrainRequest) -> Decision:
+        assert request.looking is not None
+        assert request.waiting is not None
+        request.looking()
+        await asyncio.sleep(0.05)
+        request.waiting()
+        await asyncio.sleep(1.0)
+        return Reply("4.11 is on the roadmap.")
+
+
+def test_a_search_after_look_ups_still_stops_at_the_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import tycho.runtime.session
+
+    monkeypatch.setattr(tycho.runtime.session, "SEARCH_LIMIT", 0.5)
+    r = _conversation(
+        "whats new and where do I sell gold",
+        brain=_LookThenSearch(),
+        speaker=FakeSpeaker(),
+        brain_seconds=0.1,
+        search_seconds=3.0,  # would run to about 3 s without the limit
+    )
+    assert r.results[0].status == "failed"
+
+
 def test_short_lines_are_kept_and_long_ones_arent() -> None:
     speaker = FakeSpeaker()
     long = "The Prospector, or the MOLE if you have a crew to fill it."

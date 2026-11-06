@@ -104,6 +104,8 @@ LOOKING_SECONDS = 7.0
 least this long from then: a look-up and Claude's answer to it take 3-5 s, and two in
 a row ran past BRAIN_SECONDS in the play session (#150). Never less than
 BRAIN_SECONDS, and never past LOOKING_LIMIT."""
+SEARCH_LIMIT = 20.0
+"""A request with a web search answers or fails this long after it was asked."""
 LOOKING_LIMIT = 15.0
 """However many look-ups, an answer comes or fails this long after the request."""
 FILLERS = ("Let me check.", "Checking the latest.", "One moment, looking that up.")
@@ -478,12 +480,15 @@ class Session:
                 self._warm_speaker()  # while the brain thinks, so speech starts sooner
                 try:
                     async with asyncio.timeout(self._brain_seconds) as budget:
+                        asked = loop.time()
 
                         def searching() -> None:
-                            budget.reschedule(loop.time() + self._search_seconds)
+                            # Capped too (#169): after look-ups, a search can't run past it.
+                            budget.reschedule(
+                                min(loop.time() + self._search_seconds, asked + SEARCH_LIMIT)
+                            )
                             self._fill()
 
-                        asked = loop.time()
                         checking: list[bool] = []
 
                         def looking() -> None:

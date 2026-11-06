@@ -82,7 +82,10 @@ def windowed(argv: list[str]) -> int:
     sys.stdout = sys.stderr = tail  # type: ignore[assignment]
     try:
         code = app.main(argv or ["run"])
-    except Exception as e:
+    except Exception as e:  # the player must see something, and the log the traceback
+        import logging
+
+        logging.getLogger("tycho").exception("Tycho stopped")
         tail.write(f"\nTycho stopped: {e}")
         code = 1
     if code != 0:
