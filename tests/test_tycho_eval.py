@@ -187,6 +187,7 @@ def test_run_case_counts_calls_to_claude(replies: int, kind: str, calls: int) ->
     }[kind]
     costs = e._Costs()  # pyright: ignore[reportPrivateUsage]
     logger = logging.getLogger("tycho.brain")
+    level = logger.level
     logger.addHandler(costs)
     logger.setLevel(logging.DEBUG)
     try:
@@ -204,6 +205,7 @@ def test_run_case_counts_calls_to_claude(replies: int, kind: str, calls: int) ->
         )
     finally:
         logger.removeHandler(costs)
+        logger.setLevel(level)
     assert outcome.route == "brain"
     assert outcome.calls == calls
 

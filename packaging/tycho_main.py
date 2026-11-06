@@ -70,6 +70,10 @@ class _Tail:
         return False
 
 
+def _last_lines(text: str) -> list[str]:
+    return [line for line in text.splitlines() if line.strip()][-6:]
+
+
 def windowed(argv: list[str]) -> int:
     """tycho-app.exe: Tycho with no terminal. A problem that stops it is shown in a
     message box, since nothing else would show it."""
@@ -85,11 +89,13 @@ def windowed(argv: list[str]) -> int:
     except Exception as e:  # the player must see something, and the log the traceback
         import logging
 
-        logging.getLogger("tycho").exception("Tycho stopped")
         tail.write(f"\nTycho stopped: {e}")
+        lines = _last_lines(tail.text)  # before logging, which writes the traceback here too
+        logging.getLogger("tycho").exception("Tycho stopped")
         code = 1
+    else:
+        lines = _last_lines(tail.text)
     if code != 0:
-        lines = [line for line in tail.text.splitlines() if line.strip()][-6:]
         message = "\n".join(lines) or "Tycho stopped."
         log = app.paths.logs_dir()
         message += f"\n\nThe log is in {log}."

@@ -309,21 +309,3 @@ def test_a_guessed_end_is_named() -> None:
         _routes(), {"start": "Hurston", "commodity": "", "end": "Lagrange", "cargo_scu": 0}
     )
     assert result["also_ends"]
-
-
-def test_routes_from_the_start_are_asked_when_the_commodity_list_misses_them(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Review of #158: if UEX cut a commodity's route list short, the start's own
-    routes are asked for before saying there are none."""
-    uex = FakeTradeUex()
-    real = uex._routes  # pyright: ignore[reportPrivateUsage]
-
-    def capped(query: dict[str, Any]) -> list[dict[str, Any]]:
-        return [] if "id_commodity" in query else real(query)
-
-    monkeypatch.setattr(uex, "_routes", capped)
-    _, result = _run(
-        _routes(uex), {"start": "Hurston", "commodity": "laranite", "end": "", "cargo_scu": 0}
-    )
-    assert [r["sell_at"] for r in result["routes"]] == ["New Babbage", "Area18"]

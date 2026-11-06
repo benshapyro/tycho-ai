@@ -234,12 +234,6 @@ class TradeRoutes(_TradeLookup):
             return rows
 
         rows = kept(rows)
-        if not rows and start is not None and commodity is not None:
-            # If UEX cut the commodity's list short, ask from the start itself (#160).
-            try:
-                rows = kept(await self._from(start))
-            except TradeError, WikiError:
-                rows = []
         best = sorted(rows, key=lambda r: -_profit(r, cargo))[:5]
         body: dict[str, object] = {
             "start": start.value if start is not None else "anywhere",
