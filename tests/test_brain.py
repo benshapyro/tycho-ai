@@ -935,3 +935,8 @@ def test_a_uex_miss_or_question_back_isnt_credited() -> None:
 def test_uex_said_with_dots_is_a_credit() -> None:
     client = _Calls(_looks_up("commodity_prices"), ([], _final("U.E.X. has Orison top.")))
     assert _ask(client, _Credited("commodity_prices")) == Reply("U.E.X. has Orison top.")
+
+
+def test_the_site_named_is_a_credit_too() -> None:
+    client = _Calls(_looks_up("commodity_prices"), ([], _final("Per uexcorp.space, Orison.")))
+    assert _ask(client, _Credited("commodity_prices")) == Reply("Per uexcorp.space, Orison.")

@@ -454,8 +454,8 @@ def _found(result: LookupResult) -> bool:
 def _credited(reply: Reply, credits: list[str]) -> Reply:
     """The answer, naming each source it used that it didn't name itself: Claude is
     asked to credit UEX, but with the details on a card it often doesn't (#164)."""
-    said = reply.text.replace(".", "")  # "U.E.X." names UEX too
-    missing = [c for c in credits if not re.search(rf"\b{re.escape(c)}\b", said, re.IGNORECASE)]
+    said = re.sub(r"\b(\w)\.(?=\w\.)", r"\1", reply.text)  # "U.E.X." names UEX too
+    missing = [c for c in credits if not re.search(rf"\b{re.escape(c)}", said, re.IGNORECASE)]
     if not missing:
         return reply
     return dataclasses.replace(reply, text=f"{reply.text} From {' and '.join(missing)}.")

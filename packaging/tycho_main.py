@@ -77,6 +77,7 @@ def _last_lines(text: str) -> list[str]:
 def windowed(argv: list[str]) -> int:
     """tycho-app.exe: Tycho with no terminal. A problem that stops it is shown in a
     message box, since nothing else would show it."""
+    import contextlib
     import ctypes
 
     from tycho import app
@@ -92,7 +93,8 @@ def windowed(argv: list[str]) -> int:
         tail.write(f"\nTycho stopped: {e}")
         lines = _last_lines(tail.text)  # before logging, which writes the traceback here too
         if not logging.getLogger("tycho").handlers:  # it stopped before logging began
-            app.logs.setup()
+            with contextlib.suppress(OSError):  # if logging was what failed, the box still shows
+                app.logs.setup()
         logging.getLogger("tycho").exception("Tycho stopped")
         code = 1
     else:
