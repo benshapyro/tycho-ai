@@ -67,6 +67,9 @@ class BrainRequest:
     waiting: Callable[[], None] | None = field(default=None, compare=False)
     """Called once if the answer will be slow (a web search has started), so the
     player hears a short line instead of silence (ADR 15)."""
+    looking: Callable[[], None] | None = field(default=None, compare=False)
+    """Called once when any other look-up starts (prices, a ship), so the player
+    knows Tycho heard them while it checks (play session, 6 November 2026)."""
 
 
 class BrainError(Exception):

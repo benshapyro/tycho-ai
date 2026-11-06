@@ -35,7 +35,7 @@ from tycho.lexicon import Lexicon
 from tycho.ptt.binding import Binding
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime import AlreadyRunning, Result, Session, SingleInstance
-from tycho.runtime.session import FILLERS, KEEP_CHARACTERS
+from tycho.runtime.session import CHECKING, FILLERS, KEEP_CHARACTERS
 from tycho.tile import Card, Row
 
 RATE = 16_000
@@ -1150,6 +1150,15 @@ def test_a_web_search_gets_a_filler_line_and_the_answer_waits_for_it() -> None:
     assert filler in speaker.kept  # kept as audio, so it starts at once next time
     assert speaker.spoken == [filler, "4.11 is on the roadmap for Q4."]
     assert speaker.stopped == []  # not cut off
+
+
+def test_a_look_up_says_its_checking_and_the_answer_follows() -> None:
+    """Play session: a price question was silent for 5 s, then answered."""
+    speaker = FakeSpeaker(seconds=0.05)
+    brain = FakeBrain(Reply("Rat's Nest pays the most."), Reply("Area 18."), look=True)
+    _conversation("best place to sell gold", "and laranite", brain=brain, speaker=speaker)
+    assert speaker.spoken == [CHECKING[0], "Rat's Nest pays the most.", CHECKING[1], "Area 18."]
+    assert CHECKING[0] in speaker.kept  # kept as audio: the voice service is paid once
 
 
 def test_the_filler_lines_take_turns() -> None:
