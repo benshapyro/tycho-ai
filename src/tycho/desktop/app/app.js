@@ -313,6 +313,75 @@
     }));
   }
 
+  /* ---------- commands ---------- */
+  let cmdFilter = "all", cmdQuery = "", cmdOpen = "";
+  async function commandsView(keepFocus = false) {
+    const d = await api.commands();
+    const rows = d.rows;
+    const noKey = rows.filter((r) => !r.sequence && !r.key && d.game).length;
+    $("#noKeyBadge").textContent = noKey ? `${noKey} no key` : "";
+    const q = cmdQuery.trim().toLowerCase();
+    const shown = rows.filter((r) => {
+      if (cmdFilter === "nokey" && (r.sequence || r.key || !d.game)) return false;
+      if (cmdFilter === "mine" && !r.mine.length) return false;
+      if (cmdFilter === "sequences" && !r.sequence) return false;
+      return !q || [r.id, r.label, ...r.said, ...r.mine].join(" ").toLowerCase().includes(q);
+    });
+    const counts = { all: rows.length, nokey: noKey, mine: rows.filter((r) => r.mine.length).length, sequences: rows.filter((r) => r.sequence).length };
+    const filters = [["all", "All"], ["nokey", "No key"], ["mine", "Yours"], ["sequences", "Sequences"]];
+    page.innerHTML = `<h1>Commands</h1>
+      <p class="lede">What you can say, what it does in the game, and your key for it. Built-in phrases are instant; anything else goes to Claude. Your phrases are saved to <span class="num">${esc(d.file)}</span> and apply when Tycho restarts.</p>
+      ${d.problem ? `<p class="err">${esc(d.problem)}</p>` : ""}${d.warnings.map((w) => `<p class="warn-line">${esc(w)}</p>`).join("")}
+      ${d.game ? "" : `<p class="warn-line">Star Citizen wasn't found, so keys can't be shown. Set the game folder in Settings.</p>`}
+      <div class="toolbar"><input class="input" id="cmdSearch" type="search" placeholder="Search: gear, doors, quantum…" value="${esc(cmdQuery)}" aria-label="Search commands">
+        <div class="seg" role="group" aria-label="Show">${filters.map(([k, l]) => `<button type="button" aria-pressed="${cmdFilter === k}" data-filter="${k}">${l} ${counts[k]}</button>`).join("")}</div></div>
+      <div class="tablewrap"><table><thead><tr><th>Command</th><th>Say it</th><th>Your key</th><th>Notes</th></tr></thead><tbody>
+      ${shown.map(cmdRow).join("") || `<tr><td colspan="4" class="dim">Nothing matches. Try another word.</td></tr>`}
+      </tbody></table></div>
+      <p class="note" style="margin-top:10px">A phrase you add is taken away from any built-in command that had it. To make a new command or sequence, edit the file (the Tycho agent skill can help).</p>`;
+    bindCommands();
+    if (keepFocus) { const s = $("#cmdSearch"); s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+  }
+  function cmdRow(r) {
+    const phrases = r.said.map((p) => `<span>${esc(p)}</span>`).join("") +
+      r.mine.map((p) => `<span class="mine" title="Yours">${esc(p)}<button type="button" aria-label="Remove ${esc(p)}" data-remove-phrase="${esc(r.id)}" data-phrase="${esc(p)}">×</button></span>`).join("");
+    const add = cmdOpen === r.id
+      ? `<form class="addp" data-add="${esc(r.id)}"><input class="input" placeholder="What you'll say" aria-label="New phrase for ${esc(r.label)}" maxlength="60"><button class="btn frame" type="submit">Add</button></form>`
+      : "";
+    const key = r.sequence ? `<span class="dim">its steps' keys</span>` : r.key ? esc(r.key) : `<span class="chip warn">No key</span>`;
+    const notes = [];
+    if (r.confirm) notes.push(`<span class="chip bad">Asks first</span>`);
+    if (r.toggle) notes.push(`<span class="dim" style="font-size:13px">Uses a toggle, which can flip the wrong way.</span>`);
+    if (r.to_bind) notes.push(`<span class="dim" style="font-size:13px">Bind <b>${esc(r.to_bind)}</b> in the game's keybindings. Tycho won't press a near miss.</span>`);
+    if (r.sequence) notes.push(`<span class="steps-line">${r.steps.map(esc).join(" → ")}</span>`);
+    return `<tr><td><b>${esc(r.label)}</b><div class="num dim" style="font-size:12px">${esc(r.id)}</div></td>
+      <td><div class="phr">${phrases}<button class="plus" type="button" data-open="${esc(r.id)}">+ phrase</button></div>${add}</td>
+      <td class="key">${key}</td><td>${notes.join(" ")}</td></tr>`;
+  }
+  function bindCommands() {
+    const s = $("#cmdSearch");
+    s.addEventListener("input", () => { cmdQuery = s.value; commandsView(true); });
+    page.querySelectorAll("[data-filter]").forEach((b) => b.addEventListener("click", () => { cmdFilter = b.dataset.filter; render(); }));
+    page.querySelectorAll("[data-open]").forEach((b) => b.addEventListener("click", async () => {
+      cmdOpen = b.dataset.open; await render(); page.querySelector(`[data-add="${CSS.escape(cmdOpen)}"] input`)?.focus();
+    }));
+    page.querySelectorAll("[data-add]").forEach((f) => f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const phrase = f.querySelector("input").value;
+      const r = await api.add_phrase(f.dataset.add, phrase);
+      if (!r.ok) { toast(r.problem); return; }
+      cmdOpen = "";
+      const said = phrase.trim().toLowerCase();
+      toast(r.took_from ? `Added. “${said}” was ${r.took_from.replaceAll("_", " ")}'s; it's this command's now. Applies when Tycho restarts.` : "Added. Applies when Tycho restarts.");
+      render();
+    }));
+    page.querySelectorAll("[data-remove-phrase]").forEach((b) => b.addEventListener("click", async () => {
+      const r = await api.remove_phrase(b.dataset.removePhrase, b.dataset.phrase);
+      toast(r.ok ? "Removed. Applies when Tycho restarts." : r.problem);
+      render();
+    }));
+  }
+
   /* ---------- shell ---------- */
   async function render() {
     if (capturing) api.cancel_capture();
@@ -320,6 +389,7 @@
     try {
       if (view === "status") await status();
       else if (view === "setup") await setupView();
+      else if (view === "commands") await commandsView();
       else await settingsView();
     } catch (e) {
       page.innerHTML = `<h1>Something went wrong</h1><p class="lede">${esc(e && e.message ? e.message : e)}</p>`;

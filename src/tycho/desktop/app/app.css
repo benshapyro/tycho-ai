@@ -140,3 +140,24 @@ input[type="range"] { width: 150px; accent-color: var(--acc); }
 /* While a push-to-talk capture listens, nothing else can be clicked but Cancel. */
 .capturing nav button, .capturing main button:not(#cancelCapture), .capturing main select, .capturing main input { pointer-events: none; opacity: .45; }
 
+/* Commands (ADR 17), from the approved mockup. */
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; max-width: 1100px; }
+.toolbar .input { flex: 1 1 260px; max-width: 360px; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--rule); max-width: 1100px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 680px; }
+th { text-align: left; font-family: var(--f-label); text-transform: uppercase; letter-spacing: .1em; font-weight: 600; font-size: 12px; color: var(--dim); padding: 8px 12px; border-bottom: 1px solid var(--rule); background: #0a101a; }
+td { padding: 9px 12px; border-bottom: 1px solid #ffffff0a; vertical-align: top; }
+tr:hover td { background: #ffffff05; }
+td.key { white-space: nowrap; font-family: var(--f-num); }
+.phr { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.phr span { padding: 0 6px; background: var(--well); font-size: 13px; }
+.phr span.mine { color: var(--acc); background: var(--acc-soft); display: inline-flex; gap: 4px; align-items: center; }
+.phr span.mine button { background: none; border: 0; color: var(--dim); cursor: pointer; padding: 0 2px; font-size: 13px; }
+.phr span.mine button:hover { color: var(--danger); }
+.plus { border: 1px dashed var(--rule); background: none; color: var(--dim); padding: 0 8px; font-size: 13px; cursor: pointer; }
+.plus:hover { color: var(--acc); border-color: var(--acc-line); }
+.addp { display: flex; gap: 6px; margin-top: 6px; }
+.addp .input { padding: 4px 8px; font-size: 13px; flex: 1 1 200px; }
+.steps-line { color: var(--dim); font-size: 13px; }
+.chip.bad { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, transparent); }
+
