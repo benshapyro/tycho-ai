@@ -251,3 +251,70 @@ def test_keys_read_as_the_player_knows_them(key: str, shown: str) -> None:
     parsed = KeyInput.parse(key)
     assert parsed is not None
     assert key_text(parsed) == shown
+
+
+def test_asks_first_shows_as_the_safety_gate_decides(user_file: Path) -> None:
+    """#135: no ``confirm = true``, but the gate always asks before an eject."""
+    user_file.write_text(
+        '[[command]]\nid = "my_eject"\nsay = ["get me out"]\nactions = ["v_eject"]\n'
+        '\n[[sequence]]\nid = "abandon_ship"\nsay = ["abandon ship"]\nsteps = ["my_eject"]\n',
+        "utf-8",
+    )
+    rows = _rows(Commands(user_file, lambda: KEYBINDS))
+    assert rows["my_eject"]["confirm"] is True
+    assert rows["abandon_ship"]["confirm"] is True  # one of its steps asks
+    assert rows["landing_gear"]["confirm"] is False
+
+
+def test_a_file_that_wont_load_shows_none_of_its_phrases_as_yours(user_file: Path) -> None:
+    user_file.write_text(
+        '[[phrases]]\ncommand = "landing_gear"\nsay = ["wheels down"]\n'
+        '\n[[phrases]]\ncommand = "warp_drive"\nsay = ["engage"]\n',
+        "utf-8",
+    )
+    data = Commands(user_file, lambda: KEYBINDS).rows()
+    assert "can't be used" in str(data["problem"])
+    assert all(not r["mine"] for r in data["rows"])  # type: ignore[union-attr]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "phrases = 5\n",
+        '[[phrases]]\ncommand = "landing_gear"\nsay = 5\n',
+        "command = 5\n",
+        '[[command]]\nid = "x"\nsay = 5\nactions = ["a"]\n',
+    ],
+)
+def test_a_mistyped_file_still_shows_the_built_in_commands(user_file: Path, text: str) -> None:
+    user_file.write_text(text, "utf-8")
+    data = Commands(user_file, lambda: KEYBINDS).rows()
+    assert data["problem"]
+    assert len(data["rows"]) > 50  # type: ignore[arg-type]
+
+
+def test_a_phrase_written_another_way_is_still_a_duplicate(user_file: Path) -> None:
+    commands = Commands(user_file, lambda: KEYBINDS)
+    result = commands.add_phrase("landing_gear", "Landing gear!")
+    assert result["ok"] is False
+    assert "already one of its phrases" in str(result["problem"])
+    assert not user_file.exists()
+
+
+def test_a_phrases_entry_beside_the_players_command_can_be_removed(user_file: Path) -> None:
+    user_file.write_text(
+        MINE + '\n[[phrases]]\ncommand = "space_mode"\nsay = ["go to space"]\n', "utf-8"
+    )
+    commands = Commands(user_file, lambda: KEYBINDS)
+    assert _rows(commands)["space_mode"]["mine"] == ["space mode", "go to space"]
+    assert commands.remove_phrase("space_mode", "go to space")["ok"] is True
+    assert _rows(commands)["space_mode"]["mine"] == ["space mode"]
+
+
+def test_a_refusal_names_the_command_that_has_the_phrase(user_file: Path) -> None:
+    user_file.write_text(MINE + '\n[[phrases]]\ncommand = "eject"\nsay = ["punch it"]\n', "utf-8")
+    commands = Commands(user_file, lambda: KEYBINDS)
+    for target, owner in (("landing_gear", "eject"), ("space_mode", "eject")):
+        result = commands.add_phrase(target, "punch it")
+        assert result["ok"] is False
+        assert f"({owner})" in str(result["problem"])
