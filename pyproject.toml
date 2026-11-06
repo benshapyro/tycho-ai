@@ -24,6 +24,7 @@ dependencies = [
     "pydantic>=2.14.2",
     "pysdl2>=0.9.17",
     "pysdl2-dll>=2.32.10",
+    "pywebview>=6.2.1",
     "sounddevice>=0.5.6",
 ]
 

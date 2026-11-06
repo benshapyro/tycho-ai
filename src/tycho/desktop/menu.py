@@ -44,6 +44,7 @@ class TrayMenu:
         save: Callable[[Mapping[str, object]], object] = lambda _changes: None,
         apply_tile: Callable[[bool], None] = lambda _on: None,
         open_logs: Callable[[], None] = lambda: None,
+        window: bool = False,
     ) -> None:
         """``save`` writes a setting to settings.toml (``settings.update``); ``apply_tile``
         applies the Tile's on/off to the running Tile, as a change by voice does."""
@@ -53,6 +54,8 @@ class TrayMenu:
         self._save = save
         self._apply_tile = apply_tile
         self._open_logs = open_logs
+        self._window = window
+        """Whether there's an app window to open."""
         self.refresh: Callable[[], None] = lambda: None
         """Redraws the tray's tooltip; set once the icon exists."""
 
@@ -61,13 +64,16 @@ class TrayMenu:
 
     def items(self) -> list[Item]:
         paused = self._session.paused
-        items = [Item("pause", "Resume listening" if paused else "Pause listening")]
+        items = [Item("open", "Open Tycho", default=True)] if self._window else []
+        items.append(Item("pause", "Resume listening" if paused else "Pause listening"))
         if self._display is not None:
             items.append(Item("tile", "Show the Tile", checked=self._display.on))
         return [*items, SEPARATOR, Item("logs", "Open the logs folder"), Item("quit", "Quit Tycho")]
 
     def chosen(self, key: str) -> None:
-        if key == "pause":
+        if key == "open":
+            self._host.ask("open")
+        elif key == "pause":
             paused = not self._session.paused
 
             def apply() -> None:

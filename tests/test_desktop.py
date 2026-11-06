@@ -171,6 +171,29 @@ def test_the_menu_shows_what_pausing_would_do_and_whether_the_tile_is_on() -> No
     assert menu.tip() == "Tycho: paused"
 
 
+def test_with_a_window_open_tycho_comes_first_and_a_click_chooses_it() -> None:
+    menu, _, host = _menu(window=True)
+    first = menu.items()[0]
+    assert (first.key, first.label, first.default) == ("open", "Open Tycho", True)
+    menu.chosen("open")
+    assert host.asked == ["open"]
+
+
+def test_quitting_closes_the_window_too() -> None:
+    voice = Voice()
+    host = Host(voice)
+    closed: list[str] = []
+    host.on_quit = lambda: closed.append("closed")
+
+    def window_open() -> None:
+        host.ask("quit")  # from the tray, while the window is open
+
+    host.ask("open")
+    host.run(window_open)
+    assert "closed" in closed
+    assert voice.stopped
+
+
 def test_without_a_tile_the_menu_has_no_tile_item() -> None:
     menu, _, _ = _menu()
     assert "tile" not in [i.key for i in menu.items()]

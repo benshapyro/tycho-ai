@@ -27,6 +27,11 @@ LAZY_IMPORTS = (
     "tycho.desktop.host",
     "tycho.desktop.menu",
     "tycho.desktop.tray",
+    # The app window (ADR 17): pywebview, and pythonnet under it, which starts .NET.
+    "tycho.desktop.window",
+    "tycho.desktop.bridge",
+    "webview",
+    "clr",
 )
 
 

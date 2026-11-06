@@ -5,7 +5,7 @@ import asyncio
 import logging
 import sys
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -259,13 +259,28 @@ def serve_with_tray(
 ) -> None:
     """Run the session with Tycho's tray icon (ADR 17): pause, the Tile, the logs, quit.
     Without a tray (it couldn't start), the terminal only, as before."""
+    import dataclasses
     import os
 
+    from tycho.desktop.bridge import Bridge
     from tycho.desktop.host import Host
     from tycho.desktop.menu import TrayMenu
     from tycho.desktop.tray import TrayIcon
+    from tycho.desktop.window import AppWindow, check_key
 
     host = Host(lambda stop: serve(session, store, stop))
+
+    def apply(name: str, value: object) -> None:
+        """A change made in the app, applied as voice applies one: on the voice loop."""
+        if (callback := live.get(name)) is not None:
+            host.call(lambda: callback(value))
+
+    def findings() -> list[Mapping[str, str]]:
+        current = settings.load()
+        return [dataclasses.asdict(f) for f in _checks(current, quick=True)]
+
+    window = AppWindow(Bridge(apply=apply, findings=findings, check_key=check_key))
+    host.on_quit = window.close
     menu = TrayMenu(
         session,
         host,
@@ -273,6 +288,7 @@ def serve_with_tray(
         save=settings.update,
         apply_tile=live.get("tile", lambda _on: None),
         open_logs=lambda: os.startfile(paths.logs_dir()),  # noqa: S606 - Explorer, Tycho's folder
+        window=True,
     )
     tray = TrayIcon(menu.tip, menu.items, menu.chosen)
     menu.refresh = tray.refresh
@@ -281,7 +297,7 @@ def serve_with_tray(
         asyncio.run(serve(session, store))
         return
     try:
-        host.run()
+        host.run(window.open)
     finally:
         tray.close()
 

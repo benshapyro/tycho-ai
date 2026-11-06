@@ -35,13 +35,17 @@ class Host:
         self._failure: BaseException | None = None
         self._thread = threading.Thread(target=self._run_voice, name="tycho-voice", daemon=True)
         self.windows = 0
-        """How many times the window was asked for (the window itself comes with #12)."""
+        """How many times the window was asked for."""
+        self.on_quit: Callable[[], None] = lambda: None
+        """Closes the window, if it's open: Tycho is stopping."""
 
     # From any thread: the tray, or tests.
 
     def ask(self, request: str) -> None:
         """Ask the main thread to ``"open"`` the window or ``"quit"``."""
         self._requests.put(request)
+        if request == "quit":
+            self.on_quit()  # the main thread may be inside the window: close it
 
     def call(self, fn: Callable[[], None]) -> None:
         """Run ``fn`` on the voice loop's thread, e.g. pausing the session."""
@@ -100,3 +104,4 @@ class Host:
             self._failure = e
         finally:
             self._started.set()
+            self.on_quit()  # the voice loop ended: so does the window

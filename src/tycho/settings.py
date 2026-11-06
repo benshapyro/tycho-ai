@@ -47,7 +47,8 @@ def _rule(voice: VoiceRule, applies: Applies = "restart", how: str = "") -> dict
     return {"voice": voice, "applies": applies, **({"how": how} if how else {})}
 
 
-FILE_OR_APP = "in settings.toml (or the settings screen, when there is one)"
+FILE_OR_APP = "in Tycho's window (Settings) or in settings.toml"
+FILE_FOR_NOW = "in settings.toml for now; Tycho's setup will change it in the window"
 
 NAME = re.compile(r"[\w .'-]{0,40}")
 """What Tycho may call the player: letters, digits, spaces, apostrophes, hyphens and
@@ -76,13 +77,13 @@ class Settings(BaseModel):
         default=None,
         description="Microphone name or number. Empty means the Windows default.",
         # A wrong microphone would leave Tycho unable to hear the request to undo it.
-        json_schema_extra=_rule("no", how=FILE_OR_APP),
+        json_schema_extra=_rule("no", how=FILE_FOR_NOW),
     )
     game_root: Path | None = Field(
         default=None,
         description="The Star Citizen folder that contains LIVE. Empty means Tycho finds it "
         "from the RSI Launcher, the default folder, or common folders on each drive.",
-        json_schema_extra=_rule("no", how=FILE_OR_APP),
+        json_schema_extra=_rule("no", how=FILE_FOR_NOW),
     )
     game_channel: Channel = Field(
         default="LIVE",

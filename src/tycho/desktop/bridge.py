@@ -1,0 +1,335 @@
+"""What the app window's page can ask of Tycho (ADR 17): the only way in, and narrow.
+
+pywebview calls these methods from the page's JavaScript, each on a thread of its own,
+with JSON values. Everything here checks what it's given, as the voice tool does, and
+answers in plain words a page can show. pywebview exposes every public attribute of
+this object to the page, so everything that isn't a call for the page starts with ``_``.
+
+A change goes through ``settings.update`` and the same live callbacks as one made by
+voice (``apply``), so it takes effect at once and lands in settings.toml. The app may
+do what voice can't (a longer confirm time, transcripts on): its controls are the
+player's own hands, not a sentence that might have been misheard.
+
+Keys never come back out: the page sends one once, and learns only whether one is
+stored and its last four characters.
+"""
+
+import base64
+import io
+import logging
+import typing
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, cast
+
+from tycho import __version__, credentials, settings
+from tycho.settings import Settings, SettingsError
+
+log = logging.getLogger(__name__)
+
+GROUPS: dict[str, tuple[str, ...]] = {
+    "Voice and sounds": (
+        "voice_volume",
+        "feedback_volume",
+        "call_me",
+        "call_me_says",
+        "call_me_how_often",
+    ),
+    "Safety": ("confirm_seconds",),
+    "Privacy": ("keep_transcripts", "web_search", "check_for_updates"),
+    "Game and controls": (
+        "game_channel",
+        "game_root",
+        "push_to_talk",
+        "microphone",
+        "transcription_device",
+    ),
+    "The Tile": tuple(n for n in Settings.model_fields if n == "tile" or n.startswith("tile_")),
+}
+"""Which settings each tab shows. Every setting but ``version`` is in one (a test checks)."""
+SETUP_CHOICES = frozenset({"game_root", "push_to_talk", "microphone"})
+"""Chosen with their own controls (a folder, a button press, a device), from setup."""
+KEYS: dict[str, str] = {"anthropic": "Anthropic", "elevenlabs": "ElevenLabs"}
+UNDO_DEPTH = 20
+
+type Apply = Callable[[str, object], None]
+type Findings = Callable[[], Sequence[Mapping[str, str]]]
+
+
+class Bridge:
+    def __init__(
+        self,
+        *,
+        apply: Apply = lambda _name, _value: None,
+        findings: Findings = lambda: [],
+        settings_path: Any = None,
+        check_key: Callable[[str, str], str] = lambda _name, _key: "",
+    ) -> None:
+        """``apply`` changes a setting in the running Tycho (the live callbacks);
+        ``findings`` are the checks ``tycho check`` makes; ``check_key`` tries a key
+        with its provider and returns what's wrong with it, or nothing."""
+        self._apply = apply
+        self._findings = findings
+        self._path = settings_path
+        self._check_key = check_key
+        self._undo: list[tuple[str, object]] = []
+
+    # --- reading ---------------------------------------------------------------------
+
+    def about(self) -> dict[str, object]:
+        return {"version": __version__}
+
+    def status(self) -> list[Mapping[str, str]]:
+        """The same checks as ``tycho check``, quick ones only."""
+        try:
+            return list(self._findings())
+        except Exception as e:  # a broken check must not break the page
+            log.exception("The status checks failed")
+            return [{"level": "fail", "what": "Checks", "detail": f"couldn't run: {e}", "fix": ""}]
+
+    def settings(self) -> dict[str, object]:
+        """Every setting the app shows: its group, kind, value, limits, choices and rules."""
+        current = settings.load(self._path)
+        schema = Settings.model_json_schema()
+        props: dict[str, Any] = schema.get("properties", {})
+        groups: list[dict[str, object]] = []
+        for group, names in GROUPS.items():
+            rows = [self._row(name, getattr(current, name), props.get(name, {})) for name in names]
+            groups.append({"name": group, "rows": rows})
+        return {"groups": groups, "can_undo": bool(self._undo)}
+
+    def _row(self, name: str, value: object, prop: Mapping[str, Any]) -> dict[str, object]:
+        field = Settings.model_fields[name]
+        rule = settings.rule(name)
+        row: dict[str, object] = {
+            "name": name,
+            "label": _label(name),
+            "description": field.description or "",
+            "value": _shown(name, value),
+            "voice": rule["voice"],
+            "applies": rule["applies"],
+            "how": rule.get("how", ""),
+            "kind": _kind(name, field.annotation, prop),
+        }
+        if choices := _choices(field.annotation):
+            row["choices"] = list(choices)
+        for key in ("minimum", "maximum"):
+            if key in prop:
+                row[key] = prop[key]
+        return row
+
+    def keys(self) -> dict[str, dict[str, object]]:
+        """Which keys are stored, and their last four characters: never the key."""
+        out: dict[str, dict[str, object]] = {}
+        for name, label in KEYS.items():
+            stored = credentials.get(name)
+            out[name] = {
+                "label": label,
+                "stored": bool(stored),
+                "ends": stored[-4:] if stored else "",
+            }
+        return out
+
+    def tile_preview(self, width: int = 640) -> str:
+        """The Tile as it is set now, drawn by the Tile itself over a cockpit-dark
+        background: a PNG data URL for the Tile page's preview."""
+        from tycho.tile.board import Board
+        from tycho.tile.cards import Card, Row
+        from tycho.tile.design import PICKS, TEXT_SIZES, TYCHO_ACCENT
+        from tycho.tile.draw import Look, draw
+
+        current = settings.load(self._path)
+        width = max(320, min(int(width), 1600))
+        height = width * 9 // 16
+        scale = height / 1440 * 2  # a 2560 x 1440 screen, shown at this width
+        board = Board(clock=lambda: 0.0)
+        board.show(
+            Card(
+                "list",
+                title="Best places to sell",
+                label="Sell · Laranite",
+                source="UEX",
+                rows=(
+                    Row("Everus Harbor", "Hurston", "3,048"),
+                    Row("Area18 TDD", "ArcCorp", "3,012"),
+                    Row("Port Tressler", "microTech", "2,987"),
+                ),
+            )
+        )
+        colour = current.tile_colour
+        accent = "#f5901e" if colour == "ship" else PICKS.get(colour, TYCHO_ACCENT)
+        look = Look(
+            accent=accent,
+            scale=TEXT_SIZES[current.tile_size] * scale,
+            see_through=round(current.tile_see_through * 100),
+            high_contrast=current.tile_high_contrast,
+            left=current.tile_corner.endswith("left"),
+            bottom=current.tile_corner.startswith("bottom"),
+        )
+        image = _cockpit(width, height)
+        if current.tile:
+            tile = draw(
+                board.view(), look, now=1.0, light="thinking" if current.tile_talk_light else None
+            )
+            margin = round(0.022 * width)
+            x = margin if look.left else width - tile.width - margin
+            y = height - tile.height - margin if look.bottom else margin
+            image.alpha_composite(tile, (max(0, x), max(0, y)))
+        buffer = io.BytesIO()
+        image.convert("RGB").save(buffer, "PNG")
+        return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+
+    # --- changing ----------------------------------------------------------------------
+
+    def set(self, name: object, value: object) -> dict[str, object]:
+        """Change one setting. Answers what changed and when it applies, or the problem."""
+        if not isinstance(name, str) or name not in Settings.model_fields or name == "version":
+            return {"ok": False, "problem": f"{name!r} isn't a setting"}
+        if name in SETUP_CHOICES:
+            return {"ok": False, "problem": f"{_label(name)} is chosen with its own control"}
+        before = getattr(settings.load(self._path), name)
+        try:
+            after = getattr(settings.update({name: value}, self._path), name)
+        except SettingsError as e:
+            return {"ok": False, "problem": _plain(str(e))}
+        if after == before:
+            return {"ok": True, "changed": False}
+        self._undo = [*self._undo, (name, before)][-UNDO_DEPTH:]
+        return self._applied(name, after)
+
+    def undo(self) -> dict[str, object]:
+        """Put back the last change made in the app."""
+        if not self._undo:
+            return {"ok": False, "problem": "nothing to undo"}
+        name, before = self._undo.pop()
+        try:
+            after = getattr(settings.update({name: before}, self._path), name)
+        except SettingsError as e:
+            return {"ok": False, "problem": _plain(str(e))}
+        return self._applied(name, after)
+
+    def _applied(self, name: str, value: object) -> dict[str, object]:
+        applies = settings.rule(name)["applies"]
+        if applies == "now":
+            try:
+                self._apply(name, value)
+            except Exception:
+                log.exception("Couldn't apply %s in the running Tycho", name)
+                applies = "restart"
+        return {"ok": True, "changed": True, "name": name, "value": value, "applies": applies}
+
+    def store_key(self, name: object, key: object) -> dict[str, object]:
+        """Check a key with its provider, then store it in Windows Credential Manager."""
+        if not isinstance(name, str) or name not in KEYS:
+            return {"ok": False, "problem": "that isn't a key Tycho uses"}
+        key = key.strip() if isinstance(key, str) else ""
+        if problem := _shape(name, key):
+            return {"ok": False, "problem": problem}
+        if problem := self._check_key(name, key):
+            return {"ok": False, "problem": problem}
+        try:
+            credentials.set_secret(name, key)
+        except Exception as e:
+            return {
+                "ok": False,
+                "problem": f"Windows Credential Manager refused it ({type(e).__name__})",
+            }
+        log.info("%s key stored from the app", KEYS[name])
+        return {"ok": True, "ends": key[-4:]}
+
+    def remove_key(self, name: object) -> dict[str, object]:
+        if not isinstance(name, str) or name not in KEYS:
+            return {"ok": False, "problem": "that isn't a key Tycho uses"}
+        removed = credentials.delete(name)
+        return {"ok": True, "removed": removed}
+
+
+def _shown(name: str, value: object) -> object:
+    """A value as the page shows it: push-to-talk by its name ("Mouse side (forward)")."""
+    if name == "push_to_talk" and isinstance(value, str) and value:
+        from tycho.app import describe  # here: the app imports this module
+        from tycho.ptt.binding import Binding
+
+        try:
+            return describe(Binding.parse(value))
+        except ValueError:
+            return value
+    if value is None or isinstance(value, bool | int | float | str):
+        return value
+    return str(value)
+
+
+def _label(name: str) -> str:
+    special = {
+        "tile": "Show the Tile",
+        "call_me": "What Tycho calls you",
+        "call_me_says": "How to say it",
+        "call_me_how_often": "How often",
+        "confirm_seconds": "Time to say confirm",
+        "feedback_volume": "Sound volume",
+        "game_root": "Game folder",
+        "transcription_device": "Speech recognition on",
+    }
+    if name in special:
+        return special[name]
+    return name.removeprefix("tile_").replace("_", " ").capitalize()
+
+
+def _choices(annotation: object) -> tuple[str, ...]:
+    options = typing.get_args(getattr(annotation, "__value__", annotation))
+    return (
+        cast(tuple[str, ...], options)
+        if options and all(isinstance(o, str) for o in options)
+        else ()
+    )
+
+
+def _kind(name: str, annotation: object, prop: Mapping[str, Any]) -> str:
+    if name in SETUP_CHOICES:
+        return "setup"
+    if annotation is bool:
+        return "switch"
+    if annotation is float:
+        return "percent" if prop.get("maximum", 2) <= 1 else "number"
+    if _choices(annotation):
+        return "choice"
+    return "text"
+
+
+def _shape(name: str, key: str) -> str:
+    if name == "anthropic" and not key.startswith("sk-ant-"):
+        return "That doesn't look like an Anthropic key: it starts with sk-ant-."
+    if name == "elevenlabs" and not key.startswith("sk_"):
+        return "That doesn't look like an ElevenLabs key: it starts with sk_."
+    if len(key) < 24 or any(c.isspace() for c in key):
+        return "That key looks cut short. Copy it again, all of it."
+    return ""
+
+
+def _plain(error: str) -> str:
+    """Pydantic's message, without its type names and links."""
+    lines = [line.strip() for line in error.splitlines() if line.strip()]
+    for line in lines:
+        if not line.startswith(("1 validation", "For further")) and "errors.pydantic" not in line:
+            if "[type=" in line:
+                line = line.split("[type=", 1)[0].strip()
+            if line and line not in Settings.model_fields:
+                return line
+    return "that value isn't allowed"
+
+
+def _cockpit(width: int, height: int) -> Any:
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGBA", (width, height), (8, 12, 20, 255))
+    d = ImageDraw.Draw(image)
+    for y in range(height):
+        v = round(12 + 18 * y / height)
+        d.line((0, y, width, y), fill=(v, v + 5, v + 14, 255))
+    cx, cy, r = width // 2, round(height * 0.56), round(height * 0.24)
+    d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=(245, 144, 30, 110), width=2)
+    d.rectangle((cx - 9, cy - 9, cx + 9, cy + 9), outline=(245, 144, 30, 150), width=2)
+    d.ellipse(
+        (round(width * 0.66), round(height * 0.08), round(width * 0.82), round(height * 0.2)),
+        fill=(225, 220, 205, 90),
+    )
+    return image
