@@ -21,6 +21,7 @@ OPEN_NAME = r"Local\tycho-ai-open"
 _EVENT_MODIFY_STATE = 0x0002
 _WAIT_OBJECT_0 = 0
 _INFINITE = 0xFFFFFFFF
+_ASFW_ANY = -1
 
 log = logging.getLogger(__name__)
 
@@ -87,6 +88,9 @@ def ask_to_open(name: str = OPEN_NAME) -> bool:
     if not handle:
         return False
     try:
+        # Windows lets the process just started bring a window forward, not the one
+        # that opens it; this hands that right on, so the window isn't behind the game.
+        ctypes.windll.user32.AllowSetForegroundWindow(_ASFW_ANY)
         return bool(_kernel32.SetEvent(handle))
     finally:
         _kernel32.CloseHandle(handle)

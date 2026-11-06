@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import contextlib
 import logging
+import os
 import sys
 import time
 from collections.abc import Callable, Iterator, Mapping
@@ -222,7 +223,9 @@ def _run(
                 # No window on this PC (no WebView2): set up in the terminal, as before.
                 print("Tycho's window can't open on this PC, so setup is here in the terminal.")
             current = settings.load()
-    starting = _Starting(requests) if WINDOWED else None
+    # The star while it starts, for a terminal `tycho run` too: a second start then
+    # says it's still starting rather than nothing (review of #157).
+    starting = _Starting(requests) if window and sys.platform == "win32" else None
     try:
         return _start(current, window=window, requests=requests, starting=starting)
     finally:
@@ -434,19 +437,31 @@ class _Starting:
     says what's happening, and a second start says Tycho is still starting."""
 
     def __init__(self, requests: OpenRequests | None) -> None:
-        from tycho.desktop.tray import Item, TrayIcon
+        from tycho.desktop.tray import SEPARATOR, Item, TrayIcon
 
         self._now = "Starting"
         self._tray: TrayIcon | None = TrayIcon(
             lambda: f"Tycho: {self._now}…",
-            lambda: [Item("starting", f"{self._now}…", enabled=False)],
-            lambda _key: None,
+            lambda: [
+                Item("starting", f"{self._now}…", enabled=False),
+                SEPARATOR,
+                Item("quit", "Quit Tycho"),
+            ],
+            self._chosen,
         )
         if not self._tray.start():
             self._tray = None
         self._requests = requests
         if requests is not None:
             requests.target = self.say
+
+    def _chosen(self, key: str) -> None:
+        """Quit while starting: the 2.5 GB first download can take minutes, and there's
+        nothing else to stop it with. A half-downloaded file is left as .part and
+        checked before use, so the next start carries on safely."""
+        if key == "quit":
+            log.info("Quit while starting")
+            os._exit(0)  # the main thread is inside the download, which can't be told
 
     def doing(self, now: str) -> None:
         self._now = now
@@ -462,7 +477,8 @@ class _Starting:
             f"Tycho is still starting: {self._now.lower()}. Its window opens from the "
             "star by the clock once it's listening."
         )
-        ctypes.windll.user32.MessageBoxW(None, text, "Tycho", 0x40)  # MB_ICONINFORMATION
+        # MB_ICONINFORMATION, MB_SETFOREGROUND and MB_TOPMOST: in front of the game.
+        ctypes.windll.user32.MessageBoxW(None, text, "Tycho", 0x40 | 0x10000 | 0x40000)
 
     def close(self) -> None:
         if self._requests is not None and self._requests.target == self.say:
