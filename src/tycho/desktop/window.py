@@ -9,6 +9,7 @@ uses no memory while they play; the tray icon opens it again.
 import importlib
 import logging
 import threading
+from collections.abc import Callable
 from importlib import resources
 from typing import Any
 
@@ -65,6 +66,11 @@ class AppWindow:
         finally:
             with self._lock:
                 self._window = None
+            # The page has gone: anything it was waiting on must stop, or a push-to-talk
+            # capture would save the next key pressed in the game.
+            cancel: Callable[[], object] | None = getattr(self._bridge, "cancel_capture", None)
+            if cancel is not None:
+                cancel()
         return True
 
     @property

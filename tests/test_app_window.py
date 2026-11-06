@@ -373,3 +373,32 @@ def test_the_windows_checks_never_ask_in_the_terminal(monkeypatch: pytest.Monkey
     monkeypatch.setattr(app.sys.stdin, "isatty", lambda: True)
     findings = list(app._checks(Settings(), quick=True, ask=False))  # pyright: ignore[reportPrivateUsage]
     assert any(f.what == "Star Citizen" and f.level == "fail" for f in findings)
+
+
+@pytest.mark.parametrize("starts", [True, False])
+def test_closing_the_window_stops_a_capture(monkeypatch: pytest.MonkeyPatch, starts: bool) -> None:
+    from types import SimpleNamespace
+
+    class Page:
+        def __init__(self) -> None:
+            self.cancelled = 0
+
+        def cancel_capture(self) -> dict[str, object]:
+            self.cancelled += 1
+            return {"ok": True}
+
+    def start(**_options: object) -> None:
+        if not starts:
+            raise RuntimeError("no WebView2")
+
+    def create_window(*_args: object, **_options: object) -> object:
+        return object()
+
+    def import_module(_name: str) -> SimpleNamespace:
+        return SimpleNamespace(create_window=create_window, start=start)
+
+    # Only the window module's own importlib: the page is still read from the package.
+    monkeypatch.setattr(window, "importlib", SimpleNamespace(import_module=import_module))
+    page = Page()
+    assert window.AppWindow(page).open() is starts
+    assert page.cancelled == 1
