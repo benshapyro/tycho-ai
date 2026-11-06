@@ -63,7 +63,7 @@ uv run python tools/bench/tycho_eval.py                 # every case in tools/sp
 uv run python tools/bench/tycho_eval.py --tag log       # only the cases from play logs
 ```
 
-Runs each case through Tycho's own path: the lexicon, the fast path, then `ClaudeBrain` and `commands_for`, with your real keybinds. Grades what Tycho would press (after "confirm"), fails any dangerous press that wouldn't be asked about first, and fails answers to questions marked `answer = true` that only point elsewhere ("check the wiki"). The bar is zero wrong presses and Claude's picks at p50 <= 1.5 s. About 2 cents a run. Add a case whenever a play log shows a miss.
+Runs each case through Tycho's own path: the lexicon, the fast path, then `ClaudeBrain` and `commands_for`, with your real keybinds. Grades what Tycho would press (after "confirm"), fails any dangerous press that wouldn't be asked about first, and fails answers to questions marked `answer = true` that only point elsewhere ("check the wiki"). The bar is zero wrong presses and Claude's picks at p50 <= 1.5 s. It also grades how each answer was reached (#148): every request's calls to Claude (about 1-1.5 s each), the look-ups it used, and any that came back as errors, which Claude tends to retry. A case can set `max_calls`, `tools`, `no_tools` and `no_errors`, and the summary gives the mean calls a request. About 2 cents a run. Add a case whenever a play log shows a miss.
 
 ## Language model
 

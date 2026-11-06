@@ -11,6 +11,11 @@
 # answer: (questions) a reply that only points elsewhere ("check the wiki") fails.
 # tag:    group for the report.
 #
+# How it got there (#148): a right answer after retries is slow, and luck.
+# max_calls: calls to Claude allowed, about 1-1.5 s each (a look-up and its answer is 2).
+# tools:     look-ups that must be used.   no_tools: look-ups that mustn't be.
+# no_errors: no look-up may come back as an error (Claude retries those).
+#
 # Action names are from the author's bound keys. Actions with no key can't be
 # chosen, so requests for them should get a reply explaining that.
 
@@ -751,6 +756,57 @@ expect = ["reply"]
 mentions = [['UEX'], ['\d']]
 tag = "trade"
 
+# From the play session, 6 November 2026: each of these ended in the error sound
+# or a question back before #145 and #147.
+[[case]]
+heard = "what's the best route to buy and sell refined gold"
+expect = ["reply"]
+mentions = [['UEX'], ['\d']]
+tools = ["trade_routes"]
+max_calls = 2
+no_errors = true
+tag = "trade"
+
+[[case]]
+heard = "what is the best route to buy and sell gold"
+expect = ["reply"]
+mentions = [['UEX'], ['\d']]
+max_calls = 2
+no_errors = true
+tag = "trade"
+
+[[case]]
+heard = "what are the best places to buy and sell gold purely in the pyro system"
+expect = ["reply"]
+mentions = [['UEX'], ['\d']]
+max_calls = 2
+no_errors = true
+tag = "trade"
+
+[[case]]
+heard = "I'm in Pyro at Obituary"
+recent = [["what's the best route for buying and selling refined gold", "Where are you starting from?"]]
+expect = ["reply"]
+mentions = [['UEX']]
+max_calls = 3
+no_errors = true
+tag = "trade"
+
+[[case]]
+heard = "where can I sell gold ore"
+expect = ["reply"]
+mentions = [['UEX'], ['\d']]
+max_calls = 2
+no_errors = true
+tag = "trade"
+
+[[case]]
+heard = "what do you need to craft the uh S F nine"
+expect = ["reply"]
+tools = ["item_lookup"]
+max_calls = 3
+tag = "items"
+
 # The player's fleet (ADR 15): said by voice, kept by update_fleet, and read from
 # each request's header. "fleet" and "flying" set it up; the rest check it after.
 [[case]]
@@ -1018,3 +1074,13 @@ expect = ["reply"]
 settings_after = { tile = false }
 tag = "settings"
 
+
+# Play session (#156): a command and a fleet change in one breath. The act ended the
+# request, so the Pitbull was never noted. Fails until #156 is fixed.
+[[case]]
+heard = "can you turn off power I'm in my uh Drake Pitbull right now"
+expect = ["actions"]
+must = [["v_power_set_off", "v_power_toggle"]]
+never = ["v_power_set_on"]
+flying_after = "Pitbull"
+tag = "fleet"

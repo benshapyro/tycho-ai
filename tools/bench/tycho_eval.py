@@ -91,6 +91,12 @@ class Outcome:
     ms: float = 0.0
     looked_up: int = 0
     """Look-ups the brain made for this request."""
+    calls: int = 0
+    """Calls to Claude for this request: each is about 1-1.5 s (#148)."""
+    tools: list[str] = field(default_factory=list[str])
+    """The look-ups it used, in order."""
+    errors: list[str] = field(default_factory=list[str])
+    """Look-ups that came back as errors, which Claude tends to retry."""
     searched: bool = False
     """Whether the brain searched the web for this request."""
     card: str = ""
@@ -107,11 +113,16 @@ class _Costs(logging.Handler):
         super().__init__(logging.DEBUG)
         self.total = 0.0
         self.counted = 0
+        self.replies = 0
+        """Calls to Claude that ended in a message (an act ends its call early)."""
 
     def emit(self, record: logging.LogRecord) -> None:
-        if match := re.search(r"about \$([0-9.]+)", record.getMessage()):
+        message = record.getMessage()
+        if match := re.search(r"about \$([0-9.]+)", message):
             self.total += float(match.group(1))
             self.counted += 1
+        if message.startswith("Brain replied"):
+            self.replies += 1
 
 
 def pressed(commands: tuple[Command, ...], keybinds: Keybinds) -> list[str]:
@@ -158,6 +169,22 @@ def grade(outcome: Outcome, rule: dict[str, Any], valid: set[str]) -> str:
         return f"showed a {outcome.card} card, expected none"
     if (kinds := rule.get("card")) and outcome.card not in kinds:
         return f"showed {outcome.card or 'no card'}, expected {'/'.join(kinds)}"
+    return grade_path(outcome, rule)
+
+
+def grade_path(outcome: Outcome, rule: dict[str, Any]) -> str:
+    """How the answer was reached (#148): a right answer after three tries is slow,
+    and passed only by luck. "max_calls", "tools" (each must be used), "no_tools"
+    (none may be) and "no_errors"."""
+    if (most := rule.get("max_calls")) is not None and outcome.calls > most:
+        return f"took {outcome.calls} calls to Claude, expected at most {most}"
+    for name in rule.get("tools", []):
+        if name not in outcome.tools:
+            return f"didn't use {name} ({', '.join(outcome.tools) or 'no look-ups'})"
+    if used := set(rule.get("no_tools", [])).intersection(outcome.tools):
+        return f"used {', '.join(sorted(used))}, expected not to"
+    if rule.get("no_errors") and outcome.errors:
+        return f"look-up errors: {'; '.join(outcome.errors)}"
     return "pass"
 
 
@@ -198,20 +225,28 @@ def grade_settings(path: Path, start: settings.Settings, rule: dict[str, Any]) -
 
 
 class _Counted:
-    """A look-up that counts its calls, so the eval can say how often Claude used it."""
+    """A look-up that counts its calls and notes each one in ``journal`` (its name,
+    and its error if it failed), so the eval can grade the path (#148)."""
 
-    def __init__(self, inner: Lookup) -> None:
+    def __init__(self, inner: Lookup, journal: list[tuple[str, str]] | None = None) -> None:
         self.inner = inner
         self.calls = 0
+        self.journal = journal if journal is not None else []
         self.name, self.description = inner.name, inner.description
         self.input_schema = inner.input_schema
+
+    def __getattr__(self, name: str) -> Any:
+        # from_the_web, seconds, instant: as the look-up it stands for.
+        return getattr(self.inner, name)
 
     async def prepare(self) -> None:
         await self.inner.prepare()
 
     async def run(self, arguments: Mapping[str, object]) -> LookupResult:
         self.calls += 1
-        return await self.inner.run(arguments)
+        result = await self.inner.run(arguments)
+        self.journal.append((self.name, result.content[:160] if result.is_error else ""))
+        return result
 
 
 async def run_case(
@@ -220,6 +255,8 @@ async def run_case(
     brain: ClaudeBrain,
     keybinds: Keybinds,
     counted: _Counted | None = None,
+    journal: list[tuple[str, str]] | None = None,
+    costs: _Costs | None = None,
 ) -> Outcome:
     outcome = Outcome(rule["heard"], str(rule.get("tag", "")))
     text = lexicon.correct(rule["heard"]).text
@@ -233,6 +270,9 @@ async def run_case(
     recent = [Exchange(said, did) for said, did in rule.get("recent", [])]
     started = time.perf_counter()
     before = counted.calls if counted else 0
+    journal = journal if journal is not None else []
+    journal.clear()
+    replies = costs.replies if costs else 0
     try:
 
         def searching() -> None:
@@ -246,7 +286,10 @@ async def run_case(
         return outcome
     finally:
         outcome.ms = (time.perf_counter() - started) * 1000
-        outcome.looked_up = (counted.calls if counted else 0) - before
+        outcome.tools = [name for name, _ in journal]
+        outcome.errors = [f"{name}: {error}" for name, error in journal if error]
+        outcome.looked_up = max((counted.calls if counted else 0) - before, len(journal))
+        outcome.calls = (costs.replies if costs else 0) - replies
     if isinstance(decision, Reply):
         outcome.kind, outcome.say = "reply", decision.text
         if decision.card is not None:
@@ -256,6 +299,7 @@ async def run_case(
             ] + list(decision.card.body)
         return outcome
     outcome.kind, outcome.say = "actions", decision.say
+    outcome.calls += 1  # the call that chose the act ended early, so it logged no reply
     try:
         commands = commands_for(decision, MATCHER)
         outcome.actions = pressed(commands, keybinds)
@@ -326,17 +370,20 @@ async def main() -> None:
     fleet = Fleet(scratch / "fleet.toml")
     # Settings too: a fresh tool per case, so undo never reaches into an earlier case.
     settings_file = scratch / "settings.toml"
-    settings_tool = _Counted(SettingsTool(settings_file, live=LIVE))
+    journal: list[tuple[str, str]] = []
+    if counted is not None:
+        counted.journal = journal
+    settings_tool = _Counted(SettingsTool(settings_file, live=LIVE), journal)
     brain = ClaudeBrain(
         MATCHER,
         api_key=key,
         lookups=[
             *([counted] if counted else []),
-            FleetUpdate(fleet, lambda: library),
-            ItemLookup(WikiApi()),
-            *trade_lookups(UexApi()),
+            _Counted(FleetUpdate(fleet, lambda: library), journal),
+            _Counted(ItemLookup(WikiApi()), journal),
+            *(_Counted(lookup, journal) for lookup in trade_lookups(UexApi())),
             settings_tool,
-            *web,
+            *(_Counted(lookup, journal) for lookup in web),
         ],
         reference=reference,
         # As tycho run does: the fleet, then what to call the player (#15).
@@ -356,7 +403,7 @@ async def main() -> None:
             changes = [{"name": n, "value": v} for n, v in before]
             await settings_tool.inner.run({"action": "set", "changes": changes})
             start = settings.load(settings_file)
-        outcome = await run_case(rule, lexicon, brain, keybinds, counted)
+        outcome = await run_case(rule, lexicon, brain, keybinds, counted, journal, costs)
         outcome.verdict = grade(outcome, rule, valid)
         if outcome.verdict == "pass":
             outcome.verdict = grade_fleet(fleet, rule)
@@ -366,7 +413,8 @@ async def main() -> None:
         mark = "  " if outcome.verdict == "pass" else "XX"
         what = ", ".join(outcome.actions) if outcome.kind == "actions" else outcome.kind
         what += " (asks first)" if outcome.asks else ""
-        what += f" after {outcome.looked_up} look-up(s)" if outcome.looked_up else ""
+        what += f" after {', '.join(outcome.tools)}" if outcome.tools else ""
+        what += f" ({outcome.calls} calls)" if outcome.route == "brain" else ""
         what += " after a web search" if outcome.searched else ""
         print(f"{mark} {outcome.route:5} {outcome.ms:5.0f} ms  {outcome.heard!r} -> {what}")
         if outcome.say:
@@ -412,6 +460,12 @@ def _summary(outcomes: list[Outcome], costs: _Costs) -> None:
         print(
             f"Look-ups: {len(looked)} requests used them, "
             f"p50 {statistics.median(o.ms for o in looked):.0f} ms"
+        )
+    if calls := [o.calls for o in outcomes if o.route == "brain"]:
+        retried = sum(1 for o in outcomes if o.errors)
+        print(
+            f"Calls to Claude: mean {statistics.mean(calls):.2f} a request, "
+            f"most {max(calls)}; {retried} request(s) hit a look-up error"
         )
     unpriced = len(brain) - costs.counted
     print(f"Cost: about ${costs.total + max(0, unpriced) * COST_GUESS:.3f}")
