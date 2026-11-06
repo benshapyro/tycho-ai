@@ -253,10 +253,11 @@ class ClaudeBrain:
                 results = await asyncio.gather(*(task for _, task in looking))
                 messages.append({"role": "assistant", "content": message.content})
                 content: list[Any] = [*_results(looking, results)]
-                if call == MAX_CALLS - 2 and not turn.refused:
-                    # The next call is the last: answer with what's here, a card included.
-                    # Not beside a refused act: that result asks Claude to pick again.
-                    content.append({"type": "text", "text": LAST_CALL})
+                if call == MAX_CALLS - 2:
+                    # The next call is the last: answer with what's here, a card included;
+                    # beside a refused act, pick again or answer, but look nothing up.
+                    note = LAST_PICK if turn.refused else LAST_CALL
+                    content.append({"type": "text", "text": note})
                 messages.append({"role": "user", "content": content})
         except anthropic.AuthenticationError as e:
             raise BrainError("the Anthropic key was refused") from e
@@ -264,8 +265,8 @@ class ClaudeBrain:
             raise BrainError("can't reach Claude (offline?)") from e
         except anthropic.APIStatusError as e:
             raise BrainError(f"Claude returned an error ({e.status_code})") from e
-        if turn.unbound is not None:
-            raise turn.unbound  # it kept naming actions that aren't bound
+        if turn.unbound is not None and turn.refused:
+            raise turn.unbound  # the last call too named actions that aren't bound
         raise BrainError(f"still looking things up after {MAX_CALLS} tries")
 
     async def _call(
@@ -429,12 +430,15 @@ SECOND_ACT = (
     "again, all in one run_actions call."
 )
 
+LAST_PICK = "No more look-ups for this request: pick the actions again, or say what you can't do."
+"""Instead of LAST_CALL, when the turn holds a refused act (review of #177)."""
+
 LAST_CALL = (
     "No more look-ups for this request. Answer now with what you found: speak, or "
     "use show_card. If something wasn't found, say so briefly."
 )
 """Added to the results before the last call, so a third look-up isn't the end."""
-_TOOL_AS_TEXT = re.compile(r"\b[a-z_]{3,}\s*\(\s*\{")
+_TOOL_AS_TEXT = re.compile(r"\b[a-z_]{3,}\s*\(\s*\{", re.IGNORECASE)
 """A tool call written as text: never said out loud."""
 
 

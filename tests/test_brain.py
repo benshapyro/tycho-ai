@@ -3,7 +3,6 @@
 import asyncio
 import datetime
 import re
-import time
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
@@ -32,6 +31,7 @@ from tycho.brain.briefing import (
 )
 from tycho.brain.claude import (
     LAST_CALL,
+    LAST_PICK,
     MAX_CALLS,
     NO_PRESS_AFTER_SEARCH,
     ClaudeBrain,
@@ -833,6 +833,7 @@ def test_a_refused_act_isnt_told_to_answer_now() -> None:
     assert _ask(client, FakeLookup()) == RunActions(("v_toggle_landing_system",), "Done.")
     last: list[dict[str, Any]] = client.requests[2]["messages"][-1]["content"]
     assert {"type": "text", "text": LAST_CALL} not in last
+    assert {"type": "text", "text": LAST_PICK} in last  # still told it's the last call
 
 
 def test_no_checking_line_for_a_look_up_an_act_cuts_short() -> None:
@@ -854,8 +855,14 @@ def test_look_ups_in_one_reply_run_at_the_same_time() -> None:
     """#176: two look-ups in a reply take as long as one, not twice as long."""
 
     class Slow(FakeLookup):
+        now = 0
+        most = 0
+
         async def run(self, arguments: Any) -> Any:
-            await asyncio.sleep(0.3)
+            Slow.now += 1
+            Slow.most = max(Slow.most, Slow.now)
+            await asyncio.sleep(0.05)
+            Slow.now -= 1
             return await super().run(arguments)
 
     both = _reply(
@@ -863,6 +870,17 @@ def test_look_ups_in_one_reply_run_at_the_same_time() -> None:
         _tool_stop("trade_routes", {"start": "Lorville"}, "toolu_2"),
     )
     client = _Calls(both, ([], _final("Haul laranite.")))
-    started = time.perf_counter()
     assert _ask(client, Slow("ship_lookup"), Slow("trade_routes")) == Reply("Haul laranite.")
-    assert time.perf_counter() - started < 0.55  # 0.6 s if one after the other
+    assert Slow.most == 2  # both running at once, without timing anything
+
+
+def test_a_refused_act_long_ago_isnt_blamed_for_running_out_of_calls() -> None:
+    """Review of #177: refused on call 1, look-ups after: "still looking things up"."""
+    calls = [_picks(["v_unbound"], "toolu_0"), *(_looks_up(use_id=f"toolu_{n}") for n in (1, 2))]
+    with pytest.raises(BrainError, match="still looking"):
+        _ask(_Calls(*calls), FakeLookup())
+
+
+def test_a_capitalised_tool_call_in_text_isnt_spoken() -> None:
+    with pytest.raises(BrainError, match="tool call as text"):
+        _ask(_Calls(([], _final('Show_card({"say": "x"})'))))
