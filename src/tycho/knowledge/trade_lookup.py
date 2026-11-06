@@ -20,6 +20,9 @@ log = logging.getLogger(__name__)
 SOURCE = "UEX (uexcorp.space), prices reported by players"
 SECONDS = 5.0
 """A route from a station asks UEX about each of its terminals at once."""
+ROUTES_CAP = 500
+"""UEX returns at most this many routes for one commodity: Scrap's list stopped at 500
+(measured 6 November 2026; others had 120 to 320)."""
 SPEAKING = (
     "In what you say aloud, credit UEX once, in a few words, even when the details go "
     "on a card (show_card's say); say how old a price is only when "
@@ -235,7 +238,14 @@ class TradeRoutes(_TradeLookup):
                 rows = [r for r in rows if trade.in_place(r, start, "_origin")]
             return rows
 
+        capped = commodity is not None and len(rows) >= ROUTES_CAP
         rows = kept(rows)
+        if not rows and capped and start is not None:
+            # UEX cut the commodity's list at its cap (#171): ask from the start itself.
+            try:
+                rows = kept(await self._from(start))
+            except TradeError, WikiError:
+                rows = []
         best = sorted(rows, key=lambda r: -_profit(r, cargo))[:5]
         body: dict[str, object] = {
             "start": start.value if start is not None else "anywhere",

@@ -33,7 +33,13 @@ class LookupResult:
 
 class Lookup(Protocol):
     """One look-up tool. ``input_schema`` must suit strict tool use: every object
-    lists its properties and sets ``additionalProperties`` to false."""
+    lists its properties and sets ``additionalProperties`` to false.
+
+    A look-up may also set, read with ``getattr`` (so spell them exactly):
+    ``seconds`` (its time limit), ``from_the_web`` (slow and unchecked: a filler line,
+    and no pressing after it), ``instant`` (answers at once: no "Checking.", and it
+    runs alongside an act) and ``credit`` (the source a spoken answer must name when
+    it used the look-up's data, "UEX")."""
 
     @property
     def name(self) -> str: ...
