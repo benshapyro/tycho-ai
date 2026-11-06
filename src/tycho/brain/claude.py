@@ -206,7 +206,7 @@ class ClaudeBrain:
                 model=self._model,
                 system=self._system,
                 tools=self._offered(),
-                tool_choice={"type": "auto", "disable_parallel_tool_use": True},
+                tool_choice=TOOL_CHOICE,
                 output_config={"effort": EFFORT},
                 max_tokens=0,
                 messages=[{"role": "user", "content": "ready"}],
@@ -264,12 +264,14 @@ class ClaudeBrain:
         otherwise the whole message and the look-ups it started. Notes in ``turn``
         whether a look-up from the web started."""
         looking: list[tuple[str, asyncio.Task[LookupResult]]] = []
+        instant: list[asyncio.Task[LookupResult]] = []
+        """A fleet or settings note in the same reply as an act: it runs too (#156)."""
         try:
             async with self._client.messages.stream(
                 model=self._model,
                 system=self._system,
                 tools=self._offered(),
-                tool_choice={"type": "auto", "disable_parallel_tool_use": True},
+                tool_choice=TOOL_CHOICE,
                 output_config={"effort": EFFORT},
                 max_tokens=MAX_TOKENS,
                 messages=messages,
@@ -297,7 +299,10 @@ class ClaudeBrain:
                                 turn.looking()
                             seconds = float(getattr(chosen, "seconds", LOOKUP_SECONDS))
                             lookup = run_lookup(chosen, block.input, seconds)
-                            looking.append((block.id, asyncio.create_task(lookup)))
+                            task = asyncio.create_task(lookup)
+                            looking.append((block.id, task))
+                            if getattr(chosen, "instant", False):
+                                instant.append(task)
                             continue
                         try:
                             decided = parse_tool_call(
@@ -309,9 +314,15 @@ class ClaudeBrain:
                             log.debug("Brain named unbound actions: %s", e.unknown)
                             looking.append((block.id, _answered(_unbound(e, self._actions))))
                             continue
-                        # Leaving the stream here ends the request: nothing more to wait for.
+                        # Leaving the stream here ends the request, so only the first act
+                        # in a reply is ever pressed. A look-up started with it is no longer
+                        # needed; a fleet or settings note is ("I'm in my Pitbull, power
+                        # off", #156): it's local and quick, so it finishes first.
                         for _, task in looking:
-                            task.cancel()
+                            if task not in instant:
+                                task.cancel()
+                        if instant:
+                            await asyncio.wait(instant, timeout=INSTANT_SECONDS)
                         return decided, None, []
                 message = await stream.get_final_message()
         except BaseException:
@@ -378,6 +389,13 @@ def _unbound(error: UnboundAction, actions: Collection[str]) -> LookupResult:
         "there's no key for it and what to bind."
     )
 
+
+TOOL_CHOICE: Any = {"type": "auto"}
+"""Several tools in one reply (#149, #156): look-ups at once instead of one call
+after another, and a fleet or settings note alongside an act. Only the first act in
+a reply is pressed (the stream is left there), and every act is still checked."""
+INSTANT_SECONDS = 1.0
+"""How long an act waits for a fleet or settings note from the same reply."""
 
 LAST_CALL = (
     "No more look-ups for this request. Answer now with what you found: speak, or "

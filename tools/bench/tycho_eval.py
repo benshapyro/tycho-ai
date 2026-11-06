@@ -33,6 +33,7 @@ import json
 import logging
 import re
 import statistics
+import sys
 import tempfile
 import time
 import tomllib
@@ -334,6 +335,12 @@ LIVE: dict[str, Callable[[object], None]] = {
 
 
 async def main() -> None:
+    # Cards hold "→" and the like: a console or file in Windows' own code page can't
+    # print them, and the run stopped halfway (6 November 2026).
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser()
     parser.add_argument("cases", type=Path, nargs="?", default=CASES)
     parser.add_argument("--tag", action="append", help="only cases with this tag; repeatable")

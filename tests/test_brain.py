@@ -334,7 +334,7 @@ def test_claude_is_asked_the_way_adr_14_says() -> None:
     request = client.requests[0]
     assert request["model"] == "claude-haiku-5-5"
     assert request["output_config"] == {"effort": "low"}
-    assert request["tool_choice"] == {"type": "auto", "disable_parallel_tool_use": True}
+    assert request["tool_choice"] == {"type": "auto"}  # several tools a reply (#149, #156)
     assert request["system"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
     assert {t["name"] for t in request["tools"]} == {"run_actions", "run_sequence"}
     assert all(t["strict"] for t in request["tools"])
@@ -770,3 +770,45 @@ def test_the_briefing_says_when_the_eye_beats_the_ear() -> None:
     assert "show_card" in text
     assert "Two more on the Tile" in text
     assert "Never a card for a one-line answer" in " ".join(text.split())
+
+
+def _reply(*stops: Any) -> tuple[list[Any], Any]:
+    """One reply in which Claude calls several tools, in this order."""
+    return list(stops), SimpleNamespace(
+        content=[s.content_block for s in stops], stop_reason="tool_use", usage=_final("").usage
+    )
+
+
+def test_a_fleet_note_with_an_act_is_kept_and_the_act_pressed() -> None:
+    """Play session (#156): "can you turn off power, I'm in my Pitbull" pressed power
+    off, and the Pitbull was never noted."""
+    fleet = FakeLookup("update_fleet", '{"flying": "Pitbull"}', instant=True)
+    noted = _tool_stop("update_fleet", {"flying": "Pitbull"}, "toolu_1")
+    act = _tool_stop(
+        "run_actions", {"actions": ["v_toggle_landing_system"], "say": "Gear."}, "toolu_2"
+    )
+    assert _ask(_Calls(_reply(noted, act)), fleet) == RunActions(
+        ("v_toggle_landing_system",), "Gear."
+    )
+    assert fleet.asked == [{"flying": "Pitbull"}]
+
+
+def test_only_the_first_act_in_a_reply_is_pressed() -> None:
+    first = _tool_stop(
+        "run_actions", {"actions": ["v_toggle_landing_system"], "say": "Gear."}, "toolu_1"
+    )
+    second = _tool_stop("run_actions", {"actions": ["v_eject"], "say": "Bye."}, "toolu_2")
+    assert _ask(_Calls(_reply(first, second))) == RunActions(("v_toggle_landing_system",), "Gear.")
+
+
+def test_look_ups_in_one_reply_run_together() -> None:
+    ships = FakeLookup("ship_lookup", '{"name": "Cutlass Black", "cargo_scu": 46}')
+    routes = FakeLookup("trade_routes", '{"routes": []}')
+    both = _reply(
+        _tool_stop("ship_lookup", {"name": "Cutlass"}, "toolu_1"),
+        _tool_stop("trade_routes", {"start": "Lorville"}, "toolu_2"),
+    )
+    client = _Calls(both, ([], _final("Haul laranite.")))
+    assert _ask(client, ships, routes) == Reply("Haul laranite.")
+    results = client.requests[1]["messages"][-1]["content"]
+    assert [r["tool_use_id"] for r in results] == ["toolu_1", "toolu_2"]  # one call, not two
