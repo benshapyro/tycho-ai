@@ -56,6 +56,7 @@ A result with not_found: say briefly what wasn't found."""
 
 class _UexLookup:
     seconds = SECONDS
+    credit = "UEX"
 
     def __init__(self, trade: Trade) -> None:
         self._trade = trade

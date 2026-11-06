@@ -884,3 +884,23 @@ def test_a_refused_act_long_ago_isnt_blamed_for_running_out_of_calls() -> None:
 def test_a_capitalised_tool_call_in_text_isnt_spoken() -> None:
     with pytest.raises(BrainError, match="tool call as text"):
         _ask(_Calls(([], _final('Show_card({"say": "x"})'))))
+
+
+class _Credited(FakeLookup):
+    credit = "UEX"
+
+
+def test_an_answer_from_uex_names_it_if_claude_didnt() -> None:
+    """Eval (#164): with the details on a card, the spoken line dropped "UEX"."""
+    client = _Calls(_looks_up("commodity_prices"), ([], _final("Orison pays the most.")))
+    assert _ask(client, _Credited("commodity_prices")) == Reply("Orison pays the most. From UEX.")
+
+
+def test_an_answer_that_names_uex_is_left_alone() -> None:
+    client = _Calls(_looks_up("commodity_prices"), ([], _final("UEX has Orison paying most.")))
+    assert _ask(client, _Credited("commodity_prices")) == Reply("UEX has Orison paying most.")
+
+
+def test_an_answer_without_a_credited_look_up_is_left_alone() -> None:
+    client = _Calls(_looks_up(), ([], _final("The Andromeda.")))
+    assert _ask(client, FakeLookup()) == Reply("The Andromeda.")

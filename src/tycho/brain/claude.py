@@ -20,13 +20,14 @@ request at startup writes it, so the first real request is fast too.
 """
 
 import asyncio
+import dataclasses
 import datetime
 import difflib
 import logging
 import re
 import time
 from collections.abc import Callable, Collection, Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import anthropic
@@ -70,6 +71,8 @@ class _Turn:
     waiting: Callable[[], None] | None = None
     looking: Callable[[], None] | None = None
     searched: bool = False
+    credits: list[str] = field(default_factory=list[str])
+    """Sources an answer must name, from the look-ups it used ("UEX", #164)."""
     unbound: UnboundAction | None = None
     """The last act refused for naming unbound actions, for the final error (#167)."""
     refused: bool = False
@@ -235,6 +238,8 @@ class ClaudeBrain:
                     if turn.searched and not isinstance(decided, Reply):
                         log.warning("The brain chose to act after a web search; not pressing")
                         return Reply(NO_PRESS_AFTER_SEARCH)
+                    if isinstance(decided, Reply):
+                        return _credited(decided, turn.credits)
                     return decided
                 _log_usage(message.usage, started)
                 if message.stop_reason == "refusal":
@@ -249,7 +254,7 @@ class ClaudeBrain:
                         reply = reply[: found.start()].strip()
                         if not reply:
                             raise BrainError("it wrote a tool call as text")
-                    return Reply(reply[:400])
+                    return _credited(Reply(reply[:400]), turn.credits)
                 results = await asyncio.gather(*(task for _, task in looking))
                 messages.append({"role": "assistant", "content": message.content})
                 content: list[Any] = [*_results(looking, results)]
@@ -311,6 +316,10 @@ class ClaudeBrain:
                                 # Told once the reply is known not to end in an act: the
                                 # session moves its deadline and says "Checking." (#176).
                                 checking += 1
+                            if (
+                                credit := getattr(chosen, "credit", "")
+                            ) and credit not in turn.credits:
+                                turn.credits.append(str(credit))
                             seconds = float(getattr(chosen, "seconds", LOOKUP_SECONDS))
                             lookup = run_lookup(chosen, block.input, seconds)
                             task = asyncio.create_task(lookup)
@@ -429,6 +438,16 @@ SECOND_ACT = (
     "Nothing was pressed: an earlier action in this reply was refused. Pick the actions "
     "again, all in one run_actions call."
 )
+
+
+def _credited(reply: Reply, credits: list[str]) -> Reply:
+    """The answer, naming each source it used that it didn't name itself: Claude is
+    asked to credit UEX, but with the details on a card it often doesn't (#164)."""
+    missing = [c for c in credits if c.lower() not in reply.text.lower()]
+    if not missing:
+        return reply
+    return dataclasses.replace(reply, text=f"{reply.text} From {' and '.join(missing)}.")
+
 
 LAST_PICK = "No more look-ups for this request: pick the actions again, or say what you can't do."
 """Instead of LAST_CALL, when the turn holds a refused act (review of #177)."""
