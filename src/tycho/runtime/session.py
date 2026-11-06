@@ -237,8 +237,9 @@ class Session:
         """Paused, push-to-talk does nothing, from the next press (the tray, ADR 17).
         A press already held still ends normally, so the microphone never stays open."""
         self._paused = paused
-        if paused and self._display is not None:
-            self._display.idle()
+        busy = self._listening or (self._current is not None and not self._current.done())
+        if paused and not busy and self._display is not None:
+            self._display.idle()  # a request still running puts the light out itself
 
     @property
     def paused(self) -> bool:
@@ -277,6 +278,10 @@ class Session:
             return
         if edge is Edge.PRESSED:
             if self._paused:
+                # Paused means nothing new starts. Push-to-talk still stops whatever
+                # is running, as it always does: a key sequence, or Tycho talking.
+                self._cancel_current()
+                self._stop_speaking()
                 return
             if self._tail_pending:  # the last release is still recording its tail: drop it
                 self._tail_pending = False

@@ -20,6 +20,8 @@ from dataclasses import dataclass
 
 from PIL import Image, ImageDraw
 
+from tycho import win32
+
 log = logging.getLogger(__name__)
 
 _WM_DESTROY, _WM_CLOSE, _WM_COMMAND, _WM_NULL = 0x0002, 0x0010, 0x0111, 0x0000
@@ -30,6 +32,8 @@ _NIF_MESSAGE, _NIF_ICON, _NIF_TIP = 0x1, 0x2, 0x4
 _MF_STRING, _MF_SEPARATOR, _MF_CHECKED, _MF_GRAYED = 0x0, 0x800, 0x8, 0x1
 _TPM_RIGHTBUTTON, _TPM_RETURNCMD, _TPM_NONOTIFY = 0x2, 0x100, 0x80
 _ICON = 32
+START_SECONDS = 15.0
+"""How long Tycho waits for the tray before carrying on without it."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +91,7 @@ class TrayIcon:
         self._ready = threading.Event()
         self._hwnd = 0
         self._icon = 0
+        self._abandoned = False
         self.failed = ""
 
     def start(self) -> bool:
@@ -96,17 +101,22 @@ class TrayIcon:
             return False
         self._thread = threading.Thread(target=self._run, name="tycho-tray", daemon=True)
         self._thread.start()
-        self._ready.wait(5.0)
+        if not self._ready.wait(START_SECONDS):
+            # Too slow: Tycho carries on without a tray, so this one must never appear.
+            self._abandoned = True
+            self.failed = f"the tray took more than {START_SECONDS:g} s to start"
+            self.close()
+            return False
         return bool(self._hwnd) and not self.failed
 
     def refresh(self) -> None:
         """Update the tooltip, e.g. after pausing. Safe from any thread."""
         if self._hwnd:
-            _user32().PostMessageW(self._hwnd, _WM_APP_TRAY, 0, 1)  # lParam 1: refresh
+            win32.user32().PostMessageW(self._hwnd, _WM_APP_TRAY, 0, 1)  # lParam 1: refresh
 
     def close(self) -> None:
         if self._hwnd:
-            _user32().PostMessageW(self._hwnd, _WM_CLOSE, 0, 0)
+            win32.user32().PostMessageW(self._hwnd, _WM_CLOSE, 0, 0)
         if self._thread is not None:
             self._thread.join(2.0)
 
@@ -123,10 +133,10 @@ class TrayIcon:
             self._ready.set()
 
     def _loop(self) -> None:
-        user32 = _user32()
+        user32 = win32.user32()
         taskbar_created = user32.RegisterWindowMessageW("TaskbarCreated")
 
-        @_WNDPROC
+        @win32.WNDPROC
         def proc(hwnd: int, msg: int, wparam: int, lparam: int) -> int:
             if msg == _WM_APP_TRAY:
                 if lparam == 1:
@@ -153,10 +163,10 @@ class TrayIcon:
                 return 0
             return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
 
-        instance = _kernel32().GetModuleHandleW(None)
+        instance = win32.kernel32().GetModuleHandleW(None)
         name = f"TychoTray{os.getpid()}"
-        wc = _WNDCLASSEXW()
-        wc.cbSize = ctypes.sizeof(_WNDCLASSEXW)
+        wc = win32.WNDCLASSEXW()
+        wc.cbSize = ctypes.sizeof(win32.WNDCLASSEXW)
         wc.lpfnWndProc = proc
         wc.hInstance = instance
         wc.lpszClassName = name
@@ -167,10 +177,15 @@ class TrayIcon:
         hwnd = user32.CreateWindowExW(0, name, "Tycho", 0, 0, 0, 0, 0, None, None, instance, None)
         if not hwnd:
             raise OSError(ctypes.get_last_error(), "CreateWindowExW failed")
+        if self._abandoned:  # start() gave up waiting
+            user32.DestroyWindow(hwnd)
+            return
         self._hwnd = hwnd
         self._icon = _hicon(glyph())
         if not self._notify(_NIM_ADD):
-            raise OSError(ctypes.get_last_error(), "Shell_NotifyIconW failed")
+            # The taskbar isn't there yet (Tycho started at login, before Explorer):
+            # the icon is added when Explorer says the taskbar exists.
+            log.info("The taskbar isn't ready yet; the tray icon will appear when it is")
         self._ready.set()
         msg = wintypes.MSG()
         while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
@@ -182,18 +197,18 @@ class TrayIcon:
         _ = proc  # kept alive until the loop ends
 
     def _notify(self, action: int) -> bool:
-        data = _NOTIFYICONDATAW()
-        data.cbSize = ctypes.sizeof(_NOTIFYICONDATAW)
+        data = win32.NOTIFYICONDATAW()
+        data.cbSize = ctypes.sizeof(win32.NOTIFYICONDATAW)
         data.hWnd = self._hwnd
         data.uID = 1
         data.uFlags = _NIF_MESSAGE | _NIF_ICON | _NIF_TIP
         data.uCallbackMessage = _WM_APP_TRAY
         data.hIcon = self._icon
         data.szTip = self._tip()[:127]
-        return bool(_shell32().Shell_NotifyIconW(action, ctypes.byref(data)))
+        return bool(win32.shell32().Shell_NotifyIconW(action, ctypes.byref(data)))
 
     def _popup(self) -> None:
-        user32 = _user32()
+        user32 = win32.user32()
         items = list(self._menu())
         menu = user32.CreatePopupMenu()
         try:
@@ -238,10 +253,10 @@ class TrayIcon:
 
 def _hicon(image: Image.Image) -> int:
     """An icon handle from an RGBA image: a 32-bit colour bitmap with its alpha."""
-    gdi32, user32 = _gdi32(), _user32()
+    gdi32, user32 = win32.gdi32(), win32.user32()
     w, h = image.size
-    info = _BITMAPINFO()
-    info.bmiHeader.biSize = ctypes.sizeof(_BITMAPINFOHEADER)
+    info = win32.BITMAPINFO()
+    info.bmiHeader.biSize = ctypes.sizeof(win32.BITMAPINFOHEADER)
     info.bmiHeader.biWidth = w
     info.bmiHeader.biHeight = -h
     info.bmiHeader.biPlanes = 1
@@ -255,207 +270,8 @@ def _hicon(image: Image.Image) -> int:
     pixels = image.convert("RGBA").tobytes("raw", "BGRA")
     ctypes.memmove(bits.value, pixels, len(pixels))
     mask = gdi32.CreateBitmap(w, h, 1, 1, None)
-    icon_info = _ICONINFO(True, 0, 0, mask, colour)
+    icon_info = win32.ICONINFO(True, 0, 0, mask, colour)
     icon = user32.CreateIconIndirect(ctypes.byref(icon_info))
     gdi32.DeleteObject(mask)
     gdi32.DeleteObject(colour)
     return int(icon or 0)
-
-
-# --- Win32 definitions ------------------------------------------------------------
-
-_WNDPROC = ctypes.WINFUNCTYPE(
-    ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM
-)
-
-
-class _WNDCLASSEXW(ctypes.Structure):
-    _fields_ = [
-        ("cbSize", wintypes.UINT),
-        ("style", wintypes.UINT),
-        ("lpfnWndProc", _WNDPROC),
-        ("cbClsExtra", ctypes.c_int),
-        ("cbWndExtra", ctypes.c_int),
-        ("hInstance", wintypes.HINSTANCE),
-        ("hIcon", wintypes.HICON),
-        ("hCursor", wintypes.HANDLE),
-        ("hbrBackground", wintypes.HBRUSH),
-        ("lpszMenuName", wintypes.LPCWSTR),
-        ("lpszClassName", wintypes.LPCWSTR),
-        ("hIconSm", wintypes.HICON),
-    ]
-
-
-class _GUID(ctypes.Structure):
-    _fields_ = [
-        ("Data1", wintypes.DWORD),
-        ("Data2", wintypes.WORD),
-        ("Data3", wintypes.WORD),
-        ("Data4", ctypes.c_ubyte * 8),
-    ]
-
-
-class _NOTIFYICONDATAW(ctypes.Structure):
-    _fields_ = [
-        ("cbSize", wintypes.DWORD),
-        ("hWnd", wintypes.HWND),
-        ("uID", wintypes.UINT),
-        ("uFlags", wintypes.UINT),
-        ("uCallbackMessage", wintypes.UINT),
-        ("hIcon", wintypes.HICON),
-        ("szTip", ctypes.c_wchar * 128),
-        ("dwState", wintypes.DWORD),
-        ("dwStateMask", wintypes.DWORD),
-        ("szInfo", ctypes.c_wchar * 256),
-        ("uVersion", wintypes.UINT),
-        ("szInfoTitle", ctypes.c_wchar * 64),
-        ("dwInfoFlags", wintypes.DWORD),
-        ("guidItem", _GUID),
-        ("hBalloonIcon", wintypes.HICON),
-    ]
-
-
-class _BITMAPINFOHEADER(ctypes.Structure):
-    _fields_ = [
-        ("biSize", wintypes.DWORD),
-        ("biWidth", wintypes.LONG),
-        ("biHeight", wintypes.LONG),
-        ("biPlanes", wintypes.WORD),
-        ("biBitCount", wintypes.WORD),
-        ("biCompression", wintypes.DWORD),
-        ("biSizeImage", wintypes.DWORD),
-        ("biXPelsPerMeter", wintypes.LONG),
-        ("biYPelsPerMeter", wintypes.LONG),
-        ("biClrUsed", wintypes.DWORD),
-        ("biClrImportant", wintypes.DWORD),
-    ]
-
-
-class _BITMAPINFO(ctypes.Structure):
-    _fields_ = [("bmiHeader", _BITMAPINFOHEADER), ("bmiColors", wintypes.DWORD * 3)]
-
-
-class _ICONINFO(ctypes.Structure):
-    _fields_ = [
-        ("fIcon", wintypes.BOOL),
-        ("xHotspot", wintypes.DWORD),
-        ("yHotspot", wintypes.DWORD),
-        ("hbmMask", wintypes.HBITMAP),
-        ("hbmColor", wintypes.HBITMAP),
-    ]
-
-
-_libs: dict[str, ctypes.WinDLL] = {}
-
-
-def _lib(name: str) -> ctypes.WinDLL:
-    """A Windows DLL, typed on first use (so importing this never fails elsewhere)."""
-    if name not in _libs:
-        lib = ctypes.WinDLL(name, use_last_error=True)
-        _libs[name] = lib
-        _TYPERS[name](lib)
-    return _libs[name]
-
-
-def _user32() -> ctypes.WinDLL:
-    return _lib("user32")
-
-
-def _gdi32() -> ctypes.WinDLL:
-    return _lib("gdi32")
-
-
-def _kernel32() -> ctypes.WinDLL:
-    return _lib("kernel32")
-
-
-def _shell32() -> ctypes.WinDLL:
-    return _lib("shell32")
-
-
-def _type_user32(u: ctypes.WinDLL) -> None:
-    H, P = wintypes.HWND, ctypes.c_void_p
-    u.DefWindowProcW.restype = ctypes.c_ssize_t
-    u.DefWindowProcW.argtypes = [H, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
-    u.RegisterClassExW.restype = wintypes.ATOM
-    u.RegisterClassExW.argtypes = [P]
-    u.UnregisterClassW.argtypes = [wintypes.LPCWSTR, wintypes.HINSTANCE]
-    u.RegisterWindowMessageW.restype = wintypes.UINT
-    u.RegisterWindowMessageW.argtypes = [wintypes.LPCWSTR]
-    u.CreateWindowExW.restype = H
-    u.CreateWindowExW.argtypes = [
-        wintypes.DWORD,
-        wintypes.LPCWSTR,
-        wintypes.LPCWSTR,
-        wintypes.DWORD,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        H,
-        wintypes.HMENU,
-        wintypes.HINSTANCE,
-        wintypes.LPVOID,
-    ]
-    u.DestroyWindow.argtypes = [H]
-    u.PostMessageW.argtypes = [H, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
-    u.GetMessageW.argtypes = [P, H, wintypes.UINT, wintypes.UINT]
-    u.TranslateMessage.argtypes = [P]
-    u.DispatchMessageW.argtypes = [P]
-    u.DispatchMessageW.restype = ctypes.c_ssize_t
-    u.CreatePopupMenu.restype = wintypes.HMENU
-    u.AppendMenuW.argtypes = [wintypes.HMENU, wintypes.UINT, ctypes.c_size_t, wintypes.LPCWSTR]
-    u.SetMenuDefaultItem.argtypes = [wintypes.HMENU, wintypes.UINT, wintypes.UINT]
-    u.TrackPopupMenu.restype = ctypes.c_int
-    u.TrackPopupMenu.argtypes = [
-        wintypes.HMENU,
-        wintypes.UINT,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-        H,
-        P,
-    ]
-    u.DestroyMenu.argtypes = [wintypes.HMENU]
-    u.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
-    u.SetForegroundWindow.argtypes = [H]
-    u.GetDC.restype = wintypes.HDC
-    u.GetDC.argtypes = [H]
-    u.ReleaseDC.argtypes = [H, wintypes.HDC]
-    u.CreateIconIndirect.restype = wintypes.HICON
-    u.CreateIconIndirect.argtypes = [P]
-    u.DestroyIcon.argtypes = [wintypes.HICON]
-
-
-def _type_gdi32(g: ctypes.WinDLL) -> None:
-    P = ctypes.c_void_p
-    g.CreateDIBSection.restype = wintypes.HBITMAP
-    g.CreateDIBSection.argtypes = [
-        wintypes.HDC,
-        P,
-        wintypes.UINT,
-        ctypes.POINTER(ctypes.c_void_p),
-        wintypes.HANDLE,
-        wintypes.DWORD,
-    ]
-    g.CreateBitmap.restype = wintypes.HBITMAP
-    g.CreateBitmap.argtypes = [ctypes.c_int, ctypes.c_int, wintypes.UINT, wintypes.UINT, P]
-    g.DeleteObject.argtypes = [wintypes.HGDIOBJ]
-
-
-def _type_kernel32(k: ctypes.WinDLL) -> None:
-    k.GetModuleHandleW.restype = wintypes.HMODULE
-    k.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
-
-
-def _type_shell32(s: ctypes.WinDLL) -> None:
-    s.Shell_NotifyIconW.restype = wintypes.BOOL
-    s.Shell_NotifyIconW.argtypes = [wintypes.DWORD, ctypes.c_void_p]
-
-
-_TYPERS: dict[str, Callable[[ctypes.WinDLL], None]] = {
-    "user32": _type_user32,
-    "gdi32": _type_gdi32,
-    "kernel32": _type_kernel32,
-    "shell32": _type_shell32,
-}

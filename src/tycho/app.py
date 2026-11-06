@@ -262,37 +262,20 @@ def serve_with_tray(
     import os
 
     from tycho.desktop.host import Host
-    from tycho.desktop.tray import SEPARATOR, Item, TrayIcon
+    from tycho.desktop.menu import TrayMenu
+    from tycho.desktop.tray import TrayIcon
 
     host = Host(lambda stop: serve(session, store, stop))
-
-    def menu() -> list[Item]:
-        items = [Item("pause", "Resume listening" if session.paused else "Pause listening")]
-        if display is not None:
-            items.append(Item("tile", "Show the Tile", checked=display.on))
-        return [*items, SEPARATOR, Item("logs", "Open the logs folder"), Item("quit", "Quit Tycho")]
-
-    def chosen(key: str) -> None:
-        if key == "pause":
-            paused = not session.paused
-            host.call(lambda: session.pause(paused))
-            log.info("Listening %s from the tray", "paused" if paused else "resumed")
-        elif key == "tile" and display is not None:
-            value = not display.on
-            try:
-                settings.update({"tile": value})
-            except SettingsError as e:
-                log.warning("Couldn't save the Tile setting: %s", e)
-            live["tile"](value)
-        elif key == "logs":
-            os.startfile(paths.logs_dir())  # noqa: S606 - Explorer, on Tycho's own folder
-        elif key == "quit":
-            host.ask("quit")
-
-    def tip() -> str:
-        return "Tycho: paused" if session.paused else "Tycho: listening"
-
-    tray = TrayIcon(tip, menu, chosen)
+    menu = TrayMenu(
+        session,
+        host,
+        display=display,
+        save=settings.update,
+        apply_tile=live.get("tile", lambda _on: None),
+        open_logs=lambda: os.startfile(paths.logs_dir()),  # noqa: S606 - Explorer, Tycho's folder
+    )
+    tray = TrayIcon(menu.tip, menu.items, menu.chosen)
+    menu.refresh = tray.refresh
     if not tray.start():
         log.warning("No tray icon (%s); press Ctrl+C to stop", tray.failed)
         asyncio.run(serve(session, store))

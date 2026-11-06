@@ -3,11 +3,14 @@
 import asyncio
 import sys
 import threading
+from collections.abc import Callable, Mapping
 
 import pytest
 
 from tycho.desktop.host import Host
+from tycho.desktop.menu import TrayMenu
 from tycho.desktop.tray import SEPARATOR, Item, TrayIcon, glyph
+from tycho.settings import SettingsError
 
 
 class Voice:
@@ -113,3 +116,100 @@ def test_the_tray_icon_shows_and_goes() -> None:
         assert chosen == ["pause"]
     finally:
         tray.close()
+
+
+# --- The tray's menu -----------------------------------------------------------------
+
+
+class FakeSession:
+    def __init__(self) -> None:
+        self.paused = False
+
+    def pause(self, paused: bool) -> None:
+        self.paused = paused
+
+
+class FakeHost:
+    """Runs ``call`` later, as the voice loop would, when ``run_calls`` is called."""
+
+    def __init__(self) -> None:
+        self.pending: list[Callable[[], None]] = []
+        self.asked: list[str] = []
+
+    def call(self, fn: Callable[[], None]) -> None:
+        self.pending.append(fn)
+
+    def ask(self, request: str) -> None:
+        self.asked.append(request)
+
+    def run_calls(self) -> None:
+        while self.pending:
+            self.pending.pop(0)()
+
+
+class FakeTile:
+    def __init__(self) -> None:
+        self.on = True
+
+
+def _menu(**options: object) -> tuple[TrayMenu, FakeSession, FakeHost]:
+    session, host = FakeSession(), FakeHost()
+    return TrayMenu(session, host, **options), session, host  # type: ignore[arg-type]
+
+
+def test_the_menu_shows_what_pausing_would_do_and_whether_the_tile_is_on() -> None:
+    tile = FakeTile()
+    menu, session, _ = _menu(display=tile)
+    assert [(i.key, i.label, i.checked) for i in menu.items() if i.key] == [
+        ("pause", "Pause listening", False),
+        ("tile", "Show the Tile", True),
+        ("logs", "Open the logs folder", False),
+        ("quit", "Quit Tycho", False),
+    ]
+    session.paused = True
+    assert menu.items()[0].label == "Resume listening"
+    assert menu.tip() == "Tycho: paused"
+
+
+def test_without_a_tile_the_menu_has_no_tile_item() -> None:
+    menu, _, _ = _menu()
+    assert "tile" not in [i.key for i in menu.items()]
+
+
+def test_pausing_runs_on_the_voice_loop_and_then_redraws_the_tooltip() -> None:
+    menu, session, host = _menu()
+    tips: list[str] = []
+    menu.refresh = lambda: tips.append(menu.tip())
+    menu.chosen("pause")
+    assert not session.paused  # not yet: it runs on the voice loop's thread
+    host.run_calls()
+    assert session.paused
+    assert tips == ["Tycho: paused"]  # the tooltip after the pause, never before
+
+
+def test_the_tile_item_saves_and_applies_the_setting() -> None:
+    saved: list[Mapping[str, object]] = []
+    applied: list[bool] = []
+    menu, _, _ = _menu(display=FakeTile(), save=saved.append, apply_tile=applied.append)
+    menu.chosen("tile")
+    assert saved == [{"tile": False}]
+    assert applied == [False]
+
+
+def test_a_tile_setting_that_wont_save_still_applies_until_restart() -> None:
+    def broken(_changes: Mapping[str, object]) -> None:
+        raise SettingsError("settings.toml is read-only")
+
+    applied: list[bool] = []
+    menu, _, _ = _menu(display=FakeTile(), save=broken, apply_tile=applied.append)
+    menu.chosen("tile")
+    assert applied == [False]
+
+
+def test_quit_and_the_logs() -> None:
+    opened: list[str] = []
+    menu, _, host = _menu(open_logs=lambda: opened.append("logs"))
+    menu.chosen("logs")
+    menu.chosen("quit")
+    assert opened == ["logs"]
+    assert host.asked == ["quit"]

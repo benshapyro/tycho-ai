@@ -25,6 +25,7 @@ LAZY_IMPORTS = (
     "tycho.tile.display",
     # The tray icon and the voice loop's own thread (ADR 17).
     "tycho.desktop.host",
+    "tycho.desktop.menu",
     "tycho.desktop.tray",
 )
 

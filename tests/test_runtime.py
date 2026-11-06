@@ -1405,3 +1405,39 @@ def test_a_press_held_when_pausing_still_ends_normally() -> None:
 
     r = run(scenario)
     assert [x.status for x in r.results] == ["done"]
+
+
+def test_paused_push_to_talk_still_stops_what_is_running() -> None:
+    hold = threading.Event()
+
+    async def scenario() -> Rig:
+        r = rig("landing gear", hold=hold)
+        r.say()
+        await asyncio.sleep(0.05)
+        r.session.pause(True)
+        r.session.handle(Edge.PRESSED)  # "stop": as push-to-talk always is
+        hold.set()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert [x.status for x in r.results] == ["cancelled"]
+    assert r.keys.events == []
+
+
+def test_pausing_mid_request_leaves_the_light_until_it_ends() -> None:
+    display = FakeDisplay()
+
+    async def scenario() -> None:
+        r = rig("landing gear", display=display)
+        r.session.handle(Edge.PRESSED)
+        r.session.pause(True)
+        assert display.light == "listening"  # still recording
+        r.audio.hear(SPEECH)
+        r.session.handle(Edge.RELEASED)
+        await r.session.idle()
+        assert display.light is None  # the request ended, and with it the light
+        await r.session.close()
+
+    run(scenario)

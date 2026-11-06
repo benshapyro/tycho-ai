@@ -54,8 +54,8 @@ class Host:
         """Start the voice loop and serve the tray's requests until Tycho stops.
         Re-raises anything that ended the voice loop."""
         self._thread.start()
-        self._started.wait(10.0)
         try:
+            self._started.wait(10.0)
             while self._thread.is_alive():
                 try:
                     request = self._requests.get(timeout=POLL_SECONDS)
@@ -71,7 +71,10 @@ class Host:
             raise
         finally:
             self.stop()
-            self._thread.join(10.0)
+            # As long as it takes, as asyncio.run did: the voice loop is still using
+            # the microphone, the Tile and the action log, which close after this.
+            # A second Ctrl+C interrupts the wait.
+            self._thread.join()
         if self._failure is not None:
             raise self._failure
 
