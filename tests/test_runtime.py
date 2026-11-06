@@ -1359,3 +1359,49 @@ def test_a_barge_in_leaves_the_light_on_for_the_new_request() -> None:
         await r.session.close()
 
     run(scenario)
+
+
+# --- Pausing from the tray (ADR 17) -------------------------------------------------
+
+
+def test_paused_push_to_talk_does_nothing() -> None:
+    async def scenario() -> Rig:
+        r = rig("landing gear")
+        r.session.pause(True)
+        r.say()
+        await r.session.idle()
+        assert r.session.paused
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert r.results == []
+    assert r.keys.events == []
+
+
+def test_resuming_listens_again() -> None:
+    async def scenario() -> Rig:
+        r = rig("landing gear")
+        r.session.pause(True)
+        r.session.pause(False)
+        r.say()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    assert [x.status for x in run(scenario).results] == ["done"]
+
+
+def test_a_press_held_when_pausing_still_ends_normally() -> None:
+    async def scenario() -> Rig:
+        r = rig("landing gear")
+        r.session.handle(Edge.PRESSED)
+        r.session.pause(True)  # paused while the button is down
+        r.audio.hear(SPEECH)
+        r.session.handle(Edge.RELEASED)
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert [x.status for x in r.results] == ["done"]

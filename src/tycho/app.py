@@ -79,6 +79,11 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", metavar="command")
     run = commands.add_parser("run", help="start listening (the default)")
     run.add_argument("-v", "--verbose", action="store_true", help="show debug detail")
+    run.add_argument(
+        "--no-window",
+        action="store_true",
+        help="the terminal only: no tray icon or window",
+    )
     check = commands.add_parser("check", help="check the setup, in plain words")
     check.add_argument("--quick", action="store_true", help="skip the microphone and focus tests")
     check.add_argument(
@@ -124,7 +129,11 @@ def _dispatch(args: argparse.Namespace, current: Settings) -> int:
         case "key":
             return credentials.main([args.action, args.name])
         case _:
-            return run_command(current, verbose=getattr(args, "verbose", False))
+            return run_command(
+                current,
+                verbose=getattr(args, "verbose", False),
+                window=not getattr(args, "no_window", False),
+            )
 
 
 def notice_file() -> Path:
@@ -151,13 +160,13 @@ def credits_command() -> int:
 # --- tycho run -----------------------------------------------------------------------
 
 
-def run_command(current: Settings, *, verbose: bool = False) -> int:
+def run_command(current: Settings, *, verbose: bool = False, window: bool = True) -> int:
     from tycho.runtime import AlreadyRunning, SingleInstance
 
     log_file = logs.setup(verbose=verbose)
     try:
         with SingleInstance():
-            return _run(current, log_file)
+            return _run(current, log_file, window=window)
     except AlreadyRunning as e:
         print(e, file=sys.stderr)
         return 1
@@ -170,7 +179,7 @@ def run_command(current: Settings, *, verbose: bool = False) -> int:
         return 1
 
 
-def _run(current: Settings, log_file: Path) -> int:
+def _run(current: Settings, log_file: Path, *, window: bool = True) -> int:
     from tycho.address import Address, Pronouncing
     from tycho.audio.microphone import Microphone
     from tycho.feedback import SoundDevicePlayer, SoundFeedback
@@ -232,7 +241,10 @@ def _run(current: Settings, log_file: Path) -> int:
         live["confirm_seconds"] = lambda v: session.set_confirm_seconds(_float(v))
         log.info("Listening. Hold %s and speak; press Ctrl+C to stop.", describe(binding))
         try:
-            asyncio.run(serve(session, store))
+            if window and sys.platform == "win32":
+                serve_with_tray(session, store, live, display)
+            else:
+                asyncio.run(serve(session, store))
         finally:
             action_log.close()
             if display is not None:
@@ -240,6 +252,55 @@ def _run(current: Settings, log_file: Path) -> int:
     if mic.overflows:
         log.warning("The microphone dropped audio %d time(s)", mic.overflows)
     return 0
+
+
+def serve_with_tray(
+    session: Session, store: KeybindStore, live: Live, display: TileDisplay | None
+) -> None:
+    """Run the session with Tycho's tray icon (ADR 17): pause, the Tile, the logs, quit.
+    Without a tray (it couldn't start), the terminal only, as before."""
+    import os
+
+    from tycho.desktop.host import Host
+    from tycho.desktop.tray import SEPARATOR, Item, TrayIcon
+
+    host = Host(lambda stop: serve(session, store, stop))
+
+    def menu() -> list[Item]:
+        items = [Item("pause", "Resume listening" if session.paused else "Pause listening")]
+        if display is not None:
+            items.append(Item("tile", "Show the Tile", checked=display.on))
+        return [*items, SEPARATOR, Item("logs", "Open the logs folder"), Item("quit", "Quit Tycho")]
+
+    def chosen(key: str) -> None:
+        if key == "pause":
+            paused = not session.paused
+            host.call(lambda: session.pause(paused))
+            log.info("Listening %s from the tray", "paused" if paused else "resumed")
+        elif key == "tile" and display is not None:
+            value = not display.on
+            try:
+                settings.update({"tile": value})
+            except SettingsError as e:
+                log.warning("Couldn't save the Tile setting: %s", e)
+            live["tile"](value)
+        elif key == "logs":
+            os.startfile(paths.logs_dir())  # noqa: S606 - Explorer, on Tycho's own folder
+        elif key == "quit":
+            host.ask("quit")
+
+    def tip() -> str:
+        return "Tycho: paused" if session.paused else "Tycho: listening"
+
+    tray = TrayIcon(tip, menu, chosen)
+    if not tray.start():
+        log.warning("No tray icon (%s); press Ctrl+C to stop", tray.failed)
+        asyncio.run(serve(session, store))
+        return
+    try:
+        host.run()
+    finally:
+        tray.close()
 
 
 def _float(value: object) -> float:

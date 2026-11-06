@@ -23,6 +23,9 @@ LAZY_IMPORTS = (
     # The Tile (ADR 16): drawn with Pillow, whose text needs its FreeType module.
     "PIL._imagingft",
     "tycho.tile.display",
+    # The tray icon and the voice loop's own thread (ADR 17).
+    "tycho.desktop.host",
+    "tycho.desktop.tray",
 )
 
 

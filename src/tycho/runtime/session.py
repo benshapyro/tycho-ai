@@ -231,6 +231,18 @@ class Session:
         self._stt = ThreadPoolExecutor(1, thread_name_prefix="tycho-stt")
         self._keys = ThreadPoolExecutor(1, thread_name_prefix="tycho-keys")
         self._closed = False
+        self._paused = False
+
+    def pause(self, paused: bool) -> None:
+        """Paused, push-to-talk does nothing, from the next press (the tray, ADR 17).
+        A press already held still ends normally, so the microphone never stays open."""
+        self._paused = paused
+        if paused and self._display is not None:
+            self._display.idle()
+
+    @property
+    def paused(self) -> bool:
+        return self._paused
 
     def set_confirm_seconds(self, seconds: float) -> None:
         """How long to wait for "confirm", from the next question on (#111)."""
@@ -264,6 +276,8 @@ class Session:
         if self._closed:
             return
         if edge is Edge.PRESSED:
+            if self._paused:
+                return
             if self._tail_pending:  # the last release is still recording its tail: drop it
                 self._tail_pending = False
                 with contextlib.suppress(AudioError):
