@@ -34,6 +34,9 @@ RAW_WORDS = frozenset({"raw", "ore", "unrefined"})
 REFINED_WORDS = frozenset({"refined"})
 """UEX names a refined commodity plainly ("Gold"), and its ore "Gold (Ore)" or "(Raw)"."""
 RAW_MARKS = ("(raw)", "(ore)")
+GUESS_AMONG = 4
+"""A name that fits this many or fewer is answered with the likeliest, and the others
+named (#147); more than this, and the player is asked to name one."""
 FILLER = frozenset({"the", "a", "an", "at", "in", "on", "near", "of", "some", "price", "prices"})
 COMMODITY_TERMINALS = frozenset({"commodity", "commodity_raw"})
 PLACE_FIELDS = (
@@ -116,6 +119,12 @@ class Trade:
 
     def commodity(self, asked: str) -> Commodity:
         """The commodity the player meant. Raises ``TradeError`` with the closest names."""
+        return self.commodity_match(asked)[0]
+
+    def commodity_match(self, asked: str) -> tuple[Commodity, tuple[str, ...]]:
+        """The commodity the player most likely meant, and any others that fit as well
+        (#147: a best guess, not a question back, unless too many fit). Raises
+        ``TradeError`` when none fits, or more than ``GUESS_AMONG`` do."""
         words = [w for w in normalize(asked) if w not in FILLER]
         raw = any(w in RAW_WORDS for w in words)
         words = [w for w in words if w not in RAW_WORDS and w not in REFINED_WORDS]
@@ -130,13 +139,20 @@ class Trade:
             closest = ", ".join(c.name for _, c in scored[:3])
             raise TradeError(f"no commodity called {asked!r}; closest: {closest}")
         tied = [c for score, c in scored if score >= best - 0.03]
-        names = {_plain(c.name) for c in tied}  # Gold and Gold (Ore) are one choice
-        if len(names) > 1:
-            raise TradeError(f"{asked!r} could be {', '.join(sorted(names)[:4])}: pick one")
-        return next((c for c in tied if c.raw == raw), tied[0])
+        names = list(dict.fromkeys(_plain(c.name) for c in tied))  # Gold, Gold (Ore): one
+        if len(names) > GUESS_AMONG:
+            raise TradeError(f"{asked!r} could be {', '.join(names[:4])}, and more: name one")
+        chosen = [c for c in tied if _plain(c.name) == names[0]]
+        return next((c for c in chosen if c.raw == raw), chosen[0]), tuple(names[1:])
 
     def place(self, asked: str) -> Place:
         """The most specific place the name matches. Raises ``TradeError``."""
+        return self.place_match(asked)[0]
+
+    def place_match(self, asked: str) -> tuple[Place, tuple[str, ...]]:
+        """The most specific place the name matches, and any others it matches as well
+        (a best guess among a few, #147). Raises ``TradeError`` when none matches, or
+        more than ``GUESS_AMONG`` do ("Lagrange": name one)."""
         key = _squash(PLACE_ALIASES.get(" ".join(normalize(asked)), asked))
         key = _squash(" ".join(w for w in normalize(key) if w not in FILLER)) or key
         if not key:
@@ -151,12 +167,14 @@ class Trade:
                     if value and _place_matches(key, str(value), exact=exact):
                         id_field = "id" if field == "terminal" else _id_field(field)
                         values.setdefault(str(value), (id_field, int(terminal.get(id_field) or 0)))
-                if len(values) == 1:
-                    ((value, (id_field, ident)),) = values.items()
-                    return Place(field, value, id_field, ident)
-                if len(values) > 1:
+                if len(values) > GUESS_AMONG:
                     choices = ", ".join(sorted(values)[:4])
-                    raise TradeError(f"{asked!r} could be {choices}: pick one")
+                    raise TradeError(f"{asked!r} could be {choices}, and more: name one")
+                if values:
+                    # The shortest name is the likeliest ("Lorville" before "Lorville Gates").
+                    ranked = sorted(values, key=lambda v: (len(v), v))
+                    id_field, ident = values[ranked[0]]
+                    return Place(field, ranked[0], id_field, ident), tuple(ranked[1:])
         raise TradeError(f"no place called {asked!r} in UEX's list; name a city, station or planet")
 
     def in_place(self, row: Mapping[str, Any], place: Place, prefix: str = "") -> bool:
