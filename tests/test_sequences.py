@@ -111,6 +111,52 @@ actions = ["v_deploy_landing_system"]
     assert _ids(matcher, "lower the gear") == ["landing_gear_down"]  # its other phrases stay
 
 
+def test_phrases_entries_add_to_a_command_without_replacing_it(tmp_path: Path) -> None:
+    """#134: a ``[[phrases]]`` entry adds phrases; everything else stays built-in."""
+    matcher = _user(
+        tmp_path,
+        """
+[[phrases]]
+command = "landing_gear_down"
+say = ["wheels down", "Lower  The Gear"]
+
+[[phrases]]
+command = "startup"
+say = ["wake her up"]
+""",
+    )
+    built_in = DEFAULT.get("landing_gear_down")
+    gear = matcher.get("landing_gear_down")
+    assert built_in is not None
+    assert gear is not None
+    assert gear.actions == built_in.actions
+    assert set(built_in.say) <= set(gear.say)  # its built-in phrases stay
+    assert gear.say.count("lower the gear") + gear.say.count("Lower  The Gear") == 1
+    assert _ids(matcher, "wheels down") == ["landing_gear_down"]
+    assert _ids(matcher, "wake her up") == ["startup"]
+
+
+def test_a_phrases_entry_takes_its_phrase_from_another_built_in(tmp_path: Path) -> None:
+    matcher = _user(
+        tmp_path,
+        '[[phrases]]\ncommand = "my_gear"\nsay = ["gear down"]\n'
+        '\n[[command]]\nid = "my_gear"\nsay = []\nactions = ["v_deploy_landing_system"]\n',
+    )
+    assert _ids(matcher, "gear down") == ["my_gear"]
+    down = matcher.get("landing_gear_down")
+    assert down is not None
+    assert "gear down" not in down.say
+
+
+def test_one_phrase_for_two_of_the_players_commands_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(CommandFileError, match="is in both"):
+        _user(
+            tmp_path,
+            '[[phrases]]\ncommand = "landing_gear_down"\nsay = ["xyzzy"]\n'
+            '\n[[phrases]]\ncommand = "startup"\nsay = ["xyzzy"]\n',
+        )
+
+
 def test_replacing_a_command_changes_the_sequences_that_use_it(tmp_path: Path) -> None:
     matcher = _user(
         tmp_path,
@@ -161,6 +207,10 @@ actions = ["v_deploy_landing_system"]
             "0 to 10",
         ),
         ('[[command]]\nid = 7\nsay = ["xyzzy"]\nactions = ["a"]', "id must be some text"),
+        ('[[phrases]]\nsay = ["xyzzy"]', "needs a command"),
+        ('[[phrases]]\ncommand = "landing_gear"\nsay = "xyzzy"', "say must be a list of text"),
+        ('[[phrases]]\ncommand = "warp_drive"\nsay = ["xyzzy"]', "no command with that id"),
+        ("phrases = 5", "list of tables"),
     ],
 )
 def test_a_broken_user_file_says_what_is_wrong(tmp_path: Path, text: str, problem: str) -> None:

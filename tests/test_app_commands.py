@@ -74,7 +74,7 @@ def test_without_the_game_the_list_still_shows(user_file: Path) -> None:
     assert len(data["rows"]) > 50  # type: ignore[arg-type]
 
 
-def test_adding_a_phrase_to_a_built_in_writes_a_copy_with_it(user_file: Path) -> None:
+def test_adding_a_phrase_to_a_built_in_adds_only_the_phrase(user_file: Path) -> None:
     user_file.write_text(MINE, "utf-8")
     commands = Commands(user_file, lambda: KEYBINDS)
     assert commands.add_phrase("landing_gear", "  Wheels  Down ") == {
@@ -84,22 +84,54 @@ def test_adding_a_phrase_to_a_built_in_writes_a_copy_with_it(user_file: Path) ->
     text = user_file.read_text("utf-8")
     assert "# My own commands: keep this comment." in text  # the player's file, kept
     assert 'id = "space_mode"   # mine' in text
+    assert "[[phrases]]" in text
+    assert 'id = "landing_gear"' not in text  # no copy of the built-in (#134)
+    assert "v_toggle_landing_system" not in text
     matcher = CommandMatcher.default(user_file)
     gear = matcher.get("landing_gear")
     assert gear is not None
     assert "wheels down" in gear.say
     assert "landing gear" in gear.say  # the built-in phrases too
     assert gear.actions == ("v_toggle_landing_system",)
-    assert gear.announced is True  # everything else as the built-in had it
+    assert gear.announced is True  # everything else as the built-in has it
     assert _rows(commands)["landing_gear"]["mine"] == ["wheels down"]
 
 
-def test_a_second_phrase_goes_on_the_same_copy(user_file: Path) -> None:
+def test_a_second_phrase_goes_on_the_same_entry(user_file: Path) -> None:
     commands = Commands(user_file, lambda: KEYBINDS)
     commands.add_phrase("landing_gear", "wheels down")
     commands.add_phrase("landing_gear", "drop the wheels")
-    assert user_file.read_text("utf-8").count('id = "landing_gear"') == 1
+    assert user_file.read_text("utf-8").count('command = "landing_gear"') == 1
     assert _rows(commands)["landing_gear"]["mine"] == ["wheels down", "drop the wheels"]
+
+
+def test_a_phrase_on_the_players_own_command_goes_in_its_entry(user_file: Path) -> None:
+    user_file.write_text(MINE, "utf-8")
+    commands = Commands(user_file, lambda: KEYBINDS)
+    assert commands.add_phrase("space_mode", "go to space")["ok"] is True
+    assert "[[phrases]]" not in user_file.read_text("utf-8")
+    assert _rows(commands)["space_mode"]["mine"] == ["space mode", "go to space"]
+
+
+def test_a_sequence_takes_phrases_too(user_file: Path) -> None:
+    commands = Commands(user_file, lambda: KEYBINDS)
+    assert commands.add_phrase("startup", "wake her up")["ok"] is True
+    start = CommandMatcher.default(user_file).get("startup")
+    assert start is not None
+    assert "wake her up" in start.say
+    assert start.is_sequence
+
+
+def test_a_built_in_phrase_can_be_given_to_another_command(user_file: Path) -> None:
+    """A built-in's phrases aren't the player's, even after they've added to it (#134)."""
+    commands = Commands(user_file, lambda: KEYBINDS)
+    commands.add_phrase("lights_on", "torches")
+    result = commands.add_phrase("landing_gear", "lights on")
+    assert result == {"ok": True, "applies": "restart", "took_from": "lights_on"}
+    lights = CommandMatcher.default(user_file).get("lights_on")
+    assert lights is not None
+    assert "lights on" not in lights.say
+    assert "torches" in lights.say
 
 
 def test_a_phrase_taken_from_another_built_in_says_whose_it_was(user_file: Path) -> None:
@@ -139,7 +171,9 @@ def test_a_phrase_another_of_the_players_commands_has_is_refused(user_file: Path
     assert user_file.read_text("utf-8") == MINE
 
 
-def test_removing_the_last_phrase_of_yours_puts_the_built_in_back(user_file: Path) -> None:
+def test_removing_the_last_phrase_of_yours_leaves_the_built_in_as_it_is(
+    user_file: Path,
+) -> None:
     user_file.write_text(MINE, "utf-8")
     commands = Commands(user_file, lambda: KEYBINDS)
     commands.add_phrase("landing_gear", "wheels down")
@@ -148,8 +182,36 @@ def test_removing_the_last_phrase_of_yours_puts_the_built_in_back(user_file: Pat
         "applies": "restart",
     }
     text = user_file.read_text("utf-8")
-    assert "landing_gear" not in text
+    assert "wheels down" not in text
     assert 'id = "space_mode"   # mine' in text
+    assert _rows(commands)["landing_gear"]["mine"] == []
+    gear = CommandMatcher.default(user_file).get("landing_gear")
+    assert gear is not None
+    assert "landing gear" in gear.say
+
+
+def test_removing_a_phrase_keeps_the_comments_below_it(user_file: Path) -> None:
+    commands = Commands(user_file, lambda: KEYBINDS)
+    commands.add_phrase("landing_gear", "wheels down")
+    user_file.write_text(user_file.read_text("utf-8") + "\n# a note of mine\n" + MINE, "utf-8")
+    assert commands.remove_phrase("landing_gear", "wheels down")["ok"] is True
+    text = user_file.read_text("utf-8")
+    assert "# a note of mine" in text
+    assert "# My own commands: keep this comment." in text
+
+
+def test_an_older_copy_of_a_built_in_keeps_its_built_in_phrases(user_file: Path) -> None:
+    """A copy written before #134: its built-in phrases aren't the player's to remove."""
+    user_file.write_text(
+        '[[command]]\nid = "landing_gear"\nsay = ["landing gear", "wheels down"]\n'
+        'actions = ["v_toggle_landing_system"]\n',
+        "utf-8",
+    )
+    commands = Commands(user_file, lambda: KEYBINDS)
+    assert _rows(commands)["landing_gear"]["mine"] == ["wheels down"]
+    result = commands.remove_phrase("landing_gear", "landing gear")
+    assert result == {"ok": False, "problem": "That isn't one of your phrases."}
+    assert commands.remove_phrase("landing_gear", "wheels down")["ok"] is True
 
 
 def test_removing_a_phrase_from_the_players_own_command_keeps_the_command(user_file: Path) -> None:
@@ -189,3 +251,70 @@ def test_keys_read_as_the_player_knows_them(key: str, shown: str) -> None:
     parsed = KeyInput.parse(key)
     assert parsed is not None
     assert key_text(parsed) == shown
+
+
+def test_asks_first_shows_as_the_safety_gate_decides(user_file: Path) -> None:
+    """#135: no ``confirm = true``, but the gate always asks before an eject."""
+    user_file.write_text(
+        '[[command]]\nid = "my_eject"\nsay = ["get me out"]\nactions = ["v_eject"]\n'
+        '\n[[sequence]]\nid = "abandon_ship"\nsay = ["abandon ship"]\nsteps = ["my_eject"]\n',
+        "utf-8",
+    )
+    rows = _rows(Commands(user_file, lambda: KEYBINDS))
+    assert rows["my_eject"]["confirm"] is True
+    assert rows["abandon_ship"]["confirm"] is True  # one of its steps asks
+    assert rows["landing_gear"]["confirm"] is False
+
+
+def test_a_file_that_wont_load_shows_none_of_its_phrases_as_yours(user_file: Path) -> None:
+    user_file.write_text(
+        '[[phrases]]\ncommand = "landing_gear"\nsay = ["wheels down"]\n'
+        '\n[[phrases]]\ncommand = "warp_drive"\nsay = ["engage"]\n',
+        "utf-8",
+    )
+    data = Commands(user_file, lambda: KEYBINDS).rows()
+    assert "can't be used" in str(data["problem"])
+    assert all(not r["mine"] for r in data["rows"])  # type: ignore[union-attr]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "phrases = 5\n",
+        '[[phrases]]\ncommand = "landing_gear"\nsay = 5\n',
+        "command = 5\n",
+        '[[command]]\nid = "x"\nsay = 5\nactions = ["a"]\n',
+    ],
+)
+def test_a_mistyped_file_still_shows_the_built_in_commands(user_file: Path, text: str) -> None:
+    user_file.write_text(text, "utf-8")
+    data = Commands(user_file, lambda: KEYBINDS).rows()
+    assert data["problem"]
+    assert len(data["rows"]) > 50  # type: ignore[arg-type]
+
+
+def test_a_phrase_written_another_way_is_still_a_duplicate(user_file: Path) -> None:
+    commands = Commands(user_file, lambda: KEYBINDS)
+    result = commands.add_phrase("landing_gear", "Landing gear!")
+    assert result["ok"] is False
+    assert "already one of its phrases" in str(result["problem"])
+    assert not user_file.exists()
+
+
+def test_a_phrases_entry_beside_the_players_command_can_be_removed(user_file: Path) -> None:
+    user_file.write_text(
+        MINE + '\n[[phrases]]\ncommand = "space_mode"\nsay = ["go to space"]\n', "utf-8"
+    )
+    commands = Commands(user_file, lambda: KEYBINDS)
+    assert _rows(commands)["space_mode"]["mine"] == ["space mode", "go to space"]
+    assert commands.remove_phrase("space_mode", "go to space")["ok"] is True
+    assert _rows(commands)["space_mode"]["mine"] == ["space mode"]
+
+
+def test_a_refusal_names_the_command_that_has_the_phrase(user_file: Path) -> None:
+    user_file.write_text(MINE + '\n[[phrases]]\ncommand = "eject"\nsay = ["punch it"]\n', "utf-8")
+    commands = Commands(user_file, lambda: KEYBINDS)
+    for target, owner in (("landing_gear", "eject"), ("space_mode", "eject")):
+        result = commands.add_phrase(target, "punch it")
+        assert result["ok"] is False
+        assert f"({owner})" in str(result["problem"])

@@ -4,13 +4,14 @@ The list joins the built-in commands, the player's commands.toml and their keybi
 each command's phrases (the built-in ones and the player's), the key it presses, and
 for one with no key, the game action to bind.
 
-Adding a phrase to a built-in command writes a copy of that command into the player's
-commands.toml, with their phrase added: an entry with a built-in's id replaces it
-(ADR 14, and the tycho-commands skill). Removing the player's last phrase from such a
-copy removes the copy, so the built-in is back as it was. The file is edited with
-tomlkit, which keeps the player's own entries and comments as they are, and a change is
-written only after the new file loads as Tycho would load it. Changes apply when
-Tycho next starts.
+Adding a phrase to one of the player's own commands adds it to that entry's ``say``.
+Adding one to a built-in command writes a ``[[phrases]]`` entry for it instead, which
+only adds phrases: the built-in isn't copied, so later releases' changes to it still
+reach the player (#134, and the tycho-commands skill). An emptied ``[[phrases]]`` entry
+is left in the file, since removing a table can take the comments below it. The file is
+edited with tomlkit, which keeps the player's own entries and comments as they are, and
+a change is written only after the new file loads as Tycho would load it. Changes apply
+when Tycho next starts.
 """
 
 # tomlkit's containers are loosely typed.
@@ -29,8 +30,9 @@ import tomlkit
 import tomlkit.exceptions
 from tomlkit.items import AoT, Array, Table
 
-from tycho.commands import CommandFileError, CommandMatcher, resolve
+from tycho.commands import Command, CommandFileError, CommandMatcher, resolve
 from tycho.game.keybinds import Keybinds, KeyInput
+from tycho.safety import is_confirm_grade
 from tycho.text import normalize
 
 MAX_PHRASE = 60
@@ -63,6 +65,8 @@ class Commands:
         """``keybinds`` gives the player's keybinds, or None if the game wasn't found."""
         self._path = user_file
         self._keybinds = keybinds
+        self._editing = ""
+        """The command a change is to, so a refusal can name the other one."""
 
     # --- reading -------------------------------------------------------------------
 
@@ -75,7 +79,7 @@ class Commands:
             problem = f"Your commands file can't be used, so only the built-in ones are: {e}"
             matcher = CommandMatcher.default()
         keybinds = self._keybinds()
-        mine = _phrases(self._user_entries())
+        mine = {} if problem else _phrases(self._user_data())  # its phrases aren't in use
         rows: list[Row] = []
         for command in matcher.commands:
             yours = mine.get(command.id, [])
@@ -94,7 +98,7 @@ class Commands:
                         command.id.replace("_", " ").capitalize(),
                         said,
                         yours,
-                        confirm=command.confirm,
+                        confirm=_asks(command),
                         sequence=True,
                         steps=steps,
                     )
@@ -102,12 +106,12 @@ class Commands:
                 continue
             label = _label(command.id, command.actions, keybinds)
             if keybinds is None:
-                rows.append(Row(command.id, label, said, yours, confirm=command.confirm))
+                rows.append(Row(command.id, label, said, yours, confirm=_asks(command)))
                 continue
             found = resolve(command, keybinds)
             if found.action is None:
                 rows.append(
-                    Row(command.id, label, said, yours, to_bind=label, confirm=command.confirm)
+                    Row(command.id, label, said, yours, to_bind=label, confirm=_asks(command))
                 )
                 continue
             key = ", ".join(key_text(k) for k in found.action.inputs if k.pressable)
@@ -119,7 +123,7 @@ class Commands:
                     yours,
                     key=key,
                     toggle=found.fallback,
-                    confirm=command.confirm,
+                    confirm=_asks(command, found.action.name),
                 )
             )
         rows.sort(key=lambda r: (r.sequence, r.label.lower()))
@@ -131,20 +135,20 @@ class Commands:
             "game": keybinds is not None,
         }
 
-    def _user_entries(self) -> dict[str, dict[str, Any]]:
+    def _user_data(self) -> dict[str, Any]:
         if not self._path.exists():
             return {}
         try:
-            data = tomllib.loads(self._path.read_text("utf-8-sig"))
+            return tomllib.loads(self._path.read_text("utf-8-sig"))
         except OSError, UnicodeDecodeError, tomllib.TOMLDecodeError:
             return {}
-        return _by_id(data)
 
     # --- changing --------------------------------------------------------------------
 
     def add_phrase(self, command_id: object, phrase: object) -> dict[str, object]:
         """Give a command one more phrase, the player's own."""
         said = _clean(phrase)
+        self._editing = str(command_id)
         if not said:
             return {"ok": False, "problem": "Type the words you'll say."}
         if len(said) > MAX_PHRASE:
@@ -162,7 +166,8 @@ class Commands:
         if not isinstance(say, Array):
             say = tomlkit.array()
             entry["say"] = say
-        if said in [str(p) for p in say]:
+        have = [str(p) for p in say] + list(self._said(str(command_id)))
+        if _key(said) in {_key(p) for p in have}:
             return {"ok": False, "problem": f"“{said}” is already one of its phrases."}
         say.append(said)
         took = self._owner(said, command_id)
@@ -175,49 +180,51 @@ class Commands:
         """Take away one of the player's own phrases."""
         said = _clean(phrase)
         try:
-            doc, entry = self._entry(command_id, create=False)
+            doc, _ = self._entry(command_id, create=False)
         except (OSError, UnicodeDecodeError, tomlkit.exceptions.TOMLKitError) as e:
             return {
                 "ok": False,
                 "problem": f"Your commands file has a mistake; fix it first ({e}).",
             }
-        say = entry.get("say") if entry is not None else None
-        if not isinstance(say, Array) or said not in [str(p) for p in say]:
-            return {"ok": False, "problem": "That isn't one of your phrases."}
-        del say[[str(p) for p in say].index(said)]  # tomlkit arrays keep their comments
-        built_in = _built_in().get(str(command_id))
-        if entry is not None and built_in is not None and _is_plain_copy(entry, built_in):
-            _drop(doc, str(command_id))  # nothing of the player's left: the built-in is back
-        return self._write(doc)
+        if said not in _phrases(self._user_data()).get(str(command_id), []):
+            return {"ok": False, "problem": "That isn't one of your phrases."}  # a built-in one
+        for table in _tables(doc, str(command_id)):  # their own entry, then its [[phrases]]
+            say = table.get("say")
+            if isinstance(say, Array) and said in [str(p) for p in say]:
+                del say[[str(p) for p in say].index(said)]  # tomlkit arrays keep comments
+                return self._write(doc)
+        return {"ok": False, "problem": "That isn't one of your phrases."}
 
     def _entry(self, command_id: object, *, create: bool) -> tuple[Any, Table | None]:
-        """The player's file as a document, and its entry for ``command_id``; with
-        ``create``, a copy of the built-in one when the file has none yet."""
+        """The player's file as a document, and where its phrases for ``command_id``
+        go: their own entry with that id, or else its ``[[phrases]]`` entry; with
+        ``create``, a new ``[[phrases]]`` entry for a built-in command."""
         text = self._path.read_text("utf-8-sig") if self._path.exists() else NEW_FILE
         doc = tomlkit.parse(text)
         if not isinstance(command_id, str):
             return doc, None
-        for kind in ("command", "sequence"):
-            tables = doc.get(kind)
-            if isinstance(tables, AoT):
-                for table in tables:
-                    if table.get("id") == command_id:
-                        return doc, table
-        built_in = _built_in().get(command_id)
-        if built_in is None or not create:
+        for table in _tables(doc, command_id):
+            return doc, table
+        tables = doc.get("phrases")
+        if command_id not in _built_in() or not create:
             return doc, None
-        kind = str(built_in["_kind"])
         table = tomlkit.table()
-        table.comment(f"{command_id}: the built-in command, with your phrases (Tycho's window)")
-        for key, value in built_in.items():
-            if key != "_kind":
-                table[key] = value
-        tables = doc.get(kind)
+        table.comment("more ways to say a built-in command (Tycho's window)")
+        table["command"] = command_id
+        table["say"] = tomlkit.array()
         if not isinstance(tables, AoT):
-            doc[kind] = tomlkit.aot()
-            tables = doc[kind]
+            doc["phrases"] = tomlkit.aot()
+            tables = doc["phrases"]
         cast(AoT, tables).append(table)
         return doc, cast(AoT, tables)[-1]
+
+    def _said(self, command_id: str) -> tuple[str, ...]:
+        """Every phrase the command has now, built-in and the player's."""
+        try:
+            command = CommandMatcher.default(self._path).get(command_id)
+        except CommandFileError:
+            return ()
+        return command.say if command is not None else ()
 
     def _owner(self, said: str, command_id: object) -> str:
         """The built-in command that had this phrase, which it now leaves (ADR 14)."""
@@ -240,7 +247,7 @@ class Commands:
             try:
                 CommandMatcher.default(Path(temp))
             except CommandFileError as e:
-                return {"ok": False, "problem": _readable(str(e), temp)}
+                return {"ok": False, "problem": _readable(str(e), temp, self._editing)}
             os.replace(temp, self._path)
         finally:
             if os.path.exists(temp):
@@ -297,21 +304,56 @@ def _clean(phrase: object) -> str:
 def _by_id(data: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     entries: dict[str, dict[str, Any]] = {}
     for kind in ("command", "sequence"):
-        for raw in data.get(kind, []):
+        for raw in _list(data.get(kind)):
             if isinstance(raw, dict) and isinstance(raw.get("id"), str):
                 entries[raw["id"]] = {**raw, "_kind": kind}
     return entries
 
 
-def _phrases(entries: Mapping[str, Mapping[str, Any]]) -> dict[str, list[str]]:
-    """The player's own phrases for each id: those not in the built-in entry it copies."""
+def _phrases(data: Mapping[str, Any]) -> dict[str, list[str]]:
+    """The player's own phrases for each id: their ``[[phrases]]``, and those of their
+    entries not in the built-in entry with the same id (an older copy of it)."""
     built_in = _built_in()
     out: dict[str, list[str]] = {}
-    for entry_id, entry in entries.items():
-        theirs = [str(p) for p in entry.get("say", [])]
+    for entry_id, entry in _by_id(data).items():
+        theirs = [str(p) for p in _list(entry.get("say"))]
         base = {str(p) for p in built_in.get(entry_id, {}).get("say", [])}
         out[entry_id] = [p for p in theirs if p not in base]
+    for raw in _list(data.get("phrases")):
+        if isinstance(raw, dict) and isinstance(raw.get("command"), str):
+            mine = out.setdefault(raw["command"], [])
+            mine += [str(p) for p in _list(raw.get("say")) if str(p) not in mine]
     return out
+
+
+def _list(value: object) -> list[Any]:
+    """A list from a hand-written file, or nothing: the loader reports the mistake."""
+    return cast(list[Any], value) if isinstance(value, list) else []
+
+
+def _key(phrase: str) -> tuple[str, ...]:
+    return tuple(normalize(phrase))
+
+
+def _asks(command: Command, action: str = "") -> bool:
+    """Whether Tycho asks first, as the safety gate decides it: the command says so,
+    or the action it presses (any of them, without keybinds) is one that always asks.
+    A sequence asks if any step does."""
+    if command.confirm:
+        return True
+    if command.is_sequence:
+        return any(_asks(s.command) for s in command.steps)
+    return any(is_confirm_grade(a) for a in ((action,) if action else command.actions))
+
+
+def _tables(doc: Any, command_id: str) -> list[Table]:
+    """The player's own entry for ``command_id``, then its ``[[phrases]]`` entry."""
+    found: list[Table] = []
+    for kind, key in (("command", "id"), ("sequence", "id"), ("phrases", "command")):
+        tables = doc.get(kind)
+        if isinstance(tables, AoT):
+            found += [t for t in tables if t.get(key) == command_id]
+    return found
 
 
 def _built_in() -> dict[str, dict[str, Any]]:
@@ -319,36 +361,13 @@ def _built_in() -> dict[str, dict[str, Any]]:
     return _by_id(tomllib.loads(text))
 
 
-def _is_plain_copy(entry: Table, built_in: Mapping[str, Any]) -> bool:
-    """The entry is the built-in, unchanged but for phrases, and has none of its own."""
-    mine = {k: v for k, v in entry.unwrap().items()}
-    theirs = {k: v for k, v in built_in.items() if k != "_kind"}
-    same_but_say = {k: v for k, v in mine.items() if k != "say"} == {
-        k: v for k, v in theirs.items() if k != "say"
-    }
-    return same_but_say and set(mine.get("say", [])) <= set(theirs.get("say", []))
-
-
-def _drop(doc: Any, command_id: str) -> None:
-    for kind in ("command", "sequence"):
-        tables = doc.get(kind)
-        if isinstance(tables, AoT):
-            kept = [t for t in tables if t.get("id") != command_id]
-            if len(kept) != len(tables):
-                if kept:
-                    new = tomlkit.aot()
-                    for table in kept:
-                        new.append(table)
-                    doc[kind] = new
-                else:
-                    del doc[kind]
-
-
-def _readable(error: str, temp: str) -> str:
+def _readable(error: str, temp: str, editing: str = "") -> str:
     """The loader's message, about the player's file rather than the scratch copy."""
     message = error.replace(temp, "your commands").split(": ", 1)[-1]
     if "is in both" in message:
-        return f"That phrase belongs to another of your commands ({message.split(' and ')[-1]})."
+        both = message.split(" is in both ", 1)[-1].split(" and ")
+        other = next((i for i in both if i != editing), both[-1])
+        return f"That phrase belongs to another of your commands ({other})."
     return message
 
 
