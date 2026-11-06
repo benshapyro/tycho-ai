@@ -1,27 +1,39 @@
 name: Claude Code Review
 
+# Claude reviews each PR for real bugs, reading the whole repository, not just the diff.
+#
+# Why not the code-review plugin (until 2026-11-06): it reads only the diff, is told not
+# to flag anything that "depends on specific inputs or state" (races, blocking calls,
+# error paths), skips PRs Claude has already commented on, and posts "No issues found"
+# even when its own tools were denied. On two PRs it said that while an independent
+# review found ten real bugs in each. So this is our own prompt, with the tools to read
+# the code, a check of every finding, and a report of any tool that failed.
+
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
+      - "NOTICE"
+
+concurrency:
+  # A newer push replaces a review still running on the old one.
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-
+    # Not drafts, and not forks: GitHub withholds secrets from fork runs anyway.
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: read
       id-token: write
 
@@ -29,17 +41,71 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 1
+          fetch-depth: 0 # the merge base, so git diff against main works
 
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@d535f5172dec02b204866b393d6b20b9b2aaf98d # v1.0.266
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
-          claude_args: '--allowedTools "mcp__github_inline_comment__create_inline_comment"'
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+            BASE: origin/${{ github.event.pull_request.base.ref }}
 
+            You are reviewing this pull request for bugs that would reach players. The PR's
+            branch is checked out with full history. AGENTS.md (which CLAUDE.md imports) has
+            the project's hard rules and conventions: read it first.
+
+            1. Read the PR: `gh pr view <n>` and `gh pr diff <n>`, or
+               `git diff BASE...HEAD`. Then read every changed file in full, and the code it
+               calls and that calls it (Read, Grep, Glob). Bugs often live where changed code
+               meets unchanged code.
+            2. Look hard for:
+               - correctness: wrong logic, wrong units or scaling, off-by-one, bad defaults;
+               - threads and async: the asyncio loop, worker threads, Win32 windows on their
+                 own threads, races, deadlocks, blocking calls (input(), I/O, sleeps) on the
+                 event loop or a UI thread, work handed to the wrong thread;
+               - error paths: exceptions not caught where a failure must not stop Tycho,
+                 resources not released (keys held, files, windows, threads), shutdown;
+               - security: API keys reaching a file, a log or a page; local servers; anything
+                 that touches the game process;
+               - AGENTS.md hard rules and "Done means" (new behaviour has tests); quote the
+                 rule you say is broken;
+               - tests that don't test what they claim.
+               Skip style, naming and formatting: ruff and pyright check those.
+            3. Verify each candidate before you report it: read the code again, follow the
+               values, and write the concrete inputs or steps that make it fail. Drop anything
+               you can't show going wrong.
+            4. For each verified finding, post an inline comment on the line with
+               mcp__github_inline_comment__create_inline_comment (confirmed: true): what's
+               wrong, the failure scenario, and the fix if it's clear.
+            5. Then post one summary with `gh pr comment <n> --body "..."`:
+               - "## Code review", then the findings by severity (or "No bugs found").
+               - "Read:" the files you read in full.
+               - "Couldn't:" any command or tool that failed or was denied, and what you
+                 couldn't check because of it. If you couldn't read the diff or a changed
+                 file, say the review is incomplete. Never write "No bugs found" then.
+          claude_args: |
+            --model claude-opus-5-5
+            --effort high
+            --max-turns 80
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Read,Glob,Grep,Task,Agent,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh api repos/*/pulls/*:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git blame:*)"
+
+      - name: Say which tools were denied
+        # The log only counts denials. Name them (tool and command, never output), so a
+        # review that couldn't see the code is never mistaken for a clean one.
+        if: always() && steps.claude-review.outputs.execution_file != ''
+        env:
+          EXECUTION_FILE: ${{ steps.claude-review.outputs.execution_file }}
+        run: |
+          denied=$(jq -r '
+            [.[] | select(.type == "result") | .permission_denials[]?]
+            | map("\(.tool_name) \(.tool_input.command // .tool_input.file_path // "" | tostring | .[0:120])")
+            | .[]' "$EXECUTION_FILE" 2>/dev/null || true)
+          if [ -n "$denied" ]; then
+            echo "::warning title=Claude review was denied tools::$(echo "$denied" | tr '\n' ';')"
+            printf 'Denied:\n%s\n' "$denied"
+          else
+            echo "No tools were denied."
+          fi
