@@ -93,12 +93,16 @@ def test_the_setup_skill_gives_commands_to_run() -> None:
 def test_the_commands_skill_examples_load(tmp_path: Path) -> None:
     text = (PLAYER_SKILLS / "tycho-commands" / "SKILL.md").read_text("utf-8")
     blocks = re.findall(r"```toml\n(.*?)```", text, re.DOTALL)
-    commands = [b for b in blocks if "[[command]]" in b or "[[sequence]]" in b]
-    assert len(commands) == 2
+    kinds = ("[[command]]", "[[sequence]]", "[[phrases]]")
+    commands = [b for b in blocks if any(k in b for k in kinds)]
+    assert len(commands) == 3
     file = tmp_path / "commands.toml"
     file.write_text("\n".join(commands), "utf-8")
     matcher = CommandMatcher.default(file)
     assert matcher.get("space_mode") is not None
+    gear = matcher.get("landing_gear")
+    assert gear is not None
+    assert "drop the wheels" in gear.say
     sequence = matcher.get("full_startup")
     assert sequence is not None
     assert [s.wait_seconds for s in sequence.steps] == [0.0, 1.0, 0.0]

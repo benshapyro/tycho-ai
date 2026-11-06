@@ -176,8 +176,9 @@ class CommandMatcher:
             except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
                 raise CommandFileError(f"{source}: {e}") from e
             mine = _entries(user, source)
+            extra = _phrase_entries(user, source)
             warnings = _warnings(mine)
-            entries = _merge(entries, mine)
+            entries = _merge(entries, mine, extra, source)
         try:
             return cls(_build(entries), warnings=warnings)
         except (KeyError, TypeError, ValueError) as e:
@@ -340,19 +341,74 @@ def _warnings(entries: dict[str, _Entry]) -> tuple[str, ...]:
     )
 
 
-def _merge(base: dict[str, _Entry], user: dict[str, _Entry]) -> dict[str, _Entry]:
-    """The player's entries replace built-in ones with the same id, and take their
-    phrases: a phrase the player gives an entry is removed from every built-in one."""
+def _phrase_entries(data: dict[str, Any], source: str) -> list[tuple[str, list[str]]]:
+    """The player's ``[[phrases]]``: more ways to say a command, built-in or theirs,
+    without copying it. A built-in command keeps everything else, and gets later
+    releases' changes."""
+    raw_list: Any = data.get("phrases", [])
+    if not isinstance(raw_list, list):
+        raise CommandFileError(f"{source}: [[phrases]] must be a list of tables")
+    found: list[tuple[str, list[str]]] = []
+    for raw in raw_list:  # pyright: ignore[reportUnknownVariableType]
+        if not isinstance(raw, dict):
+            raise CommandFileError(f"{source}: every [[phrases]] needs a command")
+        table = cast(dict[str, Any], raw)
+        command: Any = table.get("command")
+        say: Any = table.get("say", [])
+        if not isinstance(command, str) or not command:
+            raise CommandFileError(f"{source}: every [[phrases]] needs a command, by its id")
+        phrases = cast(list[Any], say) if isinstance(say, list) else None
+        if phrases is None or not all(isinstance(s, str) for s in phrases):
+            raise CommandFileError(
+                f"{source}: [[phrases]] for {command!r}: say must be a list of text,"
+                ' like say = ["..."]'
+            )
+        found.append((command, [str(s) for s in phrases]))
+    return found
+
+
+def _merge(
+    base: dict[str, _Entry],
+    user: dict[str, _Entry],
+    extra: list[tuple[str, list[str]]],
+    source: str,
+) -> dict[str, _Entry]:
+    """The player's entries replace built-in ones with the same id, and their
+    ``[[phrases]]`` add to a command. Either way the player's phrases are taken from
+    every other built-in entry that had them."""
     claimed = {
         tuple(normalize(str(phrase))) for entry in user.values() for phrase in entry.get("say", ())
     }
+    added: dict[tuple[str, ...], set[str]] = {}  # a [[phrases]] phrase, and its commands
+    for command, phrases in extra:
+        for phrase in phrases:
+            added.setdefault(tuple(normalize(phrase)), set()).add(command)
     merged: dict[str, _Entry] = {}
     for entry_id, entry in base.items():
         if entry_id in user:
             continue
-        say = [s for s in entry.get("say", ()) if tuple(normalize(str(s))) not in claimed]
+        say = [
+            s
+            for s in entry.get("say", ())
+            if (key := tuple(normalize(str(s)))) not in claimed
+            and added.get(key, {entry_id}) == {entry_id}  # kept by the command it's given to
+        ]
         merged[entry_id] = {**entry, "say": say}
-    return merged | user
+    merged |= user
+    for command, phrases in extra:
+        if command not in merged:
+            raise CommandFileError(
+                f"{source}: [[phrases]] for {command!r}: there's no command with that id"
+            )
+        entry = merged[command]
+        say = list(entry.get("say", ()))
+        have = {tuple(normalize(str(s))) for s in say}
+        for phrase in phrases:
+            if (key := tuple(normalize(phrase))) not in have:
+                have.add(key)
+                say.append(phrase)
+        merged[command] = {**entry, "say": say}
+    return merged
 
 
 def _build(entries: dict[str, _Entry]) -> list[Command]:
