@@ -163,3 +163,38 @@ def test_the_wiki_being_down_is_an_error() -> None:
     result = asyncio.run(lookup.run({"resource": "lindinium", "place": ""}))
     assert result.is_error
     assert "didn't answer" in result.content
+
+
+def test_a_system_is_matched_however_its_said() -> None:
+    """Review of #172: "Stanton System" didn't match Stanton."""
+    lookup = MiningLookup(FakeMiningWiki())
+    for said in ("Stanton System", "the Stanton system", "stanton"):
+        result = _run(lookup, resource="quantainium", place=said)
+        assert [p["name"] for p in result["places"]] == ["Lyria", "Aberdeen"], said
+
+
+class _OneFails(FakeMiningWiki):
+    async def get(self, path: str, params: Mapping[str, str | int] | None = None) -> Any:
+        if path.endswith("/aberdeen"):
+            raise WikiError("429 Too Many Requests")
+        return await super().get(path, params)
+
+
+def test_one_location_failing_doesnt_lose_the_others() -> None:
+    result = _run(MiningLookup(_OneFails()), resource="quantainium")
+    assert [p["name"] for p in result["places"]][:2] == ["Akiro Cluster", "Lyria"]
+    assert "Aberdeen" in [p["name"] for p in result["places"]]
+
+
+class _NoSlug(FakeMiningWiki):
+    async def get(self, path: str, params: Mapping[str, str | int] | None = None) -> Any:
+        data = await super().get(path, params)
+        if path == "/api/locations" and data["data"]:
+            data = {"data": [{**data["data"][0], "slug": ""}, *data["data"][1:]]}
+        return data
+
+
+def test_a_location_without_a_slug_doesnt_shift_the_chances() -> None:
+    result = _run(MiningLookup(_NoSlug()), resource="quantainium")
+    chances = {p["name"]: p.get("chance_percent") for p in result["places"]}
+    assert chances == {"Akiro Cluster": 5.0, "Lyria": 3.0}

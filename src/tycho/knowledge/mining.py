@@ -4,8 +4,9 @@ satisfies ``brain.lookups.Lookup``.
 The API lists the locations that have a resource (``/api/locations?filter[resource]=``),
 and each location's mining groups with their chances (``?include=resources``). The
 filter needs the exact name ("Quantainium (Raw)", "Lindinium (Ore)"), so the name as
-said is tried in those forms. Quantainium is in 66 places, so only a few are looked
-at closely: those in the place the player named, if any, else the first few.
+said is matched to the game's own names first. Every location found is looked at
+closely, at once (66 for Quantainium, about 0.7 s), so the best are found; a place
+the player named keeps it to that place.
 """
 
 import asyncio
@@ -29,6 +30,8 @@ DETAILED = 100
 """Locations looked at closely for their chances: all of them (66 at most measured,
 0.7 s at once), so the best are found, not the first in the alphabet."""
 SHOWN = 6
+PAGE = 100
+"""Locations asked for in one request; more than this and the answer says so."""
 KEEP_SECONDS = 3600.0
 """Mining data changes only with a patch: what was fetched is kept for an hour."""
 FORMS = ("{} (Raw)", "{} (Ore)", "{}")
@@ -39,8 +42,8 @@ Where to mine a resource in Star Citizen, from the current patch's game files: t
 moons, planets and asteroid fields that have it, how it's mined there (ship, ground \
 vehicle or hand mining), and the chance of finding it. Pass the resource as the \
 player said it ("quantanium", "lindinium"), and a place if they named one (a system, \
-planet or moon), to keep to it. Use it for "where do I mine X" and "what's on \
-Daymar"-style questions about mining; for selling ore use commodity_prices. In the \
+planet or moon), to keep to it. Use it for "where do I mine X" and "is there X on \
+Daymar"; it needs a resource. For selling ore use commodity_prices. In the \
 answer, credit the Star Citizen Wiki once, in a few words. A result with not_found: \
 say briefly what wasn't found."""
 
@@ -93,8 +96,10 @@ class MiningLookup:
             log.warning("Mining names didn't load: %s", e)
             return
         for page in pages:
-            for record in cast(list[dict[str, Any]], page.get("data") or []):
-                if name := str(record.get("name") or ""):
+            for record in cast(list[Any], page.get("data") or []):
+                if not isinstance(record, dict):
+                    continue
+                if name := str(cast(dict[str, Any], record).get("name") or ""):
                     self._names.setdefault(_key(name), []).append(name)
 
     async def run(self, arguments: Mapping[str, object]) -> LookupResult:
@@ -118,19 +123,22 @@ class MiningLookup:
                         }
                     )
                 locations = inside
-            details = await asyncio.gather(
-                *(
-                    self._resources(str(loc["slug"]))
-                    for loc in locations[:DETAILED]
-                    if loc.get("slug")
-                )
+            looked = [loc for loc in locations if loc.get("slug")][:DETAILED]
+            answers = await asyncio.gather(
+                *(self._resources(str(loc["slug"])) for loc in looked), return_exceptions=True
             )
         except WikiError as e:
             log.warning("Mining look-up failed: %s", e)
             return failure(f"the Star Citizen Wiki API didn't answer ({e}); answer without it")
+        if all(isinstance(a, BaseException) for a in answers) and answers:
+            first = next(a for a in answers if isinstance(a, BaseException))
+            log.warning("Mining look-up failed: %s", first)
+            return failure(f"the Star Citizen Wiki API didn't answer ({first}); answer without it")
+        # A location the Wiki didn't answer for (a rate limit, say) is listed without its
+        # chance, rather than the whole answer failing.
+        details = [[] if isinstance(a, BaseException) else a for a in answers]
         places = [
-            _place(loc, groups, resource)
-            for loc, groups in zip(locations[:DETAILED], details, strict=False)
+            _place(loc, groups, resource) for loc, groups in zip(looked, details, strict=True)
         ]
         places.sort(key=lambda p: -float(cast(float, p.get("chance_percent") or 0)))
         body: dict[str, object] = {
@@ -138,7 +146,9 @@ class MiningLookup:
             "found_in": len(locations),
             "places": places[:SHOWN],
         }
-        if len(locations) > DETAILED:
+        if len(locations) >= PAGE:
+            body["note"] = f"at least {PAGE} places have it; these are the best of those"
+        elif len(locations) > DETAILED:
             body["note"] = f"{len(locations)} places have it; the chances are for {DETAILED}"
         return self._result(body)
 
@@ -162,7 +172,7 @@ class MiningLookup:
         return self._names[close[0]] if close else []
 
     async def _locations(self, resource: str) -> list[dict[str, Any]]:
-        data = await self._get("/api/locations", {"filter[resource]": resource, "page[size]": 100})
+        data = await self._get("/api/locations", {"filter[resource]": resource, "page[size]": PAGE})
         return [loc for loc in cast(list[Any], data.get("data") or []) if isinstance(loc, dict)]
 
     async def _resources(self, slug: str) -> list[dict[str, Any]]:
@@ -203,7 +213,7 @@ def _plain(said: str) -> str:
 
 def _in(location: Mapping[str, Any], place: str) -> bool:
     """Whether the location is the place, is on it, or is in its system."""
-    key = "".join(normalize(place.replace("system", "")))
+    key = "".join(w for w in normalize(place) if w not in {"the", "system"})
     names = [
         location.get("name"),
         cast(dict[str, Any], location.get("parent") or {}).get("name"),
