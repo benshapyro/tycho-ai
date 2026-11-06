@@ -1,14 +1,16 @@
 """The app window's bridge and page (ADR 17): what the page can ask, and what it can't."""
 
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import httpx2
 import pytest
 
-from tycho import credentials, settings
+from tests.fakes.fake_key_check import FakeKeyCheck
+from tycho import app, credentials, settings
 from tycho.desktop import window
 from tycho.desktop.bridge import GROUPS, KEYS, Bridge
+from tycho.desktop.keys import ProviderKeyCheck
 from tycho.settings import Settings
 
 
@@ -21,7 +23,12 @@ def path(tmp_path: Path) -> Path:
 
 def _bridge(path: Path, **options: Any) -> tuple[Bridge, list[tuple[str, object]]]:
     applied: list[tuple[str, object]] = []
-    bridge = Bridge(apply=lambda n, v: applied.append((n, v)), settings_path=path, **options)
+
+    def apply(name: str, value: object) -> bool:
+        applied.append((name, value))
+        return True
+
+    bridge = Bridge(apply=apply, settings_path=path, **options)
     return bridge, applied
 
 
@@ -135,39 +142,29 @@ def vault(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
     return stored
 
 
-def _recording(into: list[str]) -> Callable[[str, str], str]:
-    def check(name: str, _key: str) -> str:
-        into.append(name)
-        return ""
-
-    return check
-
-
-def _answering(problem: str) -> Callable[[str, str], str]:
-    def check(_name: str, _key: str) -> str:
-        return problem
-
-    return check
-
-
 GOOD = "sk-ant-api03-" + "a" * 40 + "Wxyz"
 
 
 def test_a_key_is_checked_then_stored_and_never_comes_back_out(
     path: Path, vault: dict[str, str]
 ) -> None:
-    checked: list[str] = []
-    bridge, _ = _bridge(path, check_key=_recording(checked))
-    assert bridge.store_key("anthropic", f"  {GOOD}  ") == {"ok": True, "ends": "Wxyz"}
+    check = FakeKeyCheck()
+    bridge, _ = _bridge(path, key_check=check)
+    result = bridge.store_key("anthropic", f"  {GOOD}  ")
+    assert result == {
+        "ok": True,
+        "ends": "Wxyz",
+        "applies": "restart",
+    }  # the brain is made at start
     assert vault["anthropic"] == GOOD
-    assert checked == ["anthropic"]
+    assert check.checked == ["anthropic"]
     shown = bridge.keys()
     assert shown["anthropic"] == {"label": "Anthropic", "stored": True, "ends": "Wxyz"}
     assert GOOD not in repr(shown)
 
 
 def test_a_key_the_provider_refuses_isnt_stored(path: Path, vault: dict[str, str]) -> None:
-    bridge, _ = _bridge(path, check_key=_answering("Anthropic refused that key."))
+    bridge, _ = _bridge(path, key_check=FakeKeyCheck("Anthropic refused that key."))
     assert bridge.store_key("anthropic", GOOD) == {
         "ok": False,
         "problem": "Anthropic refused that key.",
@@ -188,19 +185,19 @@ def test_a_key_the_provider_refuses_isnt_stored(path: Path, vault: dict[str, str
 def test_a_key_that_cant_be_right_isnt_even_checked(
     path: Path, vault: dict[str, str], name: object, key: object, problem: str
 ) -> None:
-    checked: list[str] = []
-    bridge, _ = _bridge(path, check_key=_recording(checked))
+    check = FakeKeyCheck()
+    bridge, _ = _bridge(path, key_check=check)
     result = bridge.store_key(name, key)
     assert result["ok"] is False
     assert problem in str(result["problem"])
-    assert checked == []
+    assert check.checked == []
     assert vault == {}
 
 
 def test_removing_a_key(path: Path, vault: dict[str, str]) -> None:
     vault["elevenlabs"] = "sk_" + "b" * 30
     bridge, _ = _bridge(path)
-    assert bridge.remove_key("elevenlabs") == {"ok": True, "removed": True}
+    assert bridge.remove_key("elevenlabs") == {"ok": True, "removed": True, "applies": "restart"}
     assert bridge.keys()["elevenlabs"]["stored"] is False
     assert set(bridge.keys()) == set(KEYS)
 
@@ -221,23 +218,19 @@ class _Response:
         ("anthropic", 529, "overloaded", "error (529)"),
     ],
 )
-def test_checking_a_key_with_its_provider(
-    monkeypatch: pytest.MonkeyPatch, name: str, status: int, text: str, problem: str
-) -> None:
+def test_checking_a_key_with_its_provider(name: str, status: int, text: str, problem: str) -> None:
     def get(*_args: object, **_kwargs: object) -> _Response:
         return _Response(status, text)
 
-    monkeypatch.setattr(window.httpx2, "get", get)
-    answer = window.check_key(name, "a-key")
+    answer = ProviderKeyCheck(get).check(name, "a-key")
     assert (problem in answer) if problem else answer == ""
 
 
-def test_offline_the_key_isnt_judged(monkeypatch: pytest.MonkeyPatch) -> None:
-    def offline(*_a: object, **_k: object) -> None:
-        raise window.httpx2.ConnectError("no route")
+def test_offline_the_key_isnt_judged() -> None:
+    def offline(*_a: object, **_k: object) -> _Response:
+        raise httpx2.ConnectError("no route")
 
-    monkeypatch.setattr(window.httpx2, "get", offline)
-    assert "Couldn't reach" in window.check_key("anthropic", "a-key")
+    assert "Couldn't reach" in ProviderKeyCheck(offline).check("anthropic", "a-key")
 
 
 # --- the page --------------------------------------------------------------------------
@@ -290,3 +283,85 @@ def test_nothing_private_is_offered_to_the_page() -> None:
             "undo",
         ]
     )
+
+
+# --- from the review of #127 -----------------------------------------------------------
+
+
+def test_a_change_nothing_running_can_take_applies_at_restart(path: Path) -> None:
+    bridge = Bridge(apply=lambda _n, _v: False, settings_path=path)
+    assert bridge.set("voice_volume", 0.4)["applies"] == "restart"
+    assert settings.load(path).voice_volume == 0.4  # saved all the same
+
+
+def test_a_change_that_fails_to_apply_says_so(path: Path) -> None:
+    def broken(_name: str, _value: object) -> bool:
+        raise RuntimeError("the Tile's window is gone")
+
+    bridge = Bridge(apply=broken, settings_path=path)
+    assert bridge.set("tile_corner", "top left")["applies"] == "restart"
+
+
+def test_a_locked_credential_store_shows_on_the_keys_tab(
+    path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def locked(_name: str) -> str | None:
+        raise credentials.CredentialStoreError("Windows Credential Manager is locked")
+
+    monkeypatch.setattr(credentials, "get", locked)
+    monkeypatch.setattr(credentials, "delete", locked)
+    bridge, _ = _bridge(path)
+    assert bridge.keys()["anthropic"]["problem"] == "Windows Credential Manager is locked"
+    assert bridge.remove_key("anthropic") == {
+        "ok": False,
+        "problem": "Windows Credential Manager is locked",
+    }
+
+
+def _tile_box(data_url: str) -> tuple[int, int, int, int]:
+    """Where the Tile's bright card is in a preview: its bounding box at 1280 x 720."""
+    import base64
+    import io
+
+    from PIL import Image
+
+    image = Image.open(io.BytesIO(base64.b64decode(data_url.split(",", 1)[1]))).convert("L")
+    box = image.point([255 if v > 200 else 0 for v in range(256)]).getbbox()
+    assert box is not None
+    return box
+
+
+def test_the_preview_is_the_tile_at_its_real_size_and_place(path: Path) -> None:
+    from tycho.tile.display import look
+    from tycho.tile.window import Screen
+
+    bridge, _ = _bridge(path)
+    preview = bridge.tile_preview(1280)  # half of 2560: the Tile at half its size
+    real = look(settings.load(path), Screen(0, 0, 2560, 1440), "#9fd8ff")
+    width = _tile_box(preview)[2] - _tile_box(preview)[0]
+    assert abs(width - 400 * real.scale / 2) < 12
+
+
+def test_the_preview_follows_the_nudges_and_the_ship(path: Path) -> None:
+    bridge, _ = _bridge(path, ship_accent=lambda: "#4fb3ff")
+    before = bridge.tile_preview(1280)
+    settings.update({"tile_nudge_down": 0.3}, path)
+    after = bridge.tile_preview(1280)
+    assert _tile_box(after)[1] > _tile_box(before)[1] + 150  # moved down
+    blue = Bridge(settings_path=path, ship_accent=lambda: "#4fb3ff").tile_preview(640)
+    orange = Bridge(settings_path=path, ship_accent=lambda: "#f5901e").tile_preview(640)
+    assert blue != orange
+
+
+def test_the_windows_checks_never_ask_in_the_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
+    def no_game(_current: Settings) -> None:
+        raise FileNotFoundError("no game")
+
+    def asked(_channel: str) -> None:
+        raise AssertionError("the window's checks asked a question in the terminal")
+
+    monkeypatch.setattr(app, "find_install", no_game)
+    monkeypatch.setattr(app, "ask_game_root", asked)
+    monkeypatch.setattr(app.sys.stdin, "isatty", lambda: True)
+    findings = list(app._checks(Settings(), quick=True, ask=False))  # pyright: ignore[reportPrivateUsage]
+    assert any(f.what == "Star Citizen" and f.level == "fail" for f in findings)

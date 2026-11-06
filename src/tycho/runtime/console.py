@@ -53,3 +53,31 @@ class CloseGuard:
         self._request_stop()
         self._finished.wait(self._wait)
         return True
+
+
+class CtrlCGuard:
+    """While active, Ctrl+C also calls ``on_ctrl_c`` at once, on a thread Windows
+    creates. For when the main thread is busy in a window's message loop, where Python
+    would only raise KeyboardInterrupt after the window closed. Python still gets the
+    Ctrl+C too (the handler returns False)."""
+
+    def __init__(self, on_ctrl_c: Callable[[], None]) -> None:
+        self._on_ctrl_c = on_ctrl_c
+        self._handler = _HandlerType(self.on_event)
+
+    def __enter__(self) -> Self:
+        _kernel32.SetConsoleCtrlHandler(self._handler, True)
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        _kernel32.SetConsoleCtrlHandler(self._handler, False)
+
+    def on_event(self, kind: int) -> bool:
+        if kind == CTRL_C:
+            self._on_ctrl_c()
+        return False

@@ -236,3 +236,72 @@ def test_quit_and_the_logs() -> None:
     menu.chosen("quit")
     assert opened == ["logs"]
     assert host.asked == ["quit"]
+
+
+def test_clicking_the_icon_again_brings_the_window_forward_not_another() -> None:
+    voice = Voice()
+    host = Host(voice)
+    focused: list[str] = []
+    is_open = [False]
+    host.window_open = lambda: is_open[0]
+    host.focus_window = lambda: focused.append("front")
+    opened: list[int] = []
+
+    def window() -> None:
+        is_open[0] = True
+        opened.append(1)
+        host.ask("open")  # clicked again while it's open
+        host.ask("open")
+        is_open[0] = False
+        host.ask("quit")
+
+    host.ask("open")
+    host.ask("open")  # clicked twice before it opened: still one window
+    host.run(window)
+    assert opened == [1]
+    assert focused == ["front", "front"]
+
+
+def test_a_change_waits_for_the_voice_loop_and_reports_its_failure() -> None:
+    started = threading.Event()
+
+    async def voice(stop: asyncio.Event) -> None:
+        started.set()
+        await stop.wait()
+
+    host = Host(voice)
+    assert host.run_now(lambda: None) is False  # not running yet
+    runner = threading.Thread(target=host.run, daemon=True)
+    runner.start()
+    assert started.wait(5)
+    seen: list[str] = []
+    assert host.run_now(lambda: seen.append(threading.current_thread().name)) is True
+    assert seen == ["tycho-voice"]
+
+    def broken() -> None:
+        raise RuntimeError("couldn't")
+
+    with pytest.raises(RuntimeError, match="couldn't"):
+        host.run_now(broken)
+    host.ask("quit")
+    runner.join(5)
+
+
+def test_no_window_opens_once_tycho_is_quitting() -> None:
+    from tycho.desktop.window import AppWindow
+
+    window = AppWindow(object())
+    window.close()  # quit came first
+    window.open()  # then the queued open: returns at once, no window
+    assert not window.is_open
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the Windows console")
+def test_ctrl_c_reaches_tycho_even_while_the_window_is_open() -> None:
+    from tycho.runtime.console import CTRL_BREAK, CTRL_C, CtrlCGuard
+
+    quits: list[str] = []
+    guard = CtrlCGuard(lambda: quits.append("quit"))
+    assert guard.on_event(CTRL_C) is False  # Python still gets it too
+    assert guard.on_event(CTRL_BREAK) is False
+    assert quits == ["quit"]

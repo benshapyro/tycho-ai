@@ -137,7 +137,7 @@
       <form class="card frame" id="keysForm" autocomplete="off">${Object.entries(keys).map(([id, k]) => `<div class="field"><label for="k-${id}">${esc(k.label)} key${id === "elevenlabs" ? " (optional)" : ""}</label>
         ${k.stored ? `<div class="keyrow"><span class="input num" style="flex:1 1 260px">•••• •••• ${esc(k.ends)}</span><span class="chip good">Stored</span><button class="btn frame" type="button" data-remove="${id}">Remove</button></div>`
           : `<div class="keyrow"><input class="input" id="k-${id}" type="password" spellcheck="false" placeholder="${id === "anthropic" ? "sk-ant-…" : "sk_…"}"><button class="btn primary frame" type="button" data-store="${id}">Check and store</button></div>`}
-        <span class="err" id="e-${id}"></span></div>`).join("")}</form>`;
+        <span class="err" id="e-${id}">${esc(k.problem || "")}</span></div>`).join("")}</form>`;
   }
   function bindKeys() {
     $("#keysForm")?.addEventListener("submit", (e) => e.preventDefault());
@@ -148,12 +148,16 @@
       input.value = "";
       b.disabled = false;
       if (!r.ok) { $("#e-" + id).textContent = r.problem; return; }
-      toast("Key works, and is stored in Windows Credential Manager.");
+      toast("Key works, and is stored in Windows Credential Manager. Tycho uses it from its next start.");
       render();
     }));
     page.querySelectorAll("[data-remove]").forEach((b) => b.addEventListener("click", async () => {
-      await api.remove_key(b.dataset.remove);
-      toast("Key removed from Windows Credential Manager.");
+      try {
+        const r = await api.remove_key(b.dataset.remove);
+        toast(r.ok ? "Key removed from Windows Credential Manager. Tycho stops using it from its next start." : r.problem);
+      } catch (e) {
+        toast(`Couldn't remove the key: ${e && e.message ? e.message : e}`);
+      }
       render();
     }));
   }

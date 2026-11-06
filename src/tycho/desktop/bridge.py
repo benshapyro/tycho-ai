@@ -22,6 +22,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
 
 from tycho import __version__, credentials, settings
+from tycho.desktop.keys import KeyCheck
 from tycho.settings import Settings, SettingsError
 
 log = logging.getLogger(__name__)
@@ -51,7 +52,8 @@ SETUP_CHOICES = frozenset({"game_root", "push_to_talk", "microphone"})
 KEYS: dict[str, str] = {"anthropic": "Anthropic", "elevenlabs": "ElevenLabs"}
 UNDO_DEPTH = 20
 
-type Apply = Callable[[str, object], None]
+type Apply = Callable[[str, object], bool]
+"""Applies a change in the running Tycho; False if it can't now (it applies at restart)."""
 type Findings = Callable[[], Sequence[Mapping[str, str]]]
 
 
@@ -59,18 +61,20 @@ class Bridge:
     def __init__(
         self,
         *,
-        apply: Apply = lambda _name, _value: None,
+        apply: Apply = lambda _name, _value: False,
         findings: Findings = lambda: [],
         settings_path: Any = None,
-        check_key: Callable[[str, str], str] = lambda _name, _key: "",
+        key_check: KeyCheck | None = None,
+        ship_accent: Callable[[], str | None] = lambda: None,
     ) -> None:
         """``apply`` changes a setting in the running Tycho (the live callbacks);
-        ``findings`` are the checks ``tycho check`` makes; ``check_key`` tries a key
-        with its provider and returns what's wrong with it, or nothing."""
+        ``findings`` are the checks ``tycho check`` makes; ``key_check`` tries a key
+        with its provider; ``ship_accent`` is the colour of the ship being flown."""
         self._apply = apply
         self._findings = findings
         self._path = settings_path
-        self._check_key = check_key
+        self._key_check = key_check
+        self._ship_accent = ship_accent
         self._undo: list[tuple[str, object]] = []
 
     # --- reading ---------------------------------------------------------------------
@@ -121,7 +125,11 @@ class Bridge:
         """Which keys are stored, and their last four characters: never the key."""
         out: dict[str, dict[str, object]] = {}
         for name, label in KEYS.items():
-            stored = credentials.get(name)
+            try:
+                stored = credentials.get(name)
+            except credentials.CredentialStoreError as e:
+                out[name] = {"label": label, "stored": False, "ends": "", "problem": str(e)}
+                continue
             out[name] = {
                 "label": label,
                 "stored": bool(stored),
@@ -130,17 +138,18 @@ class Bridge:
         return out
 
     def tile_preview(self, width: int = 640) -> str:
-        """The Tile as it is set now, drawn by the Tile itself over a cockpit-dark
-        background: a PNG data URL for the Tile page's preview."""
+        """The Tile as it is set now, sized and placed exactly as on a 2560 x 1440
+        screen, drawn by the Tile itself and scaled to ``width``: a PNG data URL."""
+        from PIL import Image
+
         from tycho.tile.board import Board
         from tycho.tile.cards import Card, Row
-        from tycho.tile.design import PICKS, TEXT_SIZES, TYCHO_ACCENT
-        from tycho.tile.draw import Look, draw
+        from tycho.tile.display import accent, look, place
+        from tycho.tile.draw import draw
+        from tycho.tile.window import Screen
 
         current = settings.load(self._path)
-        width = max(320, min(int(width), 1600))
-        height = width * 9 // 16
-        scale = height / 1440 * 2  # a 2560 x 1440 screen, shown at this width
+        screen = Screen(0, 0, 2560, 1440)
         board = Board(clock=lambda: 0.0)
         board.show(
             Card(
@@ -155,27 +164,20 @@ class Bridge:
                 ),
             )
         )
-        colour = current.tile_colour
-        accent = "#f5901e" if colour == "ship" else PICKS.get(colour, TYCHO_ACCENT)
-        look = Look(
-            accent=accent,
-            scale=TEXT_SIZES[current.tile_size] * scale,
-            see_through=round(current.tile_see_through * 100),
-            high_contrast=current.tile_high_contrast,
-            left=current.tile_corner.endswith("left"),
-            bottom=current.tile_corner.startswith("bottom"),
-        )
-        image = _cockpit(width, height)
+        try:
+            ship = self._ship_accent()
+        except Exception:
+            ship = None
+        image = _cockpit(screen.width, screen.height)
         if current.tile:
-            tile = draw(
-                board.view(), look, now=1.0, light="thinking" if current.tile_talk_light else None
-            )
-            margin = round(0.022 * width)
-            x = margin if look.left else width - tile.width - margin
-            y = height - tile.height - margin if look.bottom else margin
-            image.alpha_composite(tile, (max(0, x), max(0, y)))
+            tile_look = look(current, screen, accent(current.tile_colour, ship))
+            light = "thinking" if current.tile_talk_light else None
+            tile = draw(board.view(), tile_look, now=1.0, light=light)
+            image.alpha_composite(tile, place(current, screen, tile.width, tile.height))
+        width = max(320, min(int(width), screen.width))
+        small = image.resize((width, width * 9 // 16), Image.Resampling.LANCZOS)
         buffer = io.BytesIO()
-        image.convert("RGB").save(buffer, "PNG")
+        small.convert("RGB").save(buffer, "PNG")
         return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
 
     # --- changing ----------------------------------------------------------------------
@@ -211,7 +213,8 @@ class Bridge:
         applies = settings.rule(name)["applies"]
         if applies == "now":
             try:
-                self._apply(name, value)
+                if not self._apply(name, value):
+                    applies = "restart"  # nothing running to apply it to
             except Exception:
                 log.exception("Couldn't apply %s in the running Tycho", name)
                 applies = "restart"
@@ -224,7 +227,7 @@ class Bridge:
         key = key.strip() if isinstance(key, str) else ""
         if problem := _shape(name, key):
             return {"ok": False, "problem": problem}
-        if problem := self._check_key(name, key):
+        if self._key_check is not None and (problem := self._key_check.check(name, key)):
             return {"ok": False, "problem": problem}
         try:
             credentials.set_secret(name, key)
@@ -234,13 +237,17 @@ class Bridge:
                 "problem": f"Windows Credential Manager refused it ({type(e).__name__})",
             }
         log.info("%s key stored from the app", KEYS[name])
-        return {"ok": True, "ends": key[-4:]}
+        # The brain and the voice are made when Tycho starts: reloading them is next (#12).
+        return {"ok": True, "ends": key[-4:], "applies": "restart"}
 
     def remove_key(self, name: object) -> dict[str, object]:
         if not isinstance(name, str) or name not in KEYS:
             return {"ok": False, "problem": "that isn't a key Tycho uses"}
-        removed = credentials.delete(name)
-        return {"ok": True, "removed": removed}
+        try:
+            removed = credentials.delete(name)
+        except credentials.CredentialStoreError as e:
+            return {"ok": False, "problem": str(e)}
+        return {"ok": True, "removed": removed, "applies": "restart"}
 
 
 def _shown(name: str, value: object) -> object:
@@ -320,8 +327,9 @@ def _plain(error: str) -> str:
 def _cockpit(width: int, height: int) -> Any:
     from PIL import Image, ImageDraw
 
-    image = Image.new("RGBA", (width, height), (8, 12, 20, 255))
-    d = ImageDraw.Draw(image)
+    # Drawn on RGB so the see-through glare and ring blend (Pillow blends only onto RGB).
+    image = Image.new("RGB", (width, height), (8, 12, 20))
+    d = ImageDraw.Draw(image, "RGBA")
     for y in range(height):
         v = round(12 + 18 * y / height)
         d.line((0, y, width, y), fill=(v, v + 5, v + 14, 255))
@@ -332,4 +340,4 @@ def _cockpit(width: int, height: int) -> Any:
         (round(width * 0.66), round(height * 0.08), round(width * 0.82), round(height * 0.2)),
         fill=(225, 220, 205, 90),
     )
-    return image
+    return image.convert("RGBA")

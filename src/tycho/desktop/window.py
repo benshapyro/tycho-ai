@@ -12,8 +12,6 @@ import threading
 from importlib import resources
 from typing import Any
 
-import httpx2
-
 log = logging.getLogger(__name__)
 
 SIZE = (1120, 800)
@@ -40,12 +38,15 @@ class AppWindow:
         self._bridge = bridge
         self._window: Any = None
         self._lock = threading.Lock()
+        self._stopping = False
 
     def open(self) -> None:
         # Imported here: pythonnet starts .NET, which only the window needs.
         webview: Any = importlib.import_module("webview")
 
         with self._lock:
+            if self._stopping:  # Tycho began quitting as the window was asked for
+                return
             self._window = webview.create_window(
                 "Tycho",
                 html=page(),
@@ -63,43 +64,31 @@ class AppWindow:
             with self._lock:
                 self._window = None
 
-    def close(self) -> None:
+    @property
+    def is_open(self) -> bool:
         with self._lock:
+            return self._window is not None
+
+    def focus(self) -> None:
+        """Bring the open window to the front, e.g. when the tray icon is clicked again."""
+        with self._lock:
+            window = self._window
+        if window is not None:
+            try:
+                window.restore()
+                window.show()
+                window.on_top = True  # raised above everything once, then let go
+                window.on_top = False
+            except Exception:
+                log.debug("Bringing the window forward failed", exc_info=True)
+
+    def close(self) -> None:
+        """Tycho is quitting: close the window, and never open another."""
+        with self._lock:
+            self._stopping = True
             window = self._window
         if window is not None:
             try:
                 window.destroy()
             except Exception:
                 log.debug("Closing the window failed", exc_info=True)
-
-
-def check_key(name: str, key: str) -> str:
-    """Try a key with its provider in one free request. Empty if it works; otherwise
-    what's wrong, in plain words. Never logs the key."""
-    try:
-        if name == "anthropic":
-            response = httpx2.get(
-                "https://api.anthropic.com/v1/models?limit=1",
-                headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
-                timeout=8.0,
-            )
-        elif name == "elevenlabs":
-            response = httpx2.get(
-                "https://api.elevenlabs.io/v1/user", headers={"xi-api-key": key}, timeout=8.0
-            )
-        else:
-            return "that isn't a key Tycho uses"
-    except httpx2.HTTPError:
-        return "Couldn't reach the provider to check the key. Check your connection and try again."
-    who = "Anthropic" if name == "anthropic" else "ElevenLabs"
-    if (
-        name == "elevenlabs"
-        and response.status_code in (401, 403)
-        and "permission" in response.text
-    ):
-        return ""  # a key limited to speech: valid, just not allowed to read the account
-    if response.status_code in (401, 403):
-        return f"{who} refused that key. Copy it again, or make a new one."
-    if response.status_code >= 400:
-        return f"{who} answered with an error ({response.status_code}). Try again in a moment."
-    return ""
