@@ -65,8 +65,6 @@ class Commands:
         """``keybinds`` gives the player's keybinds, or None if the game wasn't found."""
         self._path = user_file
         self._keybinds = keybinds
-        self._editing = ""
-        """The command a change is to, so a refusal can name the other one."""
 
     # --- reading -------------------------------------------------------------------
 
@@ -98,7 +96,7 @@ class Commands:
                         command.id.replace("_", " ").capitalize(),
                         said,
                         yours,
-                        confirm=_asks(command),
+                        confirm=_asks(command, keybinds),
                         sequence=True,
                         steps=steps,
                     )
@@ -106,12 +104,19 @@ class Commands:
                 continue
             label = _label(command.id, command.actions, keybinds)
             if keybinds is None:
-                rows.append(Row(command.id, label, said, yours, confirm=_asks(command)))
+                rows.append(Row(command.id, label, said, yours, confirm=_asks(command, None)))
                 continue
             found = resolve(command, keybinds)
             if found.action is None:
                 rows.append(
-                    Row(command.id, label, said, yours, to_bind=label, confirm=_asks(command))
+                    Row(
+                        command.id,
+                        label,
+                        said,
+                        yours,
+                        to_bind=label,
+                        confirm=_asks(command, keybinds),
+                    )
                 )
                 continue
             key = ", ".join(key_text(k) for k in found.action.inputs if k.pressable)
@@ -123,7 +128,7 @@ class Commands:
                     yours,
                     key=key,
                     toggle=found.fallback,
-                    confirm=_asks(command, found.action.name),
+                    confirm=_asks(command, keybinds),
                 )
             )
         rows.sort(key=lambda r: (r.sequence, r.label.lower()))
@@ -148,11 +153,12 @@ class Commands:
     def add_phrase(self, command_id: object, phrase: object) -> dict[str, object]:
         """Give a command one more phrase, the player's own."""
         said = _clean(phrase)
-        self._editing = str(command_id)
         if not said:
             return {"ok": False, "problem": "Type the words you'll say."}
         if len(said) > MAX_PHRASE:
             return {"ok": False, "problem": f"Keep it under {MAX_PHRASE} characters."}
+        if mistake := self._mistake():
+            return {"ok": False, "problem": mistake}
         try:
             doc, entry = self._entry(command_id, create=True)
         except (OSError, UnicodeDecodeError, tomlkit.exceptions.TOMLKitError) as e:
@@ -171,7 +177,7 @@ class Commands:
             return {"ok": False, "problem": f"“{said}” is already one of its phrases."}
         say.append(said)
         took = self._owner(said, command_id)
-        result = self._write(doc)
+        result = self._write(doc, command_id)
         if result["ok"] and took:
             result["took_from"] = took
         return result
@@ -192,7 +198,7 @@ class Commands:
             say = table.get("say")
             if isinstance(say, Array) and said in [str(p) for p in say]:
                 del say[[str(p) for p in say].index(said)]  # tomlkit arrays keep comments
-                return self._write(doc)
+                return self._write(doc, command_id)
         return {"ok": False, "problem": "That isn't one of your phrases."}
 
     def _entry(self, command_id: object, *, create: bool) -> tuple[Any, Table | None]:
@@ -218,6 +224,16 @@ class Commands:
         cast(AoT, tables).append(table)
         return doc, cast(AoT, tables)[-1]
 
+    def _mistake(self) -> str:
+        """Why the file doesn't load as it is, if it doesn't. Adding to it then could
+        overwrite what the player meant (a ``[phrases]`` table with one bracket pair),
+        or be refused for a clash that isn't the new phrase's."""
+        try:
+            CommandMatcher.default(self._path)
+        except CommandFileError as e:
+            return f"Your commands file has a mistake; fix it first ({str(e).split(': ', 1)[-1]})."
+        return ""
+
     def _said(self, command_id: str) -> tuple[str, ...]:
         """Every phrase the command has now, built-in and the player's."""
         try:
@@ -236,8 +252,9 @@ class Commands:
                 return entry_id
         return ""
 
-    def _write(self, doc: Any) -> dict[str, object]:
-        """Write the file if Tycho can load it; otherwise say why and change nothing."""
+    def _write(self, doc: Any, command_id: object) -> dict[str, object]:
+        """Write the file if Tycho can load it; otherwise say why and change nothing.
+        ``command_id`` is the command changed, so a refusal can name the other one."""
         text = tomlkit.dumps(doc)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         fd, temp = tempfile.mkstemp(dir=self._path.parent, prefix=".commands-", suffix=".toml")
@@ -247,7 +264,7 @@ class Commands:
             try:
                 CommandMatcher.default(Path(temp))
             except CommandFileError as e:
-                return {"ok": False, "problem": _readable(str(e), temp, self._editing)}
+                return {"ok": False, "problem": _readable(str(e), temp, str(command_id))}
             os.replace(temp, self._path)
         finally:
             if os.path.exists(temp):
@@ -335,15 +352,20 @@ def _key(phrase: str) -> tuple[str, ...]:
     return tuple(normalize(phrase))
 
 
-def _asks(command: Command, action: str = "") -> bool:
+def _asks(command: Command, keybinds: Keybinds | None) -> bool:
     """Whether Tycho asks first, as the safety gate decides it: the command says so,
-    or the action it presses (any of them, without keybinds) is one that always asks.
-    A sequence asks if any step does."""
+    or something it presses always asks. That's its ``setup`` actions and the action
+    it resolves to (any of its actions, without keybinds). A sequence asks if any step
+    does."""
     if command.confirm:
         return True
     if command.is_sequence:
-        return any(_asks(s.command) for s in command.steps)
-    return any(is_confirm_grade(a) for a in ((action,) if action else command.actions))
+        return any(_asks(s.command, keybinds) for s in command.steps)
+    pressed: tuple[str, ...] = command.actions
+    if keybinds is not None:
+        found = resolve(command, keybinds).action
+        pressed = (found.name,) if found is not None else command.actions
+    return any(is_confirm_grade(a) for a in (*command.setup, *pressed))
 
 
 def _tables(doc: Any, command_id: str) -> list[Table]:
