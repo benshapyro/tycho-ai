@@ -48,7 +48,7 @@ from tycho import paths, safety, settings
 from tycho.address import Address
 from tycho.app import anthropic_key, find_install, load_commands
 from tycho.brain import BrainError, BrainRequest, Exchange, Reply, commands_for
-from tycho.brain.claude import ClaudeBrain
+from tycho.brain.claude import NO_PRESS_AFTER_SEARCH, ClaudeBrain
 from tycho.brain.lookups import Lookup, LookupResult
 from tycho.commands import Command, Defer, resolve
 from tycho.game.keybinds import Keybinds
@@ -244,7 +244,12 @@ class _Counted:
 
     async def run(self, arguments: Mapping[str, object]) -> LookupResult:
         self.calls += 1
-        result = await self.inner.run(arguments)
+        try:
+            result = await self.inner.run(arguments)
+        except BaseException as e:
+            # Timed out (run_lookup cancels it) or raised: the brain gets an error either way.
+            self.journal.append((self.name, f"{type(e).__name__}: {e}"[:160] or "cancelled"))
+            raise
         self.journal.append((self.name, result.content[:160] if result.is_error else ""))
         return result
 
@@ -292,6 +297,8 @@ async def run_case(
         outcome.calls = (costs.replies if costs else 0) - replies
     if isinstance(decision, Reply):
         outcome.kind, outcome.say = "reply", decision.text
+        if decision.card is not None or decision.text == NO_PRESS_AFTER_SEARCH:
+            outcome.calls += 1  # show_card (or an act after a search) ended its call early
         if decision.card is not None:
             outcome.card = decision.card.kind
             outcome.card_rows = [

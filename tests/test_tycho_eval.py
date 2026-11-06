@@ -125,3 +125,22 @@ def test_every_case_uses_only_keys_the_eval_reads() -> None:
     data = tomllib.loads((ROOT / "tools" / "spike" / "brain_cases.toml").read_text("utf-8"))
     unknown = {(c["heard"], k) for c in data["case"] for k in c if k not in KNOWN}
     assert not unknown
+
+
+class _Slow(_Failing):
+    async def run(self, arguments: object) -> LookupResult:
+        await asyncio.sleep(10)
+        return failure("never")
+
+
+def test_a_look_up_that_times_out_is_noted_as_an_error() -> None:
+    """Review of #161: run_lookup cancels it, so it never reached the journal."""
+    from tycho.brain.lookups import run_lookup
+
+    e = _eval()
+    journal: list[tuple[str, str]] = []
+    slow = e._Counted(_Slow(), journal)  # pyright: ignore[reportPrivateUsage]
+    result = asyncio.run(run_lookup(slow, {}, seconds=0.01))
+    assert result.is_error
+    assert [name for name, _ in journal] == ["trade_routes"]
+    assert journal[0][1]
