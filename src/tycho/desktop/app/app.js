@@ -141,11 +141,31 @@
       render();
     }
   }
+  let capturing = false;
   async function capture(button, nameEl) {
+    // While it listens, the rest of the page waits: leaving would save the next key
+    // pressed (Ctrl+V into a key box) as push-to-talk. Cancel stops it.
+    capturing = true;
+    document.body.classList.add("capturing");
     button.disabled = true;
     nameEl.textContent = "Press the button now…";
-    const r = await api.capture_push_to_talk();
-    button.disabled = false;
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "btn frame";
+    cancel.id = "cancelCapture";
+    cancel.textContent = "Cancel";
+    cancel.addEventListener("click", () => api.cancel_capture());
+    button.after(cancel);
+    let r;
+    try {
+      r = await api.capture_push_to_talk();
+    } finally {
+      capturing = false;
+      document.body.classList.remove("capturing");
+      cancel.remove();
+      button.disabled = false;
+    }
+    if (r.cancelled) { render(); return; }
     if (!r.ok) { toast(r.problem); render(); return; }
     toast(`Push-to-talk: ${r.name}.${r.conflicts.length ? " It also does something in the game." : ""}${r.applies === "restart" ? " Applies when Tycho restarts." : ""}`, true);
     render();
@@ -295,6 +315,7 @@
 
   /* ---------- shell ---------- */
   async function render() {
+    if (capturing) api.cancel_capture();
     document.querySelectorAll("nav [data-view]").forEach((b) => b.setAttribute("aria-current", b.dataset.view === view ? "page" : "false"));
     try {
       if (view === "status") await status();

@@ -38,8 +38,9 @@ class SetupPC(Protocol):
         """The folder to save as game_root, from whichever level the player picked."""
         ...
 
-    def capture(self, seconds: float) -> str | None:
-        """The next button pressed, as a push_to_talk setting; None if none in time."""
+    def capture(self, seconds: float, cancel: threading.Event) -> str | None:
+        """The next button pressed, as a push_to_talk setting; None if none in time, or
+        once ``cancel`` is set."""
         ...
 
     def name(self, setting: str) -> str:
@@ -86,7 +87,7 @@ class WindowsPC:
         found = root_from(Path(folder), channel)
         return str(found) if found is not None else None
 
-    def capture(self, seconds: float) -> str | None:
+    def capture(self, seconds: float, cancel: threading.Event) -> str | None:
         """Keyboard, mouse (not left click) or joystick. The joystick source is made and
         polled on this thread and closed after, as SDL requires: Tycho's own joystick
         source, on its push-to-talk thread, is untouched."""
@@ -96,7 +97,12 @@ class WindowsPC:
 
         sources = input_sources(None)
         try:
-            found = capture_binding(sources, ignore=frozenset({win.LEFT_MOUSE}), timeout=seconds)
+            found = capture_binding(
+                sources,
+                ignore=frozenset({win.LEFT_MOUSE}),
+                timeout=seconds,
+                cancelled=cancel.is_set,
+            )
         finally:
             for source in sources:
                 close: Callable[[], None] | None = getattr(source, "close", None)

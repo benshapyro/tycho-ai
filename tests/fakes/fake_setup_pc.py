@@ -1,5 +1,7 @@
 """A PC for setup, scripted. Satisfies ``tycho.desktop.setup.SetupPC``."""
 
+import threading
+
 from tycho.desktop.setup import Game
 from tycho.settings import Settings
 
@@ -19,6 +21,8 @@ class FakeSetupPC:
             "verdict": "good",
         }
         self.calls: list[str] = []
+        self.wait_for_cancel = False
+        self.cancel: threading.Event | None = None
         self.listened: list[str | None] = []
 
     def game(self, current: Settings) -> Game:
@@ -28,7 +32,11 @@ class FakeSetupPC:
     def root(self, folder: str, channel: str) -> str | None:
         return folder.rstrip("\\") if "Star" in folder else None
 
-    def capture(self, seconds: float) -> str | None:
+    def capture(self, seconds: float, cancel: threading.Event) -> str | None:
+        self.cancel = cancel
+        if self.wait_for_cancel:
+            cancel.wait(5)
+            return None
         return self.button
 
     def name(self, setting: str) -> str:

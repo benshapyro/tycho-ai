@@ -332,3 +332,52 @@ def test_the_level_test_and_a_rescan_never_overlap(monkeypatch: pytest.MonkeyPat
     for thread in threads:
         thread.join()
     assert overlapped == []
+
+
+def test_leaving_a_capture_stops_it_and_saves_nothing(path: Path) -> None:
+    import threading
+
+    pc = FakeSetupPC()
+    pc.wait_for_cancel = True
+    bridge = _bridge(path, pc)
+    answer: dict[str, object] = {}
+    waiting = threading.Thread(target=lambda: answer.update(bridge.capture_push_to_talk()))
+    waiting.start()
+    while pc.cancel is None:
+        pass
+    assert bridge.cancel_capture() == {"ok": True}  # the player went to another step
+    waiting.join(5)
+    assert answer == {"ok": False, "cancelled": True}
+    assert settings.load(path).push_to_talk is None
+
+
+def test_starting_tycho_stops_a_capture_still_waiting(path: Path) -> None:
+    pc = FakeSetupPC()
+    bridge = _bridge(path, pc, first_run=True)
+    bridge.set_channel("PTU")
+    bridge.capture_push_to_talk()
+    assert pc.cancel is not None
+    assert not pc.cancel.is_set()
+    bridge.finish_setup()
+    assert pc.cancel.is_set()
+
+
+def test_capture_binding_stops_when_cancelled() -> None:
+    from tycho.ptt.monitor import capture_binding
+
+    calls = [0]
+
+    def cancelled() -> bool:
+        calls[0] += 1
+        return calls[0] > 3
+
+    class Nothing:
+        def pressed(self) -> frozenset[object]:
+            return frozenset()
+
+        def is_pressed(self, _binding: object) -> bool:
+            return False
+
+    found = capture_binding([Nothing()], cancelled=cancelled, sleep=lambda _s: None)  # type: ignore[list-item]
+    assert found is None
+    assert calls[0] == 4

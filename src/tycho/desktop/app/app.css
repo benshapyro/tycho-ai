@@ -137,3 +137,6 @@ input[type="range"] { width: 150px; accent-color: var(--acc); }
 .setup { display: grid; gap: 6px; justify-items: end; }
 .setup select { width: 100%; }
 .card .bar, main > .bar { max-width: 720px; }
+/* While a push-to-talk capture listens, nothing else can be clicked but Cancel. */
+.capturing nav button, .capturing main button:not(#cancelCapture), .capturing main select, .capturing main input { pointer-events: none; opacity: .45; }
+

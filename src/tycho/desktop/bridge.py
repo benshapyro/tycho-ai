@@ -18,6 +18,7 @@ import base64
 import dataclasses
 import io
 import logging
+import threading
 import time
 import typing
 from collections.abc import Callable, Mapping, Sequence
@@ -92,6 +93,8 @@ class Bridge:
         self._choose_folder = choose_folder
         self._finish = finish
         self._first_run = first_run
+        self._capture = threading.Event()
+        """Set to stop a push-to-talk capture the player has left."""
         self._undo: list[tuple[str, object]] = []
 
     # --- reading ---------------------------------------------------------------------
@@ -310,7 +313,11 @@ class Bridge:
 
     def capture_push_to_talk(self) -> dict[str, object]:
         """Wait for the player to press the button they want, and save it."""
-        found = self._pc.capture(setup.CAPTURE_SECONDS)
+        self._capture.set()  # one capture at a time: a new one replaces the last
+        self._capture = cancel = threading.Event()
+        found = self._pc.capture(setup.CAPTURE_SECONDS, cancel)
+        if cancel.is_set():
+            return {"ok": False, "cancelled": True}
         if found is None:
             seconds = round(setup.CAPTURE_SECONDS)
             return {"ok": False, "problem": f"No button was pressed in {seconds} seconds."}
@@ -319,6 +326,12 @@ class Bridge:
             result["name"] = self._pc.name(found)
             result["conflicts"] = self._conflicts(found, current)
         return result
+
+    def cancel_capture(self) -> dict[str, object]:
+        """Stop waiting for a push-to-talk button: the player moved on. Otherwise the
+        next key they press (Ctrl+V into a key box, Alt+Tab) would be saved."""
+        self._capture.set()
+        return {"ok": True}
 
     def set_microphone(self, name: object) -> dict[str, object]:
         """A microphone from the list, empty for Windows' default, or the one already
@@ -348,6 +361,7 @@ class Bridge:
         ]
         if missing:
             return {"ok": False, "problem": f"Tycho still needs {' and '.join(missing)}."}
+        self._capture.set()
         self._finish()
         return {"ok": True, "first_run": self._first_run}
 

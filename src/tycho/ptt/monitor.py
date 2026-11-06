@@ -49,11 +49,13 @@ def capture_binding(
     timeout: float | None = None,
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
+    cancelled: Callable[[], bool] = lambda: False,
 ) -> Binding | None:
     """Wait for the user to press a button, and return it.
 
     Buttons already held when this starts are ignored until released, so the key
-    that launched the prompt isn't captured. Returns None on timeout.
+    that launched the prompt isn't captured. Returns None on timeout, or once
+    ``cancelled`` says so (the player left the app window's capture).
     """
     sources = tuple(sources)
     held_at_start = _all_pressed(sources)
@@ -64,7 +66,7 @@ def capture_binding(
         fresh = now - held_at_start - ignore
         if fresh:
             return min(fresh, key=str)
-        if deadline is not None and clock() >= deadline:
+        if cancelled() or (deadline is not None and clock() >= deadline):
             return None
         sleep(poll_interval)
 
