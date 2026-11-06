@@ -340,10 +340,38 @@ def test_claude_is_asked_the_way_adr_14_says() -> None:
     assert all(t["strict"] for t in request["tools"])
 
 
+def _picks(actions: list[str], use_id: str = "toolu_1") -> tuple[list[Any], Any]:
+    """A call where Claude picks run_actions (the stream runs on if it can't be used)."""
+    stop = _tool_stop("run_actions", {"actions": actions, "say": "Done."}, use_id)
+    return [stop], SimpleNamespace(
+        content=[stop.content_block], stop_reason="tool_use", usage=_final("").usage
+    )
+
+
+def test_an_unbound_action_is_never_pressed_and_claude_picks_again() -> None:
+    """Eval (#164): "pop some noise" named v_noise_launch, which isn't bound, and the
+    request ended in the error sound. Claude hears the closest bound names instead."""
+    client = _Calls(
+        _picks(["v_toggle_landing_sys"]), _picks(["v_toggle_landing_system"], "toolu_2")
+    )
+    assert _ask(client) == RunActions(("v_toggle_landing_system",), "Done.")
+    (result,) = client.requests[1]["messages"][-1]["content"]
+    assert result["is_error"]
+    assert "Nothing was pressed" in result["content"]
+    assert "did you mean v_toggle_landing_system" in result["content"]
+
+
+def test_an_action_with_nothing_close_bound_is_said_not_pressed() -> None:
+    client = _Calls(_picks(["v_xyzzy_qqq"]), ([], _final("There's no key for that.")))
+    assert _ask(client) == Reply("There's no key for that.")
+    (result,) = client.requests[1]["messages"][-1]["content"]
+    assert "nothing close is bound" in result["content"]
+
+
 def test_claude_can_only_pick_actions_the_player_has_bound() -> None:
-    client = _Client([_tool_stop("run_actions", {"actions": ["v_unbound"], "say": ""})])
-    with pytest.raises(BrainError, match="isn't one of your bound"):
-        _decide(client)
+    client = _Calls(*[_picks(["v_unbound"], f"toolu_{n}") for n in range(MAX_CALLS)])
+    with pytest.raises(BrainError, match="still looking"):
+        _ask(client)  # never pressed, however often it asks
 
 
 def test_a_text_answer_is_a_reply() -> None:
@@ -451,9 +479,8 @@ def test_claude_can_act_after_a_look_up_and_the_act_is_still_checked() -> None:
     assert _ask(_Calls(_looks_up(), ([act], None)), FakeLookup()) == RunActions(
         ("v_toggle_landing_system",), "Gear."
     )
-    bad = _tool_stop("run_actions", {"actions": ["v_unbound"], "say": ""})
-    with pytest.raises(BrainError, match="isn't one of your bound"):
-        _ask(_Calls(_looks_up(), ([bad], None)), FakeLookup())
+    client = _Calls(_looks_up(), _picks(["v_unbound"], "toolu_2"), ([], _final("No key.")))
+    assert _ask(client, FakeLookup()) == Reply("No key.")  # the act was checked: not pressed
 
 
 def test_a_broken_look_up_becomes_an_error_result_not_a_crash() -> None:

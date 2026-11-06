@@ -76,6 +76,16 @@ class BrainError(Exception):
     """The brain gave no usable answer: offline, a refusal, a timeout, or bad output."""
 
 
+class UnboundAction(BrainError):
+    """``run_actions`` named actions that aren't bound: invented ("v_noise_launch"), or
+    real with no key. The brain is told, with the closest bound names, and picks again
+    (#164) rather than the request failing."""
+
+    def __init__(self, unknown: list[str]) -> None:
+        super().__init__(f"run_actions: {', '.join(unknown)} isn't one of your bound actions")
+        self.unknown = unknown
+
+
 def parse_tool_call(
     name: str, arguments: object, actions: Collection[str], sequences: Collection[str]
 ) -> Decision:
@@ -93,7 +103,7 @@ def parse_tool_call(
         if len(names) > MAX_ACTIONS:
             raise BrainError(f"run_actions: {len(names)} actions is too many")
         if unknown := [a for a in names if a not in actions]:
-            raise BrainError(f"run_actions: {', '.join(unknown)} isn't one of your bound actions")
+            raise UnboundAction(unknown)
         return RunActions(names, say)
     if name == "run_sequence":
         sequence = args.get("name")

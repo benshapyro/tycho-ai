@@ -20,10 +20,11 @@ request at startup writes it, so the first real request is fast too.
 
 import asyncio
 import datetime
+import difflib
 import logging
 import re
 import time
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -37,9 +38,10 @@ from tycho.brain.decisions import (
     Decision,
     Exchange,
     Reply,
+    UnboundAction,
     parse_tool_call,
 )
-from tycho.brain.lookups import LOOKUP_SECONDS, Lookup, LookupResult, run_lookup
+from tycho.brain.lookups import LOOKUP_SECONDS, Lookup, LookupResult, failure, run_lookup
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Keybinds
 from tycho.tile.cards import TOOL_DESCRIPTION, TOOL_SCHEMA
@@ -296,16 +298,20 @@ class ClaudeBrain:
                             lookup = run_lookup(chosen, block.input, seconds)
                             looking.append((block.id, asyncio.create_task(lookup)))
                             continue
+                        try:
+                            decided = parse_tool_call(
+                                block.name, block.input, self._actions, self._sequences
+                            )
+                        except UnboundAction as e:
+                            # Not pressed: Claude hears why, with the closest bound names,
+                            # and picks again on the next call (#164).
+                            log.debug("Brain named unbound actions: %s", e.unknown)
+                            looking.append((block.id, _answered(_unbound(e, self._actions))))
+                            continue
                         # Leaving the stream here ends the request: nothing more to wait for.
                         for _, task in looking:
                             task.cancel()
-                        return (
-                            parse_tool_call(
-                                block.name, block.input, self._actions, self._sequences
-                            ),
-                            None,
-                            [],
-                        )
+                        return decided, None, []
                 message = await stream.get_final_message()
         except BaseException:
             for _, task in looking:
@@ -345,6 +351,31 @@ def _results(
 
 
 _MARKUP = re.compile(r"[*`#]+")
+
+
+def _answered(result: LookupResult) -> asyncio.Task[LookupResult]:
+    """A result that's ready now, in the shape of a look-up still running."""
+
+    async def ready() -> LookupResult:
+        return result
+
+    return asyncio.create_task(ready())
+
+
+def _unbound(error: UnboundAction, actions: Collection[str]) -> LookupResult:
+    """What Claude hears when it names actions that aren't bound: the closest that
+    are, or that there's no key for it, so it says so."""
+    close = {
+        name: difflib.get_close_matches(name, actions, n=3, cutoff=0.5) for name in error.unknown
+    }
+    hints = "; ".join(
+        f"{name}: did you mean {', '.join(found)}?" if found else f"{name}: nothing close is bound"
+        for name, found in close.items()
+    )
+    return failure(
+        f"Nothing was pressed. Not bound: {hints}. Pick from the bound actions, or say "
+        "there's no key for it and what to bind."
+    )
 
 
 LAST_CALL = (
