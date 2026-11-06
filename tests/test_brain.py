@@ -563,14 +563,16 @@ def test_the_real_settings_and_fleet_tools_are_instant() -> None:
     assert FleetUpdate.instant
 
 
-def test_a_look_up_says_its_checking_once() -> None:
+def test_each_look_up_is_told_to_the_session() -> None:
+    """Review of #166: only the first moved the deadline, so a second look-up 4.6 s in
+    still ran out of time. The session says "Checking." once; the brain tells it each."""
     looked: list[str] = []
     calls = [_looks_up(use_id=f"toolu_{n}") for n in range(2)]
     client = _Calls(*calls, ([], _final("Area 18.")))
     brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=(FakeLookup(),))
     request = BrainRequest("where do I sell gold", KEYBINDS, looking=lambda: looked.append(""))
     assert asyncio.run(brain.decide(request)) == Reply("Area 18.")
-    assert len(looked) == 1
+    assert len(looked) == 2
 
 
 def test_a_look_up_cant_take_the_name_of_an_act() -> None:
