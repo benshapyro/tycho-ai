@@ -87,3 +87,12 @@ def test_modules_packed_inside_the_exe_are_covered(tmp_path: Path) -> None:
 
 def test_a_build_without_its_table_of_contents_cant_pass(tmp_path: Path) -> None:
     assert notices.write(tmp_path, tmp_path / "missing") != []
+
+
+def test_a_package_naming_no_licence_is_read_from_its_licence_file() -> None:
+    from importlib.metadata import distribution
+
+    # clr_loader (under pywebview) ships the MIT text but names no licence in its metadata.
+    terms = notices.licence(distribution("clr_loader"))
+    assert terms == "MIT (from its licence file)"
+    assert notices.allowed(terms)

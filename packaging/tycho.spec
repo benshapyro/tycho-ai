@@ -21,7 +21,10 @@ datas = [
     # `tycho --version` the real version.
     *copy_metadata("onnx-asr"),
     *copy_metadata("tycho-ai"),
-    *collect_data_files("tycho", includes=["**/*.toml", "**/*.txt", "**/*.md"]),
+    # The app window's page (ADR 17) is HTML, CSS and JavaScript.
+    *collect_data_files(
+        "tycho", includes=["**/*.toml", "**/*.txt", "**/*.md", "**/*.html", "**/*.css", "**/*.js"]
+    ),
     *collect_data_files("onnx_asr", includes=["preprocessors/data/*"]),
     *collect_data_files("sdl2dll", includes=["dll/SDL2.dll"]),
 ]
@@ -35,6 +38,9 @@ a = Analysis(  # noqa: F821
         "tycho.ptt.joystick",  # imported on first use
         "tycho.stt.parakeet",
         "tycho.tile.display",  # the Tile, opened when Tycho runs (ADR 16)
+        "tycho.desktop.window",  # the app window and its page (ADR 17)
+        "tycho.desktop.bridge",
+        "webview",
     ],
     excludes=[
         "nvidia",

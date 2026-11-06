@@ -9,9 +9,11 @@ console closing do, so it lets go of any key and shuts down the same way.
 """
 
 import asyncio
+import concurrent.futures
 import contextlib
 import logging
 import queue
+import sys
 import threading
 from collections.abc import Callable, Coroutine
 from typing import Any
@@ -23,6 +25,8 @@ type Voice = Callable[[asyncio.Event], Coroutine[Any, Any, None]]
 
 POLL_SECONDS = 0.2
 """How often the main thread wakes, so Ctrl+C is felt at once."""
+APPLY_SECONDS = 2.0
+"""How long a change made in the window waits for the voice loop to apply it."""
 
 
 class Host:
@@ -35,18 +39,47 @@ class Host:
         self._failure: BaseException | None = None
         self._thread = threading.Thread(target=self._run_voice, name="tycho-voice", daemon=True)
         self.windows = 0
-        """How many times the window was asked for (the window itself comes with #12)."""
+        """How many times the window was asked for."""
+        self.on_quit: Callable[[], None] = lambda: None
+        """Closes the window, if it's open: Tycho is stopping."""
+        self.window_open: Callable[[], bool] = lambda: False
+        self.focus_window: Callable[[], None] = lambda: None
 
     # From any thread: the tray, or tests.
 
     def ask(self, request: str) -> None:
         """Ask the main thread to ``"open"`` the window or ``"quit"``."""
+        if request == "open" and self.window_open():
+            self.focus_window()  # already open: bring it forward, don't queue another
+            return
         self._requests.put(request)
+        if request == "quit":
+            self.on_quit()  # the main thread may be inside the window: close it
 
     def call(self, fn: Callable[[], None]) -> None:
         """Run ``fn`` on the voice loop's thread, e.g. pausing the session."""
         if self._loop is not None:
             self._loop.call_soon_threadsafe(fn)
+
+    def run_now(self, fn: Callable[[], None], seconds: float = APPLY_SECONDS) -> bool:
+        """Run ``fn`` on the voice loop's thread and wait for it. False if the loop isn't
+        running; raises what ``fn`` raised, so a caller can say it didn't apply."""
+        loop = self._loop
+        if loop is None or loop.is_closed() or not self._thread.is_alive():
+            return False
+        done: concurrent.futures.Future[None] = concurrent.futures.Future()
+
+        def run() -> None:
+            try:
+                fn()
+            except BaseException as e:
+                done.set_exception(e)
+            else:
+                done.set_result(None)
+
+        loop.call_soon_threadsafe(run)
+        done.result(timeout=seconds)
+        return True
 
     # The main thread.
 
@@ -55,17 +88,19 @@ class Host:
         Re-raises anything that ended the voice loop."""
         self._thread.start()
         try:
-            self._started.wait(10.0)
-            while self._thread.is_alive():
-                try:
-                    request = self._requests.get(timeout=POLL_SECONDS)
-                except queue.Empty:
-                    continue
-                if request == "quit":
-                    self.stop()
-                elif request == "open":
-                    self.windows += 1
-                    open_window()  # runs until the player closes the window
+            with _ctrl_c(lambda: self.ask("quit")):
+                self._started.wait(10.0)
+                while self._thread.is_alive():
+                    try:
+                        request = self._requests.get(timeout=POLL_SECONDS)
+                    except queue.Empty:
+                        continue
+                    if request == "quit":
+                        self.stop()
+                    elif request == "open":
+                        self._drop_queued("open")  # clicks while it was opening: one window
+                        self.windows += 1
+                        open_window()  # runs until the player closes the window
         except KeyboardInterrupt:
             self.stop()
             raise
@@ -100,3 +135,26 @@ class Host:
             self._failure = e
         finally:
             self._started.set()
+            self.on_quit()  # the voice loop ended: so does the window
+
+    def _drop_queued(self, request: str) -> None:
+        kept: list[str] = []
+        while True:
+            try:
+                queued = self._requests.get_nowait()
+            except queue.Empty:
+                break
+            if queued != request:
+                kept.append(queued)
+        for queued in kept:
+            self._requests.put(queued)
+
+
+def _ctrl_c(quit_now: Callable[[], None]) -> contextlib.AbstractContextManager[object]:
+    """Ctrl+C while the main thread is inside the window: Python would only feel it once
+    the window closed, so Windows' own thread asks Tycho to quit at once."""
+    if sys.platform != "win32":
+        return contextlib.nullcontext()
+    from tycho.runtime.console import CtrlCGuard
+
+    return CtrlCGuard(quit_now)

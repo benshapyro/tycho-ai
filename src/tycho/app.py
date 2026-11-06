@@ -5,7 +5,7 @@ import asyncio
 import logging
 import sys
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -259,13 +259,38 @@ def serve_with_tray(
 ) -> None:
     """Run the session with Tycho's tray icon (ADR 17): pause, the Tile, the logs, quit.
     Without a tray (it couldn't start), the terminal only, as before."""
+    import dataclasses
     import os
 
+    from tycho.desktop.bridge import Bridge
     from tycho.desktop.host import Host
+    from tycho.desktop.keys import ProviderKeyCheck
     from tycho.desktop.menu import TrayMenu
     from tycho.desktop.tray import TrayIcon
+    from tycho.desktop.window import AppWindow
 
     host = Host(lambda stop: serve(session, store, stop))
+
+    def apply(name: str, value: object) -> bool:
+        """A change made in the app, applied as voice applies one: on the voice loop.
+        False if nothing running can apply it; it applies at the next start."""
+        callback = live.get(name)
+        return callback is not None and host.run_now(lambda: callback(value))
+
+    def findings() -> list[Mapping[str, str]]:
+        current = settings.load()
+        return [dataclasses.asdict(f) for f in _checks(current, quick=True, ask=False)]
+
+    bridge = Bridge(
+        apply=apply,
+        findings=findings,
+        key_check=ProviderKeyCheck(),
+        ship_accent=display.ship_accent if display is not None else lambda: None,
+    )
+    window = AppWindow(bridge)
+    host.on_quit = window.close
+    host.window_open = lambda: window.is_open
+    host.focus_window = window.focus
     menu = TrayMenu(
         session,
         host,
@@ -273,6 +298,7 @@ def serve_with_tray(
         save=settings.update,
         apply_tile=live.get("tile", lambda _on: None),
         open_logs=lambda: os.startfile(paths.logs_dir()),  # noqa: S606 - Explorer, Tycho's folder
+        window=True,
     )
     tray = TrayIcon(menu.tip, menu.items, menu.chosen)
     menu.refresh = tray.refresh
@@ -281,7 +307,7 @@ def serve_with_tray(
         asyncio.run(serve(session, store))
         return
     try:
-        host.run()
+        host.run(window.open)
     finally:
         tray.close()
 
@@ -765,7 +791,9 @@ def diagnose(current: Settings, *, quick: bool = False) -> Iterator[Finding]:
         yield finding
 
 
-def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
+def _checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Finding]:
+    """``ask``: a missing game folder may be asked for in the terminal. Never from the
+    app window, whose thread mustn't wait on a question nobody can see."""
     yield Finding("ok", "Settings", str(paths.settings_file()))
     for name in settings.unknown_keys():
         yield Finding("warn", "Settings", UNKNOWN_SETTING.format(name=name))
@@ -834,7 +862,7 @@ def _checks(current: Settings, quick: bool) -> Iterator[Finding]:
             yield Finding("ok", "Star Citizen", str(install.folder))
         except FileNotFoundError:
             # Not found anywhere Tycho looks: ask, if someone's there to answer.
-            root = ask_game_root(current.game_channel) if sys.stdin.isatty() else None
+            root = ask_game_root(current.game_channel) if ask and sys.stdin.isatty() else None
             if root is None:
                 raise
             current = current.model_copy(update={"game_root": root})

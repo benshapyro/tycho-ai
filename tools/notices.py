@@ -32,6 +32,11 @@ NATIVE_LICENCES = (
         REPO / "packaging" / "licences" / "python.txt",
     ),
     ("PortAudio (libportaudio64bit.dll)", REPO / "packaging" / "licences" / "portaudio.txt"),
+    (
+        "Microsoft WebView2 SDK 1.0.3856.49 (Microsoft.Web.WebView2.Core.dll, "
+        "Microsoft.Web.WebView2.WinForms.dll, WebView2Loader.dll, shipped with pywebview)",
+        REPO / "packaging" / "licences" / "webview2.txt",
+    ),
 )
 """Licence texts for what isn't a Python package, kept in the repo (see their README)."""
 
@@ -128,7 +133,23 @@ def licence(dist: Distribution) -> str:
     ]
     if classifiers:
         return " OR ".join(classifiers)
-    return field.splitlines()[0] if field else ""
+    if field:
+        return field.splitlines()[0]
+    return _from_licence_file(dist)
+
+
+_HEADINGS = {"MIT License": "MIT", "The MIT License": "MIT", "BSD 3-Clause License": "BSD-3-Clause"}
+"""A licence file's own first line, for a package whose metadata names none."""
+
+
+def _from_licence_file(dist: Distribution) -> str:
+    """The licence a package's own LICENSE file names in its heading (clr_loader's
+    metadata names none, but it ships the MIT text). Anything else stays unknown."""
+    for _path, text in licence_texts(dist):
+        lines = text.strip().splitlines()
+        if lines and (name := _HEADINGS.get(lines[0].strip())):
+            return f"{name} (from its licence file)"
+    return ""
 
 
 def allowed(expression: str) -> bool:

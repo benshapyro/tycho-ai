@@ -187,10 +187,8 @@ class TileDisplay:
 
     def _accent_now(self, now: float) -> str:
         colour = self._settings.tile_colour
-        if colour == "tycho":
-            return TYCHO_ACCENT
         if colour != "ship":
-            return PICKS.get(colour, TYCHO_ACCENT)
+            return accent(colour)
         if now - self._accent_at >= ACCENT_SECONDS:
             self._accent_at = now
             try:
@@ -201,21 +199,42 @@ class TileDisplay:
         return self._accent
 
     def _look(self, screen: Screen, accent: str) -> Look:
-        s = self._settings
-        return Look(
-            accent=accent,
-            scale=TEXT_SIZES[s.tile_size] * screen.height / 1080,
-            see_through=round(s.tile_see_through * 100),
-            high_contrast=s.tile_high_contrast,
-            left=s.tile_corner.endswith("left"),
-            bottom=s.tile_corner.startswith("bottom"),
-        )
+        return look(self._settings, screen, accent)
 
     def _place(self, screen: Screen, w: int, h: int) -> tuple[int, int]:
-        s = self._settings
-        margin = round(MARGIN * screen.width)
-        across = margin + round(s.tile_nudge_in * screen.width)
-        down = margin + round(s.tile_nudge_down * screen.height)
-        x = screen.left + across if s.tile_corner.endswith("left") else screen.right - w - across
-        y = screen.bottom - h - down if s.tile_corner.startswith("bottom") else screen.top + down
-        return x, y
+        return place(self._settings, screen, w, h)
+
+
+# The Tile's size, place and colour from the player's settings: shared with the app
+# window's preview (ADR 17), so the preview is the Tile, not a copy of it.
+
+
+def accent(colour: str, ship: str | None = None) -> str:
+    """The Tile's accent for its colour setting: the ship's (if known), Tycho's, or a pick."""
+    if colour == "ship":
+        return ship or TYCHO_ACCENT
+    if colour == "tycho":
+        return TYCHO_ACCENT
+    return PICKS.get(colour, TYCHO_ACCENT)
+
+
+def look(s: Settings, screen: Screen, accent: str) -> Look:
+    """How the Tile is drawn on ``screen``: its text grows with the screen's height."""
+    return Look(
+        accent=accent,
+        scale=TEXT_SIZES[s.tile_size] * screen.height / 1080,
+        see_through=round(s.tile_see_through * 100),
+        high_contrast=s.tile_high_contrast,
+        left=s.tile_corner.endswith("left"),
+        bottom=s.tile_corner.startswith("bottom"),
+    )
+
+
+def place(s: Settings, screen: Screen, w: int, h: int) -> tuple[int, int]:
+    """Where a ``w`` by ``h`` Tile goes on ``screen``: its corner, nudged in and down."""
+    margin = round(MARGIN * screen.width)
+    across = margin + round(s.tile_nudge_in * screen.width)
+    down = margin + round(s.tile_nudge_down * screen.height)
+    x = screen.left + across if s.tile_corner.endswith("left") else screen.right - w - across
+    y = screen.bottom - h - down if s.tile_corner.startswith("bottom") else screen.top + down
+    return x, y

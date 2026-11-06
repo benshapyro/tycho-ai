@@ -11,5 +11,9 @@ licences need the notice itself in every copy, not a link.
   https://github.com/PortAudio/portaudio/blob/master/LICENSE.txt (sounddevice's
   `libportaudio64bit.dll`).
 
+- `webview2.txt`: the Microsoft WebView2 SDK's `LICENSE.txt`, from the
+  Microsoft.Web.WebView2 1.0.3856.49 NuGet package (the version pywebview 6.2.1 ships:
+  `Microsoft.Web.WebView2.Core.dll` and the loader DLLs).
+
 OpenSSL 3 is Apache-2.0, the same text as Tycho's LICENSE, which the notices include.
 Refresh these when Python's minor version or a bundled native library changes.

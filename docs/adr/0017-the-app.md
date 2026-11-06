@@ -69,7 +69,7 @@ The app may do what voice can't: lengthen the confirm time, turn transcripts on,
 - **The Tile page** draws its live preview with the same tokens as the Tile.
 - **Commands** come from the command matcher and the player's keybinds, including which commands have no key.
 
-**The look is Tycho's design system** (`tycho.tile.design`): one dark look, cut corners, condensed capitals, the free fonts with Windows fallbacks. The fonts are bundled with the app (SIL OFL), because the page can't fetch them while offline.
+**The look is Tycho's design system** (`tycho.tile.design`): one dark look, cut corners, condensed capitals. The fonts are Windows' own, as on the Tile (Bahnschrift, Cascadia Mono, Consolas), so the page fetches nothing and works offline. The mockup's free fonts (SIL OFL) can be bundled later.
 
 ## Consequences
 
@@ -78,6 +78,9 @@ The app may do what voice can't: lengthen the confirm time, turn transcripts on,
 - The installer grows by pywebview, pythonnet and the WebView2 loader, a few MB. The notices tool must include the WebView2 SDK licence.
 - On Windows 10 without the WebView2 runtime, the window can't open. Tycho says so, with a link to Microsoft's installer, and keeps working without the window.
 - The setup test and the Status checks reuse what `tycho check` already knows (the game, the keybinds, the microphone, the keys), so the terminal and the app give the same answers.
+- Built so far (6 November 2026):
+  - the threads and the tray icon (#126);
+  - the window, the bridge, Status (the same checks as `tycho check`), Settings from the schema with the Tile's preview drawn by the Tile itself, and Keys.
 - Build order:
   1. the threads and the tray icon;
   2. the bridge and the first run;
