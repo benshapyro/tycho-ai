@@ -22,6 +22,7 @@ class FakeSetupPC:
         }
         self.calls: list[str] = []
         self.wait_for_cancel = False
+        self.capture_fails: Exception | None = None
         self.cancel: threading.Event | None = None
         self.listened: list[str | None] = []
 
@@ -34,6 +35,8 @@ class FakeSetupPC:
 
     def capture(self, seconds: float, cancel: threading.Event) -> str | None:
         self.cancel = cancel
+        if self.capture_fails is not None:
+            raise self.capture_fails
         if self.wait_for_cancel:
             cancel.wait(5)
             return None

@@ -59,6 +59,7 @@ def test_a_change_is_saved_and_applied_at_once(path: Path) -> None:
         "ok": True,
         "changed": True,
         "name": "voice_volume",
+        "label": "Voice volume",
         "value": 0.4,
         "applies": "now",
     }
