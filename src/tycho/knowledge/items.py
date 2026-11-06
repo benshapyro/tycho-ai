@@ -9,6 +9,7 @@ its most distinctive word alone), and the results are ranked here.
 """
 
 import asyncio
+import itertools
 import logging
 import re
 import time
@@ -29,7 +30,7 @@ FRESH_SECONDS = 600.0
 PER_QUERY = 20
 QUERY_SECONDS = 2.5
 """Each query's limit: a spelling or a recipe that takes longer is left out."""
-FILLER = frozenset({"the", "a", "an", "my", "this", "that", "item"})
+FILLER = frozenset({"the", "a", "an", "my", "this", "that", "item", "uh", "um", "erm"})
 GENERIC = frozenset(
     {
         "rifle",
@@ -94,18 +95,22 @@ class Items:
 
     async def find(self, asked: str) -> Found | Unclear | Missing:
         """Raises ``WikiError`` if the API can't be reached."""
-        words = [w for w in normalize(asked) if w not in FILLER]
+        said = [spoken(asked), *swapped(asked)]
+        words = [w for w in normalize(said[0]) if w not in FILLER]
         if not words:
             return Missing(asked, ())
-        pages = await asyncio.gather(*(self._in_time(self._search(q)) for q in spellings(asked)))
+        queries = list(dict.fromkeys(q for s in said for q in spellings(s)))
+        pages = await asyncio.gather(*(self._in_time(self._search(q)) for q in queries))
         if all(page is None for page in pages):
-            raise WikiError("the Wiki API took too long")
+            raise WikiError("the Wiki API took too long or didn't answer")
         records: dict[str, Mapping[str, Any]] = {}
         for page in pages:
             for record in page or []:
                 if record.get("type") not in NOT_ITEMS:
                     records.setdefault(str(record.get("uuid") or record.get("name")), record)
-        readings = _readings(words)
+        readings = [
+            r for s in said for r in _readings([w for w in normalize(s) if w not in FILLER])
+        ]
         scored = sorted(
             ((_score(readings, r), r) for r in records.values()),
             key=lambda pair: (-pair[0], len(str(pair[1].get("name") or ""))),
@@ -114,7 +119,15 @@ class Items:
         if best < MATCH:
             return Missing(asked, tuple(str(r.get("name")) for _, r in scored[:CHOICES]))
         tied = [r for score, r in scored if score >= best - TIE]
-        exact = [r for r in tied if _words(r) in readings]
+        # A name exactly as heard wins over one exactly as a swapped version (#174):
+        # "F S nine" is the FS-9, even with an SF-9 there too.
+        heard = _readings(words)
+        exact = (
+            [r for r in tied if _words(r) in heard]
+            or [r for r in tied if _words(r) in readings]
+            # Only against a swapped version: a vague name ("Morozov") still asks which.
+            or [r for r in tied if len(said) > 1 and any(set(h) <= set(_words(r)) for h in heard)]
+        )
         if len(tied) == 1 or exact:
             return Found((exact or tied)[0])
         return Unclear(asked, tuple(str(r.get("name")) for r in tied[:CHOICES]))
@@ -139,6 +152,10 @@ class Items:
         except TimeoutError:
             log.debug("A Wiki API query took over %.1f s; going on without it", QUERY_SECONDS)
             return None
+        except WikiError as e:
+            # One spelling's query failing (a rate limit, say) doesn't fail the others.
+            log.debug("A Wiki API query failed (%s); going on without it", e)
+            return None
 
     async def _search(self, query: str) -> list[Mapping[str, Any]]:
         data = await self._get(
@@ -159,9 +176,85 @@ class Items:
         return answer
 
 
+NUMBERS = {
+    "zero": "0",
+    "one": "1",
+    "two": "2",
+    "three": "3",
+    "four": "4",
+    "five": "5",
+    "six": "6",
+    "seven": "7",
+    "eight": "8",
+    "nine": "9",
+    "ten": "10",
+    "eleven": "11",
+    "twelve": "12",
+}
+"""Numbers as speech-to-text writes them, said as part of a model code ("S F nine")."""
+
+
+def spoken(asked: str) -> str:
+    """A name as it was said, made written: letters said one at a time are joined and
+    numbers become digits ("S F nine" is "SF 9", #153). Other words are as said."""
+    out: list[str] = []
+    joined = False
+    for word in asked.split():
+        bare = word.strip(".,;:!?")
+        if bare.lower() in FILLER and not (bare.lower() == "a" and _in_code(out)):
+            # "a S 38" is the S-38, and "the, uh, S F nine" the FS-9; but in "p four a
+            # r", after part of a code, "a" is a letter.
+            joined = False
+            continue
+        if len(bare) == 1 and bare.isalpha() and out and joined:
+            out[-1] += bare
+            continue  # still in the code: a number may follow
+        elif len(bare) == 1 and bare.isalpha():
+            out.append(bare)
+            joined = True
+            continue
+        elif (digit := NUMBERS.get(bare.lower(), bare)).isdigit() and joined:
+            out[-1] += digit  # a code's number joins its letters: "SF9", "P4"
+        else:
+            out.append(NUMBERS.get(bare.lower(), word))
+        joined = False
+    return " ".join(out)
+
+
+def _in_code(written: list[str]) -> bool:
+    """Whether the last word written is part of a code: letters said one by one, or
+    letters and a number ("p4")."""
+    last = written[-1] if written else ""
+    return bool(last) and ((len(last) <= 3 and last.isalpha()) or any(c.isdigit() for c in last))
+
+
+def swapped(asked: str) -> list[str]:
+    """For a code said letter by letter, the same with its letters in another order:
+    speech-to-text often swaps letters said quickly ("S F nine" for the FS-9). Two or
+    three letters only, so at most five more tries."""
+    letters = [w.strip(".,;:!?") for w in asked.split()]
+    while letters and letters[0].lower() in FILLER:  # "a S F nine": the article goes
+        letters = letters[1:]
+    run: list[str] = []
+    for word in letters:
+        if len(word) == 1 and word.isalpha():
+            run.append(word)
+        elif run:
+            break
+    if not 2 <= len(run) <= 3:
+        return []
+    said = spoken(asked)
+    code = "".join(run)
+    return [
+        said.replace(code, "".join(order), 1)
+        for order in dict.fromkeys(itertools.permutations(run))
+        if "".join(order) != code
+    ]
+
+
 def spellings(asked: str) -> list[str]:
     """The ways to ask the API for a name, most faithful first."""
-    words = [w for w in asked.strip().split() if w.lower() not in FILLER]
+    words = [w for w in asked.strip().split() if w.strip(".,;:!?").lower() not in FILLER]
     said = " ".join(words)
     lower = said.lower()
     tries = [said, _CODE.sub(r"\1-\2", lower)]
