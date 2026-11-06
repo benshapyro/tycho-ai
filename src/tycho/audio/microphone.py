@@ -140,14 +140,17 @@ class Microphone:
         self._buffer.feed(np.array(indata[:, 0], dtype=np.float32))
 
 
-def input_devices() -> list[str]:
+def input_devices(*, rescan: bool = False) -> list[str]:
     """The microphones Windows offers, default first, each as a microphone setting:
     "name, host API" ("Desk mic, MME"). A bare name can match the same microphone under
     several host APIs, and sounddevice then refuses it; this exact string matches one.
     Only the default host API's devices (each microphone is listed once per host API),
     and none of Windows' stand-ins ("Microsoft Sound Mapper"). Empty if PortAudio can't
-    list them."""
+    list them. PortAudio reads the device list once; ``rescan`` reads it again, to find a
+    microphone plugged in since, but only while no stream is open."""
     try:
+        if rescan:
+            _rescan()
         devices = sd.query_devices()
         default = sd.default.device[0]
         api = sd.query_hostapis(sd.default.hostapi) if sd.default.hostapi >= 0 else None

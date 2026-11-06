@@ -61,6 +61,11 @@ class SetupPC(Protocol):
 class WindowsPC:
     """The real PC. Satisfies ``SetupPC``."""
 
+    def __init__(self, *, rescan: bool = False) -> None:
+        """``rescan``: look for microphones afresh each time. Only on a first run: while
+        Tycho listens, its microphone stream is open, and a rescan would break it."""
+        self._rescan = rescan
+
     def game(self, current: Settings) -> Game:
         from tycho.app import find_install
 
@@ -115,7 +120,7 @@ class WindowsPC:
     def microphones(self) -> list[str]:
         from tycho.audio.microphone import input_devices
 
-        return input_devices()
+        return input_devices(rescan=self._rescan)
 
     def level(self, microphone: str | None) -> dict[str, object]:
         from tycho.app import microphone_device
@@ -133,17 +138,11 @@ class WindowsPC:
 
 
 def verdict(clip: np.ndarray[tuple[int], np.dtype[np.float32]]) -> dict[str, object]:
-    """How loud a clip is, and what that means for Tycho hearing the player."""
-    peak = float(np.max(np.abs(clip))) if len(clip) else 0.0
-    if peak < 0.003:
-        word = "silent"
-    elif peak < 0.05:
-        word = "quiet"
-    elif peak > 0.98:
-        word = "clipping"
-    else:
-        word = "good"
-    return {"peak": round(peak, 4), "verdict": word}
+    """How loud a clip is, by the same rule as ``tycho check`` (``audio.clip.loudness``)."""
+    from tycho.audio.clip import loudness
+
+    peak, how = loudness(clip)
+    return {"peak": round(peak, 4), "verdict": how}
 
 
 def needs_setup(current: Settings, pc: SetupPC | None = None) -> bool:

@@ -106,7 +106,8 @@
     // A saved microphone that isn't listed (a number, part of a name, or unplugged now)
     // is shown as itself, so choosing nothing never overwrites it.
     if (mic.setting && !mic.devices.includes(mic.setting)) options.push([mic.setting, `${mic.setting} (saved, not connected now)`]);
-    return `<select class="input" id="mic" aria-label="Microphone">${options.map(([v, l]) => `<option value="${esc(v)}" ${v === mic.setting ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
+    const later = firstRun ? "" : `<span class="note">Plugged one in just now? Restart Tycho to see it here.</span>`;
+    return `<select class="input" id="mic" aria-label="Microphone">${options.map(([v, l]) => `<option value="${esc(v)}" ${v === mic.setting ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>${later}`;
   }
   function bindSetup() {
     page.querySelectorAll("[data-step]").forEach((b) => b.addEventListener("click", async () => {

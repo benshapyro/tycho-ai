@@ -327,6 +327,7 @@ def app_window(
 
     from tycho.desktop.bridge import Bridge
     from tycho.desktop.keys import ProviderKeyCheck
+    from tycho.desktop.setup import WindowsPC
     from tycho.desktop.window import AppWindow
 
     def findings() -> list[Mapping[str, str]]:
@@ -336,6 +337,7 @@ def app_window(
     bridge = Bridge(
         apply=apply,
         findings=findings,
+        pc=WindowsPC(rescan=first_run),
         key_check=ProviderKeyCheck(),
         ship_accent=ship_accent,
         choose_folder=lambda: window.choose_folder(),
@@ -1029,12 +1031,14 @@ def microphone_finding(current: Settings, seconds: float = 2.5) -> Finding:
 
 
 def microphone_level(name: str, clip: np.ndarray[tuple[int], np.dtype[np.float32]]) -> Finding:
-    peak = float(np.max(np.abs(clip))) if len(clip) else 0.0
-    if peak < 0.01:
+    from tycho.audio.clip import loudness
+
+    peak, how = loudness(clip)
+    if how == "silent":
         return Finding("fail", "Microphone", f"{name} heard nothing. Is it muted?")
-    if peak < 0.05:
+    if how == "quiet":
         return Finding("warn", "Microphone", f"{name} is very quiet; raise its level in Windows")
-    if peak > 0.99:
+    if how == "clipping":
         return Finding("warn", "Microphone", f"{name} is clipping; lower its level in Windows")
     return Finding("ok", "Microphone", f"{name}, level good (peak {20 * np.log10(peak):.0f} dB)")
 

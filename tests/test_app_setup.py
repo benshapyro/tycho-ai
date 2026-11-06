@@ -213,3 +213,27 @@ def test_without_a_window_setup_falls_back_to_the_terminal(monkeypatch: pytest.M
 
     monkeypatch.setattr(app, "app_window", no_window)
     assert app.first_run() == "no_window"
+
+
+@pytest.mark.parametrize(
+    ("peak", "how"),
+    [
+        (0.0, "silent"),
+        (0.005, "silent"),
+        (0.02, "quiet"),
+        (0.3, "good"),
+        (0.985, "good"),
+        (1.0, "clipping"),
+    ],
+)
+def test_setup_and_tycho_check_judge_loudness_alike(peak: float, how: str) -> None:
+    import numpy as np
+
+    from tycho import app
+    from tycho.audio.clip import loudness
+
+    clip = np.array([0.0, peak, -peak / 2], dtype=np.float32)
+    assert loudness(clip)[1] == how
+    assert setup.verdict(clip)["verdict"] == how
+    check = app.microphone_level("Headset", clip).level
+    assert check == {"silent": "fail", "quiet": "warn", "clipping": "warn", "good": "ok"}[how]
