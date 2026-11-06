@@ -1,13 +1,14 @@
 """The brain on Claude Haiku 5.5 (ADR 6, ADR 14). Satisfies ``runtime.Brain``.
 
-Speed matters most (#21): Tycho acts as soon as the tool call is complete, and
-stops reading the stream there, so it never waits for the rest of the answer.
-At most one tool call per response, so "the moment it's complete" is well defined.
+Speed matters most (#21): Tycho acts as soon as an act's tool call is complete,
+and stops reading the stream there, so it never waits for the rest of the answer.
+A reply can hold several tool calls (#149, #156); only its first act is pressed.
 
 Look-ups (ADR 15) run in a loop: a look-up starts the moment its call is complete,
 its result goes back to Claude, and Claude carries on, at most ``MAX_CALLS`` times.
-An act still ends the request at once. Every call sends the same tools and settings,
-so the cache holds across the loop and across requests.
+An act ends the request, after waiting up to ``INSTANT_SECONDS`` for a fleet or
+settings note from the same reply. Every call sends the same tools and settings, so
+the cache holds across the loop and across requests.
 
 A look-up from the web (``from_the_web``, the web search) is slow and can't be
 checked: when it starts, ``BrainRequest.waiting`` is called so the player hears
@@ -69,6 +70,10 @@ class _Turn:
     waiting: Callable[[], None] | None = None
     looking: Callable[[], None] | None = None
     searched: bool = False
+    unbound: UnboundAction | None = None
+    """The last act refused for naming unbound actions, for the final error (#167)."""
+    refused: bool = False
+    """This call's reply held a refused act: its result asks for another pick."""
 
 
 SHOW_CARD: ToolParam = {
@@ -238,16 +243,21 @@ class ClaudeBrain:
                     reply = spoken(" ".join(b.text for b in message.content if b.type == "text"))
                     if not reply:
                         raise BrainError(f"no answer (stopped: {message.stop_reason})")
-                    if _TOOL_AS_TEXT.match(reply):
-                        # 'show_card({"say": ...' read out is gibberish to the player.
-                        raise BrainError("it wrote a tool call as text")
+                    if found := _TOOL_AS_TEXT.search(reply):
+                        # 'show_card({"say": ...' read out is gibberish to the player:
+                        # what came before it can be said; with nothing before, it fails.
+                        reply = reply[: found.start()].strip()
+                        if not reply:
+                            raise BrainError("it wrote a tool call as text")
                     return Reply(reply[:400])
                 results = await asyncio.gather(*(task for _, task in looking))
                 messages.append({"role": "assistant", "content": message.content})
                 content: list[Any] = [*_results(looking, results)]
                 if call == MAX_CALLS - 2:
-                    # The next call is the last: answer with what's here, a card included.
-                    content.append({"type": "text", "text": LAST_CALL})
+                    # The next call is the last: answer with what's here, a card included;
+                    # beside a refused act, pick again or answer, but look nothing up.
+                    note = LAST_PICK if turn.refused else LAST_CALL
+                    content.append({"type": "text", "text": note})
                 messages.append({"role": "user", "content": content})
         except anthropic.AuthenticationError as e:
             raise BrainError("the Anthropic key was refused") from e
@@ -255,6 +265,8 @@ class ClaudeBrain:
             raise BrainError("can't reach Claude (offline?)") from e
         except anthropic.APIStatusError as e:
             raise BrainError(f"Claude returned an error ({e.status_code})") from e
+        if turn.unbound is not None and turn.refused:
+            raise turn.unbound  # the last call too named actions that aren't bound
         raise BrainError(f"still looking things up after {MAX_CALLS} tries")
 
     async def _call(
@@ -264,6 +276,8 @@ class ClaudeBrain:
         otherwise the whole message and the look-ups it started. Notes in ``turn``
         whether a look-up from the web started."""
         looking: list[tuple[str, asyncio.Task[LookupResult]]] = []
+        checking = 0
+        turn.refused = False
         instant: list[asyncio.Task[LookupResult]] = []
         """A fleet or settings note in the same reply as an act: it runs too (#156)."""
         try:
@@ -294,15 +308,20 @@ class ClaudeBrain:
                                     turn.waiting = None  # once a request
                                 turn.looking = None  # not after a search's line
                             elif turn.looking is not None and not getattr(chosen, "instant", False):
-                                # Each look-up: the session moves its deadline back, and says
-                                # "Checking." the first time. Not for settings or the fleet.
-                                turn.looking()
+                                # Told once the reply is known not to end in an act: the
+                                # session moves its deadline and says "Checking." (#176).
+                                checking += 1
                             seconds = float(getattr(chosen, "seconds", LOOKUP_SECONDS))
                             lookup = run_lookup(chosen, block.input, seconds)
                             task = asyncio.create_task(lookup)
                             looking.append((block.id, task))
                             if getattr(chosen, "instant", False):
                                 instant.append(task)
+                            continue
+                        if turn.refused:
+                            # Only the first act in a reply may be pressed, even when that
+                            # one was refused (#176): this one waits for the next call.
+                            looking.append((block.id, _answered(failure(SECOND_ACT))))
                             continue
                         try:
                             decided = parse_tool_call(
@@ -312,6 +331,7 @@ class ClaudeBrain:
                             # Not pressed: Claude hears why, with the closest bound names,
                             # and picks again on the next call (#164).
                             log.debug("Brain named unbound actions: %s", e.unknown)
+                            turn.unbound, turn.refused = e, True
                             looking.append((block.id, _answered(_unbound(e, self._actions))))
                             continue
                         # Leaving the stream here ends the request, so only the first act
@@ -322,9 +342,17 @@ class ClaudeBrain:
                             if task not in instant:
                                 task.cancel()
                         if instant:
-                            await asyncio.wait(instant, timeout=INSTANT_SECONDS)
+                            _, pending = await asyncio.wait(instant, timeout=INSTANT_SECONDS)
+                            if pending:
+                                log.warning(
+                                    "Pressing before %d fleet or settings note(s) finished;"
+                                    " they carry on",
+                                    len(pending),
+                                )
                         return decided, None, []
                 message = await stream.get_final_message()
+            for _ in range(checking if turn.looking is not None else 0):
+                turn.looking()  # type: ignore[misc]
         except BaseException:
             for _, task in looking:
                 task.cancel()
@@ -397,12 +425,20 @@ a reply is pressed (the stream is left there), and every act is still checked.""
 INSTANT_SECONDS = 1.0
 """How long an act waits for a fleet or settings note from the same reply."""
 
+SECOND_ACT = (
+    "Nothing was pressed: an earlier action in this reply was refused. Pick the actions "
+    "again, all in one run_actions call."
+)
+
+LAST_PICK = "No more look-ups for this request: pick the actions again, or say what you can't do."
+"""Instead of LAST_CALL, when the turn holds a refused act (review of #177)."""
+
 LAST_CALL = (
     "No more look-ups for this request. Answer now with what you found: speak, or "
     "use show_card. If something wasn't found, say so briefly."
 )
 """Added to the results before the last call, so a third look-up isn't the end."""
-_TOOL_AS_TEXT = re.compile(r"^\s*[a-z_]+\s*\(\s*\{")
+_TOOL_AS_TEXT = re.compile(r"\b[a-z_]{3,}\s*\(\s*\{", re.IGNORECASE)
 """A tool call written as text: never said out loud."""
 
 
