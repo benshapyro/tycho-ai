@@ -277,24 +277,58 @@ class _NoTimer:
         pass
 
 
-def test_the_level_test_and_a_rescan_never_overlap() -> None:
+def test_the_level_test_and_a_rescan_never_overlap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The real level() and microphones(), with PortAudio's parts replaced by recorders:
+    a rescan while the test's stream is open would close it (and PortAudio isn't
+    thread-safe)."""
+    import importlib
     import threading
     import time as clock
 
+    import numpy as np
+
+    importlib.import_module("tycho.app")  # up front, so the threads race on PortAudio alone
+    from tycho.audio import microphone
+
+    open_streams: list[str] = []
+    overlapped: list[str] = []
+    opened = threading.Event()
+
+    class Stream:
+        name = "Headset"
+
+        def __init__(self, device: object = None) -> None:
+            pass
+
+        def __enter__(self) -> Stream:
+            open_streams.append("level")
+            opened.set()
+            return self
+
+        def __exit__(self, *_exc: object) -> None:
+            open_streams.remove("level")
+
+        def start(self) -> None:
+            pass
+
+        def stop(self) -> np.ndarray[tuple[int], np.dtype[np.float32]]:
+            return np.zeros(4, dtype=np.float32)
+
+    def rescanning_list(*, rescan: bool = False) -> list[str]:
+        opened.wait(0.3)  # give the level test every chance to be listening now
+        if open_streams:
+            overlapped.append("rescan while the level test listened")
+        clock.sleep(0.02)
+        return ["Headset, MME"]
+
+    monkeypatch.setattr(microphone, "Microphone", Stream)
+    monkeypatch.setattr(microphone, "input_devices", rescanning_list)
+    monkeypatch.setattr(setup, "LEVEL_SECONDS", 0.2)
     pc = setup.WindowsPC(rescan=True)
-    inside: list[str] = []
-    overlapped: list[bool] = []
-
-    def hold(name: str) -> None:
-        with pc._audio:  # pyright: ignore[reportPrivateUsage]
-            overlapped.append(bool(inside))
-            inside.append(name)
-            clock.sleep(0.05)
-            inside.remove(name)
-
-    threads = [threading.Thread(target=hold, args=(n,)) for n in ("level", "rescan", "level")]
+    calls = [lambda: pc.level(None), pc.microphones, pc.microphones, lambda: pc.level(None)]
+    threads = [threading.Thread(target=call) for call in calls]
     for thread in threads:
         thread.start()
     for thread in threads:
         thread.join()
-    assert overlapped == [False, False, False]
+    assert overlapped == []
