@@ -9,6 +9,7 @@ blocks, so it works on a gated headset and next to a loud fan alike.
 import logging
 import threading
 from collections import deque
+from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -141,3 +142,19 @@ class ClipBuffer:
         if not clip:
             return np.zeros(0, dtype=np.float32)
         return np.concatenate(clip)
+
+
+type Loudness = Literal["silent", "quiet", "clipping", "good"]
+
+
+def loudness(clip: Samples) -> tuple[float, Loudness]:
+    """How loud a recording is, and what that means for Tycho hearing the player. One
+    rule for ``tycho check`` and the app's microphone test, so they never disagree."""
+    peak = float(np.max(np.abs(clip))) if len(clip) else 0.0
+    if peak < 0.01:
+        return peak, "silent"
+    if peak < 0.05:
+        return peak, "quiet"
+    if peak > 0.99:
+        return peak, "clipping"
+    return peak, "good"

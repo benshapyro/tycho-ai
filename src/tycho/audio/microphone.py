@@ -138,3 +138,42 @@ class Microphone:
         if status.input_overflow:
             self.overflows += 1
         self._buffer.feed(np.array(indata[:, 0], dtype=np.float32))
+
+
+def input_devices(*, rescan: bool = False) -> list[str]:
+    """The microphones Windows offers, default first, each as a microphone setting:
+    "name, host API" ("Desk mic, MME"). A bare name can match the same microphone under
+    several host APIs, and sounddevice then refuses it; this exact string matches one.
+    Only the default host API's devices (each microphone is listed once per host API),
+    and none of Windows' stand-ins ("Microsoft Sound Mapper"). Empty if PortAudio can't
+    list them. PortAudio reads the device list once; ``rescan`` reads it again, to find a
+    microphone plugged in since, but only while no stream is open."""
+    try:
+        if rescan:
+            _rescan()
+        devices = sd.query_devices()
+        default = sd.default.device[0]
+        api = sd.query_hostapis(sd.default.hostapi) if sd.default.hostapi >= 0 else None
+    except Exception:
+        log.debug("Couldn't list microphones", exc_info=True)
+        return []
+    ours = set(api["devices"]) if api is not None else set(range(len(devices)))
+    api_name = str(api["name"]) if api is not None else ""
+    names: list[str] = []
+    for index, device in enumerate(devices):
+        name = str(device.get("name", ""))
+        if index not in ours or device.get("max_input_channels", 0) <= 0:
+            continue
+        if not name or name.startswith(_STAND_INS):
+            continue
+        setting = f"{name}, {api_name}" if api_name else name
+        if setting in names:
+            continue
+        if index == default:
+            names.insert(0, setting)
+        else:
+            names.append(setting)
+    return names
+
+
+_STAND_INS = ("Microsoft Sound Mapper", "Primary Sound Capture Driver")

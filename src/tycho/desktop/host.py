@@ -83,7 +83,7 @@ class Host:
 
     # The main thread.
 
-    def run(self, open_window: Callable[[], None] = lambda: None) -> None:
+    def run(self, open_window: Callable[[], object] = lambda: None) -> None:
         """Start the voice loop and serve the tray's requests until Tycho stops.
         Re-raises anything that ended the voice loop."""
         self._thread.start()

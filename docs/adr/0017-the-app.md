@@ -81,6 +81,7 @@ The app may do what voice can't: lengthen the confirm time, turn transcripts on,
 - Built so far (6 November 2026):
   - the threads and the tray icon (#126);
   - the window, the bridge, Status (the same checks as `tycho check`), Settings from the schema with the Tile's preview drawn by the Tile itself, and Keys.
+  - the first run (`tycho run` opens the window on setup when there's no push-to-talk or no game; Tycho starts when it's done), and push-to-talk, the microphone and the game folder changeable in Settings. The "say gear down" test waits for the voice loop to be running during setup.
 - Build order:
   1. the threads and the tray icon;
   2. the bridge and the first run;

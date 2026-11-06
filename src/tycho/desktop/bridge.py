@@ -15,13 +15,17 @@ stored and its last four characters.
 """
 
 import base64
+import dataclasses
 import io
 import logging
+import threading
+import time
 import typing
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
 
 from tycho import __version__, credentials, settings
+from tycho.desktop import setup
 from tycho.desktop.keys import KeyCheck
 from tycho.settings import Settings, SettingsError
 
@@ -51,6 +55,9 @@ SETUP_CHOICES = frozenset({"game_root", "push_to_talk", "microphone"})
 """Chosen with their own controls (a folder, a button press, a device), from setup."""
 KEYS: dict[str, str] = {"anthropic": "Anthropic", "elevenlabs": "ElevenLabs"}
 UNDO_DEPTH = 20
+DEVICES_SECONDS = 10.0
+"""How long the list of microphones is kept between redraws."""
+
 
 type Apply = Callable[[str, object], bool]
 """Applies a change in the running Tycho; False if it can't now (it applies at restart)."""
@@ -66,6 +73,10 @@ class Bridge:
         settings_path: Any = None,
         key_check: KeyCheck | None = None,
         ship_accent: Callable[[], str | None] = lambda: None,
+        pc: setup.SetupPC | None = None,
+        choose_folder: Callable[[], str | None] = lambda: None,
+        finish: Callable[[], None] = lambda: None,
+        first_run: bool = False,
     ) -> None:
         """``apply`` changes a setting in the running Tycho (the live callbacks);
         ``findings`` are the checks ``tycho check`` makes; ``key_check`` tries a key
@@ -75,12 +86,22 @@ class Bridge:
         self._path = settings_path
         self._key_check = key_check
         self._ship_accent = ship_accent
+        self._pc = pc or setup.WindowsPC()
+        self._cache: dict[str, tuple[object, object]] = {}
+        """Slow look-ups (the game, its keybinds, the devices), kept while their inputs
+        stay the same: each Next or redraw shouldn't search the disk again."""
+        self._choose_folder = choose_folder
+        self._finish = finish
+        self._first_run = first_run
+        self._capture = threading.Event()
+        """Set to stop a push-to-talk capture the player has left."""
         self._undo: list[tuple[str, object]] = []
 
     # --- reading ---------------------------------------------------------------------
 
     def about(self) -> dict[str, object]:
-        return {"version": __version__}
+        """``first_run``: Tycho is waiting for setup before it starts listening."""
+        return {"version": __version__, "first_run": self._first_run}
 
     def status(self) -> list[Mapping[str, str]]:
         """The same checks as ``tycho check``, quick ones only."""
@@ -248,6 +269,137 @@ class Bridge:
         except credentials.CredentialStoreError as e:
             return {"ok": False, "problem": str(e)}
         return {"ok": True, "removed": removed, "applies": "restart"}
+
+    # --- setup: the choices made with their own controls -------------------------------
+
+    def setup_state(self) -> dict[str, object]:
+        """Everything setup shows: the game, push-to-talk, the microphone, the keys."""
+        current = settings.load(self._path)
+        game = self._game(current)
+        ptt = current.push_to_talk
+        return {
+            "game": dataclasses.asdict(game),
+            "channels": list(_choices(Settings.model_fields["game_channel"].annotation)),
+            "push_to_talk": {
+                "set": ptt is not None,
+                "name": self._pc.name(ptt) if ptt else "",
+                "conflicts": self._conflicts(ptt, current) if ptt else [],
+            },
+            "microphone": {"setting": current.microphone or "", "devices": self._devices()},
+            "keys": self.keys(),
+            "ready": ptt is not None and game.found,
+        }
+
+    def set_channel(self, channel: object) -> dict[str, object]:
+        """Which version of the game: LIVE, PTU and so on."""
+        result, current = self._save_choice("game_channel", channel)
+        if current is not None:
+            result["game"] = dataclasses.asdict(self._game(current))
+        return result
+
+    def choose_game_folder(self) -> dict[str, object]:
+        """Pick the game's folder in Windows' own folder dialog."""
+        folder = self._choose_folder()
+        if not folder:
+            return {"ok": False, "cancelled": True}
+        channel = settings.load(self._path).game_channel
+        root = self._pc.root(folder, channel)
+        if root is None:
+            return {"ok": False, "problem": f"There's no {channel}\\Data.p4k in or under {folder}."}
+        result, current = self._save_choice("game_root", root)
+        if current is not None:
+            result["game"] = dataclasses.asdict(self._game(current))
+        return result
+
+    def capture_push_to_talk(self) -> dict[str, object]:
+        """Wait for the player to press the button they want, and save it."""
+        self._capture.set()  # one capture at a time: a new one replaces the last
+        self._capture = cancel = threading.Event()
+        found = self._pc.capture(setup.CAPTURE_SECONDS, cancel)
+        if cancel.is_set():
+            return {"ok": False, "cancelled": True}
+        if found is None:
+            seconds = round(setup.CAPTURE_SECONDS)
+            return {"ok": False, "problem": f"No button was pressed in {seconds} seconds."}
+        result, current = self._save_choice("push_to_talk", found)
+        if current is not None:
+            result["name"] = self._pc.name(found)
+            result["conflicts"] = self._conflicts(found, current)
+        return result
+
+    def cancel_capture(self) -> dict[str, object]:
+        """Stop waiting for a push-to-talk button: the player moved on. Otherwise the
+        next key they press (Ctrl+V into a key box, Alt+Tab) would be saved."""
+        self._capture.set()
+        return {"ok": True}
+
+    def set_microphone(self, name: object) -> dict[str, object]:
+        """A microphone from the list, empty for Windows' default, or the one already
+        saved (which may be a number, or unplugged now)."""
+        if not isinstance(name, str):
+            return {"ok": False, "problem": "That microphone isn't connected."}
+        saved = settings.load(self._path).microphone or ""
+        if name and name != saved and name not in self._devices(fresh=True):
+            return {"ok": False, "problem": "That microphone isn't connected."}
+        result, _ = self._save_choice("microphone", name or None)
+        return result
+
+    def microphone_level(self) -> dict[str, object]:
+        """A short listen to the chosen microphone."""
+        return self._pc.level(settings.load(self._path).microphone)
+
+    def finish_setup(self) -> dict[str, object]:
+        """Setup is done: on a first run, Tycho starts."""
+        current = settings.load(self._path)
+        missing = [
+            what
+            for what, ok in (
+                ("the game", self._game(current).found),
+                ("a push-to-talk button", current.push_to_talk is not None),
+            )
+            if not ok
+        ]
+        if missing:
+            return {"ok": False, "problem": f"Tycho still needs {' and '.join(missing)}."}
+        self._capture.set()
+        self._finish()
+        return {"ok": True, "first_run": self._first_run}
+
+    def _save_choice(self, name: str, value: object) -> tuple[dict[str, object], Settings | None]:
+        """A setup choice, saved; it applies when Tycho next starts. Also the settings
+        as saved, so the caller needn't read the file again."""
+        before = getattr(settings.load(self._path), name)
+        try:
+            current = settings.update({name: value}, self._path)
+        except SettingsError as e:
+            return {"ok": False, "problem": _plain(str(e))}, None
+        if getattr(current, name) != before:
+            self._undo = [*self._undo, (name, before)][-UNDO_DEPTH:]
+        return {"ok": True, "applies": "start" if self._first_run else "restart"}, current
+
+    # Slow look-ups, kept while their inputs are the same.
+
+    def _game(self, current: Settings) -> setup.Game:
+        key = (current.game_channel, str(current.game_root))
+        return cast(setup.Game, self._cached("game", key, lambda: self._pc.game(current)))
+
+    def _conflicts(self, ptt: str, current: Settings) -> list[str]:
+        key = (ptt, current.game_channel, str(current.game_root))
+        found = self._cached("conflicts", key, lambda: self._pc.conflicts(ptt, current))
+        return list(cast(list[str], found))
+
+    def _devices(self, fresh: bool = False) -> list[str]:
+        # Microphones come and go, so a new list each time setup is shown, not each click.
+        key = time.monotonic() // DEVICES_SECONDS if not fresh else time.monotonic()
+        return list(cast(list[str], self._cached("devices", key, self._pc.microphones)))
+
+    def _cached(self, what: str, key: object, look: Callable[[], object]) -> object:
+        hit = self._cache.get(what)
+        if hit is not None and hit[0] == key:
+            return hit[1]
+        value = look()
+        self._cache[what] = (key, value)
+        return value
 
 
 def _shown(name: str, value: object) -> object:
