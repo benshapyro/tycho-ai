@@ -74,3 +74,7 @@ What leaves the PC, for the README's list:
 - The brain and the voice are new boundaries (`Brain`, `Speaker`), each a Protocol with a fake, so the whole loop stays testable offline.
 - The action log records the brain's picks and its spoken line, so misroutes can be added to the eval (ADR 10).
 - Players need two keys for the full experience, and setup must explain both. Without either, Tycho is the 0.2 fast path.
+
+## Update, 6 November 2026: several tools in one reply
+
+Claude was asked for one tool a reply (`disable_parallel_tool_use`). In the play session that cost a call per look-up when a question needed two, and lost a fleet note said with a command ("I'm in my Pitbull, power off": the act ended the request first). Tool use is now parallel (#149, #156). Look-ups in one reply run together, and a fleet or settings note runs alongside an act, which waits up to a second for it. Only the first act in a reply is pressed, and every act is still checked and goes through the safety gate. It merges only after the brain eval shows no new wrong presses.
