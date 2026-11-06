@@ -40,6 +40,7 @@ if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when run
         Speaker,
         Transcriber,
     )
+    from tycho.runtime.instance import OpenRequests
     from tycho.spoken_settings import Live
     from tycho.stt.parakeet import ParakeetTranscriber
     from tycho.tile.display import TileDisplay
@@ -162,14 +163,28 @@ def credits_command() -> int:
 # --- tycho run -----------------------------------------------------------------------
 
 
+WINDOWED = False
+"""True in the Start menu's Tycho (tycho-app.exe, #146): no terminal, so nothing can be
+asked there, and a problem is shown in a message box (packaging/tycho_main.py)."""
+
+
 def run_command(current: Settings, *, verbose: bool = False, window: bool = True) -> int:
     from tycho.runtime import AlreadyRunning, SingleInstance
+    from tycho.runtime.instance import OpenRequests, ask_to_open
 
     log_file = logs.setup(verbose=verbose)
+    window = window and sys.platform == "win32"
     try:
         with SingleInstance():
-            return _run(current, log_file, window=window)
+            if not window:
+                return _run(current, log_file, window=False)
+            # Starting Tycho again (the Start menu) shows this one's window (#146).
+            with OpenRequests() as requests:
+                return _run(current, log_file, window=True, requests=requests)
     except AlreadyRunning as e:
+        if window and ask_to_open():
+            print("Tycho is already running: its window is open.")
+            return 0
         print(e, file=sys.stderr)
         return 1
     except KeyboardInterrupt:
@@ -181,15 +196,13 @@ def run_command(current: Settings, *, verbose: bool = False, window: bool = True
         return 1
 
 
-def _run(current: Settings, log_file: Path, *, window: bool = True) -> int:
-    from tycho.address import Address, Pronouncing
-    from tycho.audio.microphone import Microphone
-    from tycho.feedback import SoundDevicePlayer, SoundFeedback
-    from tycho.input.windows import WindowsFocusCheck, WindowsKeySender
-    from tycho.runtime.actionlog import FileActionLog
-    from tycho.tile.display import TileDisplay
-    from tycho.voice.elevenlabs import ElevenLabsSpeaker
-
+def _run(
+    current: Settings,
+    log_file: Path,
+    *,
+    window: bool = True,
+    requests: OpenRequests | None = None,
+) -> int:
     log.info("Tycho %s. Log file: %s", __version__, log_file)
     start_update_check(current)
     if window and sys.platform == "win32":
@@ -198,15 +211,46 @@ def _run(current: Settings, log_file: Path, *, window: bool = True) -> int:
         if needs_setup(current):
             # A first run (no push-to-talk, or no game): the window asks, not the terminal.
             log.info("Opening Tycho's window to set up")
-            outcome = first_run()
+            outcome = first_run(requests)
             if outcome == "closed":
                 print("Setup isn't finished, so Tycho isn't listening. Run it again to finish.")
+                return 1
+            if outcome == "no_window" and WINDOWED:
+                print(NO_WINDOW, file=sys.stderr)
                 return 1
             if outcome == "no_window":
                 # No window on this PC (no WebView2): set up in the terminal, as before.
                 print("Tycho's window can't open on this PC, so setup is here in the terminal.")
             current = settings.load()
+    starting = _Starting(requests) if WINDOWED else None
+    try:
+        return _start(current, window=window, requests=requests, starting=starting)
+    finally:
+        if starting is not None:
+            starting.close()
+
+
+def _start(
+    current: Settings,
+    *,
+    window: bool,
+    requests: OpenRequests | None,
+    starting: _Starting | None,
+) -> int:
+    """Everything after setup: the speech model, the keybinds, the Tile, the
+    microphone, then listening."""
+    from tycho.address import Address, Pronouncing
+    from tycho.audio.microphone import Microphone
+    from tycho.feedback import SoundDevicePlayer, SoundFeedback
+    from tycho.input.windows import WindowsFocusCheck, WindowsKeySender
+    from tycho.runtime.actionlog import FileActionLog
+    from tycho.tile.display import TileDisplay
+    from tycho.voice.elevenlabs import ElevenLabsSpeaker
+
     binding = current.push_to_talk_binding
+    if binding is None and WINDOWED:
+        print(NO_BUTTON, file=sys.stderr)  # there's no terminal to choose it in
+        return 1
     if binding is None:
         print("First, choose your push-to-talk button.")
         rebound = bind_command(current)
@@ -214,8 +258,10 @@ def _run(current: Settings, log_file: Path, *, window: bool = True) -> int:
             return 1
         current = rebound
 
+    if starting is not None:
+        starting.doing("Reading your keybinds")
     store = load_keybinds(current, binding)
-    transcriber = load_transcriber(current)
+    transcriber = load_transcriber(current, starting.doing if starting is not None else None)
     action_log = FileActionLog()
     log.info("Action log: %s", action_log.path)
     feedback = SoundFeedback(SoundDevicePlayer(), current.feedback_volume)
@@ -256,9 +302,12 @@ def _run(current: Settings, log_file: Path, *, window: bool = True) -> int:
         )
         live["confirm_seconds"] = lambda v: session.set_confirm_seconds(_float(v))
         log.info("Listening. Hold %s and speak; press Ctrl+C to stop.", describe(binding))
+        if starting is not None:
+            starting.close()  # the tray's own star takes its place
         try:
             if window and sys.platform == "win32":
-                serve_with_tray(session, store, live, display)
+                if not serve_with_tray(session, store, live, display, requests):
+                    return 1
             else:
                 asyncio.run(serve(session, store))
         finally:
@@ -270,11 +319,32 @@ def _run(current: Settings, log_file: Path, *, window: bool = True) -> int:
     return 0
 
 
+NO_WINDOW = (
+    "Tycho's window can't open on this PC: it needs Microsoft Edge WebView2, which "
+    "Windows 10 and 11 usually have. Install it from Microsoft "
+    "(go.microsoft.com/fwlink/p/?LinkId=2124703), or run `tycho run` in a terminal "
+    "to set up there."
+)
+NO_BUTTON = (
+    "Tycho has no push-to-talk button yet. Open Tycho and choose one in setup, or run "
+    "`tycho bind` in a terminal."
+)
+NO_TRAY = (
+    "Tycho couldn't put its icon by the clock ({why}), so it stopped: without it, there "
+    "would be no way to close it."
+)
+
+
 def serve_with_tray(
-    session: Session, store: KeybindStore, live: Live, display: TileDisplay | None
-) -> None:
+    session: Session,
+    store: KeybindStore,
+    live: Live,
+    display: TileDisplay | None,
+    requests: OpenRequests | None = None,
+) -> bool:
     """Run the session with Tycho's tray icon (ADR 17): pause, the Tile, the logs, quit.
-    Without a tray (it couldn't start), the terminal only, as before."""
+    Without a tray (it couldn't start), the terminal only, as before; with no terminal
+    either (the Start menu's Tycho), it stops, says why and returns False."""
     import os
 
     from tycho.desktop.host import Host
@@ -307,13 +377,22 @@ def serve_with_tray(
     tray = TrayIcon(menu.tip, menu.items, menu.chosen)
     menu.refresh = tray.refresh
     if not tray.start():
+        if WINDOWED:
+            log.error("No tray icon (%s), and no terminal: stopping", tray.failed)
+            print(NO_TRAY.format(why=tray.failed), file=sys.stderr)
+            return False
         log.warning("No tray icon (%s); press Ctrl+C to stop", tray.failed)
         asyncio.run(serve(session, store))
-        return
+        return True
+    if requests is not None:
+        requests.target = lambda: host.ask("open")
     try:
         host.run(window.open)
     finally:
+        if requests is not None:
+            requests.target = lambda: None
         tray.close()
+    return True
 
 
 def app_window(
@@ -349,12 +428,57 @@ def app_window(
     return window
 
 
+class _Starting:
+    """The Start menu's Tycho, between setup and listening (review of #157). The speech
+    model can take minutes to download, and nothing else shows: a star by the clock
+    says what's happening, and a second start says Tycho is still starting."""
+
+    def __init__(self, requests: OpenRequests | None) -> None:
+        from tycho.desktop.tray import Item, TrayIcon
+
+        self._now = "Starting"
+        self._tray: TrayIcon | None = TrayIcon(
+            lambda: f"Tycho: {self._now}…",
+            lambda: [Item("starting", f"{self._now}…", enabled=False)],
+            lambda _key: None,
+        )
+        if not self._tray.start():
+            self._tray = None
+        self._requests = requests
+        if requests is not None:
+            requests.target = self.say
+
+    def doing(self, now: str) -> None:
+        self._now = now
+        if self._tray is not None:
+            self._tray.refresh()
+
+    def say(self) -> None:
+        """A second start, while this one starts: on the event's thread, so waiting on
+        the box blocks nothing else."""
+        import ctypes
+
+        text = (
+            f"Tycho is still starting: {self._now.lower()}. Its window opens from the "
+            "star by the clock once it's listening."
+        )
+        ctypes.windll.user32.MessageBoxW(None, text, "Tycho", 0x40)  # MB_ICONINFORMATION
+
+    def close(self) -> None:
+        if self._requests is not None and self._requests.target == self.say:
+            self._requests.target = lambda: None
+        if self._tray is not None:
+            self._tray.close()
+            self._tray = None
+
+
 type FirstRun = Literal["done", "closed", "no_window"]
 
 
-def first_run() -> FirstRun:
+def first_run(requests: OpenRequests | None = None) -> FirstRun:
     """The window, on setup, before Tycho starts listening (ADR 17): "done" once the
-    player finishes it, "closed" if they close it first, "no_window" if it can't open."""
+    player finishes it, "closed" if they close it first, "no_window" if it can't open.
+    Starting Tycho again meanwhile brings this window forward."""
     import threading
 
     finished = threading.Event()
@@ -367,9 +491,15 @@ def first_run() -> FirstRun:
 
     window = app_window(first_run=True, finish=finish)
     opened.append(window)
-    with _ctrl_c(window.close):  # the main thread is inside the window: Ctrl+C closes it
-        if not window.open():
-            return "no_window"
+    if requests is not None:
+        requests.target = window.focus
+    try:
+        with _ctrl_c(window.close):  # the main thread is inside the window: Ctrl+C closes it
+            if not window.open():
+                return "no_window"
+    finally:
+        if requests is not None:
+            requests.target = lambda: None
     return "done" if finished.is_set() else "closed"
 
 
@@ -396,10 +526,15 @@ def load_keybinds(current: Settings, binding: Binding) -> KeybindStore:
     return store
 
 
-def load_transcriber(current: Settings) -> ParakeetTranscriber:
+def load_transcriber(
+    current: Settings, doing: Callable[[str], None] | None = None
+) -> ParakeetTranscriber:
+    """``doing`` hears what's happening, for the star of a Tycho with no terminal."""
     from tycho.stt.parakeet import ParakeetTranscriber
 
-    folder = ModelStore(paths.models_dir()).ensure(PARAKEET_V2, _download_progress())
+    folder = ModelStore(paths.models_dir()).ensure(PARAKEET_V2, _download_progress(doing=doing))
+    if doing is not None:
+        doing("Loading the speech model")
     choice = device_choice(current)
     log.info("Speech recognition on the %s: %s", _device_name(choice.device), choice.reason)
     started = time.monotonic()
@@ -788,8 +923,11 @@ async def _refresh_keybinds(store: KeybindStore) -> None:
         last_error = store.last_error
 
 
-def _download_progress(what: str = "the speech model") -> Callable[[str, int, int], None]:
-    """One line per file, updated in place, ending when the file is complete."""
+def _download_progress(
+    what: str = "the speech model", doing: Callable[[str], None] | None = None
+) -> Callable[[str, int, int], None]:
+    """One line per file, updated in place, ending when the file is complete; and, with
+    ``doing``, the same for the star's tooltip."""
     shown: dict[str, int] = {}
 
     def show(name: str, done: int, total: int) -> None:
@@ -801,6 +939,8 @@ def _download_progress(what: str = "the speech model") -> Callable[[str, int, in
         end = "\n" if done >= total else ""
         line = f"  Downloading {what}: {name} {percent:3d}% {size}"
         print("\r" + line, end=end, flush=True)  # \r: overwrite the line in place
+        if doing is not None and total > 1e8:  # the big file is the wait
+            doing(f"Getting {what} (2.5 GB, once): {percent}%")
 
     return show
 

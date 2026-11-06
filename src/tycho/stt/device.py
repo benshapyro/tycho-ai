@@ -97,6 +97,9 @@ def _smi(field: str) -> str | None:
             text=True,
             timeout=5,
             check=False,
+            # The Start menu's Tycho has no console: without this, each check flashes a
+            # console window, which can take focus from the game (review of #157).
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         return out.stdout.split()[0]
     except OSError, subprocess.TimeoutExpired, IndexError:

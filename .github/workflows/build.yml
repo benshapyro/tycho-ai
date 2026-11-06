@@ -58,6 +58,13 @@ jobs:
           }
           if ($out -notmatch "Settings") { throw "tycho check didn't run" }
           & $exe key --help | Out-Null
+          # The Start menu's Tycho (#146): built beside tycho.exe, with no console.
+          $app = "dist\tycho\tycho-app.exe"
+          if (-not (Test-Path $app)) { throw "tycho-app.exe is missing" }
+          $bytes = [System.IO.File]::ReadAllBytes($app)
+          $pe = [BitConverter]::ToInt32($bytes, 0x3C)
+          $subsystem = [BitConverter]::ToUInt16($bytes, $pe + 0x5C)
+          if ($subsystem -ne 2) { throw "tycho-app.exe isn't a windowed program (subsystem $subsystem)" }
           if ($LASTEXITCODE -ne 0) { throw "tycho key failed" }
 
       - name: Third-party notices, and nothing GPL or non-commercial
