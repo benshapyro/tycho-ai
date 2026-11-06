@@ -114,7 +114,7 @@ def test_raw_ore_is_priced_at_refineries() -> None:
 
 def test_the_lists_load_once_however_many_look_ups_ask() -> None:
     uex = FakeTradeUex()
-    prices, routes = trade_lookups(uex)
+    prices, routes, *_ = trade_lookups(uex)
 
     async def both() -> None:
         await asyncio.gather(prices.prepare(), routes.prepare())
@@ -142,13 +142,13 @@ def _run(lookup: Any, arguments: dict[str, Any]) -> tuple[bool, Any]:
 
 
 def _prices() -> CommodityPrices:
-    prices, _ = trade_lookups(FakeTradeUex())
+    prices, *_ = trade_lookups(FakeTradeUex())
     assert isinstance(prices, CommodityPrices)
     return prices
 
 
 def _routes(uex: FakeTradeUex | None = None) -> TradeRoutes:
-    _, routes = trade_lookups(uex or FakeTradeUex())
+    _, routes, *_ = trade_lookups(uex or FakeTradeUex())
     assert isinstance(routes, TradeRoutes)
     return routes
 
@@ -202,7 +202,7 @@ def test_routes_with_cargo_count_only_what_is_on_sale() -> None:
 
 def test_routes_from_a_station_ask_about_its_terminals() -> None:
     uex = FakeTradeUex()
-    _, routes = trade_lookups(uex)
+    _, routes, *_ = trade_lookups(uex)
     _, result = _run(routes, {"start": "ARC-L1", "commodity": "", "end": "", "cargo_scu": 0})
     assert [r["commodity"] for r in result["routes"]] == ["Quantainium"]
     assert ("/commodities_routes", {"id_terminal_origin": 1}) in uex.calls
@@ -223,7 +223,7 @@ def test_a_name_that_misses_is_an_answer_not_an_error() -> None:
     error, result = _run(_prices(), {"commodity": "unobtainium", "place": ""})
     assert not error
     assert "closest" in result["not_found"]
-    assert "closest names" in result["answer"]
+    assert "answer" not in result  # data only: how to say it is in the description
     error, result = _run(
         _routes(), {"start": "nowhere", "commodity": "", "end": "", "cargo_scu": 0}
     )
@@ -260,7 +260,7 @@ def test_an_assumed_match_names_the_others() -> None:
 def test_without_uex_it_says_so_and_tries_again_next_time() -> None:
     uex = FakeTradeUex()
     uex.offline = True
-    prices, _ = trade_lookups(uex)
+    prices, *_ = trade_lookups(uex)
     error, result = _run(prices, {"commodity": "laranite", "place": ""})
     assert error
     assert "can't be reached" in result["error"]
@@ -289,3 +289,23 @@ def test_a_start_and_a_commodity_ask_uex_once_and_keep_the_start() -> None:
     ]
     routes = [query for path, query in uex.calls if path == "/commodities_routes"]
     assert routes == [{"id_commodity": 47}]
+
+
+def test_a_commodity_that_fits_a_few_names_the_others(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review of #158: no test set also_matches, or asked when too many tie."""
+    trade = _trade()
+    commodity, others = trade.commodity_match("aranite")  # Laranite and Caranite tie
+    assert commodity.name in ("Laranite", "Caranite")
+    assert others
+    import tycho.knowledge.trade
+
+    monkeypatch.setattr(tycho.knowledge.trade, "GUESS_AMONG", 1)
+    with pytest.raises(TradeError, match="name one"):
+        trade.commodity_match("aranite")
+
+
+def test_a_guessed_end_is_named() -> None:
+    _, result = _run(
+        _routes(), {"start": "Hurston", "commodity": "", "end": "Lagrange", "cargo_scu": 0}
+    )
+    assert result["also_ends"]

@@ -305,3 +305,40 @@ def test_download_progress_reaches_the_star() -> None:
     show("encoder-model.onnx.data", 1_200_000_000, 2_400_000_000)
     show("vocab.txt", 10, 20)  # a small file isn't the wait
     assert seen == ["Getting the speech model (2.5 GB, once): 50%"]
+
+
+def test_a_crash_box_shows_tycho_s_last_words_not_the_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review of #170: the traceback, logged to the console handler, filled the box."""
+    import ctypes
+    import logging
+
+    entry = _entry_point()
+    shown: list[str] = []
+
+    def crashes(_argv: list[str]) -> int:
+        handler = logging.StreamHandler()  # as logs.setup's console handler: to the tail
+        logging.getLogger("tycho").addHandler(handler)
+        print("Loading the speech model")
+        raise ValueError("the model file is damaged")
+
+    class User32:
+        @staticmethod
+        def MessageBoxW(_owner: object, text: str, _title: str, _flags: int) -> int:
+            shown.append(text)
+            return 1
+
+    monkeypatch.setattr(app, "main", crashes)
+    monkeypatch.setattr(app, "WINDOWED", False)
+    monkeypatch.setattr(ctypes, "windll", type("Windll", (), {"user32": User32})())
+    monkeypatch.setattr(sys, "stdout", sys.stdout)
+    monkeypatch.setattr(sys, "stderr", sys.stderr)
+    try:
+        assert entry.windowed([]) == 1
+    finally:
+        logging.getLogger("tycho").handlers = [
+            h for h in logging.getLogger("tycho").handlers if type(h) is not logging.StreamHandler
+        ]
+    assert "Tycho stopped: the model file is damaged" in shown[0]
+    assert "Traceback" not in shown[0]
