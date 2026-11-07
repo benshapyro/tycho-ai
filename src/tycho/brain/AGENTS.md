@@ -1,0 +1,25 @@
+# The brain (ADR 14)
+
+Claude decides what to do with anything the fast path doesn't match. Its output is untrusted: it becomes commands that the safety gate checks. Read the root AGENTS.md first.
+
+## Files
+
+- `claude.py`: the adapter. One request is up to `MAX_CALLS` calls to Claude: look-ups run, their results go back, Claude carries on.
+- `decisions.py`: what Claude can decide (`RunActions`, `RunSequence`, `Reply`), `parse_tool_call`, and the errors.
+- `briefing.py`: the cached system prompt. It lists the player's bound actions.
+- `lookups.py`: the `Lookup` Protocol and `run_lookup`, which never raises.
+
+## Rules
+
+- **Never trust a pick.** Every action is checked against the bound set in `parse_tool_call`, and then by the safety gate. An unbound one is answered ("did you mean ...") and never pressed.
+- **Only the first act in a reply is pressed.** The stream is left there, so an act is as fast as possible. A fleet or settings note in the same reply (`instant`) waits up to `INSTANT_SECONDS`.
+- **Nothing presses after a web search.** Its results can't be checked, so `NO_PRESS_AFTER_SEARCH`.
+- **Keep the cache.** Every call sends the same tools and system prompt; the briefing is rebuilt only when the keybinds change. Changing the tools, `TOOL_CHOICE` or the briefing costs a cache write.
+- **A look-up may set** `seconds`, `from_the_web`, `instant` and `credit`, read with `getattr`: spell them exactly.
+- **A miss is an answer, not an error.** `is_error` makes Claude retry, and each retry costs about 1-1.5 s. Return `not_found` with the closest names instead.
+- **Don't take tools away on the last call.** Claude then wrote `show_card({...})` as text, and it was read aloud. `LAST_CALL` text tells it to answer now instead.
+
+## Testing
+
+- `tests/test_brain.py` scripts Claude's stream (`_Calls`, `_looks_up`, `_picks`, `_reply`). It needs no key.
+- Any change here should be judged by the eval, which is paid (about 10 cents a run, ask first): `uv run python tools/bench/tycho_eval.py`. The bar is zero wrong presses. Compare the mean calls a request and the acting p50 with the last run.

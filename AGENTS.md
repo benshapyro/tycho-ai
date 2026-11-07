@@ -2,6 +2,8 @@
 
 Instructions for AI coding agents working on Tycho, an unofficial voice co-pilot for Star Citizen. Read [docs/architecture.md](docs/architecture.md) for what we're building, and [docs/adr](docs/adr) for why.
 
+This is the one instructions file for every coding agent: Claude Code reads it directly (there's no CLAUDE.md), as do Codex, Cursor and others. Some folders have their own AGENTS.md with the rules for that part, read when you work there: `src/tycho/brain/`, `src/tycho/knowledge/`, `src/tycho/desktop/` and `tools/bench/`.
+
 ## Commands
 
 - Install: `uv sync`
