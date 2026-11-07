@@ -6,7 +6,7 @@
 
 Tycho turns natural speech into in-game actions, using your own keybinds. Hold push-to-talk and say what you want, the way you'd say it to a crewmate. Tycho presses the right keys, tells you what it did, and asks before doing anything you can't undo. It can also answer Star Citizen questions.
 
-**Status: pre-alpha (0.3).** Common commands run instantly on your PC. Claude handles everything said differently, plus questions, and Tycho answers aloud with an ElevenLabs voice. Anything you can't undo (ejecting, firing) waits for you to say "confirm". Install it with the installer from [Releases](https://github.com/benshapyro/tycho-ai/releases/latest), or from source with a terminal and about 15 minutes.
+**Status: pre-alpha (0.4).** Common commands run instantly on your PC. Claude handles everything said differently, plus questions, and Tycho answers aloud with an ElevenLabs voice. Anything you can't undo (ejecting, firing) waits for you to say "confirm". Install it with the installer from [Releases](https://github.com/benshapyro/tycho-ai/releases/latest), or from source with a terminal and about 15 minutes.
 
 ## Works today
 
