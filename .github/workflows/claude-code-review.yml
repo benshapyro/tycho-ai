@@ -61,8 +61,8 @@ jobs:
             BASE: origin/${{ github.event.pull_request.base.ref }}
 
             You are reviewing this pull request for bugs that would reach players. The PR's
-            branch is checked out with full history. AGENTS.md (which CLAUDE.md imports) has
-            the project's hard rules and conventions: read it first.
+            branch is checked out with full history. AGENTS.md has the project's hard rules
+            and conventions: read it first, and the AGENTS.md in any folder a change touches.
 
             1. Read the PR: `gh pr view <n>` and `gh pr diff <n>`, or
                `git diff BASE...HEAD`. Then read every changed file in full, and the code it

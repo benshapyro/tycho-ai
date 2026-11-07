@@ -24,7 +24,9 @@ datas = [
     *copy_metadata("tycho-ai"),
     # The app window's page (ADR 17) is HTML, CSS and JavaScript.
     *collect_data_files(
-        "tycho", includes=["**/*.toml", "**/*.txt", "**/*.md", "**/*.html", "**/*.css", "**/*.js"]
+        "tycho",
+        includes=["**/*.toml", "**/*.txt", "**/*.md", "**/*.html", "**/*.css", "**/*.js"],
+        excludes=["**/AGENTS.md"],  # guides for coding agents, not for players' installs
     ),
     *collect_data_files("onnx_asr", includes=["preprocessors/data/*"]),
     *collect_data_files("sdl2dll", includes=["dll/SDL2.dll"]),
