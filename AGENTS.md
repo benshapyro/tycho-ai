@@ -4,6 +4,8 @@ Instructions for AI coding agents working on Tycho, an unofficial voice co-pilot
 
 This is the one instructions file for every coding agent: Claude Code reads it directly (there's no CLAUDE.md), as do Codex, Cursor and others. Some folders have their own AGENTS.md with the rules for that part, read when you work there: `src/tycho/brain/`, `src/tycho/knowledge/`, `src/tycho/desktop/` and `tools/bench/`.
 
+**What to work on next:** the pinned roadmap issue, [#200](https://github.com/benshapyro/tycho-ai/issues/200) (`gh issue view 200`), lists the order of work by milestone. Read it before picking up an issue, and tick its line when you close one.
+
 ## Commands
 
 - Install: `uv sync`
