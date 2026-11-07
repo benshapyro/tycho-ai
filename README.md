@@ -18,7 +18,7 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
   - ships, from the current patch's game files;
   - trade prices and routes, live from UEX;
   - where to refine an ore, and where to buy a ship with aUEC, from UEX;
-  - where to mine a resource, from the current patch's game files;
+  - where to mine a resource, from the Star Citizen Wiki;
   - weapons, armor, components and crafting;
   - news and upcoming patches, from RSI's sites.
 - **Knows your fleet,** so "which of my ships is best for mining?" is about your ships.
