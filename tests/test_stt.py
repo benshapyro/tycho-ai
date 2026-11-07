@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from tycho.stt import ModelError, ModelFile, ModelSpec, ModelStore, choose_device
+from tycho.stt import ModelError, ModelFile, ModelSpec, ModelStore, choose_device, models
 from tycho.stt.device import smi_path
 from tycho.stt.models import HttpDownloader
 from tycho.stt.parakeet import Device, device_in_use
@@ -106,6 +106,57 @@ def test_files_already_present_are_hashed_once_not_downloaded(tmp_path: Path) ->
 def test_a_failed_download_gives_a_plain_message(tmp_path: Path) -> None:
     with pytest.raises(ModelError, match="internet connection"):
         ModelStore(tmp_path, FakeDownloader(fail=True)).ensure(_spec())
+
+
+def _free(monkeypatch: pytest.MonkeyPatch, free: int) -> None:
+    def usage(path: object) -> SimpleNamespace:
+        return SimpleNamespace(free=free)
+
+    monkeypatch.setattr(models.shutil, "disk_usage", usage)
+
+
+def test_no_room_for_the_model_is_said_before_downloading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    spec = _spec()
+    _free(monkeypatch, spec.size - 1)
+    downloader = FakeDownloader()
+    with pytest.raises(ModelError) as caught:
+        ModelStore(tmp_path, downloader).ensure(spec)
+    assert downloader.fetched == []
+    message = str(caught.value)
+    assert "The speech model needs about" in message
+    assert str(tmp_path / spec.folder) in message
+    assert "free some space" in message
+
+
+def test_a_partial_download_only_needs_room_for_the_rest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    spec = _spec()
+    folder = tmp_path / spec.folder
+    folder.mkdir(parents=True)
+    (folder / "a.onnx.part").write_bytes(CONTENT["a.onnx"][:500])
+    _free(monkeypatch, spec.size - 500)
+    ModelStore(tmp_path, FakeDownloader()).ensure(spec)
+    assert ModelStore(tmp_path).ready(spec)
+
+
+def test_a_model_already_there_needs_no_room(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    spec = _spec()
+    ModelStore(tmp_path, FakeDownloader()).ensure(spec)
+    _free(monkeypatch, 0)
+    ModelStore(tmp_path, FakeDownloader(fail=True)).ensure(spec)
+
+
+def test_sizes_are_said_in_units_a_player_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _free(monkeypatch, 40_000_000)
+    with pytest.raises(ModelError, match=r"about 2\.5 GB free in .*, and that drive has 40 MB;"):
+        models.check_space(tmp_path, 2_500_000_000, "The speech model needs")
 
 
 # --- The real downloader, against a local server -----------------------------------

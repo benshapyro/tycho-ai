@@ -9,6 +9,7 @@ modification time are recorded, and it's only hashed again if either changes.
 import hashlib
 import json
 import os
+import shutil
 import urllib.error
 import urllib.request
 from collections.abc import Callable
@@ -175,6 +176,24 @@ def wrong_download(name: str) -> str:
     )
 
 
+def check_space(folder: Path, needed: int, what: str) -> None:
+    """Raise ``ModelError`` if ``folder``'s drive has less than ``needed`` bytes free,
+    saying how much is needed, how much there is, and where (#187).
+
+    ``what`` starts the sentence and carries its verb: "The speech model needs".
+    """
+    free = shutil.disk_usage(folder).free
+    if free < needed:
+        raise ModelError(
+            f"{what} about {_gb(needed)} free in {folder}, and that drive has {_gb(free)}; "
+            "free some space and try again."
+        )
+
+
+def _gb(size: int) -> str:
+    return f"{size / 1e9:.1f} GB" if size >= 100_000_000 else f"{size / 1e6:.0f} MB"
+
+
 def _size(path: Path) -> int:
     try:
         return path.stat().st_size
@@ -214,7 +233,10 @@ class ModelStore:
         folder = self.folder(spec)
         try:
             folder.mkdir(parents=True, exist_ok=True)
-            for file in self.missing(spec):
+            missing = self.missing(spec)
+            if missing:
+                check_space(folder, _still_to_fetch(folder, missing), "The speech model needs")
+            for file in missing:
                 self._download(spec, file, folder, progress)
         except OSError as e:
             raise ModelError(
@@ -260,6 +282,16 @@ class ModelStore:
             return False
         checked[file.name] = [*stamp, file.sha256]
         return True
+
+
+def _still_to_fetch(folder: Path, missing: list[ModelFile]) -> int:
+    """Bytes the missing files will add. A partial download is kept and continued, and
+    each finished file is renamed into place, not copied, so it needs no room twice."""
+    total = 0
+    for file in missing:
+        have = _size(folder / f"{file.name}.part")
+        total += file.size - have if have <= file.size else file.size
+    return total
 
 
 def _stamp(path: Path) -> tuple[int, int]:
