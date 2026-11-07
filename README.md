@@ -17,12 +17,14 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
 - **Answers about the game:**
   - ships, from the current patch's game files;
   - trade prices and routes, live from UEX;
+  - where to refine an ore, and where to buy a ship with aUEC, from UEX;
+  - where to mine a resource, from the current patch's game files;
   - weapons, armor, components and crafting;
   - news and upcoming patches, from RSI's sites.
 - **Knows your fleet,** so "which of my ships is best for mining?" is about your ships.
 - **Settings by voice:** "turn your voice down a bit", "less time to confirm", "stop searching the web". "Undo" puts back the last change.
 - **Calls you what you like:** "Commander" by default, or "call me Ace", or nothing at all. It uses the name sparingly.
-- **The Tile:** a small see-through panel over the game for what's better read than heard: prices, routes, specs, recipes, steps, and the countdown when Tycho asks you to confirm. Its colour follows your ship. It needs Borderless Window mode, and hasn't been tried in a play session yet ([#2](https://github.com/benshapyro/tycho-ai/issues/2)).
+- **The Tile:** a small see-through panel over the game for what's better read than heard: prices, routes, specs, recipes, steps, and the countdown when Tycho asks you to confirm. Its colour follows your ship. It needs Borderless Window mode.
 - **Its own window and a tray icon:** a guided first run (the game, your push-to-talk button, a microphone test, your keys), Status, Settings, and Commands, where you see everything you can say and add your own phrases.
 - **A log of every key it pressed.**
 - **Speech recognition on your PC,** on the graphics card when it has room and on the processor otherwise.
