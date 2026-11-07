@@ -58,6 +58,11 @@ class AppWindow:
                 min_size=SMALLEST,
                 background_color=BACKGROUND,
             )
+            # Brought to the front once shown: opened from the tray or by a second start,
+            # Windows only flashed it on the taskbar (found trying the installed app).
+            events = getattr(self._window, "events", None)
+            if events is not None:
+                events.shown += self.focus
         try:
             webview.start(gui="edgechromium", private_mode=True)
         except Exception as e:  # no WebView2 runtime, or it failed: Tycho carries on
