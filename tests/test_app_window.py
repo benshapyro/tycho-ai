@@ -406,3 +406,54 @@ def test_closing_the_window_stops_a_capture(monkeypatch: pytest.MonkeyPatch, sta
     page = Page()
     assert window.AppWindow(page).open() is starts
     assert page.cancelled == 1
+
+
+def test_the_window_comes_to_the_front_once_shown(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Trying the installed app: a second start opened the window behind the others,
+    flashing on the taskbar. Once shown, it's raised as the tray's click raises it."""
+    from types import SimpleNamespace
+
+    raised: list[str] = []
+
+    class Shown:
+        def __init__(self) -> None:
+            self.handlers: list[Any] = []
+
+        def __iadd__(self, handler: Any) -> Shown:
+            self.handlers.append(handler)
+            return self
+
+    class Window:
+        def __init__(self) -> None:
+            self.events = SimpleNamespace(shown=Shown())
+
+        def restore(self) -> None:
+            raised.append("restore")
+
+        def show(self) -> None:
+            raised.append("show")
+
+        @property
+        def on_top(self) -> bool:
+            return False
+
+        @on_top.setter
+        def on_top(self, value: bool) -> None:
+            raised.append(f"on_top={value}")
+
+    made: list[Window] = []
+
+    def create_window(*_args: object, **_options: object) -> Window:
+        made.append(Window())
+        return made[-1]
+
+    def start(**_options: object) -> None:
+        for handler in made[-1].events.shown.handlers:
+            handler()  # pywebview calls it once the window is on screen
+
+    def import_module(_name: str) -> SimpleNamespace:
+        return SimpleNamespace(create_window=create_window, start=start)
+
+    monkeypatch.setattr(window, "importlib", SimpleNamespace(import_module=import_module))
+    assert window.AppWindow(SimpleNamespace()).open() is True
+    assert raised == ["restore", "show", "on_top=True", "on_top=False"]
