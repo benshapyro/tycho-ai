@@ -45,6 +45,9 @@ RETRY_SECONDS = 30.0
 tries again (#210): the failure may be brief, the game holding memory for a moment. Each
 failure after doubles the wait, up to ``RETRY_MOST``."""
 RETRY_MOST = 300.0
+_clock = time.monotonic
+"""The retry wait's clock, a name of this module's own so a test can set it here
+without changing ``time.monotonic`` for every thread (#216)."""
 
 
 class ParakeetTranscriber:
@@ -138,7 +141,7 @@ class ParakeetTranscriber:
                     "speech recognition is still switching to the processor"
                 )
             if self._broken:
-                if time.monotonic() < self._retry_at or self._folder is None:
+                if _clock() < self._retry_at or self._folder is None:
                     raise RecognitionUnavailable(self._broken)
                 retry = self._folder
             else:
@@ -192,12 +195,12 @@ class ParakeetTranscriber:
             with self._lock:
                 wait = self._wait
                 self._broken = f"speech recognition couldn't load on the processor ({reason})"
-                self._retry_at = time.monotonic() + wait
+                self._retry_at = _clock() + wait
                 self._wait = min(wait * 2, RETRY_MOST)
                 self._switching = None
             log.error(
-                "Couldn't load speech recognition on the processor (%s); trying again in "
-                "%.0f s, or restart Tycho",
+                "Couldn't load speech recognition on the processor (%s); the next request "
+                "after %.0f s tries again, or restart Tycho",
                 reason,
                 wait,
             )

@@ -210,6 +210,13 @@ def test_a_failed_request_never_names_what_was_searched() -> None:
     assert str(caught.value) == "/api/v2/items: HTTP 503"
 
 
+def test_a_client_can_be_closed() -> None:
+    # The bench tools make new clients each round and close them (#213).
+    client = httpx2.AsyncClient(transport=httpx2.MockTransport(lambda r: httpx2.Response(200)))
+    asyncio.run(WikiApi(client).aclose())
+    assert client.is_closed
+
+
 @pytest.mark.parametrize(
     ("said", "written"),
     [
