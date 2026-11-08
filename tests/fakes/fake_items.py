@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Mapping
 from typing import Any
 
+from tests.fakes.fake_wiki import FakeSearch
 from tycho.knowledge import WikiError
 
 
@@ -132,6 +133,7 @@ class FakeItemsWiki:
         self.slow = slow
         self.delay = delay
         self.offline = False
+        self.search = FakeSearch()
         self.calls: list[dict[str, Any]] = []
 
     async def get(self, path: str, params: Mapping[str, str | int] | None = None) -> Any:
@@ -139,13 +141,15 @@ class FakeItemsWiki:
         self.calls.append({"path": path, **query})
         if self.offline:
             raise WikiError(f"{path}: offline")
-        if path == "/api/v2/items":
+        if path == "/api/search":
+            return await self.search.answer(params)
+        if path == "/api/items":
             name = str(query.get("filter[name]", ""))
             if name in self.slow:
                 await asyncio.sleep(self.delay)
             found = [i for i in [*ITEMS, *self.extra] if name.lower() in i["name"].lower()]
             return {"data": found[: int(query.get("limit", 30))], "meta": {"total": len(found)}}
-        if path == "/api/v2/blueprints":
+        if path == "/api/blueprints":
             name = query.get("filter[output.name]")
             return {"data": [b for b in BLUEPRINTS if b["output_name"] == name]}
         raise WikiError(f"{path}: not found")

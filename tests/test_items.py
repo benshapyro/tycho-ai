@@ -9,9 +9,22 @@ import httpx2
 import pytest
 
 from tests.fakes.fake_items import FakeItemsWiki, item
+from tests.fakes.fake_wiki import search_answer
 from tycho.knowledge import WikiApi, WikiError, items
 from tycho.knowledge.item_lookup import ItemLookup
-from tycho.knowledge.items import Found, Items, Missing, Unclear, facts, spellings, spoken, swapped
+from tycho.knowledge.items import (
+    Found,
+    IsAShip,
+    Items,
+    Missing,
+    Unclear,
+    facts,
+    search_text,
+    spellings,
+    spoken,
+    swapped,
+)
+from tycho.knowledge.wiki import Hit, search
 
 # --- Names --------------------------------------------------------------------------------------
 
@@ -30,7 +43,7 @@ def test_a_name_is_tried_in_the_spellings_the_api_needs(said: str, tries: list[s
     assert spellings(said) == tries
 
 
-def _find(said: str, wiki: FakeItemsWiki | None = None) -> Found | Unclear | Missing:
+def _find(said: str, wiki: FakeItemsWiki | None = None) -> Found | Unclear | Missing | IsAShip:
     return asyncio.run(Items(wiki or FakeItemsWiki()).find(said))
 
 
@@ -93,7 +106,7 @@ def test_answers_are_reused_for_a_while() -> None:
         await found.find("Bulwark")
 
     asyncio.run(twice())
-    assert len(wiki.calls) == 1
+    assert sorted(c["path"] for c in wiki.calls) == ["/api/items", "/api/search"]  # once each
 
 
 # --- Facts --------------------------------------------------------------------------------------
@@ -206,8 +219,8 @@ def test_a_failed_request_never_names_what_was_searched() -> None:
     )
     api = WikiApi(client)
     with pytest.raises(WikiError) as caught:
-        asyncio.run(api.get("/api/v2/items", {"filter[name]": "my secret gun"}))
-    assert str(caught.value) == "/api/v2/items: HTTP 503"
+        asyncio.run(api.get("/api/items", {"filter[name]": "my secret gun"}))
+    assert str(caught.value) == "/api/items: HTTP 503"
 
 
 def test_a_client_can_be_closed() -> None:
@@ -254,3 +267,107 @@ def test_a_code_heard_in_the_right_order_beats_its_swapped_version() -> None:
     found = _find("F S nine", wiki)
     assert isinstance(found, Found)
     assert found.record["name"] == "FS-9 LMG"
+
+
+# --- The Wiki API's unified search (#153) -------------------------------------------------------
+
+
+def test_a_ship_asked_of_the_item_look_up_says_its_a_ship() -> None:
+    """Live, item_lookup("Cutlass Black") answered with the Cutlass Black Plushie."""
+    wiki = FakeItemsWiki(extra=[item("Cutlass Black Plushie", "Misc")])
+    found = _find("Cutlass Black", wiki)
+    assert found == IsAShip("Cutlass Black", "Drake Cutlass Black")
+    error, result = _run({"names": ["Cutlass Black"]}, wiki)
+    assert not error
+    assert result["items"] == [
+        {
+            "asked": "Cutlass Black",
+            "is_a_ship": "Drake Cutlass Black",
+            "note": "a ship, not an item: use ship_lookup with this name",
+        }
+    ]
+
+
+def test_a_miss_is_rescued_by_the_search(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Every spelling's query is slow (new to the API), but the search answers.
+    monkeypatch.setattr(items, "QUERY_SECONDS", 0.05)
+    found = _find("fs-9", FakeItemsWiki(slow=frozenset({"fs-9"})))
+    assert isinstance(found, Found)
+    assert found.record["name"] == "FS-9 LMG"
+
+
+def test_a_miss_offers_the_closest_names_the_search_found() -> None:
+    # No Gallant in these items, so the search's names are the closest.
+    found = _find("the Gallant")
+    assert isinstance(found, Missing)
+    assert found.closest[0] == "Gallant Rifle"
+    assert len(found.closest) == 3
+
+
+def test_a_slow_search_leaves_the_answer_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(items, "QUERY_SECONDS", 0.05)
+    wiki = FakeItemsWiki(extra=[item("Cutlass Black Plushie", "Misc")])
+    wiki.search.delay = 1.0
+    found = _find("Bulwark", wiki)
+    assert isinstance(found, Found)
+    assert found.record["name"] == "Bulwark"
+    assert _find("the Gallant", wiki) == Missing("the Gallant", ())
+
+
+def test_a_failed_search_is_still_an_answer_not_a_failure() -> None:
+    wiki = FakeItemsWiki()
+    wiki.search.down = True
+    error, result = _run({"names": ["Bulwark", "the Gallant"]}, wiki)
+    assert not error
+    bulwark, gallant = result["items"]
+    assert bulwark["name"] == "Bulwark"
+    assert gallant["error"] == "no item by that name in this patch's game files"
+
+
+def test_the_search_is_asked_for_the_name_as_the_game_writes_it() -> None:
+    assert search_text("the uh S F nine") == "sf-9"
+    assert search_text("Atlas quantum drive") == "atlas"  # the kind of item isn't in its name
+    assert search_text("quantum drive") == "quantum drive"  # unless that's all there is
+    assert search_text("Cutlass Black") == "cutlass black"
+
+
+class _Answers:
+    """A Wiki source that answers every request with ``answer``, noting the params."""
+
+    def __init__(self, answer: Any) -> None:
+        self.answer = answer
+        self.params: list[dict[str, Any]] = []
+
+    async def get(self, path: str, params: Any = None) -> Any:
+        self.params.append({"path": path, **(params or {})})
+        return self.answer
+
+
+def test_the_search_sends_only_what_the_api_accepts() -> None:
+    source = _Answers({"data": []})
+    assert asyncio.run(search(source, 'Gallant "Midnight" Rifle!')) == []
+    assert source.params == [{"path": "/api/search", "filter[query]": "Gallant Midnight Rifle"}]
+    assert asyncio.run(search(source, "a")) == []  # too short to ask
+    assert len(source.params) == 1
+
+
+def test_the_search_reads_each_group() -> None:
+    hits = asyncio.run(search(_Answers(search_answer("cutlass black")), "cutlass black"))
+    assert hits[0] == Hit("vehicles", "Drake Cutlass Black", "Multi-Role")
+    assert hits[-1] == Hit("items", "Cutlass Black Plushie", "Misc")
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        [],
+        {"data": {"type": "items"}},
+        {"data": [{"type": "items"}]},
+        {"data": [{"type": "items", "results": [{"name": None}]}]},
+        {"data": [{"type": "items", "results": ["Gallant"]}]},
+    ],
+)
+def test_a_surprising_search_answer_is_an_error_that_never_names_the_query(answer: Any) -> None:
+    with pytest.raises(WikiError) as caught:
+        asyncio.run(search(_Answers(answer), "my secret gun"))
+    assert "secret" not in str(caught.value)

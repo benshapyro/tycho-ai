@@ -6,6 +6,11 @@ the API can't send just names), so each question asks the API instead (Ben,
 2026-11-02). The API matches a name as a substring, exactly as written, so a name
 is tried in a few spellings at once ("fs9" as "fs-9", "arrow head" as "arrowhead",
 its most distinctive word alone), and the results are ranked here.
+
+The API's unified search is asked at the same time (#153). It finds ships too, so
+a ship asked of the item look-up ("Cutlass Black", whose plushie is an item) says
+it's a ship, and it can rescue a miss: an item its name fits, or the closest names
+across ships and items.
 """
 
 import asyncio
@@ -18,7 +23,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from tycho.knowledge.fresh import Fresh
-from tycho.knowledge.wiki import WikiError, WikiSource
+from tycho.knowledge.wiki import ITEM_KINDS, VEHICLES, Hit, WikiError, WikiSource, search
 from tycho.text import name_score, normalize
 
 log = logging.getLogger(__name__)
@@ -29,7 +34,10 @@ CHOICES = 3
 FRESH_SECONDS = 600.0
 PER_QUERY = 20
 QUERY_SECONDS = 2.5
-"""Each query's limit: a spelling or a recipe that takes longer is left out."""
+"""Each query's limit: a spelling, the search or a recipe that takes longer is left out."""
+FIND_SECONDS = 3.0
+"""A name's whole finding, fetching an item the search rescued included, so the
+recipe still has its QUERY_SECONDS inside item_lookup's 6 s."""
 FILLER = frozenset({"the", "a", "an", "my", "this", "that", "item", "uh", "um", "erm"})
 GENERIC = frozenset(
     {
@@ -86,22 +94,36 @@ class Missing:
     closest: tuple[str, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class IsAShip:
+    """The name is a ship's, at least as much as any item's: ship_lookup knows it."""
+
+    asked: str
+    ship: str
+
+
 class Items:
     """Finds items by what the player called them, with a short reuse of each answer."""
 
     def __init__(self, source: WikiSource, clock: Callable[[], float] = time.monotonic) -> None:
         self._source = source
+        self._clock = clock
         self._fetched: Fresh[Mapping[str, Any]] = Fresh(FRESH_SECONDS, clock)
+        self._searched: Fresh[list[Hit]] = Fresh(FRESH_SECONDS, clock)
 
-    async def find(self, asked: str) -> Found | Unclear | Missing:
+    async def find(self, asked: str) -> Found | Unclear | Missing | IsAShip:
         """Raises ``WikiError`` if the API can't be reached."""
+        started = self._clock()
         said = [spoken(asked), *swapped(asked)]
         words = [w for w in normalize(said[0]) if w not in FILLER]
         if not words:
             return Missing(asked, ())
         queries = list(dict.fromkeys(q for s in said for q in spellings(s)))
-        pages = await asyncio.gather(*(self._in_time(self._search(q)) for q in queries))
-        if all(page is None for page in pages):
+        hits, pages = await asyncio.gather(
+            self._in_time(self._hits(search_text(asked))),
+            asyncio.gather(*(self._in_time(self._search(q)) for q in queries)),
+        )
+        if all(page is None for page in pages) and not hits:
             raise WikiError("the Wiki API took too long or didn't answer")
         records: dict[str, Mapping[str, Any]] = {}
         for page in pages:
@@ -116,8 +138,14 @@ class Items:
             key=lambda pair: (-pair[0], len(str(pair[1].get("name") or ""))),
         )
         best = scored[0][0] if scored else 0.0
+        ranked = _ranked(readings, hits or [])
+        ships = [(score, hit) for score, hit in ranked if hit.kind == VEHICLES]
+        if ships and ships[0][0] >= MATCH and ships[0][0] >= best - TIE:
+            # "Cutlass Black" is the ship, not the Cutlass Black Plushie.
+            return IsAShip(asked, ships[0][1].name)
         if best < MATCH:
-            return Missing(asked, tuple(str(r.get("name")) for _, r in scored[:CHOICES]))
+            closest = [str(r.get("name")) for _, r in scored[:CHOICES]]
+            return await self._rescued(Missing(asked, tuple(closest)), readings, ranked, started)
         tied = [r for score, r in scored if score >= best - TIE]
         # A name exactly as heard wins over one exactly as a swapped version (#174):
         # "F S nine" is the FS-9, even with an SF-9 there too.
@@ -137,20 +165,45 @@ class Items:
         if not item.get("is_craftable"):
             return None
         data = await self._in_time(
-            self._get("/api/v2/blueprints", {"filter[output.name]": str(item["name"])})
+            self._get("/api/blueprints", {"filter[output.name]": str(item["name"])})
         )
         if data is None:
             return None
         rows = cast(list[Mapping[str, Any]], data.get("data") or [])
         return next((r for r in rows if r.get("output_name") == item["name"]), None)
 
-    async def _in_time[T](self, call: Awaitable[T]) -> T | None:
+    async def _rescued(
+        self,
+        missed: Missing,
+        readings: list[list[str]],
+        ranked: list[tuple[float, Hit]],
+        started: float,
+    ) -> Found | Unclear | Missing:
+        """A miss, rescued by the search where it can be: an item whose name fits,
+        else the closest names across items and ships."""
+        found = [(score, hit) for score, hit in ranked if hit.kind in ITEM_KINDS]
+        best = found[0][0] if found else 0.0
+        if best >= MATCH:
+            tied = list(dict.fromkeys(hit.name for score, hit in found if score >= best - TIE))
+            if len(tied) > 1:
+                return Unclear(missed.asked, tuple(tied[:CHOICES]))
+            left = min(QUERY_SECONDS, FIND_SECONDS - (self._clock() - started))
+            if left > 0 and (record := await self._in_time(self._record(tied[0]), left)):
+                return Found(record)
+        names = [*missed.closest, *(hit.name for _, hit in ranked)]
+        closest = sorted(
+            dict.fromkeys(names), key=lambda n: (-_score(readings, {"name": n}), len(n))
+        )
+        return Missing(missed.asked, tuple(closest[:CHOICES]))
+
+    async def _in_time[T](self, call: Awaitable[T], seconds: float | None = None) -> T | None:
         """``call``'s answer, or None if the API takes longer than ``QUERY_SECONDS``.
         The API is quick once it has seen a query, but a new one can take 10 s or more."""
+        seconds = QUERY_SECONDS if seconds is None else seconds
         try:
-            return await asyncio.wait_for(call, QUERY_SECONDS)
+            return await asyncio.wait_for(call, seconds)
         except TimeoutError:
-            log.debug("A Wiki API query took over %.1f s; going on without it", QUERY_SECONDS)
+            log.debug("A Wiki API query took over %.1f s; going on without it", seconds)
             return None
         except WikiError as e:
             # One spelling's query failing (a rate limit, say) doesn't fail the others.
@@ -159,10 +212,25 @@ class Items:
 
     async def _search(self, query: str) -> list[Mapping[str, Any]]:
         data = await self._get(
-            "/api/v2/items",
+            "/api/items",
             {"filter[name]": query, "filter[variants]": "false", "limit": PER_QUERY},
         )
         return cast(list[Mapping[str, Any]], data.get("data") or [])
+
+    async def _hits(self, query: str) -> list[Hit]:
+        if (hit := self._searched.get(query)) is not None:
+            return hit
+        hits = await search(self._source, query)
+        self._searched.keep(query, hits)
+        return hits
+
+    async def _record(self, name: str) -> Mapping[str, Any] | None:
+        """The item named exactly ``name``, variants too ("Gallant "Midnight" Rifle")."""
+        data = await self._get("/api/items", {"filter[name]": name, "limit": PER_QUERY})
+        rows = cast(list[Mapping[str, Any]], data.get("data") or [])
+        return next(
+            (r for r in rows if r.get("name") == name and r.get("type") not in NOT_ITEMS), None
+        )
 
     async def _get(self, path: str, params: Mapping[str, str | int]) -> Any:
         key = f"{path}?{sorted(params.items())}"
@@ -271,6 +339,30 @@ def spellings(asked: str) -> list[str]:
         if query and query.lower() not in (s.lower() for s in seen):
             seen.append(query)
     return seen
+
+
+def search_text(asked: str) -> str:
+    """What to ask the unified search for a name: as said, made written, without
+    filler or the words for the kind of item, and with model codes as the game
+    writes them ("S F nine" is "sf-9", "Atlas quantum drive" is "atlas"). The search
+    matches a substring, so one faithful phrase beats several loose ones."""
+    words = [w for w in normalize(spoken(asked)) if w not in FILLER]
+    words = [w for w in words if w not in GENERIC] or words
+    return _CODE.sub(r"\1-\2", " ".join(words))
+
+
+def _ranked(readings: list[list[str]], hits: list[Hit]) -> list[tuple[float, Hit]]:
+    """The search's ships and items, best fit first; liveries and cargo left out."""
+    kept = [
+        hit
+        for hit in hits
+        if hit.kind == VEHICLES or (hit.kind in ITEM_KINDS and hit.label not in NOT_ITEMS)
+    ]
+    return sorted(
+        ((_score(readings, {"name": hit.name}), hit) for hit in kept),
+        # A ship wins a tie: "Drake Cutlass Black" over the Cutlass Black Plushie.
+        key=lambda pair: (-pair[0], pair[1].kind != VEHICLES, len(pair[1].name)),
+    )
 
 
 def _readings(words: list[str]) -> list[list[str]]:

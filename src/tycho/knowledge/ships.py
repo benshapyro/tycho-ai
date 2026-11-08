@@ -9,6 +9,9 @@ equally well ("Constellation"), it says which, so Claude can ask or choose.
 
 Ships still in concept aren't in the game files; ``concepts_from_uex`` adds them
 from UEX, marked as not in the game, so "the Kraken" finds something true.
+
+A name that matches no ship may be an item's ("the Gallant"): ``rescued`` reads the
+Wiki API's unified search for it (#153).
 """
 
 from collections.abc import Iterable, Mapping
@@ -16,7 +19,9 @@ from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from typing import Any, cast
 
-from tycho.text import normalize, similarity
+from tycho.knowledge.items import GENERIC, NOT_ITEMS, search_text
+from tycho.knowledge.wiki import ITEM_KINDS, VEHICLES, Hit
+from tycho.text import name_score, normalize, similarity
 
 MATCH = 0.6
 """The lowest score that counts as a match; below it, the closest names are offered."""
@@ -118,6 +123,14 @@ class NotFound:
     closest: tuple[str, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class IsAnItem:
+    """No ship, but an item's name fits: item_lookup knows it."""
+
+    asked: str
+    item: str
+
+
 class ShipLibrary:
     """Every ship in one patch, in memory (a few hundred records)."""
 
@@ -210,11 +223,63 @@ class ShipLibrary:
         return "\n".join(lines)
 
 
-def answer(found: Ship | Ambiguous | NotFound) -> dict[str, object]:
+def searched(asked: str) -> str:
+    """What to ask the unified search for a ship's name: players' names made full
+    ("cutty black" is "cutlass black"), then as for an item."""
+    words: list[str] = []
+    for word in asked.split():
+        plain = normalize(word)
+        words += ALIASES.get(plain[0], (word,)) if len(plain) == 1 else (word,)
+    return search_text(" ".join(words))
+
+
+def rescued(
+    library: ShipLibrary, missed: NotFound, hits: Iterable[Hit]
+) -> Ship | IsAnItem | NotFound:
+    """A name no ship matched, read again with the search's ``hits``: the one ship
+    they name, else an item whose name fits, else the closest across both."""
+    hits = list(hits)
+    ships = {
+        ship.key: ship
+        for hit in hits
+        if hit.kind == VEHICLES and isinstance(ship := library.find(hit.name), Ship)
+    }
+    if len(ships) == 1:
+        return next(iter(ships.values()))
+    query = _query(missed.asked)
+    core = tuple(w for w in query if w not in GENERIC) or query
+
+    def fit(name: str) -> float:
+        # As for items: "Atlas quantum drive" is the Atlas, a touch less surely.
+        words = normalize(name)
+        return max(name_score(query, words), name_score(core, words) - 0.02)
+
+    items = sorted(
+        (
+            (fit(hit.name), hit.name)
+            for hit in hits
+            if hit.kind in ITEM_KINDS and hit.label not in NOT_ITEMS
+        ),
+        key=lambda pair: (-pair[0], len(pair[1])),
+    )
+    if items and items[0][0] >= MATCH:
+        return IsAnItem(missed.asked, items[0][1])
+    names = [*missed.closest, *(s.name for s in ships.values()), *(name for _, name in items)]
+    closest = sorted(dict.fromkeys(names), key=lambda n: (-fit(n), len(n)))
+    return replace(missed, closest=tuple(closest[:CHOICES]))
+
+
+def answer(found: Ship | Ambiguous | NotFound | IsAnItem) -> dict[str, object]:
     """What one name becomes in a look-up result."""
     match found:
         case Ship():
             return dict(found.facts)
+        case IsAnItem():
+            return {
+                "asked": found.asked,
+                "is_an_item": found.item,
+                "note": "an item, not a ship: use item_lookup with this name",
+            }
         case Ambiguous():
             more = f", and {found.more} more" if found.more else ""
             return {

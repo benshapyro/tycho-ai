@@ -14,10 +14,13 @@ from tycho.knowledge import Ambiguous, NotFound, Ship, ShipLibrary, ShipLookup, 
 from tycho.knowledge.ships import (
     concept_from_uex,
     concepts_from_uex,
+    rescued,
+    searched,
     ship_from_wiki,
     ships_from_wiki,
 )
 from tycho.knowledge.store import ShipDataError, ensure, file_for, load, save
+from tycho.knowledge.wiki import Hit
 
 FLEET = [
     vehicle("Constellation Mk IV Andromeda", game_name="RSI Constellation Mk IV Andromeda"),
@@ -55,7 +58,7 @@ CONCEPTS = [
 LIBRARY = ShipLibrary(ships_from_wiki(FLEET), version="4.10.2-LIVE.1", as_of="2026-11-01")
 
 
-def _name(found: Ship | Ambiguous | NotFound) -> str:
+def _name(found: object) -> str:
     assert isinstance(found, Ship), found
     return found.name
 
@@ -224,12 +227,12 @@ def test_it_downloads_once_per_patch(tmp_path: Path) -> None:
     wiki = FakeWiki(FLEET)
     first = asyncio.run(ensure(wiki, tmp_path, _today))
     assert len(first) == len(FLEET)
-    assert wiki.calls.count("/api/v2/vehicles") == 6  # 12 ships, 2 a page
+    assert wiki.calls.count("/api/vehicles") == 6  # 12 ships, 2 a page
     assert file_for(tmp_path, "4.10.2-LIVE.1").exists()
 
     wiki.calls.clear()
     again = asyncio.run(ensure(wiki, tmp_path, _today))
-    assert wiki.calls == ["/api/v2/game-versions"]  # the copy on disk is used
+    assert wiki.calls == ["/api/game-versions"]  # the copy on disk is used
     assert len(again) == len(FLEET)
 
 
@@ -272,7 +275,7 @@ def test_an_old_schema_is_downloaded_again(tmp_path: Path) -> None:
     db.close()
     wiki = FakeWiki(FLEET)
     asyncio.run(ensure(wiki, tmp_path, _today))
-    assert "/api/v2/vehicles" in wiki.calls
+    assert "/api/vehicles" in wiki.calls
 
 
 def test_data_that_cant_be_saved_is_used_until_restart(
@@ -356,6 +359,74 @@ def test_the_tool_schema_suits_strict_tool_use() -> None:
     assert schema["required"] == ["names"]
 
 
+# --- A miss, read again with the Wiki API's search (#153) ---------------------------------------
+
+
+def test_an_item_asked_of_the_ship_look_up_says_its_an_item() -> None:
+    """ADR 15's eval: "what's the DPS on the gallant" once got "no ship by that name"."""
+    wiki = FakeWiki(FLEET)
+    error, content = _run(ShipLookup(wiki, Path(), library=LIBRARY), {"names": ["the Gallant"]})
+    assert not error
+    assert content["ships"] == [
+        {
+            "asked": "the Gallant",
+            "is_an_item": "Gallant Rifle",
+            "note": "an item, not a ship: use item_lookup with this name",
+        }
+    ]
+    assert wiki.search.asked == ["gallant"]
+
+
+def test_a_ship_found_is_never_searched_for() -> None:
+    wiki = FakeWiki(FLEET)
+    _run(ShipLookup(wiki, Path(), library=LIBRARY), {"names": ["the Cat", "Connie"]})
+    assert wiki.search.asked == []
+
+
+def test_a_miss_the_search_finds_one_ship_for_is_that_ship() -> None:
+    # The search reads class names too, so it can find a ship the names alone miss.
+    library = ShipLibrary(ships_from_wiki(FLEET[:3]), version="4.10.2-LIVE.1", as_of="2026-11-01")
+    missed = NotFound("Andromeda GS", ())
+    hits = [Hit("vehicles", "RSI Constellation Mk IV Andromeda", "Multi-Role")]
+    assert _name(rescued(library, missed, hits)) == "Constellation Mk IV Andromeda"
+
+
+def test_a_miss_offers_the_closest_across_ships_and_items() -> None:
+    hits = [Hit("items", "Gallant Rifle", "FPS Weapon"), Hit("items", "Galant Paint", "Paints")]
+    found = rescued(LIBRARY, NotFound("Gallant Bomber", ("400i", "C1 Spirit")), hits)
+    assert isinstance(found, NotFound)
+    assert found.closest[0] == "Gallant Rifle"  # liveries are never items
+    assert "Galant Paint" not in found.closest
+
+
+def test_a_slow_search_leaves_the_miss_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ship_lookup, "SEARCH_SECONDS", 0.05)
+    wiki = FakeWiki(FLEET)
+    wiki.search.delay = 1.0
+    error, content = _run(ShipLookup(wiki, Path(), library=LIBRARY), {"names": ["the Gallant"]})
+    assert not error
+    assert content["ships"][0]["asked"] == "the Gallant"
+    assert "is_an_item" not in content["ships"][0]
+    assert "closest" in content["ships"][0]
+
+
+def test_a_failed_search_leaves_the_miss_as_it_was() -> None:
+    wiki = FakeWiki(FLEET)
+    wiki.search.down = True
+    error, content = _run(
+        ShipLookup(wiki, Path(), library=LIBRARY), {"names": ["the Gallant", "the Cat"]}
+    )
+    assert not error
+    gallant, cat = content["ships"]
+    assert "closest" in gallant
+    assert cat["cargo_scu"] == 576
+
+
+def test_a_ships_search_says_what_players_mean() -> None:
+    assert searched("the cutty black") == "cutlass black"
+    assert searched("FS-9") == "fs-9"
+
+
 # --- Ships still in concept --------------------------------------------------------------------
 
 
@@ -419,7 +490,7 @@ def test_without_uex_the_concepts_are_fetched_next_time_alone(tmp_path: Path) ->
     uex.offline = False
     wiki.calls.clear()
     again = asyncio.run(ensure(wiki, tmp_path, _today, concepts=uex))
-    assert wiki.calls == ["/api/v2/game-versions"]  # the game ships aren't downloaded again
+    assert wiki.calls == ["/api/game-versions"]  # the game ships aren't downloaded again
     assert again.concepts
     assert load(file_for(tmp_path, "4.10.2-LIVE.1")).concepts
 
