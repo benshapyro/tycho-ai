@@ -9,6 +9,7 @@ and quiet on purpose: they confirm, they don't announce.
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from typing import Protocol
 
 import numpy as np
@@ -57,12 +58,25 @@ class Player(Protocol):
 
 
 class SoundDevicePlayer:
-    """Plays on the Windows default output, without waiting. Satisfies ``Player``."""
+    """Plays on the Windows default output, without waiting. Satisfies ``Player``.
+
+    ``sd.play`` opens and starts a stream, which can take tens of milliseconds, so it
+    runs on a thread of its own, never on the event loop (#60). Sounds play in order."""
+
+    def __init__(self) -> None:
+        self._device = ThreadPoolExecutor(1, thread_name_prefix="tycho-feedback-sound")
 
     def play(self, samples: Samples, rate: int) -> None:
-        import sounddevice as sd  # pyright: ignore[reportMissingTypeStubs] - no type information
+        self._device.submit(_play_now, samples, rate)
 
+
+def _play_now(samples: Samples, rate: int) -> None:
+    import sounddevice as sd  # pyright: ignore[reportMissingTypeStubs] - no type information
+
+    try:
         sd.play(samples, rate)  # pyright: ignore[reportUnknownMemberType]
+    except Exception as e:  # PortAudio raises its own types; a sound must never stop Tycho
+        log.warning("Couldn't play a feedback sound: %s", e)
 
 
 class SoundFeedback:

@@ -1141,6 +1141,56 @@ def test_push_to_talk_stops_tycho_talking() -> None:
     assert speaker.closed
 
 
+def test_stopping_waits_for_the_brains_warm_up_and_closes_it() -> None:
+    """#60: the warm-up was cancelled but never awaited, and the brain never closed."""
+
+    class SlowWarm(FakeBrain):
+        cancelled = False
+
+        async def warm(self, keybinds: Keybinds) -> None:
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                await asyncio.sleep(0.01)  # cleaning up after itself
+                self.cancelled = True
+                raise
+
+    brain = SlowWarm()
+
+    async def scenario() -> None:
+        r = rig(brain=brain)
+        stop = asyncio.Event()
+        running = asyncio.create_task(r.session.run(stop))
+        await asyncio.sleep(0.01)
+        stop.set()
+        await running
+
+    run(scenario)
+    assert brain.cancelled  # finished before run returned
+    assert brain.closed
+
+
+def test_the_brain_is_warmed_again_for_new_keybinds() -> None:
+    """#60: after a rebind, the first request was about 3 s cold."""
+    brain = FakeBrain()
+    current = [KEYBINDS]
+
+    async def scenario() -> None:
+        r = rig(brain=brain, keybinds_now=lambda: current[0])
+        stop = asyncio.Event()
+        running = asyncio.create_task(r.session.run(stop))
+        await asyncio.sleep(0.01)
+        current[0] = _WITH_LIGHTS
+        r.session.warm_brain()
+        await asyncio.sleep(0.01)
+        stop.set()
+        await running
+        r.session.warm_brain()  # after closing: nothing
+
+    run(scenario)
+    assert brain.warmed_with == [KEYBINDS, _WITH_LIGHTS]
+
+
 def test_the_voice_connection_is_opened_while_the_brain_thinks() -> None:
     speaker = FakeSpeaker()
     _conversation(

@@ -228,6 +228,7 @@ class Session:
         self._fillers = itertools.cycle(FILLERS)
         self._checking = itertools.cycle(CHECKING)
         self._speech_warming: asyncio.Task[None] | None = None
+        self._brain_warming: asyncio.Task[None] | None = None
         self._recent: list[Exchange] = []
         self._recent_at = 0.0
         self._confirm_seconds = confirm_seconds
@@ -276,19 +277,24 @@ class Session:
         )
         poller.start()
         log.debug("Listening for push-to-talk on %s", self._ptt.binding)
-        warming = None
-        if self._brain is not None:
-            warming = asyncio.create_task(self._brain.warm(self._keybinds()))
-            warming.add_done_callback(_log_failure)
+        self.warm_brain()
         self._warm_speaker()
         try:
             await stop.wait()
         finally:
-            if warming is not None:
-                warming.cancel()
             halt.set()
             await asyncio.to_thread(poller.join, 1.0)
             await self.close()
+
+    def warm_brain(self) -> None:
+        """Warm the brain's cache in the background, at the start and after the keybinds
+        change (#60), so the next request isn't about 3 s cold. A failure is logged."""
+        if self._brain is None or self._closed:
+            return
+        if self._brain_warming is not None:
+            self._brain_warming.cancel()  # for the old keybinds
+        self._brain_warming = asyncio.create_task(self._brain.warm(self._keybinds()))
+        self._brain_warming.add_done_callback(_log_failure)
 
     def handle(self, edge: Edge) -> None:
         """React to push-to-talk. Runs on the event loop."""
@@ -349,8 +355,13 @@ class Session:
         await self.idle()
         if speech is not None:
             await asyncio.gather(speech, return_exceptions=True)
-        if self._speech_warming is not None:
-            self._speech_warming.cancel()
+        for warming in (self._speech_warming, self._brain_warming):
+            if warming is not None:
+                warming.cancel()
+                await asyncio.gather(warming, return_exceptions=True)
+        if self._brain is not None:
+            with contextlib.suppress(Exception):
+                await self._brain.close()
         if self._speaker is not None:
             with contextlib.suppress(Exception):
                 await self._speaker.close()
