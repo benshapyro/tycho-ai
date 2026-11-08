@@ -566,7 +566,8 @@ def test_the_real_settings_and_fleet_tools_are_instant() -> None:
 
 def test_each_look_up_is_told_to_the_session() -> None:
     """Review of #166: only the first moved the deadline, so a second look-up 4.6 s in
-    still ran out of time. The session says "Checking." once; the brain tells it each."""
+    still ran out of time. The brain says "Checking." once (#212), and tells the
+    session of each look-up so each moves the deadline."""
     looked: list[str] = []
     calls = [_looks_up(use_id=f"toolu_{n}") for n in range(2)]
     client = _Calls(*calls, ([], _final("Area 18.")))
@@ -1047,3 +1048,53 @@ def test_uex_said_with_dots_is_a_credit() -> None:
 def test_the_site_named_is_a_credit_too() -> None:
     client = _Calls(_looks_up("commodity_prices"), ([], _final("Per uexcorp.space, Orison.")))
     assert _ask(client, _Credited("commodity_prices")) == Reply("Per uexcorp.space, Orison.")
+
+
+def _refused_beside_a_look_up(seen: list[str], then: tuple[list[Any], Any]) -> Any:
+    """A request whose first reply has a look-up and an act naming an unbound action."""
+    first = _reply(
+        _tool_stop("ship_lookup", {"name": "Cutlass"}, "toolu_1"),
+        _tool_stop("run_actions", {"actions": ["v_unbound"], "say": "Done."}, "toolu_2"),
+    )
+    brain = ClaudeBrain(MATCHER, client=cast(Any, _Calls(first, then)), lookups=(FakeLookup(),))
+    request = BrainRequest(
+        "gear",
+        KEYBINDS,
+        looking=lambda: seen.append("looking"),
+        checking=lambda: seen.append("checking"),
+    )
+    return asyncio.run(brain.decide(request))
+
+
+def test_no_checking_line_just_before_a_press_after_a_refused_act() -> None:
+    """#214: the reply with the refused act ended without a press, so "Checking." was
+    said, and the next call pressed straight after it."""
+    seen: list[str] = []
+    decided = _refused_beside_a_look_up(seen, _picks(["v_toggle_landing_system"], "toolu_3"))
+    assert isinstance(decided, RunActions)
+    assert seen == ["looking"]
+
+
+def test_a_checking_line_held_back_isnt_said_late_before_the_answer() -> None:
+    """Review of #241: owed to the next reply, it played once the results were in, and
+    held the answer up by its own length."""
+    seen: list[str] = []
+    assert _refused_beside_a_look_up(seen, ([], _final("Gear's not bound."))) == Reply(
+        "Gear's not bound."
+    )
+    assert seen == ["looking"]
+
+
+def test_closing_the_brain_closes_its_look_ups() -> None:
+    """#240: a fetch that outlived its look-up was still pending when the loop closed."""
+
+    class Closing(FakeLookup):
+        closed = 0
+
+        async def close(self) -> None:
+            Closing.closed += 1
+
+    lent = _Client([], _final(""))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, lent), lookups=(Closing(), FakeLookup("plain")))
+    asyncio.run(brain.close())
+    assert Closing.closed == 1

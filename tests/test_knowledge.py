@@ -605,3 +605,19 @@ def test_the_ship_look_ups_item_can_still_lack_the_kind_said() -> None:
         LIBRARY, NotFound("Atlas quantum drive", ()), [Hit("items", "Atlas", "Quantum Drive")]
     )
     assert found == IsAnItem("Atlas quantum drive", "Atlas")
+
+
+def test_a_ship_look_up_cut_short_leaves_no_search_running() -> None:
+    """#240: the look-up's time limit cancels the run; its searches go with it, as
+    each is awaited directly, so a cancel reaches it."""
+    wiki = FakeWiki(FLEET)
+    wiki.search.delay = 10.0
+    lookup = ShipLookup(wiki, Path(), library=LIBRARY)
+
+    async def run() -> set[asyncio.Task[Any]]:
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(lookup.run({"names": ["the Odin"]}), 0.05)
+        await asyncio.sleep(0)
+        return {t for t in asyncio.all_tasks() if t is not asyncio.current_task() and not t.done()}
+
+    assert asyncio.run(run()) == set()

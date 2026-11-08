@@ -20,6 +20,7 @@ request at startup writes it, so the first real request is fast too.
 """
 
 import asyncio
+import contextlib
 import dataclasses
 import datetime
 import difflib
@@ -218,6 +219,10 @@ class ClaudeBrain:
         if self._preparing is not None and not self._preparing.done():
             self._preparing.cancel()
             await asyncio.gather(self._preparing, return_exceptions=True)
+        for lookup in self._lookups.values():  # fetches that outlived their look-up (#240)
+            if (close := getattr(lookup, "close", None)) is not None:
+                with contextlib.suppress(Exception):
+                    await close()
         if self._owns_client:
             await self._client.close()
 
@@ -385,7 +390,9 @@ class ClaudeBrain:
                                 )
                         return decided, None, []
                 message = await stream.get_final_message()
-            if checking and turn.checking is not None:
+            # Not beside a refused act: the next call may press (#214). Its look-up's
+            # line isn't owed later either: by the next reply's end, the results are in.
+            if checking and not turn.refused and turn.checking is not None:
                 turn.checking()
                 turn.checking = None  # once a request
         except BaseException:

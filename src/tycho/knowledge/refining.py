@@ -62,6 +62,9 @@ class _UexLookup:
     def __init__(self, trade: Trade) -> None:
         self._trade = trade
 
+    async def close(self) -> None:
+        await self._trade.close()
+
     async def prepare(self) -> None:
         """The trade look-ups load the shared lists; this only makes sure."""
         if not self._trade.ready:

@@ -243,6 +243,14 @@ class Trade:
             task.add_done_callback(lambda done: self._fetched_by(key, done))
         return await asyncio.shield(task)
 
+    async def close(self) -> None:
+        """Stop the fetches still on their way, so none is left when the loop closes
+        (#240). The look-ups that share this call it each; the second finds none."""
+        fetching = list(self._fetching.values())
+        for task in fetching:
+            task.cancel()
+        await asyncio.gather(*fetching, return_exceptions=True)
+
     async def _fetch(self, key: str, path: str, params: Mapping[str, int]) -> list[dict[str, Any]]:
         rows = await self._list(path, params)
         self._fetched.keep(key, rows)
