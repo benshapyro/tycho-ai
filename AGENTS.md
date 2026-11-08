@@ -23,6 +23,8 @@ Use `uv`. Never use `pip` or a bare `python`.
 
 All four of these pass: `ruff format --check`, `ruff check`, `pyright`, and `pytest`. New behaviour has tests.
 
+A change a player can notice also adds a line under **Unreleased** in `CHANGELOG.md`, in plain words, with its PR or issue. Anything that breaks an existing setup (a file that stops loading, a setting that changes meaning) says so first, with how to fix it.
+
 ## Hard rules
 
 - Never copy or port code from GPL-licensed projects, including Wingman AI. Tycho is Apache-2.0.

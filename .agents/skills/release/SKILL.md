@@ -21,6 +21,8 @@ git checkout -b release/<version>
 uv version <version> --no-sync      # updates pyproject.toml and uv.lock
 ```
 
+In the same PR, move everything under **Unreleased** in `CHANGELOG.md` to a new `## [<version>] - <YYYY-MM-DD>` section, leave **Unreleased** empty, and update the compare links at the bottom.
+
 Commit (`chore(release): <version>`), push, open a PR, wait for CI and the Claude review, and merge when the maintainer says so.
 
 ## 3. Take the installer CI built from main
@@ -37,6 +39,8 @@ The file name must carry the new version. Use the installer from the merge commi
 
 ## 4. Draft the release
 
+Start from the version's section in `CHANGELOG.md`: it lists what changed, in players' words, with links. If something merged since the last release is missing from it, add it there too. The notes then expand it for a reader who has never heard of Tycho.
+
 Write the notes for players, not developers. Assume the reader has never heard of Tycho and isn't technical: plain words, short sections, and a concrete example for each change (what you say, and what Tycho does). Explain any term (the Tile, push-to-talk) the first time it appears.
 
 - what's new since the last release, by what a player notices, most noticeable first; fixes and work behind the scenes go last, in a line or two;
@@ -49,7 +53,7 @@ Also, in the release PR, move anything this release ships from the README's **Co
 
 Before the release PR, check the open issues labelled `from-review` (`gh issue list --label from-review`): review findings that weren't blocking when their PR merged. Fix them, or ask the maintainer which may wait for the next release.
 
-`git log --oneline <last tag>..main` lists what changed. Then create the release as a draft:
+`git log --oneline <last tag>..main` lists what changed, to check the changelog against. Then create the release as a draft:
 
 ```
 gh release create v<version> <folder>/TychoSetup-<version>.exe --draft --target <merge commit sha> --title "Tycho <version>" --notes-file notes.md
