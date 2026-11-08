@@ -1725,24 +1725,91 @@ def test_say_that_again_repeats_what_the_brain_did_and_presses_nothing() -> None
     assert len(brain.asked) == 2
 
 
-def test_a_confirm_question_isnt_said_again_and_nothing_older_is_either() -> None:
-    """#226: the question was the last line, and the player's words have ended it (ADR
-    13), so neither it nor the answer before it is replayed, and confirm does nothing."""
+def _timed(*lines: tuple[str, float], **options: Any) -> Rig:
+    """Say each line after waiting its seconds, on a clock the test moves."""
+    now = [100.0]
+
+    async def scenario() -> Rig:
+        r = rig(*(line for line, _ in lines), clock=lambda: now[0], **options)
+        for _, wait in lines:
+            now[0] += wait
+            r.say()
+            await r.session.idle()
+        await r.session.close()
+        return r
+
+    return run(scenario)
+
+
+def test_say_that_again_asks_an_open_question_again_and_confirm_still_works() -> None:
+    """#226 (ADR 13, amended): the question is said again and stays open. Only the
+    confirm that follows presses anything, after the gate checks again."""
     speaker = FakeSpeaker()
     brain = FakeBrain(Reply("Best is Everus Harbor."))
     r = _conversation(
         "where to sell laranite", "eject", "say that again", "confirm", brain=brain, speaker=speaker
     )
-    assert [x.status for x in r.results] == [
-        "replied",
-        "asking",
-        "not_understood",
-        "not_understood",
-    ]
-    assert r.results[2].detail == "the question has ended"
+    assert [x.status for x in r.results] == ["replied", "asking", "asking", "done"]
+    assert r.results[2].commands == ("say_again",)
+    assert r.results[2].pressed == ()
     assert speaker.spoken[0] == "Best is Everus Harbor."
-    assert [line.endswith("Say confirm.") for line in speaker.spoken[1:]] == [True]
+    assert len(speaker.spoken) == 3
+    assert speaker.spoken[1] == speaker.spoken[2]
+    assert speaker.spoken[2].endswith("Say confirm.")
+    assert r.results[3].pressed == ("v_eject",)
+    assert r.results[3].confirmed
+    assert len(brain.asked) == 1
+
+
+def test_a_question_asked_again_waits_afresh() -> None:
+    r = _timed(("eject", 0.0), ("say that again", 4.0), ("confirm", 4.9))
+    assert [x.status for x in r.results] == ["asking", "asking", "done"]
+    assert r.results[2].pressed == ("v_eject",)
+
+
+def test_a_question_asked_again_still_expires() -> None:
+    r = _timed(("eject", 0.0), ("say that again", 4.0), ("confirm", 5.1))
+    assert r.results[2].detail == "the question expired"
     assert r.keys.events == []
+
+
+def test_an_expired_question_isnt_asked_again() -> None:
+    r = _timed(("eject", 0.0), ("say that again", 5.1), ("confirm", 0.1))
+    assert r.results[1].status == "not_understood"
+    assert r.results[1].detail == "the question expired"
+    assert r.results[2].detail == "nothing to confirm"
+    assert r.keys.events == []
+
+
+def test_an_answered_question_isnt_asked_again_and_nothing_older_is_either() -> None:
+    """Cancelled, the question was still the last line; it isn't replayed, and neither
+    is the answer before it."""
+    speaker = FakeSpeaker()
+    brain = FakeBrain(Reply("Best is Everus Harbor."))
+    r = _conversation(
+        "where to sell laranite",
+        "eject",
+        "cancel",
+        "say that again",
+        "confirm",
+        brain=brain,
+        speaker=speaker,
+    )
+    assert r.results[3].status == "not_understood"
+    assert r.results[3].detail == "the question has ended"
+    assert r.results[4].detail == "nothing to confirm"
+    assert len(speaker.spoken) == 2
+    assert r.keys.events == []
+
+
+def test_a_question_asked_again_goes_back_on_the_tile() -> None:
+    display = FakeDisplay()
+    _conversation("eject", "say that again", display=display)
+    asks = [c for c in display.calls if c.startswith("ask") or c == "answered"]
+    assert len(asks) == 3
+    assert asks[0] == asks[2]
+    assert asks[0].startswith("ask")
+    assert asks[1] == "answered"
 
 
 def test_clear_the_target_is_still_the_games() -> None:
