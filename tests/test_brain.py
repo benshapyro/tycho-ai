@@ -1075,12 +1075,14 @@ def test_no_checking_line_just_before_a_press_after_a_refused_act() -> None:
     assert seen == ["looking"]
 
 
-def test_checking_held_back_for_a_refused_act_is_said_by_the_next_answer() -> None:
+def test_a_checking_line_held_back_isnt_said_late_before_the_answer() -> None:
+    """Review of #241: owed to the next reply, it played once the results were in, and
+    held the answer up by its own length."""
     seen: list[str] = []
     assert _refused_beside_a_look_up(seen, ([], _final("Gear's not bound."))) == Reply(
         "Gear's not bound."
     )
-    assert seen == ["looking", "checking"]
+    assert seen == ["looking"]
 
 
 def test_closing_the_brain_closes_its_look_ups() -> None:
