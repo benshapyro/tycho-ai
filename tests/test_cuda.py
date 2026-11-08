@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from tycho import app
-from tycho.stt import ModelError, cuda
+from tycho.stt import ModelError, cuda, models
 from tycho.stt.cuda import CudaLibraries, Wheel
 
 
@@ -100,7 +100,7 @@ def test_no_connection_or_no_room_is_said_plainly(
     def full(path: object) -> SimpleNamespace:
         return SimpleNamespace(free=10)
 
-    monkeypatch.setattr(cuda.shutil, "disk_usage", full)
+    monkeypatch.setattr(models.shutil, "disk_usage", full)
     with pytest.raises(ModelError, match="GB free"):
         CudaLibraries(tmp_path / "other", FakeDownloader(wheels)).ensure()
 

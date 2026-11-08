@@ -960,6 +960,30 @@ def test_confirming_never_unlocks_a_shared_dangerous_key() -> None:
     assert not shared.ask
 
 
+@pytest.mark.parametrize(
+    ("danger", "refused"),
+    [
+        ("ralt", True),  # ralt goes down on its own before the x
+        ("lalt+ralt", False),  # lalt is never held for ralt+x
+        ("lshift", False),  # another modifier
+        ("x", False),  # the main key alone isn't pressed without ralt
+    ],
+)
+def test_a_modifier_pressed_on_its_own_counts_as_its_key(danger: str, refused: bool) -> None:
+    lights = _action("v_lights", "ralt+x")
+    keybinds = Keybinds([lights, _action("v_eject", danger)])
+    command = next(c for c in CommandMatcher.default().commands if c.actions == ("v_lights",))
+    verdict = safety.check(command, lights, keybinds)
+    assert verdict.allowed is not refused
+    assert ("v_eject" in verdict.reason) is refused
+
+
+def test_modifiers_bound_together_are_caught_when_the_press_holds_them_all() -> None:
+    lights = _action("v_lights", "lctrl+lalt+x")
+    keybinds = Keybinds([lights, _action("v_self_destruct", "lalt+lctrl")])
+    assert safety.shares_key_with_danger(lights, keybinds) is not None
+
+
 # --- The voice (ADR 14) ------------------------------------------------------------------
 
 _WITH_LIGHTS = Keybinds([*KEYBINDS, _action("v_lights", "l")], MODES)

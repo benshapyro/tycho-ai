@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from tycho.commands.matcher import Command
 from tycho.game.gamelog import QUANTUM_ROUTE
-from tycho.game.keybinds import Action, Keybinds
+from tycho.game.keybinds import MODIFIERS, Action, Keybinds, KeyInput
 from tycho.input.plan import pressable_input
 
 CONFIRM_GRADE = frozenset(
@@ -139,7 +139,8 @@ def shares_key_with_danger(
     command: Command | None = None,
     setup_done: int | None = None,
 ) -> Action | None:
-    """A confirm-grade action bound to the very key Tycho would press for ``action``.
+    """A confirm-grade action bound to the very key Tycho would press for ``action``, or
+    to modifiers alone that the press holds down on the way ("ralt" for "ralt+x").
 
     Ones in a control context that ``command``'s setup or requirements switch off
     don't count.
@@ -151,12 +152,21 @@ def shares_key_with_danger(
     for other in keybinds:
         if (
             other.name != action.name
-            and key in other.inputs
+            and any(_pressed_by(key, bound) for bound in other.inputs)
             and is_confirm_grade(other.name)
             and other.actionmap not in off
         ):
             return other
     return None
+
+
+def _pressed_by(press: KeyInput, bound: KeyInput) -> bool:
+    """Whether pressing ``press`` also presses ``bound``: the same input, or a binding of
+    modifiers only, all held for the press (the modifiers go down before the main key)."""
+    if bound == press:
+        return True
+    held = {bound.key, *bound.modifiers}
+    return held <= MODIFIERS and held <= set(press.modifiers)
 
 
 def switched_off(command: Command, setup_done: int | None = None) -> frozenset[str]:
