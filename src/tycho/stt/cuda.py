@@ -25,6 +25,7 @@ from tycho.stt.models import (
     HttpDownloader,
     ModelError,
     Progress,
+    check_space,
     fetch_whole,
     file_sha256,
     wrong_download,
@@ -122,11 +123,7 @@ class CudaLibraries:
             return self.dlls
         try:
             self.root.mkdir(parents=True, exist_ok=True)
-            if shutil.disk_usage(self.root).free < SPACE_NEEDED:
-                raise ModelError(
-                    f"The graphics card libraries need about {SPACE_NEEDED / 1e9:.1f} GB free "
-                    f"in {self.root}; free some space and try again."
-                )
+            check_space(self.root, SPACE_NEEDED, "The graphics card libraries need")
             self.dlls.mkdir(exist_ok=True)
             done = self._done()
             for wheel in WHEELS:
