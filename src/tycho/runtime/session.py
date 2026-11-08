@@ -10,7 +10,8 @@ flight, and a key sequence stops within about 10 ms with every key released.
 
 Confirm-grade requests are asked about (ADR 13): a question sound, then nothing
 is pressed unless the next thing the player says is "confirm", within a few
-seconds. Expiry is checked when they next speak; no timer acts on its own.
+seconds; "say that again" asks the question again and restarts the wait. Expiry
+is checked when they next speak; no timer acts on its own.
 
 What the fast path can't match goes to the brain (ADR 14), with the last few
 exchanges if they were recent. What it picks becomes commands, planned and gated
@@ -29,7 +30,7 @@ import threading
 import time
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from tycho import logs, safety
 from tycho.audio.clip import Samples, trim_silence
@@ -132,8 +133,8 @@ class _Line:
     voice. Kept whether or not the voice managed to say it."""
 
     text: str = ""
-    question: bool = False
-    """It was the safety gate's confirm question."""
+    question: int | None = None
+    """For the safety gate's confirm question: the request it asked about."""
 
 
 @dataclass(slots=True)
@@ -466,7 +467,8 @@ class Session:
 
         text = self._lexicon.correct(heard).text
         trace.mark("correct")
-        # A question lasts until the player next says something, whatever it is.
+        # A question lasts until the player next says something, whatever it is,
+        # except "say that again", which asks it again (ADR 13, amended for #226).
         question, self._question = self._question, None
         if question is not None and self._display is not None:
             self._display.answered()
@@ -476,7 +478,7 @@ class Session:
             return self._tile(request, tile, trace, heard, text)
         if is_say_again(text):
             trace.mark("match")
-            return self._say_again(request, trace, heard, text)
+            return self._say_again(request, trace, heard, text, question)
         if (reply := reply_to_question(text)) is not None:
             trace.mark("match")
             if question is None or self._clock() > question.deadline:
@@ -658,20 +660,45 @@ class Session:
             request, "not_understood", trace, heard, text, detail, progress=progress
         )
 
-    def _say_again(self, request: int, trace: Trace, heard: str, text: str) -> Result:
+    def _say_again(
+        self, request: int, trace: Trace, heard: str, text: str, question: _Question | None
+    ) -> Result:
         """The last line Tycho said, word for word, with no call to the brain (#222): an
         answer, or the line about what it did (#226). Only ever spoken: nothing is
         planned or pressed, and a card isn't redrawn (that's "show that again").
 
-        A confirm question isn't said again: the player's words have ended it (ADR 13),
-        and "Say confirm." would then ask for something that does nothing."""
+        A confirm question still open is asked again, and waits afresh for "confirm"
+        (ADR 13, amended for #226). One that expired or was answered isn't: "Say
+        confirm." would then ask for something that does nothing."""
         line = self._last_line
-        said = "" if line.question else line.text.strip()
-        progress = _Progress(commands=("say_again",), say=said)
-        if not said:
-            detail = "the question has ended" if line.question else "nothing to say again"
+        if line.question is not None:
+            progress = _Progress(commands=("say_again",))
+            if question is None or question.request != line.question:
+                detail = "the question has ended"
+            elif self._clock() > question.deadline:
+                detail = "the question expired"
+            else:
+                deadline = self._clock() + self._confirm_seconds
+                self._question = replace(question, deadline=deadline)
+                progress.question = line.text
+                detail = 'asked again: hold push-to-talk and say "confirm"'
+                return self._result(
+                    request, "asking", trace, heard, text, detail, progress=progress
+                )
             return self._result(
                 request, "not_understood", trace, heard, text, detail, progress=progress
+            )
+        said = line.text.strip()
+        progress = _Progress(commands=("say_again",), say=said)
+        if not said:
+            return self._result(
+                request,
+                "not_understood",
+                trace,
+                heard,
+                text,
+                "nothing to say again",
+                progress=progress,
             )
         return self._result(request, "done", trace, heard, text, progress=progress)
 
@@ -744,7 +771,7 @@ class Session:
             self._last_reply = (result.say, result.card)
         if result.commands != ("say_again",):  # a replay leaves the line it replayed
             if result.status == "asking" and result.question:
-                self._last_line = _Line(result.question, question=True)
+                self._last_line = _Line(result.question, question=result.request)
             elif self._would_speak(result):
                 self._last_line = _Line(result.say)
         self._to_tile(result)

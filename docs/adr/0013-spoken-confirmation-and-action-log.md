@@ -28,6 +28,7 @@ The author decided the grades on 2026-10-31. Powering off and opening or closing
 4. **Anything else said instead cancels the question.**
    - "Cancel", "abort", "negative", "belay that" or "never mind" cancel it and play "done".
    - Any other request also drops the question, then runs as usual. A question never outlives the next thing the player says.
+   - **Amended 2026-11-08 (author, [#226](https://github.com/benshapyro/tycho-ai/issues/226)):** the one exception is "say that again". It asks the open question again, in the gate's words, and the question waits afresh for "confirm" (5 seconds, or `confirm_seconds`). It presses nothing, and the confirmation still re-checks everything (point 5). A question that expired or was answered is never asked again.
 5. **A confirmation re-checks everything.** Tycho plans the request again with the keybinds as they are now, and runs every gate check except the question itself. If the keybinds changed in between and the press is no longer safe, it's refused.
 6. **The action log** is `%LOCALAPPDATA%\tycho\logs\actions.jsonl`.
    - It has one JSON line for each request that matched a command. Each line records:
