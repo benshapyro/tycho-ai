@@ -231,6 +231,21 @@ def test_the_say_that_again_cases_are_in_the_eval() -> None:
     assert any(c["expect"] == ["say_again"] for c in data["case"])
 
 
+def test_the_model_benchmarks_leave_out_the_say_that_again_cases(tmp_path: Path) -> None:
+    """Review of #225: jev_report and brain_report grade a model, which never sees them."""
+    _eval()  # puts tools/bench on the path
+    from brain_report import load_cases  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
+
+    cases_file = tmp_path / "cases.toml"
+    cases_file.write_text(
+        '[[case]]\nheard = "say that again"\nexpect = ["say_again"]\n\n'
+        '[[case]]\nheard = "gear down"\nexpect = ["actions"]\n',
+        "utf-8",
+    )
+    cases, _ = load_cases(cases_file, engine="")  # pyright: ignore[reportUnknownVariableType]
+    assert [c.heard for c in cases] == ["gear down"]  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+
+
 def _keybinds() -> object:
     from tests.test_runtime import KEYBINDS
 

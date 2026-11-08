@@ -97,7 +97,6 @@ SAY_AGAIN_WORDS = frozenset(
         "repeat that",
         "repeat it",
         "come again",
-        "what was that",
     }
 )
 """Asking to hear Tycho's last answer again (#222), Tile on or off. It's replayed word

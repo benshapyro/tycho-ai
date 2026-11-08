@@ -359,6 +359,8 @@ def load_cases(source: Path, engine: str) -> tuple[list[Case], Path]:
     if source.is_file():
         data: dict[str, Any] = tomllib.loads(source.read_text("utf-8"))
         raw: list[dict[str, Any]] = data["case"]
+        # "Say that again" is the session's (#222): no model sees it, so none is graded on it.
+        raw = [c for c in raw if c["expect"] != ["say_again"]]
         cases = [Case(c["heard"], c["heard"], c, str(c.get("tag", ""))) for c in raw]
         heard = [c.key for c in cases]
         if duplicates := sorted({h for h in heard if heard.count(h) > 1}):
