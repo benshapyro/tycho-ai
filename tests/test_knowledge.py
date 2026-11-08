@@ -405,7 +405,7 @@ def test_a_miss_the_search_finds_one_fitting_ship_for_is_that_ship() -> None:
 def test_the_ship_the_search_names_must_fit_the_words_as_said() -> None:
     """#221: the search is asked "mantis" for "Mantis gatling", and names the RSI
     Mantis, the ship the gun is named for. Asked of the ship look-up, it's the gun."""
-    fleet = [*FLEET, vehicle("Mantis", class_name="RSI_Mantis")]
+    fleet = [*FLEET, vehicle("Mantis", class_name="RSI_Mantis", game_name="RSI Mantis")]
     library = ShipLibrary(ships_from_wiki(fleet), version="4.10.2-LIVE.1", as_of="2026-11-01")
     wiki = FakeWiki(fleet)
     error, content = _run(ShipLookup(wiki, Path(), library=library), {"names": ["Mantis gatling"]})
