@@ -421,15 +421,23 @@ def test_a_ship_the_search_names_that_doesnt_fit_is_only_a_closest_name() -> Non
     assert found.closest == ("Caterpillar",)
 
 
-def test_a_ship_miss_asks_the_search_once_in_a_while() -> None:
+def test_a_ship_miss_asks_the_search_once() -> None:
     """#221: the search allows 60 requests a minute, and the same miss misses again."""
-    now = [0.0]
     wiki = FakeWiki(FLEET)
-    lookup = ShipLookup(wiki, Path(), library=LIBRARY, clock=lambda: now[0])
+    lookup = ShipLookup(wiki, Path(), library=LIBRARY)
     for _ in range(2):
         error, content = _run(lookup, {"names": ["the Odin"]})
         assert not error
         assert "closest" in content["ships"][0]
+    assert wiki.search.asked == ["odin"]
+
+
+def test_a_ship_miss_asks_the_search_again_after_a_while() -> None:
+    now = [0.0]
+    wiki = FakeWiki(FLEET)
+    lookup = ShipLookup(wiki, Path(), library=LIBRARY, clock=lambda: now[0])
+    _run(lookup, {"names": ["the Odin"]})
+    _run(lookup, {"names": ["the Odin"]})
     assert wiki.search.asked == ["odin"]
     now[0] += ship_lookup.FRESH_SECONDS
     _run(lookup, {"names": ["the Odin"]})
