@@ -74,28 +74,31 @@ GENERIC = frozenset(
 too common to search on alone, and not held against a name that lacks them."""
 NOT_ITEMS = frozenset({"Paints", "Cargo"})
 """Liveries and commodity boxes share names with items ("Arrow Headhunters Livery")."""
-KINDS: dict[str, str] = {
-    "pistol": "pistol",
-    "rifle": "rifle",
-    "sniper": "rifle",
-    "shotgun": "shotgun",
-    "scattergun": "ship gun",
-    "lmg": "lmg",
-    "smg": "smg",
-    "cannon": "ship gun",
-    "repeater": "ship gun",
-    "gatling": "ship gun",
-    "missile": "missile",
-    "torpedo": "missile",
-    "launcher": "launcher",
-    "decoy": "launcher",
-    "blade": "blade",
-    "model": "model",
-    "shield": "shield",
-    "cooler": "cooler",
-    "quantum": "quantum drive",
-    "helmet": "helmet",
-    "backpack": "backpack",
+_RIFLE = frozenset({"rifle"})
+_SHIP_GUN = frozenset({"ship gun"})
+KINDS: dict[str, frozenset[str]] = {
+    "pistol": frozenset({"pistol"}),
+    # Players call an LMG or an SMG a rifle ("FS-9 rifle"), so they're one kind.
+    "rifle": _RIFLE,
+    "sniper": _RIFLE,
+    "lmg": _RIFLE,
+    "smg": _RIFLE,
+    "shotgun": frozenset({"shotgun"}),
+    "scattergun": frozenset({"shotgun", "ship gun"}),
+    "cannon": _SHIP_GUN,
+    "repeater": _SHIP_GUN,
+    "gatling": _SHIP_GUN,
+    "missile": frozenset({"missile"}),
+    "torpedo": frozenset({"missile"}),
+    "launcher": frozenset({"launcher"}),
+    "decoy": frozenset({"launcher"}),
+    "blade": frozenset({"blade"}),
+    "model": frozenset({"model"}),
+    "shield": frozenset({"shield"}),
+    "cooler": frozenset({"cooler"}),
+    "quantum": frozenset({"quantum drive"}),
+    "helmet": frozenset({"helmet"}),
+    "backpack": frozenset({"backpack"}),
 }
 """Words that say one kind of item. Said, one counts against a name with another kind
 and none of the kinds said (#233): "Arrow pistol" isn't the Arrowhead Sniper Rifle nor
@@ -441,8 +444,8 @@ CLASH = MATCH - 0.1
 
 def clashes(said: Iterable[str], name: Iterable[str]) -> bool:
     """Whether the kind of item said and the kind ``name`` says differ (``KINDS``)."""
-    asked = {KINDS[w] for w in said if w in KINDS}
-    named = {KINDS[w] for w in name if w in KINDS}
+    asked = {kind for w in said for kind in KINDS.get(w, ())}
+    named = {kind for w in name for kind in KINDS.get(w, ())}
     return bool(asked and named and not asked & named)
 
 

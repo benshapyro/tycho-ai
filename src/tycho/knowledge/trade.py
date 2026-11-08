@@ -253,7 +253,7 @@ class Trade:
             del self._fetching[key]
         if not done.cancelled() and (e := done.exception()) is not None:
             # Read here, so a fetch nobody waited for to the end doesn't warn on exit.
-            log.debug("UEX %s failed after its look-up gave up: %s", key.split("?")[0], e)
+            log.debug("UEX %s failed: %s", key.split("?")[0], e)
 
     async def _list(
         self, path: str, params: Mapping[str, int] | None = None

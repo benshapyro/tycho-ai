@@ -402,6 +402,12 @@ def test_an_item_of_another_kind_than_the_one_said_is_not_a_match() -> None:
     assert "Arrowhead Sniper Rifle" in found.closest
 
 
+@pytest.mark.parametrize("said", ["FS-9 rifle", "fs9 smg", "Arrowhead rifle"])
+def test_a_near_kind_still_matches(said: str) -> None:
+    """Review of #239: an LMG called a rifle was a miss; players say it that way."""
+    assert isinstance(_find(said), Found), said
+
+
 def test_a_broad_word_for_the_kind_counts_against_nothing() -> None:
     assert isinstance(found := _find("Arrowhead gun"), Found), found
     assert found.record["name"] == "Arrowhead Sniper Rifle"
