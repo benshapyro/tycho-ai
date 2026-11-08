@@ -736,14 +736,30 @@ def gpu_command(action: str) -> int:
 BRAIN_KEY_HELP = f"{TYCHO} key set anthropic"
 
 
-def anthropic_key() -> str | None:
+def _stored_key(name: str, label: str, fix: str) -> str | None:
+    """The player's stored key, or None if there's none or it can't be used."""
     from tycho import credentials
 
     try:
-        return credentials.get("anthropic")
+        key = credentials.get(name)
     except credentials.CredentialStoreError as e:
-        log.warning("Couldn't read your Anthropic key: %s", e)
+        log.warning("Couldn't read your %s key: %s", label, e)
         return None
+    if key is not None and not key.isascii():
+        # A pasted zero-width space, say: it can't go in a request header, and would stop
+        # Tycho starting (#246, #248). Keys stored before `tycho key set` refused these.
+        log.warning(
+            "Your %s key has a character keys don't have, maybe an invisible one, "
+            "so Tycho can't use it. Store it again: %s",
+            label,
+            fix,
+        )
+        return None
+    return key
+
+
+def anthropic_key() -> str | None:
+    return _stored_key("anthropic", "Anthropic", BRAIN_KEY_HELP)
 
 
 def load_brain(
@@ -831,22 +847,7 @@ VOICE_KEY_HELP = f"{TYCHO} key set elevenlabs"
 
 
 def elevenlabs_key() -> str | None:
-    from tycho import credentials
-
-    try:
-        key = credentials.get("elevenlabs")
-    except credentials.CredentialStoreError as e:
-        log.warning("Couldn't read your ElevenLabs key: %s", e)
-        return None
-    if key is not None and not key.isascii():
-        # It can't go in a request header, and would stop Tycho starting (#246).
-        log.warning(
-            "Your ElevenLabs key has a character keys don't have, maybe an invisible one, "
-            "so Tycho can't use it. Store it again: %s",
-            VOICE_KEY_HELP,
-        )
-        return None
-    return key
+    return _stored_key("elevenlabs", "ElevenLabs", VOICE_KEY_HELP)
 
 
 _voice_now: Finding | None = None

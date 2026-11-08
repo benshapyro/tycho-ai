@@ -526,3 +526,27 @@ def test_the_starting_star_says_when_the_voice_is_being_checked(
     assert doing == ["Checking your voice"]
     assert app.load_speaker(settings.Settings(voice_volume=0), doing=doing.append) is None
     assert doing == ["Checking your voice"]
+
+
+def test_a_stored_anthropic_key_with_a_hidden_character_is_no_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Stored before `tycho key set` refused such a key, it went on to the SDK, which can't
+    # put it in a header (#248, from the #247 review). Now it counts as no key, with a warning.
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    def stored(name: str) -> str:
+        return "sk-ant-api03-" + "a" * 30 + "​"
+
+    monkeypatch.setattr(app.credentials, "get", stored)
+    with caplog.at_level(logging.WARNING, logger="tycho"):
+        assert app.anthropic_key() is None
+    assert "Anthropic key has a character keys don't have" in caplog.text
+    assert "tycho key set anthropic" in caplog.text
+    monkeypatch.setattr(app, "find_install", _no_game)
+    app.main(["check", "--quick", "--json"])
+    brain = {f["what"]: f for f in json.loads(capsys.readouterr().out)["findings"]}["Brain"]
+    assert brain["level"] == "warn"

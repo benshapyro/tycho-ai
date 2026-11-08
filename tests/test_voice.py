@@ -302,6 +302,15 @@ def test_the_start_check_never_raises_on_a_key_that_cant_be_sent() -> None:
     assert "character" in checked.reason
 
 
+def test_httpx2_refuses_a_header_with_a_hidden_character() -> None:
+    # What the stand-in above and elevenlabs_key() rely on: real headers raise for a
+    # zero-width space, before anything is sent (#248, from the #247 review).
+    with pytest.raises(UnicodeError):
+        httpx2.Request("GET", "https://api.elevenlabs.io/", headers={"xi-api-key": "sk_\u200b"})
+    with pytest.raises(UnicodeError):
+        httpx2.Headers({"x-api-key": "sk-ant-\u200b"}).raw  # noqa: B018
+
+
 def test_the_start_check_never_raises_offline() -> None:
     def get(url: str, **kwargs: Any) -> _Answer:
         raise httpx2.ConnectError("offline")
