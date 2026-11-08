@@ -517,20 +517,40 @@ def test_a_request_while_switching_to_the_processor_is_refused(
     assert transcriber.transcribe(_QUIET, 16_000) == "hello"
 
 
-def test_a_processor_copy_that_wont_load_says_why_each_time(
+def test_a_processor_copy_that_wont_load_says_why_then_tries_again(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """#210: a failed load mid-session was final until Tycho restarted, and its reason
+    was ONNX Runtime's whole error. Now it's one line, and a later request tries again."""
+    import tycho.stt.parakeet
     from tycho.stt.parakeet import ParakeetTranscriber
 
-    monkeypatch.setattr(ParakeetTranscriber, "_open", _gpu_then_cpu(0, [], _Model(fails=1)))
+    now = [0.0]
+    monkeypatch.setattr(tycho.stt.parakeet.time, "monotonic", lambda: now[0])
+    cpu = _Model(fails=2)  # the first load's warm-up, and the first retry's
+    monkeypatch.setattr(ParakeetTranscriber, "_open", _gpu_then_cpu(0, [], cpu))
     transcriber = ParakeetTranscriber.load(tmp_path, "gpu")
     transcriber._model.fails = 1  # type: ignore[union-attr]  # pyright: ignore[reportPrivateUsage, reportOptionalMemberAccess, reportAttributeAccessIssue]
     with pytest.raises(RecognitionUnavailable):
         transcriber.transcribe(_QUIET, 16_000)
     _switched(transcriber)
     for _ in range(2):
-        with pytest.raises(RecognitionUnavailable, match="couldn't load on the processor"):
+        with pytest.raises(RecognitionUnavailable, match="couldn't load on the processor") as e:
             transcriber.transcribe(_QUIET, 16_000)
+        assert "\n" not in str(e.value)
+        assert "Non-zero status code" in str(e.value)  # the first line only
+    now[0] = 31.0  # past the first wait: try again, and fail again
+    with pytest.raises(RecognitionUnavailable, match="still switching"):
+        transcriber.transcribe(_QUIET, 16_000)
+    _switched(transcriber)
+    now[0] = 61.0  # the wait has doubled: not yet
+    with pytest.raises(RecognitionUnavailable, match="couldn't load on the processor"):
+        transcriber.transcribe(_QUIET, 16_000)
+    now[0] = 92.0
+    with pytest.raises(RecognitionUnavailable, match="still switching"):
+        transcriber.transcribe(_QUIET, 16_000)
+    _switched(transcriber)
+    assert transcriber.transcribe(_QUIET, 16_000) == "hello"  # the game let go
 
 
 def test_a_processor_failure_is_a_plain_model_error(
