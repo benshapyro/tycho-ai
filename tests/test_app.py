@@ -373,3 +373,31 @@ def test_tycho_actions_finds_names_by_label_and_by_what_players_say(
     assert app.main(["actions", "gear", "down"]) == 0  # no label says "gear"
     assert "landing_gear_down: v_deploy_landing_system" in capsys.readouterr().out
     assert app.main(["actions", "zzqq"]) == 1
+
+
+def test_a_keybind_change_warms_the_brain_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#60: ``_refresh_keybinds`` never asked for a warm-up, so the first request after a
+    rebind was about 3 s cold. Only a change asks."""
+    import asyncio
+
+    monkeypatch.setattr(app, "KEYBIND_REFRESH_SECONDS", 0.0)
+    changes = iter([False, True, False])
+    store = SimpleNamespace(refresh=lambda: next(changes, False), last_error=None)
+    warmed: list[bool] = []
+
+    async def scenario() -> None:
+        changed = asyncio.Event()
+
+        def warm() -> None:
+            warmed.append(True)
+            changed.set()
+
+        refresher = asyncio.create_task(
+            app._refresh_keybinds(store, warm)  # pyright: ignore[reportPrivateUsage, reportArgumentType]
+        )
+        await changed.wait()
+        await asyncio.sleep(0.01)  # the third read, unchanged, asks for nothing
+        refresher.cancel()
+
+    asyncio.run(asyncio.wait_for(scenario(), 5))
+    assert warmed == [True]

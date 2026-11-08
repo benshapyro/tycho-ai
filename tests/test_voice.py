@@ -3,8 +3,12 @@
 import asyncio
 import json
 import os
+import sys
+import threading
+import types
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
+from typing import Any
 
 import httpx2
 import pytest
@@ -18,6 +22,7 @@ from tycho.voice.elevenlabs import (
     ElevenLabsSpeaker,
     _make_room,  # pyright: ignore[reportPrivateUsage]
 )
+from tycho.voice.playback import Sink, SoundDeviceSink
 
 
 class FakeSink:
@@ -82,6 +87,78 @@ def _audio(_: httpx2.Request) -> httpx2.Response:
 def _error(status: int, code: str) -> Callable[[httpx2.Request], httpx2.Response]:
     body = {"detail": {"status": code, "message": "no"}}
     return lambda _: httpx2.Response(status, json=body)
+
+
+def test_the_sound_card_is_opened_off_the_event_loop() -> None:
+    """#60: opening the speech stream can take tens of milliseconds."""
+    opened_on: list[int] = []
+    rig = Rig(_audio)
+    open_sink = rig.speaker._open_sink  # pyright: ignore[reportPrivateUsage]
+
+    def recording(rate: int, gain: float) -> Sink:
+        opened_on.append(threading.get_ident())
+        return open_sink(rate, gain)
+
+    rig.speaker._open_sink = recording  # pyright: ignore[reportPrivateUsage]
+
+    async def scenario() -> int:
+        await rig.speaker.speak("Lights off.")
+        return threading.get_ident()
+
+    loop_thread = asyncio.run(scenario())
+    assert opened_on
+    assert loop_thread not in opened_on
+    assert rig.sinks[0].closed
+
+
+class FakeStream:
+    """Stands in for ``sounddevice.RawOutputStream``, noting which thread calls it."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        self.calls: list[tuple[str, int]] = [("open", threading.get_ident())]
+        self.done = threading.Event()
+        STREAMS.append(self)
+
+    def start(self) -> None:
+        self.calls.append(("start", threading.get_ident()))
+
+    def abort(self, ignore_errors: bool = False) -> None:
+        self.calls.append(("abort", threading.get_ident()))
+
+    def close(self, ignore_errors: bool = False) -> None:
+        self.calls.append(("close", threading.get_ident()))
+        self.done.set()
+
+
+STREAMS: list[FakeStream] = []
+
+
+class _Stop(Exception):
+    pass
+
+
+def test_the_speech_stream_starts_and_closes_off_the_loop_and_stops_at_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = types.SimpleNamespace(RawOutputStream=FakeStream, CallbackStop=_Stop)
+    monkeypatch.setitem(sys.modules, "sounddevice", fake)
+    STREAMS.clear()
+    sink = SoundDeviceSink(RATE, head_start=0.0)
+
+    async def scenario() -> tuple[int, bytearray]:
+        sink.write(b"\x01\x00" * 4800)
+        sink.close()  # the player pressed push-to-talk
+        block = bytearray(b"\xff" * 640)
+        with pytest.raises(_Stop):  # the very next block is silence, and the last
+            sink._fill(block, 320, None, None)  # pyright: ignore[reportPrivateUsage]
+        return threading.get_ident(), block
+
+    loop_thread, block = asyncio.run(scenario())
+    assert block == bytearray(640)
+    (stream,) = STREAMS
+    assert stream.done.wait(5)
+    assert [name for name, _ in stream.calls] == ["open", "start", "abort", "close"]
+    assert all(thread != loop_thread for name, thread in stream.calls if name != "open")
 
 
 def test_a_line_is_streamed_to_the_sound_card_and_played_to_the_end() -> None:

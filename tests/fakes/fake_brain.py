@@ -25,9 +25,15 @@ class FakeBrain:
         self._look = look
         self.asked: list[BrainRequest] = []
         self.warmed = 0
+        self.warmed_with: list[Keybinds] = []
+        self.closed = False
 
     async def warm(self, keybinds: Keybinds) -> None:
         self.warmed += 1
+        self.warmed_with.append(keybinds)
+
+    async def close(self) -> None:
+        self.closed = True
 
     async def decide(self, request: BrainRequest) -> Decision:
         self.asked.append(request)

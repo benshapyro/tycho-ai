@@ -82,3 +82,27 @@ def test_the_volume_can_change_while_running() -> None:
     loud, quiet = (float(np.abs(s).max()) for s in player.played)
     assert quiet < loud / 4
     assert len(player.played) == 2  # silent: nothing played at zero
+
+
+def test_a_sound_never_blocks_the_caller(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#60: ``sd.play`` opens a stream, which is slow; it runs off the caller's thread."""
+    import sys
+    import threading
+    import types
+
+    from tycho.feedback import SoundDevicePlayer
+
+    release, played = threading.Event(), threading.Event()
+    on: list[str] = []
+
+    def play(samples: Samples, rate: int) -> None:
+        on.append(threading.current_thread().name)
+        release.wait(5)
+        played.set()
+
+    monkeypatch.setitem(sys.modules, "sounddevice", types.SimpleNamespace(play=play))
+    SoundDevicePlayer().play(done_sound(), SAMPLERATE)  # returns while the device is busy
+    assert not played.is_set()
+    release.set()
+    assert played.wait(5)
+    assert on != [threading.current_thread().name]

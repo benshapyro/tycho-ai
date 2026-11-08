@@ -917,7 +917,7 @@ async def serve(session: Session, store: KeybindStore, stop: asyncio.Event | Non
 
     stop = stop or asyncio.Event()
     loop = asyncio.get_running_loop()
-    refresher = asyncio.create_task(_refresh_keybinds(store))
+    refresher = asyncio.create_task(_refresh_keybinds(store, session.warm_brain))
 
     def request_stop() -> None:
         loop.call_soon_threadsafe(stop.set)
@@ -930,12 +930,15 @@ async def serve(session: Session, store: KeybindStore, stop: asyncio.Event | Non
             await asyncio.gather(refresher, return_exceptions=True)
 
 
-async def _refresh_keybinds(store: KeybindStore) -> None:
+async def _refresh_keybinds(store: KeybindStore, changed: Callable[[], None]) -> None:
+    """Reread the keybinds now and then; ``changed`` is called when they change, to warm
+    the brain's cache for the new briefing (#60)."""
     last_error: str | None = None
     while True:
         await asyncio.sleep(KEYBIND_REFRESH_SECONDS)
         if await asyncio.to_thread(store.refresh):
             log.info("Keybinds changed in game; using the new ones")
+            changed()
         if store.last_error and store.last_error != last_error:
             log.warning(
                 "Couldn't reread keybinds (%s); keeping the last good ones", store.last_error
