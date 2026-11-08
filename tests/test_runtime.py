@@ -1352,6 +1352,8 @@ class _TwoLookUps(FakeBrain):
             request.waiting()
         assert request.looking is not None
         request.looking()
+        if request.checking is not None:  # the brain says it once a request
+            request.checking()
         await asyncio.sleep(self._gap)
         request.looking()
         await asyncio.sleep(self._after)
@@ -1394,6 +1396,36 @@ def test_a_look_up_never_shortens_a_web_searchs_deadline() -> None:
         looking_seconds=0.05,
     )
     assert r.results[0].status == "replied"
+
+
+class _LookThenPress(FakeBrain):
+    """A look-up starts, then the reply ends in a key press, ``after`` seconds later."""
+
+    def __init__(self, after: float) -> None:
+        super().__init__()
+        self._after = after
+
+    async def decide(self, request: BrainRequest) -> Decision:
+        assert request.looking is not None
+        request.looking()  # the deadline moves at once; "Checking." is never asked for
+        await asyncio.sleep(self._after)
+        return RunActions(("v_toggle_landing_system",), "Gear.")
+
+
+def test_a_look_up_moves_the_deadline_without_saying_checking() -> None:
+    """#178: the deadline moves as the look-up starts, even past the usual deadline,
+    and "Checking." waits for the brain to say the reply won't end in a key press."""
+    speaker = FakeSpeaker()
+    r = _conversation(
+        "do the usual for this ship",
+        brain=_LookThenPress(0.3),
+        speaker=speaker,
+        brain_seconds=0.1,  # the press comes after the usual deadline
+        looking_seconds=2.0,
+    )
+    assert r.results[0].status == "done"
+    assert r.pressed() == _down_up("n")
+    assert not [line for line in speaker.spoken if line in CHECKING]
 
 
 class _LookThenSearch(FakeBrain):

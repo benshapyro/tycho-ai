@@ -68,9 +68,13 @@ class BrainRequest:
     """Called once if the answer will be slow (a web search has started), so the
     player hears a short line instead of silence (ADR 15)."""
     looking: Callable[[], None] | None = field(default=None, compare=False)
-    """Called as each other look-up starts (prices, a ship), so the player knows Tycho
-    heard them while it checks, and the wait for the answer allows for it (play
-    session, 6 November 2026)."""
+    """Called as each other look-up starts (prices, a ship), so the wait for the answer
+    allows for it (play session, 6 November 2026). At once, even if the reply then ends
+    in a key press: the press ends the request anyway (#178)."""
+    checking: Callable[[], None] | None = field(default=None, compare=False)
+    """Called at most once a request, when a reply with look-ups is known not to end in
+    a key press, so the player hears "Checking." while Tycho checks, and never just
+    before a press (#176, #178)."""
 
 
 class BrainError(Exception):
