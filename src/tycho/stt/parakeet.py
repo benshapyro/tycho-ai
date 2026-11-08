@@ -2,6 +2,8 @@
 
 import gc
 import logging
+import threading
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self
@@ -9,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal, Self
 import numpy as np
 
 from tycho.audio.clip import Samples
+from tycho.runtime.ports import RecognitionUnavailable
 from tycho.stt.models import PARAKEET_V2, ModelError
 
 if TYPE_CHECKING:
@@ -45,10 +48,15 @@ class ParakeetTranscriber:
     def __init__(
         self, model: TextResultsAsrAdapter, device: Device, folder: Path | None = None
     ) -> None:
-        self._model = model
+        self._model: TextResultsAsrAdapter | None = model
         self.device: Device = device
         self._folder = folder
         """Where the model is, to load it on the processor if the graphics card fails."""
+        self._lock = threading.Lock()
+        self._switching: threading.Thread | None = None
+        """The processor copy loading, after the graphics card failed mid-session."""
+        self._broken = ""
+        """Why the processor copy couldn't load: every request after says so."""
 
     @classmethod
     def load(cls, folder: Path, device: Device) -> Self:
@@ -56,18 +64,23 @@ class ParakeetTranscriber:
         won't start it, or fails on the warm-up: free memory is only a guess, and the game
         may take more between the check and the first run (Ben's run, 2026-11-03)."""
         if device == "gpu":
+            failure = ""
             try:
-                transcriber = cls._open(folder, "gpu")
-                transcriber._warm_up()
+                gpu = cls._open(folder, "gpu")
+                gpu._warm_up()
+                return gpu
             except Exception as e:  # ONNX Runtime raises its own unrelated exception types
-                log.warning(
-                    "The graphics card couldn't run speech recognition (%s); using the "
-                    "processor instead",
-                    _first_line(e),
-                )
-                gc.collect()  # let go of what the failed session holds on the card
-            else:
-                return transcriber
+                failure = _first_line(e)
+            # Out of the except block: the error's traceback, which holds the frames that
+            # hold the half-built GPU session, is gone. Drop our own reference too, then
+            # collect, so the card's memory is free before the CPU copy loads (#204).
+            gpu = None
+            gc.collect()
+            log.warning(
+                "The graphics card couldn't run speech recognition (%s); using the "
+                "processor instead",
+                failure,
+            )
         try:
             transcriber = cls._open(folder, "cpu")
             transcriber._warm_up()
@@ -107,28 +120,74 @@ class ParakeetTranscriber:
         return cls(model, device_in_use(model, device), folder)
 
     def transcribe(self, samples: Samples, samplerate: int) -> str:
+        """Raises ``RecognitionUnavailable`` when this request can't be heard: the graphics
+        card just failed, or the processor copy is still loading. The player says it
+        again; speech that old is never acted on (#204)."""
         if samplerate != SAMPLERATE:
             raise ValueError(f"Parakeet needs {SAMPLERATE} Hz audio, not {samplerate}")
+        with self._lock:
+            if self._switching is not None:
+                raise RecognitionUnavailable(
+                    "speech recognition is still switching to the processor"
+                )
+            if self._broken:
+                raise RecognitionUnavailable(self._broken)
+            model, device = self._model, self.device
+        failure, folder = "", self._folder
         try:
-            return self._recognize(samples)
+            return _recognize(model, samples)
         except Exception as e:
-            if self.device != "gpu" or self._folder is None:
+            if device != "gpu" or self._folder is None:
                 raise
-            # The game took the card's memory mid-session, or the driver reset: carry on
-            # on the processor for the rest of the session, and do this request there.
-            log.warning(
-                "Speech recognition failed on the graphics card (%s); using the processor "
-                "from now on",
-                _first_line(e),
+            failure, folder = _first_line(e), self._folder
+        # The game took the card's memory mid-session, or the driver reset. Fail this
+        # request now rather than load the CPU copy here (about 20 s) and then act on
+        # a command that old. Outside the except block, so the error's traceback, which
+        # holds the GPU session, is gone before the CPU copy starts loading.
+        log.warning(
+            "Speech recognition failed on the graphics card (%s); switching to the "
+            "processor, so say that again in a moment",
+            failure,
+        )
+        del model
+        self._move_to_processor(folder)
+        raise RecognitionUnavailable(
+            "speech recognition failed on the graphics card; switching to the processor"
+        )
+
+    def _move_to_processor(self, folder: Path) -> None:
+        """Load the CPU copy on a thread of its own, for the requests after this one."""
+        with self._lock:
+            self._model, self.device = None, "cpu"  # the GPU session's last reference
+            self._switching = threading.Thread(
+                target=self._load_processor, args=(folder,), name="tycho-stt-switch", daemon=True
             )
-            del self._model
-            gc.collect()
-            cpu = type(self)._open(self._folder, "cpu")
-            self._model, self.device = cpu._model, "cpu"
-            return self._recognize(samples)
+            self._switching.start()
+
+    def _load_processor(self, folder: Path) -> None:
+        gc.collect()  # let go of what the failed session holds on the card
+        started = time.perf_counter()
+        try:
+            cpu = type(self)._open(folder, "cpu")
+            cpu._warm_up()
+        except Exception as e:
+            log.error("Couldn't load speech recognition on the processor: %s", _first_line(e))
+            with self._lock:
+                self._broken = f"speech recognition couldn't load on the processor: {e}"
+                self._switching = None
+            return
+        with self._lock:
+            self._model, self._switching = cpu._model, None
+        log.info("Speech recognition is on the processor (%.0f s)", time.perf_counter() - started)
 
     def _recognize(self, samples: Samples) -> str:
-        return str(self._model.recognize(samples, sample_rate=SAMPLERATE)).strip()
+        return _recognize(self._model, samples)
+
+
+def _recognize(model: TextResultsAsrAdapter | None, samples: Samples) -> str:
+    if model is None:
+        raise RecognitionUnavailable("speech recognition isn't loaded")
+    return str(model.recognize(samples, sample_rate=SAMPLERATE)).strip()
 
 
 DECODER_FILE = "decoder_joint-model.onnx"

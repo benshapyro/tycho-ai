@@ -8,6 +8,7 @@ from tycho.runtime.ports import (
     Display,
     Feedback,
     GameState,
+    RecognitionUnavailable,
     Speaker,
     Transcriber,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "Display",
     "Feedback",
     "GameState",
+    "RecognitionUnavailable",
     "Result",
     "Session",
     "SingleInstance",

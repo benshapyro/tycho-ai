@@ -47,6 +47,7 @@ from tycho.runtime.ports import (
     Display,
     Feedback,
     GameState,
+    RecognitionUnavailable,
     Speaker,
     Transcriber,
 )
@@ -426,6 +427,8 @@ class Session:
             raise
         except AudioError as e:
             log.error("The microphone stopped working: %s", e)
+            result = self._result(request, "failed", trace, detail=str(e), progress=progress)
+        except RecognitionUnavailable as e:  # expected, and the transcriber says why: no traceback
             result = self._result(request, "failed", trace, detail=str(e), progress=progress)
         except Exception as e:  # one request's failure never stops the loop
             log.exception("Request %d failed", request)

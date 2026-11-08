@@ -8,8 +8,15 @@ from tycho.game.keybinds import Keybinds
 from tycho.tile import Card
 
 
+class RecognitionUnavailable(Exception):
+    """The transcriber can't hear this request right now (say, it's switching from the
+    graphics card to the processor). The request fails, the player hears the not-done
+    sound and says it again: Tycho never acts on speech it heard long ago (#204)."""
+
+
 class Transcriber(Protocol):
-    """Speech to text. Blocking; the session runs it on its own worker thread."""
+    """Speech to text. Blocking; the session runs it on its own worker thread. May raise
+    ``RecognitionUnavailable``."""
 
     def transcribe(self, samples: Samples, samplerate: int) -> str: ...
 
