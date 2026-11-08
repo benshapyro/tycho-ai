@@ -26,6 +26,7 @@ from tycho import paths
 from tycho.game.install import Channel
 from tycho.ptt.binding import Binding
 from tycho.tile.cards import ALL_KINDS
+from tycho.voice import voices
 
 CURRENT_VERSION = 1
 
@@ -40,6 +41,7 @@ type TileColour = Literal[
 ]
 type CardsAtOnce = Literal["one", "two"]
 type CardsStay = Literal["shorter", "normal", "longer"]
+type VoiceModel = Literal["the voice's own", "v4 turbo", "flash"]
 
 
 def _rule(voice: VoiceRule, applies: Applies = "restart", how: str = "") -> dict[str, Any]:
@@ -110,6 +112,19 @@ class Settings(BaseModel):
         le=1.0,
         description="Volume of Tycho's voice. Zero turns it off.",
         json_schema_extra=_rule("yes", "now"),
+    )
+    voice: str = Field(
+        default="George",
+        description="Tycho's ElevenLabs voice: George, Sarah, Lily, Brian, or a voice ID "
+        "from your ElevenLabs account. A voice you designed works only with your own key. "
+        "If your key can't use it, Tycho speaks as George and says so.",
+        json_schema_extra=_rule("no", how=FILE_OR_APP),
+    )
+    voice_model: VoiceModel = Field(
+        default="the voice's own",
+        description="The ElevenLabs model for the voice. The voice's own is Flash v2.5 for "
+        "George (quickest) and v4 Turbo for the rest. Both cost the same.",
+        json_schema_extra=_rule("no", how=FILE_OR_APP),
     )
     confirm_seconds: float = Field(
         default=5.0,
@@ -247,6 +262,17 @@ class Settings(BaseModel):
         if not NAME.fullmatch(value):
             raise ValueError(
                 "use up to 40 letters, digits, spaces, apostrophes, hyphens or full stops"
+            )
+        return value
+
+    @field_validator("voice")
+    @classmethod
+    def _known_voice(cls, value: str) -> str:
+        value = value.strip()
+        if not voices.is_voice(value):
+            raise ValueError(
+                "use George, Sarah, Lily, Brian, The Ship's Mind, or a 20-character "
+                "ElevenLabs voice ID"
             )
         return value
 

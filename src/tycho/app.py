@@ -23,6 +23,7 @@ from tycho.ptt.binding import Binding, DeviceKind
 from tycho.ptt.monitor import InputSource
 from tycho.settings import Settings, SettingsError
 from tycho.stt import PARAKEET_V2, DeviceChoice, ModelError, ModelStore
+from tycho.voice.voices import Voice
 
 if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when running
     from tycho.address import Address
@@ -247,6 +248,7 @@ def _start(
     from tycho.feedback import SoundDevicePlayer, SoundFeedback
     from tycho.input.windows import WindowsFocusCheck, WindowsKeySender
     from tycho.runtime.actionlog import FileActionLog
+    from tycho.tile.cards import notice
     from tycho.tile.display import TileDisplay
     from tycho.voice.elevenlabs import ElevenLabsSpeaker
 
@@ -268,7 +270,17 @@ def _start(
     action_log = FileActionLog()
     log.info("Action log: %s", action_log.path)
     feedback = SoundFeedback(SoundDevicePlayer(), current.feedback_volume)
-    voice = load_speaker(current)
+    told: list[str] = []
+    """The voice fell back to George (#242): shown on the Tile once it's up."""
+
+    def voice_fell_back(said: str) -> None:
+        if display is None:
+            told.append(said)
+        else:
+            display.show(notice(said))
+
+    display: TileDisplay | None = None
+    voice = load_speaker(current, voice_fell_back)
     address = Address.from_settings(current)
     speaker = Pronouncing(voice, address) if voice is not None else None
     # What a setting changed by voice changes in the running session (#111). A name
@@ -279,13 +291,14 @@ def _start(
     for name in ("call_me", "call_me_says", "call_me_how_often"):
         live[name] = lambda v, name=name: address.set(name, v)
     # The Tile (ADR 16): a window of its own, never anything in the game.
-    display: TileDisplay | None = TileDisplay(current)
-    if not display.start():
-        display = None
-    else:
+    tile = TileDisplay(current)
+    if tile.start():
+        display = tile
+        for said in told:
+            display.show(notice(said))
         for name in Settings.model_fields:
             if name == "tile" or name.startswith("tile_"):
-                live[name] = lambda v, name=name: display.change(name, v)
+                live[name] = lambda v, name=name: tile.change(name, v)
     with Microphone(device=microphone_device(current.microphone)) as mic:
         log.info("Microphone: %s", mic.name)
         session = build_session(
@@ -825,9 +838,39 @@ def elevenlabs_key() -> str | None:
         return None
 
 
-def load_speaker(current: Settings) -> Speaker | None:
+_voice_now: Finding | None = None
+"""The voice the running Tycho speaks with, for the window's status (#242). None until
+``load_speaker`` has chosen one."""
+
+
+def choose_voice(current: Settings, key: str) -> tuple[Voice, Finding]:
+    """The voice to speak with, asking ElevenLabs (free) whether the player's key can
+    use the one they chose; George on Flash if it can't (ADR 9, #242)."""
+    from tycho.voice import voices
+
+    chosen = voices.choose(current.voice, current.voice_model)
+    checked = voices.check(key, chosen)
+    if checked.availability == "missing" and (instead := voices.fallback(chosen)):
+        detail = (
+            f"{checked.reason}, so Tycho speaks as {instead.describe()}. "
+            "Set voice to one your account has."
+        )
+        return instead, Finding("warn", "Voice", detail, fix=f"voice in {paths.settings_file()}")
+    if checked.availability == "available":
+        return chosen, Finding("ok", "Voice", f"ElevenLabs, {chosen.describe()}")
+    return chosen, Finding(
+        "ok", "Voice", f"ElevenLabs, {chosen.describe()} ({checked.reason or 'not checked'})"
+    )
+
+
+def load_speaker(
+    current: Settings, on_fallback: Callable[[str], None] = lambda _said: None
+) -> Speaker | None:
     """ElevenLabs, if the player has stored a key and the voice isn't turned off.
-    Without it, Tycho's replies are shown in its window and it plays its sounds."""
+    Without it, Tycho's replies are shown in its window and it plays its sounds.
+    ``on_fallback`` is told, in words for the player, when their voice isn't available
+    and Tycho speaks as George instead: at start, or later in the session."""
+    global _voice_now
     if current.voice_volume == 0:
         log.info("Voice: off (voice_volume is 0)")
         return None
@@ -837,12 +880,32 @@ def load_speaker(current: Settings) -> Speaker | None:
             "No ElevenLabs key, so Tycho's replies are shown here. Add one: %s", VOICE_KEY_HELP
         )
         return None
-    from tycho.voice.elevenlabs import MODEL, ElevenLabsSpeaker
+    from tycho.voice.elevenlabs import ElevenLabsSpeaker
 
-    log.info("Voice: ElevenLabs %s, The Ship's Mind", MODEL)
-    from tycho import paths
+    voice, finding = choose_voice(current, key)
+    _voice_now = finding
+    if finding.level == "warn":
+        log.warning("Voice: %s", finding.detail)
+        on_fallback(finding.detail)
+    else:
+        log.info("Voice: %s", finding.detail)
 
-    return ElevenLabsSpeaker(api_key=key, volume=current.voice_volume, kept=paths.voice_dir())
+    def fell_back(gone: Voice, used: Voice) -> None:
+        global _voice_now
+        said = (
+            f"{gone.name} isn't available to your ElevenLabs key, so Tycho speaks as "
+            f"{used.describe()}. Set voice to one your account has."
+        )
+        _voice_now = Finding("warn", "Voice", said, fix=f"voice in {paths.settings_file()}")
+        on_fallback(said)
+
+    return ElevenLabsSpeaker(
+        api_key=key,
+        voice=voice,
+        volume=current.voice_volume,
+        kept=paths.voice_dir(),
+        on_fallback=fell_back,
+    )
 
 
 def load_commands() -> CommandMatcher:
@@ -1063,7 +1126,7 @@ def _checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Findin
             fix=VOICE_KEY_HELP,
         )
     else:
-        yield Finding("ok", "Voice", "ElevenLabs, with your key")
+        yield voice_finding(current, quick)
 
     commands_file = paths.commands_file()
     try:
@@ -1158,6 +1221,23 @@ def _checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Findin
 
     if not quick:
         yield from _live_checks(current)
+
+
+def voice_finding(current: Settings, quick: bool) -> Finding:
+    """The voice and model Tycho will speak with. ``tycho check`` asks ElevenLabs
+    whether the key can use it (free); the window's quick checks show what the running
+    Tycho chose at start instead of asking again."""
+    from tycho.voice import voices
+
+    if quick:
+        if _voice_now is not None:
+            return _voice_now
+        chosen = voices.choose(current.voice, current.voice_model)
+        return Finding("ok", "Voice", f"ElevenLabs, {chosen.describe()}, with your key")
+    key = elevenlabs_key()
+    if key is None:  # removed since the check above
+        return Finding("warn", "Voice", f"no ElevenLabs key: {VOICE_KEY_HELP}", fix=VOICE_KEY_HELP)
+    return choose_voice(current, key)[1]
 
 
 def _live_checks(current: Settings) -> Iterator[Finding]:

@@ -10,6 +10,10 @@ one per voice and wording, so they play at once and cost nothing the next time.
 ElevenLabs charges per character and has no cheaper model than v4 Turbo, so not
 paying twice for "Gear down." is the saving. The folder is capped (``KEPT_BYTES``):
 the line used longest ago goes first.
+
+The voice and its model come from ``tycho.voice.voices``. If ElevenLabs says the voice
+is missing part way through a session, the speaker switches to George on Flash and
+says so through ``on_fallback``.
 """
 
 import asyncio
@@ -25,16 +29,10 @@ import httpx2
 
 from tycho.voice import SpeechError
 from tycho.voice.playback import Sink, SoundDeviceSink
+from tycho.voice.voices import API, DEFAULT, Voice, fallback, missing
 
 log = logging.getLogger(__name__)
 
-API = "https://api.elevenlabs.io"
-MODEL = "eleven_v4_turbo"
-SHIPS_MIND = "Es2YFCHLnv4SHTRUsaih"
-"""The Ship's Mind, designed for Tycho (ADR 9). Other players can use it once it's
-shared to ElevenLabs' public Voice Library (#25)."""
-GEORGE = "JBFqnCBsd6RMkjVDRZzb"
-"""A stock British voice, the closest to The Ship's Mind, used when it isn't available."""
 RATE = 24_000
 MAX_CHARACTERS = 400
 KEPT_BYTES = 10_000_000
@@ -51,13 +49,14 @@ class ElevenLabsSpeaker:
         api_key: str | None = None,
         client: httpx2.AsyncClient | None = None,
         open_sink: Callable[[int, float], Sink] = SoundDeviceSink,
-        voice: str = SHIPS_MIND,
-        model: str = MODEL,
+        voice: Voice = DEFAULT,
         volume: float = 1.0,
         kept: Path | None = None,
+        on_fallback: Callable[[Voice, Voice], None] = lambda _missing, _used: None,
     ) -> None:
         """``kept`` is the folder for lines spoken with ``keep``; without one, every
-        line is fetched."""
+        line is fetched. ``on_fallback(missing, used)`` is called if ElevenLabs says the
+        voice is missing and the speaker switches to George."""
         self._owns_client = client is None
         if client is None:
             if api_key is None:
@@ -71,7 +70,7 @@ class ElevenLabsSpeaker:
         self._client = client
         self._open_sink = open_sink
         self._voice = voice
-        self._model = model
+        self._on_fallback = on_fallback
         self._gain = min(1.0, max(0.0, volume)) ** 1.5  # the same curve as the sounds
         self._kept = kept
 
@@ -80,7 +79,7 @@ class ElevenLabsSpeaker:
         self._gain = min(1.0, max(0.0, volume)) ** 1.5
 
     @property
-    def voice(self) -> str:
+    def voice(self) -> Voice:
         return self._voice
 
     async def warm(self) -> None:
@@ -110,15 +109,20 @@ class ElevenLabsSpeaker:
             try:
                 async with self._client.stream(
                     "POST",
-                    f"/v1/text-to-speech/{self._voice}/stream",
+                    f"/v1/text-to-speech/{self._voice.id}/stream",
                     params={"output_format": f"pcm_{RATE}"},
-                    json={"text": text, "model_id": self._model},
+                    json={"text": text, "model_id": self._voice.model},
                 ) as response:
                     if response.status_code != 200:
                         status, body = response.status_code, await response.aread()
-                        if _voice_missing(status, body) and self._voice != GEORGE:
-                            log.warning("The Ship's Mind voice isn't available; using George")
-                            self._voice = GEORGE
+                        if missing(status, body) and (instead := fallback(self._voice)):
+                            log.warning(
+                                "Voice: %s isn't available to your ElevenLabs key; using %s",
+                                self._voice.name,
+                                instead.describe(),
+                            )
+                            gone, self._voice = self._voice, instead
+                            self._on_fallback(gone, instead)
                             sink = None
                         else:
                             raise SpeechError(_explain(status, body))
@@ -158,7 +162,7 @@ class ElevenLabsSpeaker:
     def _file_for(self, text: str) -> Path | None:
         if self._kept is None:
             return None
-        digest = hashlib.sha256(f"{self._voice}|{self._model}|{text}".encode()).hexdigest()
+        digest = hashlib.sha256(f"{self._voice.id}|{self._voice.model}|{text}".encode()).hexdigest()
         return self._kept / f"{digest[:20]}.pcm"
 
     async def close(self) -> None:
@@ -217,10 +221,6 @@ def _make_room(folder: Path, room: int) -> None:
             break
         file.unlink(missing_ok=True)
         total -= size
-
-
-def _voice_missing(status: int, body: bytes) -> bool:
-    return status in (400, 404) and "voice" in _code(body) and "not_found" in _code(body)
 
 
 def _explain(status: int, body: bytes) -> str:

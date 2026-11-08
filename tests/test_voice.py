@@ -13,16 +13,15 @@ from typing import Any
 import httpx2
 import pytest
 
-from tycho.voice import SpeechError
+from tycho.voice import SpeechError, voices
 from tycho.voice.elevenlabs import (
-    GEORGE,
     MAX_CHARACTERS,
     RATE,
-    SHIPS_MIND,
     ElevenLabsSpeaker,
     _make_room,  # pyright: ignore[reportPrivateUsage]
 )
 from tycho.voice.playback import Sink, SoundDeviceSink
+from tycho.voice.voices import FLASH, GEORGE, SARAH, SHIPS_MIND, TURBO, Voice
 
 
 class FakeSink:
@@ -58,8 +57,10 @@ class Rig:
         *,
         hang: bool = False,
         kept: Path | None = None,
+        voice: Voice = voices.DEFAULT,
     ) -> None:
         self.requests: list[httpx2.Request] = []
+        self.fell_back: list[tuple[Voice, Voice]] = []
         self.sinks: list[FakeSink] = []
         self.playing = asyncio.Event()
         """Set when any sink has been given its whole line."""
@@ -77,7 +78,14 @@ class Rig:
         client = httpx2.AsyncClient(
             base_url="https://api.elevenlabs.io", transport=httpx2.MockTransport(handler)
         )
-        self.speaker = ElevenLabsSpeaker(client=client, open_sink=open_sink, volume=0.5, kept=kept)
+        self.speaker = ElevenLabsSpeaker(
+            client=client,
+            open_sink=open_sink,
+            volume=0.5,
+            kept=kept,
+            voice=voice,
+            on_fallback=lambda gone, used: self.fell_back.append((gone, used)),
+        )
 
 
 def _audio(_: httpx2.Request) -> httpx2.Response:
@@ -168,9 +176,10 @@ def test_a_line_is_streamed_to_the_sound_card_and_played_to_the_end() -> None:
     rig = Rig(_audio)
     asyncio.run(rig.speaker.speak("Lights off."))
     (request,) = rig.requests
-    assert request.url.path == f"/v1/text-to-speech/{SHIPS_MIND}/stream"
+    # The default is George on Flash v2.5 (ADR 9, amended 8 November 2026; #242).
+    assert request.url.path == f"/v1/text-to-speech/{GEORGE}/stream"
     assert request.url.params["output_format"] == f"pcm_{RATE}"
-    assert json.loads(request.content) == {"text": "Lights off.", "model_id": "eleven_v4_turbo"}
+    assert json.loads(request.content) == {"text": "Lights off.", "model_id": FLASH}
     (sink,) = rig.sinks
     assert sink.rate == RATE
     assert sink.gain == pytest.approx(0.5**1.5)
@@ -187,17 +196,105 @@ def test_a_long_line_is_cut_and_blank_lines_cost_nothing() -> None:
     assert len(json.loads(request.content)["text"]) == MAX_CHARACTERS
 
 
-def test_without_the_ships_mind_it_falls_back_to_george() -> None:
+def test_a_chosen_voice_is_asked_for_with_its_own_model() -> None:
+    rig = Rig(_audio, voice=voices.choose("Sarah"))
+    asyncio.run(rig.speaker.speak("Lights off."))
+    (request,) = rig.requests
+    assert request.url.path == f"/v1/text-to-speech/{SARAH}/stream"
+    assert json.loads(request.content)["model_id"] == TURBO
+
+
+def test_without_the_ships_mind_it_falls_back_to_george_on_flash_and_says_so() -> None:
     def answer(request: httpx2.Request) -> httpx2.Response:
         if SHIPS_MIND in request.url.path:
             return _error(404, "voice_not_found")(request)
         return _audio(request)
 
-    rig = Rig(answer)
+    ships_mind = voices.choose("The Ship's Mind")
+    rig = Rig(answer, voice=ships_mind)
     asyncio.run(rig.speaker.speak("Lights off."))
     assert [GEORGE in r.url.path for r in rig.requests] == [False, True]
-    assert rig.speaker.voice == GEORGE
+    assert [json.loads(r.content)["model_id"] for r in rig.requests] == [TURBO, FLASH]
+    assert rig.speaker.voice == voices.DEFAULT
+    assert rig.fell_back == [(ships_mind, voices.DEFAULT)]
     assert len(rig.sinks) == 1
+
+
+def test_george_missing_is_an_error_not_a_loop() -> None:
+    rig = Rig(_error(404, "voice_not_found"))
+    with pytest.raises(SpeechError):
+        asyncio.run(rig.speaker.speak("Lights off."))
+    assert len(rig.requests) == 1
+    assert rig.fell_back == []
+
+
+# --- Choosing the voice (#242) ------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("setting", "model", "expected"),
+    [
+        ("George", "the voice's own", (GEORGE, FLASH)),
+        ("george", "", (GEORGE, FLASH)),
+        ("Sarah", "the voice's own", (SARAH, TURBO)),
+        ("The Ship's Mind", "", (SHIPS_MIND, TURBO)),
+        ("ships-mind", "", (SHIPS_MIND, TURBO)),
+        (SARAH, "", (SARAH, TURBO)),  # an ID on the shortlist keeps its model
+        ("abcdefghij0123456789", "", ("abcdefghij0123456789", TURBO)),
+        ("abcdefghij0123456789", "flash", ("abcdefghij0123456789", FLASH)),
+        ("George", "v4 turbo", (GEORGE, TURBO)),
+    ],
+)
+def test_the_voice_setting_names_a_voice_and_its_model(
+    setting: str, model: str, expected: tuple[str, str]
+) -> None:
+    voice = voices.choose(setting, model)
+    assert (voice.id, voice.model) == expected
+
+
+class _Answer:
+    def __init__(self, status: int, text: str = "") -> None:
+        self.status_code, self.text = status, text
+
+
+def _get(status: int, code: str = "") -> Callable[..., _Answer]:
+    body = json.dumps({"detail": {"status": code}}) if code else ""
+    asked: list[str] = []
+
+    def get(url: str, **kwargs: Any) -> _Answer:
+        asked.append(url)
+        assert kwargs["headers"] == {"xi-api-key": "sk_test"}
+        return _Answer(status, body)
+
+    get.asked = asked  # pyright: ignore[reportFunctionMemberAccess]
+    return get
+
+
+@pytest.mark.parametrize(
+    ("status", "code", "availability"),
+    [
+        (200, "", "available"),
+        (404, "voice_not_found", "missing"),
+        (400, "voice_not_found", "missing"),
+        (401, "missing_permissions", "unknown"),  # a key allowed only text-to-speech
+        (401, "invalid_api_key", "unknown"),
+        (500, "", "unknown"),
+    ],
+)
+def test_the_start_check_asks_for_the_voice_itself(
+    status: int, code: str, availability: str
+) -> None:
+    get = _get(status, code)
+    checked = voices.check("sk_test", voices.choose("The Ship's Mind"), get)
+    assert checked.availability == availability
+    assert get.asked == [f"https://api.elevenlabs.io/v1/voices/{SHIPS_MIND}"]  # pyright: ignore[reportFunctionMemberAccess]
+
+
+def test_the_start_check_never_raises_offline() -> None:
+    def get(url: str, **kwargs: Any) -> _Answer:
+        raise httpx2.ConnectError("offline")
+
+    assert voices.check("sk_test", voices.DEFAULT, get).availability == "unknown"
 
 
 @pytest.mark.parametrize(
