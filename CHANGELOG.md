@@ -12,12 +12,13 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
      `git show 24b13cf:docs/releases/0.5.0.md`. Start the release notes from it. -->
 
 ### Added
-- Missed what Tycho said? "Say that again" (or "repeat that", "come again") repeats its last answer word for word, at once and as often as you like, with the Tile on or off. Before, it went back to Claude, took a second or two, might come back worded differently, and stopped working after half a minute. ([#225](https://github.com/benshapyro/tycho-ai/pull/225), [#222](https://github.com/benshapyro/tycho-ai/issues/222))
+- Missed what Tycho said? "Say that again" (or "repeat that", "come again") repeats the last thing it said word for word, an answer or what it just did ("Lights."), at once and as often as you like, with the Tile on or off. It only repeats the words: it never presses a key again. Before, it went back to Claude, took a second or two, might come back worded differently, and stopped working after half a minute. ([#225](https://github.com/benshapyro/tycho-ai/pull/225), [#222](https://github.com/benshapyro/tycho-ai/issues/222), [#226](https://github.com/benshapyro/tycho-ai/issues/226))
 
 ### Changed
 - **Check after upgrading if you edit `commands.toml` by hand:** a `requires` or `accepted_risks` value Tycho doesn't know, such as a typo, now stops the whole file loading. Until you fix it, Tycho uses only its built-in commands, and the Commands page says so. `tycho check` names the value and the ones allowed: correct or remove it, then run `tycho check` again. Before, the typo was ignored and that command was always refused. ([#206](https://github.com/benshapyro/tycho-ai/pull/206), [#218](https://github.com/benshapyro/tycho-ai/issues/218))
 - A trade route asked from where you are ("I'm at Obituary, best route for refined gold?") is one small request to UEX instead of two, and a slow shop is left out instead of holding up the answer. ([#211](https://github.com/benshapyro/tycho-ai/pull/211))
 - Asked about the wrong kind of thing by name, Tycho checks the Star Citizen Wiki's search: "Cutlass Black" is the ship, not the plushie, and "the Gallant" as a ship finds the Gallant rifle. Weapons named after a ship, like the "Mantis gatling", stay weapons. ([#220](https://github.com/benshapyro/tycho-ai/pull/220))
+- A phrase of yours that is one of Tycho's own words ("repeat that", "confirm", "clear the Tile") never reached your command, because Tycho answers those first. The Commands page now refuses it, and `tycho check` warns about one already in your `commands.toml` and says what Tycho uses it for. ([#227](https://github.com/benshapyro/tycho-ai/issues/227))
 - Tycho checks the drive has room before it downloads the speech model, and says how much it needs, how much is free, and where. ([#203](https://github.com/benshapyro/tycho-ai/pull/203))
 
 ### Fixed

@@ -859,6 +859,7 @@ tag = "fleet"
 heard = "what do I need to craft an FS-9"
 expect = ["reply"]
 mentions = [['Lindinium'], ['Hephaestanite'], ['Iron']]
+card = ["recipe", "list"]  # it was also a "tile" case; one case now (#228)
 tag = "items"
 
 [[case]]
@@ -1037,12 +1038,6 @@ tag = "tile"
 heard = "how do I refuel my ship"
 expect = ["reply"]
 card = ["steps"]
-tag = "tile"
-
-[[case]]
-heard = "what do I need to craft an FS-9"
-expect = ["reply"]
-card = ["recipe", "list"]
 tag = "tile"
 
 [[case]]

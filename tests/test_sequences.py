@@ -277,3 +277,29 @@ steps = ["power_on"]
     (warning,) = matcher.warnings
     assert "quiet_start" in warning
     assert "setup, announced" in warning
+
+
+def test_a_phrase_that_is_one_of_the_sessions_own_words_is_warned_about(tmp_path: Path) -> None:
+    """#227: the session answers "repeat that" itself, so the command never ran, silently."""
+    matcher = _user(
+        tmp_path,
+        """
+[[command]]
+id = "my_lights"
+say = ["cabin glow", "Repeat that!"]
+actions = ["v_lights"]
+
+[[phrases]]
+command = "landing_gear"
+say = ["affirmative", "keep that up", "wheels down"]
+""",
+    )
+    assert matcher.get("my_lights") is not None  # nothing is dropped: the file still loads
+    say_again, confirm, tile = matcher.warnings
+    assert "'my_lights'" in say_again
+    assert "last line again" in say_again
+    assert "never runs" in say_again
+    assert "'landing_gear'" in confirm
+    assert "confirm questions" in confirm
+    assert "only while the Tile is off" in tile
+    assert not any("cabin glow" in w or "wheels down" in w for w in matcher.warnings)
