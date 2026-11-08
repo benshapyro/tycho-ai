@@ -354,8 +354,14 @@ class Case:
     tag: str
 
 
-def load_cases(source: Path, engine: str) -> tuple[list[Case], Path]:
-    """Cases from a typed case file, or from a recording session's transcripts."""
+RESULTS = Path(__file__).resolve().parents[2] / "recordings"  # gitignored
+
+
+def load_cases(source: Path, engine: str, results: Path = RESULTS) -> tuple[list[Case], Path]:
+    """Cases from a typed case file, or from a recording session's transcripts.
+
+    A case file's results go in ``results`` (made if missing); tests pass their own (#235).
+    """
     if source.is_file():
         data: dict[str, Any] = tomllib.loads(source.read_text("utf-8"))
         raw: list[dict[str, Any]] = data["case"]
@@ -365,7 +371,6 @@ def load_cases(source: Path, engine: str) -> tuple[list[Case], Path]:
         heard = [c.key for c in cases]
         if duplicates := sorted({h for h in heard if heard.count(h) > 1}):
             raise SystemExit(f"Duplicate cases in {source}: {duplicates}")
-        results = Path(__file__).resolve().parents[2] / "recordings"  # gitignored
         results.mkdir(exist_ok=True)
         return cases, results / f"{source.stem}.results.jsonl"
     expected: dict[str, dict[str, Any]] = tomllib.loads(EXPECTED.read_text("utf-8"))

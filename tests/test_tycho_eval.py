@@ -242,7 +242,7 @@ def test_the_model_benchmarks_leave_out_the_say_that_again_cases(tmp_path: Path)
         '[[case]]\nheard = "gear down"\nexpect = ["actions"]\n',
         "utf-8",
     )
-    cases, _ = load_cases(cases_file, engine="")  # pyright: ignore[reportUnknownVariableType]
+    cases, _ = load_cases(cases_file, engine="", results=tmp_path)  # pyright: ignore[reportUnknownVariableType]
     assert [c.heard for c in cases] == ["gear down"]  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
 
 
@@ -252,10 +252,16 @@ def _keybinds() -> object:
     return KEYBINDS
 
 
-def test_the_model_benchmarks_load_the_real_case_file() -> None:
-    """#228: a duplicate case made brain_report and jev_report exit before running."""
+def test_the_model_benchmarks_load_the_real_case_file(tmp_path: Path) -> None:
+    """#228: a duplicate case made brain_report and jev_report exit before running.
+    #235: the results file goes where it's told, not into the checkout's recordings/."""
     _eval()  # puts tools/bench on the path
     from brain_report import load_cases  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
 
-    cases, _ = load_cases(ROOT / "tools" / "spike" / "brain_cases.toml", engine="")  # pyright: ignore[reportUnknownVariableType]
+    results = tmp_path / "recordings"
+    cases, out = load_cases(  # pyright: ignore[reportUnknownVariableType]
+        ROOT / "tools" / "spike" / "brain_cases.toml", engine="", results=results
+    )
     assert cases
+    assert out == results / "brain_cases.results.jsonl"
+    assert results.is_dir()

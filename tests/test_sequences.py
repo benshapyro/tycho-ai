@@ -303,3 +303,34 @@ say = ["affirmative", "keep that up", "wheels down"]
     assert "confirm questions" in confirm
     assert "only while the Tile is off" in tile
     assert not any("cabin glow" in w or "wheels down" in w for w in matcher.warnings)
+
+
+def test_a_phrase_the_lexicon_turns_into_the_sessions_own_words_is_warned_about(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#236: the session matches its words after the lexicon, so the check must too.
+    No shipped term does this today, so a lexicon that would stands in."""
+    from tycho.commands import reserved
+    from tycho.lexicon import Lexicon
+
+    monkeypatch.setattr(reserved, "_lexicon", lambda: Lexicon(["Confirmed"]))
+    assert reserved.reserved_for("konfirmed") == "question"
+    matcher = _user(
+        tmp_path,
+        """
+[[phrases]]
+command = "landing_gear"
+say = ["konfirmed", "wheels down"]
+""",
+    )
+    (warning,) = matcher.warnings
+    assert "'konfirmed'" in warning
+    assert "confirm questions" in warning
+
+
+def test_the_shipped_lexicon_leaves_ordinary_phrases_alone() -> None:
+    from tycho.commands.reserved import reserved_for
+
+    assert reserved_for("landing gear") is None
+    assert reserved_for("quantum drive") is None
+    assert reserved_for("Repeat that.") == "say_again"
