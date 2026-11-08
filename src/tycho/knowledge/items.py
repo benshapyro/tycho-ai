@@ -33,11 +33,11 @@ TIE = 0.03
 CHOICES = 3
 FRESH_SECONDS = 600.0
 PER_QUERY = 20
-QUERY_SECONDS = 2.5
+QUERY_SECONDS = 2.0
 """Each query's limit: a spelling, the search or a recipe that takes longer is left out."""
-FIND_SECONDS = 3.0
+FIND_SECONDS = 2.5
 """A name's whole finding, fetching an item the search rescued included, so the
-recipe still has its QUERY_SECONDS inside item_lookup's 6 s."""
+recipe still has its QUERY_SECONDS inside item_lookup's 5 s."""
 FILLER = frozenset({"the", "a", "an", "my", "this", "that", "item", "uh", "um", "erm"})
 GENERIC = frozenset(
     {

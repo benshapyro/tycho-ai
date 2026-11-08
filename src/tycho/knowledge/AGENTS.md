@@ -17,7 +17,7 @@ What the brain can look up: ships, items and crafting, mining, trade prices and 
 - **One request beats many.** A commodity's routes come in one `/commodities_routes?id_commodity=N` call, not station by station. UEX caps that list at 500 (`ROUTES_CAP`). With a start too, ask from the start for that commodity (`id_planet_origin=P&id_commodity=N`, or each of a station's few terminals at once), not the commodity's whole list first (#150). Terminals asked at once that don't answer within `PART_SECONDS` are left out, not waited for.
 - **Time it against the live APIs** with `tools/bench/lookup_times.py` (free) before changing a look-up's `seconds`.
 - **Results are compact JSON with their source.** Each is a tool result in Claude's context, so keep it small.
-- **Time:** a look-up has `seconds` (4-6 s), and the request has a deadline (`LOOKING_SECONDS`, `LOOKING_LIMIT` in `runtime/session.py`).
+- **Time:** a look-up has `seconds` (3-5 s, fitted to timings with `tools/bench/lookup_times.py`, #150), and the request has a deadline (`LOOKING_SECONDS`, `LOOKING_LIMIT` in `runtime/session.py`).
 
 ## Testing
 

@@ -26,9 +26,12 @@ from tycho.knowledge.wiki import WikiError, WikiSource
 log = logging.getLogger(__name__)
 
 SOURCE = "UEX (uexcorp.space), prices reported by players"
-SECONDS = 5.0
-"""A route from a station asks UEX about each of its terminals at once."""
-PART_SECONDS = 3.5
+SECONDS = 4.0
+"""A route from a station asks UEX about each of its terminals at once. Measured on Ben's
+PC (8 November 2026, idle and with the game running): at most 0.9 s, so 4 s keeps
+room for UEX's slow moments (a 4.6 s answer in the 6 November play session) while a
+UEX that hangs fails a second sooner (#150)."""
+PART_SECONDS = 2.5
 """How long a station's terminals are waited for, when asked one by one: the routes
 from those that answered are given, so one slow terminal can't use up ``SECONDS``
 (#150, the Obituary question in the play session)."""

@@ -19,7 +19,8 @@ from tycho.text import name_score, normalize
 
 log = logging.getLogger(__name__)
 
-SECONDS = 4.0
+SECONDS = 3.0
+"""Measured at most 0.9 s (8 November 2026, idle and with the game running, #150)."""
 SHOWN = 5
 SHIP_MATCH = 0.75
 """How close a ship's name must be to what was said."""
