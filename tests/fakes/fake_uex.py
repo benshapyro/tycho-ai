@@ -138,6 +138,7 @@ def route(
         "id_terminal_origin": start["id"],
         "id_terminal_destination": end["id"],
         "id_planet_origin": start.get("id_planet", 0),
+        "id_orbit_origin": start.get("id_orbit", 0),
         "price_origin": buy,
         "price_destination": sell,
         "scu_reachable": scu,
@@ -208,10 +209,12 @@ class FakeTradeUex:
                 raise WikiError(f"{path}: not found")
 
     def _routes(self, query: dict[str, Any]) -> list[dict[str, Any]]:
-        if "id_terminal_origin" in query:
-            return [r for r in ROUTES if r["id_terminal_origin"] == query["id_terminal_origin"]]
-        if "id_planet_origin" in query:
-            return [r for r in ROUTES if r["id_planet_origin"] == query["id_planet_origin"]]
-        if "id_commodity" in query:  # one commodity's routes, from anywhere
-            return [r for r in ROUTES if r["id_commodity"] == query["id_commodity"]]
-        raise WikiError("missing_one_required_inputs")
+        """Every route that fits all of the filters given, as UEX gives them."""
+        filters = {
+            k: v
+            for k, v in query.items()
+            if k in ("id_terminal_origin", "id_planet_origin", "id_orbit_origin", "id_commodity")
+        }
+        if not filters:
+            raise WikiError("missing_one_required_inputs")
+        return [r for r in ROUTES if all(r.get(k) == v for k, v in filters.items())]
