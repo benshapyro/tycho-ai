@@ -6,7 +6,7 @@ from typing import Any
 
 from tycho.knowledge import WikiError
 
-SEARCHED: dict[str, list[tuple[str, list[tuple[str, str, str | None]]]]] = {
+SEARCHED: dict[str, list[tuple[str, list[tuple[str, str | None, str | None]]]]] = {
     # The live API's unified search, GET /api/search?filter[query]=..., recorded on
     # 7 November 2026 (4.10.2-LIVE): each group's type, and each result's name, class
     # name and label (item_type_label for items, extra_label for vehicles). The answer
@@ -40,6 +40,49 @@ SEARCHED: dict[str, list[tuple[str, list[tuple[str, str, str | None]]]]] = {
             ("Cutlass Black Ship Armor", "ARMR_DRAK_Cutlass_Red", "Armor"),
             ("Cutlass Black Ship Armor", "ARMR_GLSN_Shiv", "Armor"),
             ("Cutlass Black Plushie", "Carryable_1H_CY_toy_plushy_cutlass_black_1_a", "Misc"),
+        ]),
+    ],
+    # Recorded on 8 November 2026 (4.10.2-LIVE), for #221; "odin" and "starfighter"
+    # with some results left out.
+    "mantis": [
+        ("vehicles", [
+            ("RSI Mantis", "RSI_Mantis", "Combat"),
+        ]),
+        ("items", [
+            ("Bed", "Bed_Single_Mantis_RSI", "Usable"),
+            ("Seat", "Seat_Stool_Animated_Mantis_RSI", "Usable"),
+            ("Mantis TSB Flight Blade", "Controller_Flight_RSI_Mantis_Blade_SPD",
+             "Flight Controller"),
+            ("Mantis Polar Camo Livery", "Paint_Mantis_IAE2950_Grey_White_Camo", "Paints"),
+            ("Mantis Skullcrusher Livery", "Paint_Mantis_PirateWeek_Red_Black_Skull", "Paints"),
+        ]),
+        ("blueprints", [
+            ("Mantis GT-220 Gatling", "gats_ballisticgatling_s3", None),
+            ("Sabine Undersuit", "qrt_mantis_undersuit_01_01_01", None),
+            ("Calva Racing Helmet", "qrt_mantis_undersuit_helmet_01_01_01", None),
+        ]),
+    ],
+    "odin": [
+        ("items", [
+            ("Iodine", "Carryable_TBO_FL_16SCU_Commodity_Nonmetal_Iodine", "Cargo"),
+            ("Iodine", "Carryable_TBO_FL_1SCU_Commodity_Nonmetal_Iodine", "Cargo"),
+        ]),
+        ("locations", [
+            ("Nyx - Odin Jump Point", None, None),
+        ]),
+        ("commodities", [
+            ("Iodine", None, None),
+        ]),
+    ],
+    "starfighter": [
+        ("vehicles", [
+            ("Crusader Ares Star Fighter Inferno", "CRUS_Starfighter_Inferno", "Combat"),
+            ("Crusader Ares Star Fighter Ion", "CRUS_Starfighter_Ion", "Combat"),
+        ]),
+        ("items", [
+            ("SHIELDS", "Controller_Shield_CRUS_Starfighter", "Shield Controller"),
+            ("Ares Star Fighter Central Tower Livery", "Paint_Starfighter_Sand_Orange_Hurston",
+             "Paints"),
         ]),
     ],
     "fs-9": [

@@ -8,11 +8,14 @@ offered either way, so the tools never change and the cache holds.
 import asyncio
 import json
 import logging
-from collections.abc import Mapping
+import time
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import cast
 
 from tycho.brain.lookups import LookupResult, failure
+from tycho.knowledge.fresh import Fresh
+from tycho.knowledge.items import FRESH_SECONDS
 from tycho.knowledge.ships import (
     Ambiguous,
     IsAnItem,
@@ -24,7 +27,7 @@ from tycho.knowledge.ships import (
     searched,
 )
 from tycho.knowledge.store import ShipDataError, ensure
-from tycho.knowledge.wiki import WikiError, WikiSource, search
+from tycho.knowledge.wiki import Hit, WikiError, WikiSource, search
 
 log = logging.getLogger(__name__)
 
@@ -60,6 +63,7 @@ class ShipLookup:
         *,
         concepts: WikiSource | None = None,
         library: ShipLibrary | None = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         """``concepts`` is UEX, for ships still in concept. ``library`` is data
         already loaded; ``prepare`` then has nothing to do."""
@@ -68,6 +72,9 @@ class ShipLookup:
         self._folder = folder
         self._library = library
         self._problem = "the ship data is still loading"
+        # The search allows 60 requests a minute, and a name that missed once
+        # misses again, so its answers are kept a while, as Items does (#221).
+        self._searched: Fresh[list[Hit]] = Fresh(FRESH_SECONDS, clock)
 
     @property
     def library(self) -> ShipLibrary | None:
@@ -136,10 +143,12 @@ class ShipLookup:
     ) -> Ship | Ambiguous | NotFound | IsAnItem:
         """A miss read again with the Wiki API's search, if it answers in time;
         otherwise the miss stands."""
+        query = searched(missed.asked)
         try:
-            hits = await asyncio.wait_for(
-                search(self._source, searched(missed.asked)), SEARCH_SECONDS
-            )
+            hits = self._searched.get(query)
+            if hits is None:
+                hits = await asyncio.wait_for(search(self._source, query), SEARCH_SECONDS)
+                self._searched.keep(query, hits)
         except TimeoutError:
             log.debug("The Wiki API's search took over %.1f s; going on without it", SEARCH_SECONDS)
             return missed
