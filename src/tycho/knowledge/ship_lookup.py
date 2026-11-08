@@ -9,7 +9,7 @@ import asyncio
 import json
 import logging
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import cast
 
@@ -126,8 +126,18 @@ class ShipLookup:
         # Off the event loop: matching a name the first time takes milliseconds
         # each, and push-to-talk must never wait for it.
         found = await asyncio.to_thread(lambda: [library.find(n) for n in asked])
+        # One search per distinct miss: "Odin" and "the Odin" in one call ask once (#233).
+        searches: dict[str, asyncio.Task[list[Hit] | None]] = {}
+        for f in found:
+            if isinstance(f, NotFound) and (query := searched(f.asked)) not in searches:
+                searches[query] = asyncio.create_task(self._hits(query))
         found = await asyncio.gather(
-            *(self._rescue(library, f) if isinstance(f, NotFound) else _now(f) for f in found)
+            *(
+                self._rescue(library, f, searches[searched(f.asked)])
+                if isinstance(f, NotFound)
+                else _now(f)
+                for f in found
+            )
         )
         result = {
             "source": SOURCE,
@@ -139,23 +149,28 @@ class ShipLookup:
         return LookupResult(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
 
     async def _rescue(
-        self, library: ShipLibrary, missed: NotFound
+        self, library: ShipLibrary, missed: NotFound, hits: Awaitable[list[Hit] | None]
     ) -> Ship | Ambiguous | NotFound | IsAnItem:
-        """A miss read again with the Wiki API's search, if it answers in time;
+        """A miss read again with the Wiki API's search, if it answered in time;
         otherwise the miss stands."""
-        query = searched(missed.asked)
+        if (found := await hits) is None:
+            return missed
+        return await asyncio.to_thread(rescued, library, missed, found)
+
+    async def _hits(self, query: str) -> list[Hit] | None:
+        """The search's answer for ``query``, kept a while; None if it's slow or fails."""
+        if (kept := self._searched.get(query)) is not None:
+            return kept
         try:
-            hits = self._searched.get(query)
-            if hits is None:
-                hits = await asyncio.wait_for(search(self._source, query), SEARCH_SECONDS)
-                self._searched.keep(query, hits)
+            hits = await asyncio.wait_for(search(self._source, query), SEARCH_SECONDS)
         except TimeoutError:
             log.debug("The Wiki API's search took over %.1f s; going on without it", SEARCH_SECONDS)
-            return missed
+            return None
         except WikiError as e:  # never names what was searched: the player's words
             log.debug("The Wiki API's search failed (%s); going on without it", e)
-            return missed
-        return await asyncio.to_thread(rescued, library, missed, hits)
+            return None
+        self._searched.keep(query, hits)
+        return hits
 
 
 async def _now[T](value: T) -> T:

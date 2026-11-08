@@ -476,3 +476,69 @@ def test_an_uncapped_empty_list_doesnt_ask_again() -> None:
     )
     assert result["routes"] == []
     assert [path for path, _ in uex.calls].count("/commodities_routes") == 1
+
+
+# --- A slow list is still kept (#231) ------------------------------------------------------------
+
+
+class _SlowRoutes(FakeTradeUex):
+    """UEX that takes ``delay`` seconds for a route list."""
+
+    def __init__(self, delay: float) -> None:
+        super().__init__()
+        self.delay = delay
+
+    async def get(self, path: str, params: Any = None) -> Any:
+        if path == "/commodities_routes":
+            await asyncio.sleep(self.delay)
+        return await super().get(path, params)
+
+
+def test_a_route_list_slower_than_the_look_up_is_kept_for_next_time() -> None:
+    """#231: the look-up's limit cancelled the fetch before the list was kept, so the
+    same question failed again every time."""
+    uex = _SlowRoutes(delay=0.2)
+
+    async def ask() -> list[dict[str, Any]]:
+        trade = Trade(uex)
+        await trade.load()
+        params = {"id_commodity": 47}
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(trade.routes(params), 0.05)  # the look-up gives up
+        await asyncio.sleep(0.3)  # UEX answers anyway
+        return await asyncio.wait_for(trade.routes(params), 0.05)
+
+    rows = asyncio.run(ask())
+    assert rows
+    assert rows == uex._routes({"id_commodity": 47})  # pyright: ignore[reportPrivateUsage]
+    assert [path for path, _ in uex.calls].count("/commodities_routes") == 1
+
+
+def test_asking_again_while_a_list_is_on_its_way_waits_for_the_same_fetch() -> None:
+    uex = _SlowRoutes(delay=0.05)
+
+    async def ask() -> None:
+        trade = Trade(uex)
+        await trade.load()
+        await asyncio.gather(*(trade.routes({"id_commodity": 47}) for _ in range(3)))
+
+    asyncio.run(ask())
+    assert [path for path, _ in uex.calls].count("/commodities_routes") == 1
+
+
+def test_a_fetch_that_fails_after_its_look_up_gave_up_is_asked_again() -> None:
+    uex = _SlowRoutes(delay=0.1)
+
+    async def ask() -> list[dict[str, Any]]:
+        trade = Trade(uex)
+        await trade.load()
+        uex.offline = True
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(trade.routes({"id_commodity": 47}), 0.02)
+        await asyncio.sleep(0.2)  # it fails, unwatched, and nothing is kept
+        uex.offline = False
+        uex.delay = 0
+        return await trade.routes({"id_commodity": 47})
+
+    assert asyncio.run(ask()) == uex._routes({"id_commodity": 47})  # pyright: ignore[reportPrivateUsage]
+    assert [path for path, _ in uex.calls].count("/commodities_routes") == 2

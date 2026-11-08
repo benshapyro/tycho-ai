@@ -389,3 +389,65 @@ def test_a_surprising_search_answer_is_an_error_that_never_names_the_query(answe
     with pytest.raises(WikiError) as caught:
         asyncio.run(search(_Answers(answer), "my secret gun"))
     assert "secret" not in str(caught.value)
+
+
+# --- The kind of item said (#233) ----------------------------------------------------------------
+
+
+def test_an_item_of_another_kind_than_the_one_said_is_not_a_match() -> None:
+    """#233, seen live: "Arrow pistol" was the Arrowhead Sniper Rifle (and the 'Arrow' I
+    Missile); there's no Arrow pistol, so it's a miss that names them."""
+    found = _find("Arrow pistol")
+    assert isinstance(found, Missing), found
+    assert "Arrowhead Sniper Rifle" in found.closest
+
+
+def test_a_broad_word_for_the_kind_counts_against_nothing() -> None:
+    assert isinstance(found := _find("Arrowhead gun"), Found), found
+    assert found.record["name"] == "Arrowhead Sniper Rifle"
+    assert isinstance(found := _find("Arrowhead sniper"), Found), found
+
+
+class _MantisWiki:
+    """#233, as the live API answered: the name queries find the Mantis's flight
+    blade, and only the search knows the Mantis GT-220 Gatling (as a blueprint)."""
+
+    BLADE = item("Mantis Standard Flight Blade", "FlightController")
+    GATLING = item("Mantis GT-220 Gatling", "WeaponGun")
+
+    def __init__(self) -> None:
+        self.searched: list[str] = []
+
+    async def get(self, path: str, params: Any = None) -> Any:
+        query = dict(params or {})
+        if path == "/api/search":
+            return {
+                "data": [
+                    {
+                        "type": "blueprints",
+                        "label": "Blueprints",
+                        "results": [{"name": "Mantis GT-220 Gatling", "item_type_label": None}],
+                    }
+                ]
+            }
+        name = str(query.get("filter[name]", ""))
+        if name == self.GATLING["name"]:
+            return {"data": [self.GATLING]}
+        return {"data": [self.BLADE] if "mantis" in name.lower() else []}
+
+
+def test_an_item_the_search_knows_beats_a_worse_one_the_names_found() -> None:
+    found = _find("Mantis gatling", _MantisWiki())  # pyright: ignore[reportArgumentType]
+    assert isinstance(found, Found), found
+    assert found.record["name"] == "Mantis GT-220 Gatling"
+
+
+def test_items_of_one_name_are_one_answer_not_a_question() -> None:
+    """#233, seen live: "Gladius decoy launcher" asked which of three of the same name."""
+    same = [
+        item("Aegis Gladius - Decoy Launcher", "WeaponDefensive", uuid=f"decoy-{n}")
+        for n in range(3)
+    ]
+    found = _find("Gladius decoy launcher", FakeItemsWiki(extra=same))
+    assert isinstance(found, Found), found
+    assert found.record["name"] == "Aegis Gladius - Decoy Launcher"
