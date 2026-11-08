@@ -116,11 +116,13 @@ class FakeStream:
 
     def __init__(self, **kwargs: Any) -> None:
         self.calls: list[tuple[str, int]] = [("open", threading.get_ident())]
+        self.started = threading.Event()
         self.done = threading.Event()
         STREAMS.append(self)
 
     def start(self) -> None:
         self.calls.append(("start", threading.get_ident()))
+        self.started.set()
 
     def abort(self, ignore_errors: bool = False) -> None:
         self.calls.append(("abort", threading.get_ident()))
@@ -147,6 +149,7 @@ def test_the_speech_stream_starts_and_closes_off_the_loop_and_stops_at_once(
 
     async def scenario() -> tuple[int, bytearray]:
         sink.write(b"\x01\x00" * 4800)
+        assert await asyncio.to_thread(STREAMS[0].started.wait, 5)  # playing
         sink.close()  # the player pressed push-to-talk
         block = bytearray(b"\xff" * 640)
         with pytest.raises(_Stop):  # the very next block is silence, and the last

@@ -604,6 +604,32 @@ def test_warming_again_after_a_rebind_writes_the_cache_but_loads_nothing_twice()
     assert not lookup.prepared
 
 
+def test_a_rebind_during_the_first_warm_up_still_loads_the_look_ups() -> None:
+    """Review of #207: cancelling the first warm-up for new keybinds mustn't leave the
+    ship data "still loading" for the whole session."""
+    release = asyncio.Event()
+
+    class SlowLookup(FakeLookup):
+        async def prepare(self) -> None:
+            await release.wait()
+            self.prepared = True
+
+    lookup = SlowLookup()
+    brain = ClaudeBrain(MATCHER, client=cast(Any, _Client([], _final(""))), lookups=[lookup])
+
+    async def scenario() -> None:
+        first = asyncio.create_task(brain.warm(KEYBINDS))
+        await asyncio.sleep(0)
+        first.cancel()  # the keybinds changed
+        await asyncio.gather(first, return_exceptions=True)
+        second = asyncio.create_task(brain.warm(KEYBINDS))
+        release.set()
+        await second
+
+    asyncio.run(scenario())
+    assert lookup.prepared
+
+
 def test_closing_the_brain_closes_its_own_connection(monkeypatch: pytest.MonkeyPatch) -> None:
     """#60: the connection pool was never closed."""
     brain = ClaudeBrain(MATCHER, api_key="test")

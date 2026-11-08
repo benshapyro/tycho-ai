@@ -198,18 +198,25 @@ class ClaudeBrain:
         self._for: Keybinds | None = None
         self._system: list[TextBlockParam] = []
         self._actions: frozenset[str] = frozenset()
-        self._prepared = False
+        self._preparing: asyncio.Future[list[None]] | None = None
 
     async def warm(self, keybinds: Keybinds) -> None:
-        """Warm the cache, and the first time, load what the look-ups need, side by side.
+        """Warm the cache, and load what the look-ups need, side by side.
+
         Called again after the keybinds change (#60): the briefing lists them, so the
-        cache needs writing again, but the look-ups are ready."""
-        prepare = [] if self._prepared else [lookup.prepare() for lookup in self._lookups.values()]
-        self._prepared = True
-        await asyncio.gather(self._warm_cache(keybinds), *prepare)
+        cache needs writing again. The look-ups load once, in a task of their own, so a
+        rewarm that cancels this one can't leave them half loaded."""
+        if self._preparing is None:
+            lookups = self._lookups.values()
+            self._preparing = asyncio.gather(*(lookup.prepare() for lookup in lookups))
+        await asyncio.gather(self._warm_cache(keybinds), asyncio.shield(self._preparing))
 
     async def close(self) -> None:
-        """Close the connection to Claude, if it's the brain's own."""
+        """Stop any loading still running, and close the connection to Claude, if it's
+        the brain's own."""
+        if self._preparing is not None and not self._preparing.done():
+            self._preparing.cancel()
+            await asyncio.gather(self._preparing, return_exceptions=True)
         if self._owns_client:
             await self._client.close()
 
