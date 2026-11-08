@@ -43,7 +43,12 @@ class Brain(Protocol):
     async def decide(self, request: BrainRequest) -> Decision: ...
 
     async def warm(self, keybinds: Keybinds) -> None:
-        """Get ready for the first request, e.g. by caching the briefing. Never raises."""
+        """Get ready for the next request, e.g. by caching the briefing. Called at the
+        start and again when the keybinds change. Never raises."""
+        ...
+
+    async def close(self) -> None:
+        """Let go of connections. Called once, when Tycho stops."""
         ...
 
 

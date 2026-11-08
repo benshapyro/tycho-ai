@@ -123,7 +123,7 @@ class ElevenLabsSpeaker:
                         else:
                             raise SpeechError(_explain(status, body))
                     else:
-                        sink = self._open(text)
+                        sink = await self._open(text)
                         async for piece in response.aiter_bytes():
                             if started:
                                 log.debug("First audio in %.0f ms", _ms(started))
@@ -147,7 +147,7 @@ class ElevenLabsSpeaker:
                 sink.close()
 
     async def _play(self, text: str, audio: bytes) -> None:
-        sink = self._open(text)
+        sink = await self._open(text)
         try:
             sink.write(audio)
             sink.finish()
@@ -165,11 +165,22 @@ class ElevenLabsSpeaker:
         if self._owns_client:
             await self._client.aclose()
 
-    def _open(self, text: str) -> Sink:
+    async def _open(self, text: str) -> Sink:
+        """Open the sound card off the event loop: it can take tens of milliseconds (#60).
+        If ``speak`` is cancelled meanwhile, the sink is closed once it's open."""
+        opening = asyncio.ensure_future(asyncio.to_thread(self._open_sink, RATE, self._gain))
         try:
-            return self._open_sink(RATE, self._gain)
+            return await asyncio.shield(opening)
+        except asyncio.CancelledError:
+            opening.add_done_callback(_close_opened)
+            raise
         except Exception as e:  # PortAudio raises its own types
             raise SpeechError(f"couldn't play speech: {e}") from e
+
+
+def _close_opened(opening: asyncio.Future[Sink]) -> None:
+    if not opening.cancelled() and opening.exception() is None:
+        opening.result().close()
 
 
 def _read(file: Path) -> bytes | None:

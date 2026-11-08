@@ -588,6 +588,63 @@ def test_warming_up_also_loads_the_look_ups_data() -> None:
     assert lookup.prepared
 
 
+def test_warming_again_after_a_rebind_writes_the_cache_but_loads_nothing_twice() -> None:
+    """#60: the briefing lists the keybinds, so a rebind needs the cache warmed again."""
+    lookup = FakeLookup()
+    client = _Client([], _final(""))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=[lookup])
+
+    async def scenario() -> None:
+        await brain.warm(KEYBINDS)
+        lookup.prepared = False
+        await brain.warm(KEYBINDS)
+
+    asyncio.run(scenario())
+    assert len(client.requests) == 2
+    assert not lookup.prepared
+
+
+def test_a_rebind_during_the_first_warm_up_still_loads_the_look_ups() -> None:
+    """Review of #207: cancelling the first warm-up for new keybinds mustn't leave the
+    ship data "still loading" for the whole session."""
+    release = asyncio.Event()
+
+    class SlowLookup(FakeLookup):
+        async def prepare(self) -> None:
+            await release.wait()
+            self.prepared = True
+
+    lookup = SlowLookup()
+    brain = ClaudeBrain(MATCHER, client=cast(Any, _Client([], _final(""))), lookups=[lookup])
+
+    async def scenario() -> None:
+        first = asyncio.create_task(brain.warm(KEYBINDS))
+        await asyncio.sleep(0)
+        first.cancel()  # the keybinds changed
+        await asyncio.gather(first, return_exceptions=True)
+        second = asyncio.create_task(brain.warm(KEYBINDS))
+        release.set()
+        await second
+
+    asyncio.run(scenario())
+    assert lookup.prepared
+
+
+def test_closing_the_brain_closes_its_own_connection(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#60: the connection pool was never closed."""
+    brain = ClaudeBrain(MATCHER, api_key="test")
+    closed: list[bool] = []
+
+    async def close() -> None:
+        closed.append(True)
+
+    monkeypatch.setattr(brain._client, "close", close)  # pyright: ignore[reportPrivateUsage]
+    asyncio.run(brain.close())
+    assert closed == [True]
+    lent = _Client([], _final(""))
+    asyncio.run(ClaudeBrain(MATCHER, client=cast(Any, lent)).close())  # a lent one is left open
+
+
 def test_reference_text_goes_at_the_end_of_the_cached_briefing() -> None:
     client = _Client([], _final("RSI."))
     brain = ClaudeBrain(

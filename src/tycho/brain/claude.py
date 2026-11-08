@@ -180,6 +180,7 @@ class ClaudeBrain:
         says what Tycho knows about the player, for each request's header. ``cards``
         says whether the Tile is on, so whether Claude may show a card (#2)."""
         # The session gives up after its own deadline; one quick retry fits inside it.
+        self._owns_client = client is None
         self._client = client or anthropic.AsyncAnthropic(
             api_key=api_key, timeout=anthropic.Timeout(8.0, connect=3.0), max_retries=1
         )
@@ -197,12 +198,27 @@ class ClaudeBrain:
         self._for: Keybinds | None = None
         self._system: list[TextBlockParam] = []
         self._actions: frozenset[str] = frozenset()
+        self._preparing: asyncio.Future[list[None]] | None = None
 
     async def warm(self, keybinds: Keybinds) -> None:
-        """Warm the cache, and load what the look-ups need, side by side."""
-        await asyncio.gather(
-            self._warm_cache(keybinds), *(lookup.prepare() for lookup in self._lookups.values())
-        )
+        """Warm the cache, and load what the look-ups need, side by side.
+
+        Called again after the keybinds change (#60): the briefing lists them, so the
+        cache needs writing again. The look-ups load once, in a task of their own, so a
+        rewarm that cancels this one can't leave them half loaded."""
+        if self._preparing is None:
+            lookups = self._lookups.values()
+            self._preparing = asyncio.gather(*(lookup.prepare() for lookup in lookups))
+        await asyncio.gather(self._warm_cache(keybinds), asyncio.shield(self._preparing))
+
+    async def close(self) -> None:
+        """Stop any loading still running, and close the connection to Claude, if it's
+        the brain's own."""
+        if self._preparing is not None and not self._preparing.done():
+            self._preparing.cancel()
+            await asyncio.gather(self._preparing, return_exceptions=True)
+        if self._owns_client:
+            await self._client.close()
 
     async def _warm_cache(self, keybinds: Keybinds) -> None:
         """Write the briefing to the cache and open the connection, billing no output.
