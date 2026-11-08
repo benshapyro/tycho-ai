@@ -280,6 +280,8 @@ def _start(
             display.show(notice(said))
 
     display: TileDisplay | None = None
+    if starting is not None:
+        starting.doing("Checking your voice")
     voice = load_speaker(current, voice_fell_back)
     address = Address.from_settings(current)
     speaker = Pronouncing(voice, address) if voice is not None else None

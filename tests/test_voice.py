@@ -276,6 +276,7 @@ def _get(status: int, code: str = "") -> Callable[..., _Answer]:
         (200, "", "available"),
         (404, "voice_not_found", "missing"),
         (400, "voice_not_found", "missing"),
+        (400, "invalid_request", "unknown"),  # not a missing voice: keep it (#246)
         (401, "missing_permissions", "unknown"),  # a key allowed only text-to-speech
         (401, "invalid_api_key", "unknown"),
         (500, "", "unknown"),
@@ -288,6 +289,17 @@ def test_the_start_check_asks_for_the_voice_itself(
     checked = voices.check("sk_test", voices.choose("The Ship's Mind"), get)
     assert checked.availability == availability
     assert get.asked == [f"https://api.elevenlabs.io/v1/voices/{SHIPS_MIND}"]  # pyright: ignore[reportFunctionMemberAccess]
+
+
+def test_the_start_check_never_raises_on_a_key_that_cant_be_sent() -> None:
+    # A zero-width space pasted with the key fails when the header is encoded (#246).
+    def get(url: str, **kwargs: Any) -> _Answer:
+        kwargs["headers"]["xi-api-key"].encode("ascii")
+        return _Answer(200)
+
+    checked = voices.check("sk_test\u200b", voices.DEFAULT, get)
+    assert checked.availability == "unknown"
+    assert "character" in checked.reason
 
 
 def test_the_start_check_never_raises_offline() -> None:
