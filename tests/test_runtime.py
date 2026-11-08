@@ -35,7 +35,7 @@ from tycho.lexicon import Lexicon
 from tycho.ptt.binding import Binding
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime import AlreadyRunning, RecognitionUnavailable, Result, Session, SingleInstance
-from tycho.runtime.session import CHECKING, FILLERS, KEEP_CHARACTERS
+from tycho.runtime.session import CHECKING, FILLERS, FOLLOW_UP_SECONDS, KEEP_CHARACTERS
 from tycho.tile import Card, Row
 
 RATE = 16_000
@@ -1619,6 +1619,91 @@ def test_with_the_tile_off_its_words_go_to_the_brain_as_usual() -> None:
     r = _conversation("keep that up", display=FakeDisplay(on=False), brain=brain)
     assert r.results[0].status == "replied"
     assert [x.text for x in brain.asked] == ["keep that up"]
+
+
+# --- "Say that again" (#222) ---------------------------------------------------------
+
+
+@pytest.mark.parametrize("tile", [True, False])
+def test_say_that_again_repeats_the_last_answer_without_the_brain(tile: bool) -> None:
+    speaker = FakeSpeaker()
+    brain = FakeBrain(Reply("Best is Everus Harbor, 7,420 a unit."))
+    display = FakeDisplay(on=tile)
+    r = _conversation(
+        "where to sell laranite", "say that again", brain=brain, speaker=speaker, display=display
+    )
+    assert len(brain.asked) == 1
+    assert r.results[1].status == "done"
+    assert r.results[1].commands == ("say_again",)
+    assert speaker.spoken == ["Best is Everus Harbor, 7,420 a unit."] * 2
+    assert display.shown == []  # a card isn't redrawn: that's "show that again"
+
+
+def test_say_that_again_works_with_no_tile_at_all() -> None:
+    speaker = FakeSpeaker()
+    brain = FakeBrain(Reply("Quantum fuel is a tank of its own."))
+    _conversation("how does quantum fuel work", "come again", brain=brain, speaker=speaker)
+    assert len(brain.asked) == 1
+    assert speaker.spoken == ["Quantum fuel is a tank of its own."] * 2
+
+
+def test_say_that_again_has_no_time_limit() -> None:
+    """The brain's follow-ups end after FOLLOW_UP_SECONDS; the replay doesn't."""
+    now = [0.0]
+    speaker = FakeSpeaker()
+    brain = FakeBrain(Reply("Hurston is 23 gigameters out."))
+
+    async def scenario() -> Rig:
+        r = rig(
+            "how far is Hurston",
+            "repeat that",
+            brain=brain,
+            speaker=speaker,
+            clock=lambda: now[0],
+        )
+        r.say()
+        await r.session.idle()
+        now[0] += 10 * FOLLOW_UP_SECONDS
+        r.say()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert len(brain.asked) == 1
+    assert speaker.spoken == ["Hurston is 23 gigameters out."] * 2
+    assert r.results[1].status == "done"
+
+
+def test_a_short_answer_said_again_uses_the_kept_audio() -> None:
+    speaker = FakeSpeaker()
+    brain = FakeBrain(Reply("Which Constellation?"))
+    _conversation("constellation stats", "say again", brain=brain, speaker=speaker)
+    assert speaker.kept == ["Which Constellation?"] * 2
+
+
+def test_nothing_to_say_again_is_not_understood() -> None:
+    brain = FakeBrain(Reply("never asked"))
+    r = _conversation("say that again", brain=brain, speaker=FakeSpeaker())
+    assert r.results[0].status == "not_understood"
+    assert r.results[0].detail == "nothing to say again"
+    assert brain.asked == []
+    assert r.feedback.played == ["not_done"]
+
+
+def test_say_that_again_is_in_the_action_log() -> None:
+    brain = FakeBrain(Reply("Best is Everus Harbor."))
+    r = _conversation("where to sell laranite", "say that again", brain=brain, log_transcripts=True)
+    entry = r.actions.entries[-1]
+    assert entry["commands"] == ["say_again"]
+    assert entry["status"] == "done"
+    assert entry["tycho_said"] == "Best is Everus Harbor."
+
+
+def test_say_that_again_isnt_a_follow_up_for_the_brain() -> None:
+    brain = FakeBrain(Reply("Best is Everus Harbor."), Reply("Area 18 is next."))
+    _conversation("where to sell laranite", "say that again", "and after that", brain=brain)
+    assert [x.said for x in brain.asked[1].recent] == ["where to sell Laranite"]
 
 
 def test_clear_the_target_is_still_the_games() -> None:

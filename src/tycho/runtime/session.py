@@ -89,6 +89,20 @@ TILE_WORDS: dict[str, frozenset[str]] = {
 }
 """What the player says to the Tile (ADR 16), while it's on. Whole utterances only, so
 "clear the target" is still the game's; no command may use them as phrases."""
+SAY_AGAIN_WORDS = frozenset(
+    {
+        "say that again",
+        "say it again",
+        "say again",
+        "repeat that",
+        "repeat it",
+        "come again",
+        "what was that",
+    }
+)
+"""Asking to hear Tycho's last answer again (#222), Tile on or off. It's replayed word
+for word, without asking the brain, however long ago it was said. Whole utterances
+only, and no command may use them as phrases."""
 
 POLL_RETRY_SECONDS = 1.0
 """How long to wait before reading push-to-talk again after it failed."""
@@ -157,6 +171,11 @@ def tile_command(text: str) -> str | None:
     """``"pin"``, ``"clear"``, ``"again"`` or ``"show"`` if the whole utterance is one."""
     said = " ".join(normalize(text))
     return next((what for what, words in TILE_WORDS.items() if said in words), None)
+
+
+def is_say_again(text: str) -> bool:
+    """Whether the whole utterance asks to hear the last answer again."""
+    return " ".join(normalize(text)) in SAY_AGAIN_WORDS
 
 
 def reply_to_question(text: str) -> str | None:
@@ -469,6 +488,9 @@ class Session:
         if tile is not None:
             trace.mark("match")
             return self._tile(request, tile, trace, heard, text)
+        if is_say_again(text):
+            trace.mark("match")
+            return self._say_again(request, trace, heard, text)
         if (reply := reply_to_question(text)) is not None:
             trace.mark("match")
             if question is None or self._clock() > question.deadline:
@@ -650,6 +672,23 @@ class Session:
             request, "not_understood", trace, heard, text, detail, progress=progress
         )
 
+    def _say_again(self, request: int, trace: Trace, heard: str, text: str) -> Result:
+        """The last answer's line, word for word, with no call to the brain (#222). A
+        card isn't redrawn: that's "show that again"."""
+        said = self._last_reply[0].strip()
+        progress = _Progress(commands=("say_again",), say=said)
+        if not said:
+            return self._result(
+                request,
+                "not_understood",
+                trace,
+                heard,
+                text,
+                "nothing to say again",
+                progress=progress,
+            )
+        return self._result(request, "done", trace, heard, text, progress=progress)
+
     def _result(
         self,
         request: int,
@@ -715,6 +754,8 @@ class Session:
             elif result.status == "asking" and result.question:
                 log.info("Tycho asks: %s", result.question, extra=logs.CONSOLE_ONLY)
         self._remember(result)
+        if result.status == "replied":
+            self._last_reply = (result.say, result.card)
         self._to_tile(result)
         if result.commands and self._action_log is not None:
             self._record(self._action_log, result, spoken=speak)
@@ -739,7 +780,6 @@ class Session:
         if not self._listening:  # a barge-in: the light is already the new request's
             display.idle()
         if result.status == "replied":
-            self._last_reply = (result.say, result.card)
             if result.card is not None:
                 display.show(result.card)
         elif result.status == "asking" and result.question:
@@ -751,6 +791,8 @@ class Session:
     @staticmethod
     def _would_speak(result: Result) -> bool:
         """Whether this result has a line for the player, given a voice to say it."""
+        if result.commands == ("say_again",):
+            return result.done and bool(result.say)
         if not result.by_brain or not result.say.strip():
             return False
         return result.status == "replied" or (result.done and not result.announced)
@@ -856,6 +898,8 @@ class Session:
 
     def _remember(self, result: Result) -> None:
         if not result.text or result.status in ("empty", "cancelled"):
+            return
+        if result.commands == ("say_again",):  # the answer it repeats is already there
             return
         if result.status == "replied":
             outcome = f"said: {result.say}"
