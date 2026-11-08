@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from typing import cast
 
 from tycho.brain.lookups import LookupResult, failure
-from tycho.knowledge.items import Found, Items, Missing, Unclear, facts
+from tycho.knowledge.items import Found, IsAShip, Items, Missing, Unclear, facts
 from tycho.knowledge.wiki import WikiError, WikiSource
 
 log = logging.getLogger(__name__)
@@ -84,6 +84,12 @@ class ItemLookup:
                     "asked": asked,
                     "matches": list(candidates),
                     "note": "several items match: pick the one the player meant, or ask",
+                }
+            case IsAShip(ship=ship):
+                return {
+                    "asked": asked,
+                    "is_a_ship": ship,
+                    "note": "a ship, not an item: use ship_lookup with this name",
                 }
             case Missing(closest=closest):
                 return {

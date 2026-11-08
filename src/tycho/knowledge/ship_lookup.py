@@ -13,13 +13,25 @@ from pathlib import Path
 from typing import cast
 
 from tycho.brain.lookups import LookupResult, failure
-from tycho.knowledge.ships import ShipLibrary, answer
+from tycho.knowledge.ships import (
+    Ambiguous,
+    IsAnItem,
+    NotFound,
+    Ship,
+    ShipLibrary,
+    answer,
+    rescued,
+    searched,
+)
 from tycho.knowledge.store import ShipDataError, ensure
-from tycho.knowledge.wiki import WikiSource
+from tycho.knowledge.wiki import WikiError, WikiSource, search
 
 log = logging.getLogger(__name__)
 
 MAX_NAMES = 3
+SEARCH_SECONDS = 1.5
+"""How long a miss waits for the Wiki API's search (about 0.3 s): well inside the
+look-up's 2.5 s, so a slow search leaves the miss as it was, not a timeout."""
 SOURCE = (
     "Star Citizen Wiki API (api.star-citizen.wiki), from the game files; "
     "ships still in concept from UEX (uexcorp.space)"
@@ -104,13 +116,38 @@ class ShipLookup:
         if library is None:
             return failure(f"{self._problem}; answer from memory, and say it may be out of date")
         asked = [str(n) for n in cast(list[object], names)[:MAX_NAMES]]
+        # Off the event loop: matching a name the first time takes milliseconds
+        # each, and push-to-talk must never wait for it.
+        found = await asyncio.to_thread(lambda: [library.find(n) for n in asked])
+        found = await asyncio.gather(
+            *(self._rescue(library, f) if isinstance(f, NotFound) else _now(f) for f in found)
+        )
         result = {
             "source": SOURCE,
             "game_version": library.patch,
             "as_of": library.as_of,
             "stale": library.stale,
-            # Off the event loop: matching a name the first time takes milliseconds
-            # each, and push-to-talk must never wait for it.
-            "ships": await asyncio.to_thread(lambda: [answer(library.find(n)) for n in asked]),
+            "ships": [answer(f) for f in found],
         }
         return LookupResult(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+
+    async def _rescue(
+        self, library: ShipLibrary, missed: NotFound
+    ) -> Ship | Ambiguous | NotFound | IsAnItem:
+        """A miss read again with the Wiki API's search, if it answers in time;
+        otherwise the miss stands."""
+        try:
+            hits = await asyncio.wait_for(
+                search(self._source, searched(missed.asked)), SEARCH_SECONDS
+            )
+        except TimeoutError:
+            log.debug("The Wiki API's search took over %.1f s; going on without it", SEARCH_SECONDS)
+            return missed
+        except WikiError as e:  # never names what was searched: the player's words
+            log.debug("The Wiki API's search failed (%s); going on without it", e)
+            return missed
+        return await asyncio.to_thread(rescued, library, missed, hits)
+
+
+async def _now[T](value: T) -> T:
+    return value
