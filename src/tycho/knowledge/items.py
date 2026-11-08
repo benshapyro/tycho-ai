@@ -139,7 +139,17 @@ class Items:
         )
         best = scored[0][0] if scored else 0.0
         ranked = _ranked(readings, hits or [])
-        ships = [(score, hit) for score, hit in ranked if hit.kind == VEHICLES]
+        # A ship must fit the words as said, kind-of-item words and all: "Mantis
+        # gatling" is the Mantis GT-220 Gatling, not the RSI Mantis (#220 review).
+        as_said = [_squashed_codes(words)]
+        ships = sorted(
+            (
+                (_score(as_said, {"name": hit.name}), hit)
+                for _, hit in ranked
+                if hit.kind == VEHICLES
+            ),
+            key=lambda pair: (-pair[0], len(pair[1].name)),
+        )
         if ships and ships[0][0] >= MATCH and ships[0][0] >= best - TIE:
             # "Cutlass Black" is the ship, not the Cutlass Black Plushie.
             return IsAShip(asked, ships[0][1].name)

@@ -288,6 +288,24 @@ def test_a_ship_asked_of_the_item_look_up_says_its_a_ship() -> None:
     ]
 
 
+def test_a_ship_weapon_named_after_its_ship_is_the_weapon() -> None:
+    """Review of #220: "Mantis gatling" was the RSI Mantis, as the kind of item
+    ("gatling") was left out when the ship's name was compared."""
+    wiki = FakeItemsWiki(extra=[item("Mantis GT-220 Gatling", "WeaponGun")])
+    wiki.search.extra["mantis"] = {
+        "data": [
+            {
+                "type": "vehicles",
+                "label": "Vehicles",
+                "results": [{"name": "RSI Mantis", "extra_label": "Combat"}],
+            }
+        ]
+    }
+    found = _find("Mantis gatling", wiki)
+    assert isinstance(found, Found), found
+    assert found.record["name"] == "Mantis GT-220 Gatling"
+
+
 def test_a_miss_is_rescued_by_the_search(monkeypatch: pytest.MonkeyPatch) -> None:
     # Every spelling's query is slow (new to the API), but the search answers.
     monkeypatch.setattr(items, "QUERY_SECONDS", 0.05)
