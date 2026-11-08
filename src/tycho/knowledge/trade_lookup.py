@@ -8,11 +8,19 @@ Tycho says the source once and the age only when it's old (Ben, 2026-11-02).
 import asyncio
 import json
 import logging
-from collections.abc import Mapping
+from collections.abc import Coroutine, Mapping
 from typing import Any
 
 from tycho.brain.lookups import Lookup, LookupResult, failure
-from tycho.knowledge.trade import Place, Trade, TradeError, hours_ago, top
+from tycho.knowledge.trade import (
+    MAX_ORIGINS,
+    Commodity,
+    Place,
+    Trade,
+    TradeError,
+    hours_ago,
+    top,
+)
 from tycho.knowledge.wiki import WikiError, WikiSource
 
 log = logging.getLogger(__name__)
@@ -20,6 +28,10 @@ log = logging.getLogger(__name__)
 SOURCE = "UEX (uexcorp.space), prices reported by players"
 SECONDS = 5.0
 """A route from a station asks UEX about each of its terminals at once."""
+PART_SECONDS = 3.5
+"""How long a station's terminals are waited for, when asked one by one: the routes
+from those that answered are given, so one slow terminal can't use up ``SECONDS``
+(#150, the Obituary question in the play session)."""
 ROUTES_CAP = 500
 """UEX returns at most this many routes for one commodity: Scrap's list stopped at 500
 (measured 6 November 2026; others had 120 to 320)."""
@@ -215,15 +227,23 @@ class TradeRoutes(_TradeLookup):
                 commodity, others = trade.commodity_match(commodity_said)
                 if others:
                     assumed["also_matches"] = list(others)
-            if commodity is not None:
+            capped = False
+            if start is not None and self._narrow(start):
+                # A planet, an orbit or a few terminals: ask from there, for just the
+                # commodity if there is one. Small lists, in one round trip (#150).
+                rows, capped = await self._from(start, commodity)
+                wide = False
+            elif commodity is not None:
                 # One request for every route of one commodity (#147), kept below to the
-                # start if there is one: from anywhere, or from a whole system ("gold in
-                # Pyro"), which a few of its terminals asked one by one would miss.
+                # start if there is one: a whole system ("gold in Pyro"), which a few of
+                # its terminals asked one by one would miss.
                 rows = await trade.routes({"id_commodity": commodity.id})
+                capped, wide = len(rows) >= ROUTES_CAP, True
             elif start is not None:
-                rows = await self._from(start)
+                rows, capped = await self._from(start, None)
+                wide = False
             else:
-                rows = []
+                rows, wide = [], False
         except TradeError as e:
             return self._miss(str(e))
         except WikiError as e:
@@ -238,12 +258,17 @@ class TradeRoutes(_TradeLookup):
                 rows = [r for r in rows if trade.in_place(r, start, "_origin")]
             return rows
 
-        capped = commodity is not None and len(rows) >= ROUTES_CAP
         rows = kept(rows)
-        if not rows and capped and start is not None:
-            # UEX cut the commodity's list at its cap (#171): ask from the start itself.
+        if not rows and capped and start is not None and commodity is not None:
+            # UEX cut a list at its cap (#171): ask the other way round. From the start
+            # itself after the commodity's list, or the commodity's list after the start's
+            # (should UEX ever not narrow the start's routes to the commodity).
             try:
-                rows = kept(await self._from(start))
+                rows = kept(
+                    (await self._from(start, commodity))[0]
+                    if wide
+                    else await trade.routes({"id_commodity": commodity.id})
+                )
             except TradeError, WikiError:
                 rows = []
         best = sorted(rows, key=lambda r: -_profit(r, cargo))[:5]
@@ -259,18 +284,36 @@ class TradeRoutes(_TradeLookup):
             body["note"] = f"UEX has no matching routes {where}"
         return self._result(body)
 
-    async def _from(self, start: Place) -> list[dict[str, Any]]:
-        """UEX starts routes from a terminal, a planet or an orbit: anything else is
-        asked terminal by terminal."""
+    def _narrow(self, start: Place) -> bool:
+        """Whether routes from ``start`` are best asked from the start itself: UEX starts
+        routes from a planet or an orbit, and a station, city or outpost has only a few
+        terminals. A system or a moon has too many to ask one by one."""
         if start.id_field in ("id_planet", "id_orbit") and start.id:
-            return await self._trade.routes({f"{start.id_field}_origin": start.id})
-        terminals = self._trade.terminals_at(start)[:4]
+            return True
+        return 0 < len(self._trade.terminals_at(start)) <= MAX_ORIGINS
+
+    async def _from(
+        self, start: Place, commodity: Commodity | None
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """The routes from ``start`` (of ``commodity`` only, if there is one), and whether
+        a list UEX gave was cut at its cap. UEX starts routes from a terminal, a planet or
+        an orbit: anything else is asked terminal by terminal, at once, and the terminals
+        that haven't answered after ``PART_SECONDS`` are left out."""
+        only: dict[str, int] = {"id_commodity": commodity.id} if commodity is not None else {}
+        if start.id_field in ("id_planet", "id_orbit") and start.id:
+            rows = await self._trade.routes({f"{start.id_field}_origin": start.id, **only})
+            return rows, len(rows) >= ROUTES_CAP
+        terminals = self._trade.terminals_at(start)[:MAX_ORIGINS]
         if not terminals:
             raise TradeError(f"UEX lists no trade terminals at {start.value}")
-        lists = await asyncio.gather(
-            *(self._trade.routes({"id_terminal_origin": t}) for t in terminals)
+        lists = await _answered(
+            [self._trade.routes({"id_terminal_origin": t, **only}) for t in terminals],
+            PART_SECONDS,
+            start.value,
         )
-        return [row for rows in lists for row in rows]
+        return [row for rows in lists for row in rows], any(
+            len(rows) >= ROUTES_CAP for rows in lists
+        )
 
     def _route(self, row: Mapping[str, Any], cargo: int) -> dict[str, object]:
         buy, sell = (
@@ -292,6 +335,33 @@ class TradeRoutes(_TradeLookup):
         if cargo:
             out["profit_for_cargo"] = _profit(row, cargo)
         return out
+
+
+async def _answered[T](
+    requests: list[Coroutine[Any, Any, T]], seconds: float, where: str
+) -> list[T]:
+    """The answers to ``requests``, made at once, from those that answered within
+    ``seconds``. Raises ``WikiError`` only when none did."""
+    tasks = [asyncio.ensure_future(r) for r in requests]
+    try:
+        done, waiting = await asyncio.wait(tasks, timeout=seconds)
+    finally:
+        for task in tasks:
+            task.cancel()
+    answers = [t.result() for t in tasks if t in done and t.exception() is None]
+    problems = [e for t in tasks if t in done and (e := t.exception()) is not None]
+    if not answers:
+        if problems:
+            raise WikiError(str(problems[0])) from problems[0]
+        raise WikiError(f"no terminal at {where} answered within {seconds:.1f} s")
+    if waiting or problems:
+        log.info(
+            "Routes from %s: %d of %d terminals answered in time",
+            where,
+            len(answers),
+            len(tasks),
+        )
+    return answers
 
 
 def _per_scu(row: Mapping[str, Any]) -> float:

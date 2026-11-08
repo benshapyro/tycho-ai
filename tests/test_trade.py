@@ -276,9 +276,9 @@ def test_the_tool_schemas_suit_strict_tool_use() -> None:
         assert "UEX" in lookup.description
 
 
-def test_a_start_and_a_commodity_ask_uex_once_and_keep_the_start() -> None:
-    """Play session: gold from Pyro found nothing, because only four of the system's
-    terminals were asked. With a commodity, one request covers every start."""
+def test_a_start_and_a_commodity_ask_uex_once_for_both() -> None:
+    """#150: a start and a commodity are one small request, not the commodity's whole
+    list (up to 500 routes) first and then the start's."""
     uex = FakeTradeUex()
     _, result = _run(
         _routes(uex), {"start": "Hurston", "commodity": "laranite", "end": "", "cargo_scu": 0}
@@ -288,7 +288,68 @@ def test_a_start_and_a_commodity_ask_uex_once_and_keep_the_start() -> None:
         ("Lorville", "Area18"),
     ]
     routes = [query for path, query in uex.calls if path == "/commodities_routes"]
-    assert routes == [{"id_commodity": 47}]
+    assert routes == [{"id_planet_origin": 1, "id_commodity": 47}]
+
+
+def test_a_station_and_a_commodity_ask_its_terminals_once() -> None:
+    """The play session's "I'm in Pyro at Obituary" (#150): before, the commodity's
+    whole list was asked first, and the station's terminals only after it came back
+    capped. Now it is the station's terminals, for that commodity, in one round."""
+    uex = FakeTradeUex()
+    _, result = _run(
+        _routes(uex), {"start": "ARC-L1", "commodity": "quantanium", "end": "", "cargo_scu": 0}
+    )
+    assert [r["sell_at"] for r in result["routes"]] == ["Lorville"]
+    routes = [query for path, query in uex.calls if path == "/commodities_routes"]
+    assert routes == [{"id_terminal_origin": 1, "id_commodity": 58}]
+
+
+def test_a_slow_terminal_is_left_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#150: one terminal that doesn't answer mustn't use up the look-up's time: the
+    routes from those that did answer are given."""
+    import tycho.knowledge.trade_lookup
+
+    uex = FakeTradeUex()
+    real_get = uex.get
+
+    async def slow_at_area18(path: str, params: dict[str, int] | None = None) -> Any:
+        if path == "/commodities_routes" and (params or {}).get("id_terminal_origin") == 12:
+            await asyncio.sleep(10)
+        return await real_get(path, params)
+
+    monkeypatch.setattr(uex, "get", slow_at_area18)
+    monkeypatch.setattr(tycho.knowledge.trade_lookup, "PART_SECONDS", 0.05)
+    monkeypatch.setattr(Trade, "terminals_at", _arc_l1_and_area18)
+    error, result = _run(
+        _routes(uex), {"start": "ARC-L1", "commodity": "", "end": "", "cargo_scu": 0}
+    )
+    assert not error
+    assert [r["commodity"] for r in result["routes"]] == ["Quantainium"]
+
+
+def _arc_l1_and_area18(self: Trade, place: object) -> list[int]:
+    """ARC-L1 and Area 18 as if in one place, for the slow-terminal test."""
+    return [1, 12]
+
+
+def test_no_terminal_answering_in_time_is_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    import tycho.knowledge.trade_lookup
+
+    uex = FakeTradeUex()
+    real_get = uex.get
+
+    async def slow(path: str, params: Any = None) -> Any:
+        if path == "/commodities_routes":
+            await asyncio.sleep(10)
+        return await real_get(path, params)
+
+    monkeypatch.setattr(uex, "get", slow)
+    monkeypatch.setattr(tycho.knowledge.trade_lookup, "PART_SECONDS", 0.05)
+    error, result = _run(
+        _routes(uex), {"start": "ARC-L1", "commodity": "", "end": "", "cargo_scu": 0}
+    )
+    assert error
+    assert "didn't answer" in result["error"]
 
 
 def test_a_commodity_that_fits_a_few_names_the_others(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -314,18 +375,42 @@ def test_a_guessed_end_is_named() -> None:
 def test_a_capped_commodity_list_falls_back_to_the_starts_routes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """#171: UEX stops a commodity's routes at 500, so a start can be missing from it."""
+    """#171: UEX stops a commodity's routes at 500, so a start can be missing from it.
+    A whole system is asked by the commodity's list, then from a few of its terminals."""
     import tycho.knowledge.trade_lookup
 
     uex = FakeTradeUex()
     real = uex._routes  # pyright: ignore[reportPrivateUsage]
 
     def capped(query: dict[str, Any]) -> list[dict[str, Any]]:
-        if "id_commodity" in query:  # the cap reached, with none from Hurston
+        if list(query) == ["id_commodity"]:  # the cap reached, with none from Stanton
             return [r for r in real({"id_terminal_origin": 12}) if r["id_commodity"] == 70]
         return real(query)
 
     monkeypatch.setattr(uex, "_routes", capped)
+    monkeypatch.setattr(tycho.knowledge.trade_lookup, "ROUTES_CAP", 1)
+    _, result = _run(
+        _routes(uex), {"start": "Stanton", "commodity": "laranite", "end": "", "cargo_scu": 0}
+    )
+    assert [r["sell_at"] for r in result["routes"]] == ["New Babbage", "Area18"]
+
+
+def test_a_capped_start_list_falls_back_to_the_commodities(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Should UEX ever give a start's routes without narrowing them to the commodity,
+    a capped list without it still finds the routes, from the commodity's list."""
+    import tycho.knowledge.trade_lookup
+
+    uex = FakeTradeUex()
+    real = uex._routes  # pyright: ignore[reportPrivateUsage]
+
+    def ignores_the_commodity(query: dict[str, Any]) -> list[dict[str, Any]]:
+        if "id_planet_origin" in query:  # capped, and other commodities only
+            return [r for r in real({"id_planet_origin": 1}) if r["id_commodity"] != 47]
+        return real(query)
+
+    monkeypatch.setattr(uex, "_routes", ignores_the_commodity)
     monkeypatch.setattr(tycho.knowledge.trade_lookup, "ROUTES_CAP", 1)
     _, result = _run(
         _routes(uex), {"start": "Hurston", "commodity": "laranite", "end": "", "cargo_scu": 0}

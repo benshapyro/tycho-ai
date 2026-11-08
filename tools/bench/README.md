@@ -9,6 +9,7 @@ Install the extra packages these tools need with `uv sync --group bench`.
 | Speech-to-text | `engines/*.py`, `report.py` | none |
 | Fast-path commands | `commands_report.py` | none |
 | Speech model's graphics memory | `gpu_memory.py` | none |
+| Look-up times (live UEX and Wiki API) | `lookup_times.py` | none |
 | Language model ("brain") | `brain_report.py` | `anthropic`, optionally `cerebras` |
 | Fast router (Jev) | `jev_report.py` | `typesafe` |
 | Voices | `tts/elevenlabs_tts.py`, `tts/kokoro_tts.py`, `tts/design_voices.py` | `elevenlabs` for the ElevenLabs scripts |

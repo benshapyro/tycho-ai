@@ -13,7 +13,8 @@ What the brain can look up: ships, items and crafting, mining, trade prices and 
 - **Resolve names in code, not by Claude retrying.** Speech-to-text writes "quantanium", "S F nine", "cutty black". Match against the source's own names, try a few spellings, and keep a fuzzy cutoff high enough that "unobtainium" isn't Quantainium (0.88 in `mining.py`).
 - **A best guess beats a question back.** With two to four matches, answer the likeliest and name the others (`also_matches`, `also_places`). Above `GUESS_AMONG`, say "name one".
 - **A miss is a result** (`not_found`, closest names), not `failure()`. Keep `failure()` for the source being down.
-- **One request beats many.** A commodity's routes come in one `/commodities_routes?id_commodity=N` call, not station by station. UEX caps that list at 500 (`ROUTES_CAP`).
+- **One request beats many.** A commodity's routes come in one `/commodities_routes?id_commodity=N` call, not station by station. UEX caps that list at 500 (`ROUTES_CAP`). With a start too, ask from the start for that commodity (`id_planet_origin=P&id_commodity=N`, or each of a station's few terminals at once), not the commodity's whole list first (#150). Terminals asked at once that don't answer within `PART_SECONDS` are left out, not waited for.
+- **Time it against the live APIs** with `tools/bench/lookup_times.py` (free) before changing a look-up's `seconds`.
 - **Results are compact JSON with their source.** Each is a tool result in Claude's context, so keep it small.
 - **Time:** a look-up has `seconds` (4-6 s), and the request has a deadline (`LOOKING_SECONDS`, `LOOKING_LIMIT` in `runtime/session.py`).
 
