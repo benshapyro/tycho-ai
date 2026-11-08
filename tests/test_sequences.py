@@ -207,6 +207,18 @@ actions = ["v_deploy_landing_system"]
             "0 to 10",
         ),
         ('[[command]]\nid = 7\nsay = ["xyzzy"]\nactions = ["a"]', "id must be some text"),
+        (
+            '[[command]]\nid = "x"\nsay = ["xyzzy"]\nactions = ["a"]\nrequires = ["quantum_route"]',
+            "requires has 'quantum_route', which Tycho doesn't know; it can be 'quantum_route_set'",
+        ),
+        (
+            '[[sequence]]\nid = "x"\nsay = ["xyzzy"]\nrequires = ["route"]\nsteps = ["power_on"]',
+            "requires has 'route'",
+        ),
+        (
+            '[[command]]\nid = "x"\nsay = ["xyzzy"]\nactions = ["a"]\naccepted_risks = ["foot"]',
+            "accepted_risks has 'foot', which Tycho doesn't know; it can be 'player'",
+        ),
         ('[[phrases]]\nsay = ["xyzzy"]', "needs a command"),
         ('[[phrases]]\ncommand = "landing_gear"\nsay = "xyzzy"', "say must be a list of text"),
         ('[[phrases]]\ncommand = "warp_drive"\nsay = ["xyzzy"]', "no command with that id"),
