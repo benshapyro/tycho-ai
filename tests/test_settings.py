@@ -38,6 +38,8 @@ def test_the_file_explains_each_setting(tmp_path: Path) -> None:
     [
         ("feedback_volume = 3.0", "feedback_volume"),
         ("confirm_seconds = 60", "confirm_seconds"),  # a question must not linger
+        ('voice = "Shipsmind please"', "voice"),
+        ('voice_model = "eleven_v3"', "voice_model"),
         ('transcription_device = "tpu"', "transcription_device"),
         ('push_to_talk = "elbow:1"', "push_to_talk"),
         ("version = 99", "newer Tycho"),
@@ -145,3 +147,16 @@ def test_changes_from_two_threads_at_once_are_both_kept(tmp_path: Path) -> None:
         thread.join()
     saved = settings.load(path)
     assert all(getattr(saved, n) == values[n] for n in names)
+
+
+def test_the_voice_is_george_unless_set_and_never_changes_by_voice() -> None:
+    # ADR 9, amended 8 November 2026 (#242): George on Flash, the player's own choice after.
+    assert Settings().voice == "George"
+    assert Settings().voice_model == "the voice's own"
+    assert Settings(voice=" The Ship's Mind ").voice == "The Ship's Mind"
+    for name in ("voice", "voice_model"):
+        assert settings.rule(name) == {
+            "voice": "no",
+            "applies": "restart",
+            "how": settings.FILE_OR_APP,
+        }

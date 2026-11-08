@@ -35,6 +35,8 @@ log = logging.getLogger(__name__)
 
 GROUPS: dict[str, tuple[str, ...]] = {
     "Voice and sounds": (
+        "voice",
+        "voice_model",
         "voice_volume",
         "feedback_volume",
         "call_me",
@@ -475,6 +477,8 @@ def _label(name: str) -> str:
         "feedback_volume": "Sound volume",
         "game_root": "Game folder",
         "transcription_device": "Speech recognition on",
+        "voice": "Voice",
+        "voice_model": "Voice model",
     }
     if name in special:
         return special[name]
@@ -509,6 +513,8 @@ def _shape(name: str, key: str) -> str:
         return "That doesn't look like an ElevenLabs key: it starts with sk_."
     if len(key) < 24 or any(c.isspace() for c in key):
         return "That key looks cut short. Copy it again, all of it."
+    if not key.isascii():
+        return "That key has a character keys don't have, maybe an invisible one. Copy it again."
     return ""
 
 

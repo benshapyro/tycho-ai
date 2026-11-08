@@ -151,3 +151,18 @@ def test_a_piped_key_is_refused_so_it_never_sits_in_a_transcript(
     assert memory.store == {}
     err = capsys.readouterr().err
     assert 'start "Tycho key" cmd /k tycho key set anthropic' in err
+
+
+def test_tycho_key_set_refuses_a_key_with_a_hidden_character(
+    memory: MemoryKeyring, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # It can't go in a request header, so it would stop Tycho starting (#246).
+    from tycho import app
+
+    monkeypatch.setattr(
+        credentials.getpass, "getpass", lambda prompt="": "sk_" + "a" * 30 + "\u200b"
+    )
+    monkeypatch.setattr(credentials, "_interactive", lambda: True)
+    assert app.main(["key", "set", "elevenlabs"]) == 1
+    assert memory.store == {}
+    assert "invisible" in capsys.readouterr().err

@@ -401,3 +401,128 @@ def test_a_keybind_change_warms_the_brain_again(monkeypatch: pytest.MonkeyPatch)
 
     asyncio.run(asyncio.wait_for(scenario(), 5))
     assert warmed == [True]
+
+
+# --- The voice (#242) ------------------------------------------------------------------
+
+
+def _voice_check(monkeypatch: pytest.MonkeyPatch, availability: str, reason: str = "") -> list[str]:
+    from tycho.voice import voices
+
+    asked: list[str] = []
+
+    def check(key: str, voice: voices.Voice) -> voices.Checked:
+        asked.append(voice.id)
+        return voices.Checked(availability, reason)  # pyright: ignore[reportArgumentType]
+
+    monkeypatch.setattr(app, "elevenlabs_key", lambda: "sk_test")
+    monkeypatch.setattr(voices, "check", check)
+    monkeypatch.setattr(app, "_voice_now", None)
+    return asked
+
+
+def test_a_missing_voice_falls_back_to_george_on_flash_before_the_first_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from tycho.voice import voices
+    from tycho.voice.elevenlabs import ElevenLabsSpeaker
+
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    asked = _voice_check(monkeypatch, "missing", "The Ship's Mind isn't available to your key")
+    told: list[str] = []
+    with caplog.at_level(logging.INFO, logger="tycho"):
+        speaker = app.load_speaker(
+            settings.Settings(voice="The Ship's Mind"), on_fallback=told.append
+        )
+    assert asked == [voices.SHIPS_MIND]
+    assert isinstance(speaker, ElevenLabsSpeaker)
+    assert speaker.voice == voices.DEFAULT
+    assert "George on Flash v2.5" in caplog.text
+    (said,) = told
+    assert "George on Flash v2.5" in said
+    # The window's status shows what the running Tycho chose, without asking again.
+    finding = app.voice_finding(settings.Settings(voice="The Ship's Mind"), quick=True)
+    assert finding.level == "warn"
+    assert asked == [voices.SHIPS_MIND]
+
+
+def test_the_start_log_names_the_voice_actually_used(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from tycho.voice.elevenlabs import ElevenLabsSpeaker
+
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    _voice_check(monkeypatch, "available")
+    told: list[str] = []
+    with caplog.at_level(logging.INFO, logger="tycho"):
+        speaker = app.load_speaker(settings.Settings(voice="Sarah"), on_fallback=told.append)
+    assert isinstance(speaker, ElevenLabsSpeaker)
+    assert speaker.voice.name == "Sarah"
+    assert "Voice: ElevenLabs, Sarah on v4 Turbo" in caplog.text
+    assert "Ship's Mind" not in caplog.text
+    assert told == []
+
+
+def test_a_voice_that_couldnt_be_checked_is_kept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A key allowed only text-to-speech can't read voices; the first line still falls back.
+    from tycho.voice.elevenlabs import ElevenLabsSpeaker
+
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    _voice_check(monkeypatch, "unknown", "your key isn't allowed to read voices")
+    speaker = app.load_speaker(settings.Settings(voice="The Ship's Mind"))
+    assert isinstance(speaker, ElevenLabsSpeaker)
+    assert speaker.voice.name == "The Ship's Mind"
+
+
+@pytest.mark.parametrize(
+    ("availability", "level", "words"),
+    [
+        ("available", "ok", "ElevenLabs, George on Flash v2.5"),
+        ("missing", "warn", "so Tycho speaks as George on Flash v2.5"),
+    ],
+)
+def test_tycho_check_names_the_voice_and_warns_if_its_missing(
+    monkeypatch: pytest.MonkeyPatch, availability: str, level: str, words: str
+) -> None:
+    asked = _voice_check(monkeypatch, availability, "The Ship's Mind isn't available to your key")
+    voice = "George" if availability == "available" else "The Ship's Mind"
+    finding = app.voice_finding(settings.Settings(voice=voice), quick=False)
+    assert (finding.what, finding.level) == ("Voice", level)
+    assert words in finding.detail
+    assert len(asked) == 1
+    # The quick checks (the window's) never ask ElevenLabs.
+    quick = app.voice_finding(settings.Settings(voice=voice), quick=True)
+    assert quick.level == "ok"
+    assert len(asked) == 1
+
+
+def test_a_stored_voice_key_with_a_hidden_character_is_no_key_not_a_failed_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # httpx2 encodes headers when the client is built: a zero-width space pasted with an
+    # older key stopped Tycho starting (#246, the #247 review).
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    def stored(name: str) -> str:
+        return "sk_" + "a" * 30 + "\u200b"
+
+    monkeypatch.setattr(app.credentials, "get", stored)
+    doing: list[str] = []
+    with caplog.at_level(logging.WARNING, logger="tycho"):
+        assert app.load_speaker(settings.Settings(), doing=doing.append) is None
+    assert "invisible" in caplog.text
+    assert doing == []  # nothing to check, so the starting star doesn't say so
+
+
+def test_the_starting_star_says_when_the_voice_is_being_checked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    _voice_check(monkeypatch, "available")
+    doing: list[str] = []
+    assert app.load_speaker(settings.Settings(), doing=doing.append) is not None
+    assert doing == ["Checking your voice"]
+    assert app.load_speaker(settings.Settings(voice_volume=0), doing=doing.append) is None
+    assert doing == ["Checking your voice"]
