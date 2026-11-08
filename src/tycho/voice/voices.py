@@ -123,16 +123,18 @@ def check(key: str, voice: Voice, get: Get = httpx2.get) -> Checked:
         )
     except httpx2.HTTPError as e:
         return Checked("unknown", f"couldn't reach ElevenLabs ({type(e).__name__})")
+    except UnicodeError:  # a key with a pasted invisible character can't go in a header
+        return Checked("unknown", "your ElevenLabs key has a character that can't be sent")
     status, code = response.status_code, _code(response.text)
     if status == 200:
         return Checked("available")
-    if status in (400, 404):
+    if status == 404 or missing(status, response.text):
         return Checked("missing", f"{voice.name} isn't available to your ElevenLabs key")
     if status in (401, 403) and "permission" in code:
         return Checked("unknown", "your key isn't allowed to read voices, so it wasn't checked")
     if status in (401, 403):
         return Checked("unknown", "ElevenLabs refused the key")
-    return Checked("unknown", f"ElevenLabs answered {status}")
+    return Checked("unknown", f"ElevenLabs answered {status}" + (f" ({code})" if code else ""))
 
 
 def fallback(voice: Voice) -> Voice | None:

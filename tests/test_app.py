@@ -496,3 +496,33 @@ def test_tycho_check_names_the_voice_and_warns_if_its_missing(
     quick = app.voice_finding(settings.Settings(voice=voice), quick=True)
     assert quick.level == "ok"
     assert len(asked) == 1
+
+
+def test_a_stored_voice_key_with_a_hidden_character_is_no_key_not_a_failed_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # httpx2 encodes headers when the client is built: a zero-width space pasted with an
+    # older key stopped Tycho starting (#246, the #247 review).
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    def stored(name: str) -> str:
+        return "sk_" + "a" * 30 + "\u200b"
+
+    monkeypatch.setattr(app.credentials, "get", stored)
+    doing: list[str] = []
+    with caplog.at_level(logging.WARNING, logger="tycho"):
+        assert app.load_speaker(settings.Settings(), doing=doing.append) is None
+    assert "invisible" in caplog.text
+    assert doing == []  # nothing to check, so the starting star doesn't say so
+
+
+def test_the_starting_star_says_when_the_voice_is_being_checked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    _voice_check(monkeypatch, "available")
+    doing: list[str] = []
+    assert app.load_speaker(settings.Settings(), doing=doing.append) is not None
+    assert doing == ["Checking your voice"]
+    assert app.load_speaker(settings.Settings(voice_volume=0), doing=doing.append) is None
+    assert doing == ["Checking your voice"]

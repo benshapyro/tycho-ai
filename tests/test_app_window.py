@@ -178,6 +178,7 @@ def test_a_key_the_provider_refuses_isnt_stored(path: Path, vault: dict[str, str
     [
         ("anthropic", "sk_wrong_provider_key_123456789", "starts with sk-ant-"),
         ("elevenlabs", "sk-ant-api03-abcdefghijklmnopqrstuvwx", "starts with sk_"),
+        ("elevenlabs", "sk_" + "a" * 30 + "\u200b", "invisible one"),  # #246
         ("anthropic", "sk-ant-short", "cut short"),
         ("openai", GOOD, "isn't a key"),
         ("anthropic", 42, "starts with sk-ant-"),

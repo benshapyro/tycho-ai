@@ -513,6 +513,8 @@ def _shape(name: str, key: str) -> str:
         return "That doesn't look like an ElevenLabs key: it starts with sk_."
     if len(key) < 24 or any(c.isspace() for c in key):
         return "That key looks cut short. Copy it again, all of it."
+    if not key.isascii():
+        return "That key has a character keys don't have, maybe an invisible one. Copy it again."
     return ""
 
 

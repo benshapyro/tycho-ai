@@ -280,7 +280,9 @@ def _start(
             display.show(notice(said))
 
     display: TileDisplay | None = None
-    voice = load_speaker(current, voice_fell_back)
+    voice = load_speaker(
+        current, voice_fell_back, starting.doing if starting is not None else lambda _now: None
+    )
     address = Address.from_settings(current)
     speaker = Pronouncing(voice, address) if voice is not None else None
     # What a setting changed by voice changes in the running session (#111). A name
@@ -832,10 +834,19 @@ def elevenlabs_key() -> str | None:
     from tycho import credentials
 
     try:
-        return credentials.get("elevenlabs")
+        key = credentials.get("elevenlabs")
     except credentials.CredentialStoreError as e:
         log.warning("Couldn't read your ElevenLabs key: %s", e)
         return None
+    if key is not None and not key.isascii():
+        # It can't go in a request header, and would stop Tycho starting (#246).
+        log.warning(
+            "Your ElevenLabs key has a character keys don't have, maybe an invisible one, "
+            "so Tycho can't use it. Store it again: %s",
+            VOICE_KEY_HELP,
+        )
+        return None
+    return key
 
 
 _voice_now: Finding | None = None
@@ -864,7 +875,9 @@ def choose_voice(current: Settings, key: str) -> tuple[Voice, Finding]:
 
 
 def load_speaker(
-    current: Settings, on_fallback: Callable[[str], None] = lambda _said: None
+    current: Settings,
+    on_fallback: Callable[[str], None] = lambda _said: None,
+    doing: Callable[[str], None] = lambda _now: None,
 ) -> Speaker | None:
     """ElevenLabs, if the player has stored a key and the voice isn't turned off.
     Without it, Tycho's replies are shown in its window and it plays its sounds.
@@ -882,6 +895,7 @@ def load_speaker(
         return None
     from tycho.voice.elevenlabs import ElevenLabsSpeaker
 
+    doing("Checking your voice")
     voice, finding = choose_voice(current, key)
     _voice_now = finding
     if finding.level == "warn":
