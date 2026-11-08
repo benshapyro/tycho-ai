@@ -100,14 +100,19 @@ def check(
     name = action.label or action.name
     if missing := [fact for fact in command.requires if fact not in facts]:
         return Verdict(False, "; ".join(_REQUIREMENTS.get(fact, fact) for fact in missing))
-    if keybinds is not None and (
-        risky := shares_key_with_danger(action, keybinds, command, setup_done)
-    ):
+    if keybinds is not None and (clash := key_clash(action, keybinds, command, setup_done)):
+        risky, bound = clash
         key = pressable_input(action)
+        danger = risky.label or risky.name
+        # Name the key that clashes: for "ralt+x", Eject may be on "ralt" alone (#208).
+        also = (
+            f"which is also {danger}"
+            if bound == key
+            else f"which holds down {bound}, and {bound} is {danger}"
+        )
         return Verdict(
             False,
-            f"{name} is on {key}, which is also {risky.label or risky.name}. "
-            "Give it a key of its own (the recommended keybinds do).",
+            f"{name} is on {key}, {also}. Give it a key of its own (the recommended keybinds do).",
         )
     if not confirmed and (command.confirm or is_confirm_grade(action.name)):
         return Verdict(False, f"{name} needs your confirmation", ask=True)
@@ -145,18 +150,29 @@ def shares_key_with_danger(
     Ones in a control context that ``command``'s setup or requirements switch off
     don't count.
     """
+    clash = key_clash(action, keybinds, command, setup_done)
+    return clash[0] if clash is not None else None
+
+
+def key_clash(
+    action: Action,
+    keybinds: Keybinds,
+    command: Command | None = None,
+    setup_done: int | None = None,
+) -> tuple[Action, KeyInput] | None:
+    """As ``shares_key_with_danger``, with the confirm-grade action's binding that the
+    press would also press: the same key, or the modifiers it holds (#208)."""
     key = pressable_input(action)
     if key is None:
         return None
     off = switched_off(command, setup_done) if command is not None else frozenset[str]()
     for other in keybinds:
-        if (
-            other.name != action.name
-            and any(_pressed_by(key, bound) for bound in other.inputs)
-            and is_confirm_grade(other.name)
-            and other.actionmap not in off
-        ):
-            return other
+        if other.name == action.name or not is_confirm_grade(other.name):
+            continue
+        if other.actionmap in off:
+            continue
+        if bound := next((b for b in other.inputs if _pressed_by(key, b)), None):
+            return other, bound
     return None
 
 
