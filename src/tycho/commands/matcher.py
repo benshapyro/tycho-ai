@@ -323,6 +323,24 @@ def _type_problem(entry: _Entry) -> str | None:
         return f"settle_seconds must be 0 to {MAX_STEP_WAIT:g}"
     if not isinstance(entry.get("steps", []), list):
         return "steps must be a list"
+    return _unknown_to_the_gate(entry)
+
+
+def _unknown_to_the_gate(entry: _Entry) -> str | None:
+    """A ``requires`` or ``accepted_risks`` value the safety gate doesn't know, or None.
+    A typo would otherwise pass silently: an unknown fact is never true, so the command
+    is always refused, and an unknown risk is never accepted."""
+    from tycho import safety  # here, not at the top: the gate imports this module
+
+    checks = [("requires", safety.known_facts())]
+    if entry["_kind"] == "command":  # a sequence's accepted_risks are ignored, with a warning
+        checks.append(("accepted_risks", safety.ACCEPTABLE_RISKS))
+    for name, allowed in checks:
+        if unknown := [v for v in entry.get(name, []) if v not in allowed]:
+            return (
+                f"{name} has {', '.join(repr(v) for v in unknown)}, which Tycho doesn't know; "
+                f"it can be {' or '.join(repr(v) for v in sorted(allowed))}"
+            )
     return None
 
 
