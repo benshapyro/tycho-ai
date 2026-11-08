@@ -12,6 +12,7 @@ import pytest
 from tests.fakes.fake_wiki import FakeUex, FakeWiki, uex_vehicle, vehicle
 from tycho.knowledge import Ambiguous, NotFound, Ship, ShipLibrary, ShipLookup, ship_lookup, store
 from tycho.knowledge.ships import (
+    IsAnItem,
     concept_from_uex,
     concepts_from_uex,
     rescued,
@@ -571,3 +572,36 @@ def test_the_look_up_answers_for_a_concept_ship(tmp_path: Path) -> None:
     (kraken,) = content["ships"]
     assert kraken["status"].startswith("concept")
     assert kraken["cargo_scu"] == 3792
+
+
+def test_the_same_miss_twice_in_one_call_asks_the_search_once() -> None:
+    """#233: "Odin" and "the Odin" in one call searched twice."""
+    wiki = FakeWiki(FLEET)
+    wiki.search.delay = 0.01  # as the real search takes a while: both ask before either lands
+    error, content = _run(
+        ShipLookup(wiki, Path(), library=LIBRARY), {"names": ["Odin", "the Odin"]}
+    )
+    assert not error
+    assert all("closest" in ship for ship in content["ships"])
+    assert wiki.search.asked == ["odin"]
+
+
+@pytest.mark.parametrize(
+    ("asked", "hit"),
+    [
+        # Seen live (#233): a model ship isn't the cannon, nor a sniper rifle the pistol.
+        ("Gladius cannon", Hit("items", "Gladius Dunlevy Model", "Misc")),
+        ("Arrow pistol", Hit("items", "Arrowhead Sniper Rifle", "FPS Weapon")),
+        ("Arrow pistol", Hit("blueprints", "Arrowhead Sniper Rifle", None)),
+    ],
+)
+def test_the_ship_look_ups_item_must_be_the_kind_said(asked: str, hit: Hit) -> None:
+    found = rescued(LIBRARY, NotFound(asked, ()), [hit])
+    assert isinstance(found, NotFound), found
+
+
+def test_the_ship_look_ups_item_can_still_lack_the_kind_said() -> None:
+    found = rescued(
+        LIBRARY, NotFound("Atlas quantum drive", ()), [Hit("items", "Atlas", "Quantum Drive")]
+    )
+    assert found == IsAnItem("Atlas quantum drive", "Atlas")

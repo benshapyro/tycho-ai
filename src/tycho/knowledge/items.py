@@ -18,7 +18,7 @@ import itertools
 import logging
 import re
 import time
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -74,6 +74,36 @@ GENERIC = frozenset(
 too common to search on alone, and not held against a name that lacks them."""
 NOT_ITEMS = frozenset({"Paints", "Cargo"})
 """Liveries and commodity boxes share names with items ("Arrow Headhunters Livery")."""
+_RIFLE = frozenset({"rifle"})
+_SHIP_GUN = frozenset({"ship gun"})
+KINDS: dict[str, frozenset[str]] = {
+    "pistol": frozenset({"pistol"}),
+    # Players call an LMG or an SMG a rifle ("FS-9 rifle"), so they're one kind.
+    "rifle": _RIFLE,
+    "sniper": _RIFLE,
+    "lmg": _RIFLE,
+    "smg": _RIFLE,
+    "shotgun": frozenset({"shotgun"}),
+    "scattergun": frozenset({"shotgun", "ship gun"}),
+    "cannon": _SHIP_GUN,
+    "repeater": _SHIP_GUN,
+    "gatling": _SHIP_GUN,
+    "missile": frozenset({"missile"}),
+    "torpedo": frozenset({"missile"}),
+    "launcher": frozenset({"launcher"}),
+    "decoy": frozenset({"launcher"}),
+    "blade": frozenset({"blade"}),
+    "model": frozenset({"model"}),
+    "shield": frozenset({"shield"}),
+    "cooler": frozenset({"cooler"}),
+    "quantum": frozenset({"quantum drive"}),
+    "helmet": frozenset({"helmet"}),
+    "backpack": frozenset({"backpack"}),
+}
+"""Words that say one kind of item. Said, one counts against a name with another kind
+and none of the kinds said (#233): "Arrow pistol" isn't the Arrowhead Sniper Rifle nor
+the 'Arrow' I Missile, and "Gladius cannon" isn't a decoy launcher. Broad words ("gun",
+"weapon", "armor") say no one kind, so they count against nothing."""
 _CODE = re.compile(r"\b([a-z]{1,4})[\s-]?(\d+)\b")
 
 
@@ -156,6 +186,13 @@ class Items:
         if best < MATCH:
             closest = [str(r.get("name")) for _, r in scored[:CHOICES]]
             return await self._rescued(Missing(asked, tuple(closest)), readings, ranked, started)
+        # The search can know a better item than the name queries found: "Mantis
+        # gatling" is the Mantis GT-220 Gatling, not the Mantis Standard Flight Blade (#233).
+        items = [(score, hit) for score, hit in ranked if hit.kind in ITEM_KINDS]
+        if items and items[0][0] > best + TIE:
+            left = min(QUERY_SECONDS, FIND_SECONDS - (self._clock() - started))
+            if left > 0 and (record := await self._in_time(self._record(items[0][1].name), left)):
+                return Found(record)
         tied = [r for score, r in scored if score >= best - TIE]
         # A name exactly as heard wins over one exactly as a swapped version (#174):
         # "F S nine" is the FS-9, even with an SF-9 there too.
@@ -166,9 +203,11 @@ class Items:
             # Only against a swapped version: a vague name ("Morozov") still asks which.
             or [r for r in tied if len(said) > 1 and any(set(h) <= set(_words(r)) for h in heard)]
         )
-        if len(tied) == 1 or exact:
+        # Items of one name (a part for several ships) are one answer, not a question.
+        names = tuple(dict.fromkeys(str(r.get("name")) for r in tied))
+        if len(names) == 1 or exact:
             return Found((exact or tied)[0])
-        return Unclear(asked, tuple(str(r.get("name")) for r in tied[:CHOICES]))
+        return Unclear(asked, names[:CHOICES])
 
     async def blueprint(self, item: Mapping[str, Any]) -> Mapping[str, Any] | None:
         """How to craft ``item``, if it can be crafted."""
@@ -395,7 +434,19 @@ def _score(readings: list[list[str]], record: Mapping[str, Any]) -> float:
     name = _words(record)
     first, *others = readings
     # A looser reading counts a touch less than the words as said.
-    return max([name_score(first, name), *(name_score(r, name) - 0.02 for r in others)])
+    score = max([name_score(first, name), *(name_score(r, name) - 0.02 for r in others)])
+    return min(score, CLASH) if clashes(first, name) else score
+
+
+CLASH = MATCH - 0.1
+"""The most a name of another kind of item can score: never a match, still a close name."""
+
+
+def clashes(said: Iterable[str], name: Iterable[str]) -> bool:
+    """Whether the kind of item said and the kind ``name`` says differ (``KINDS``)."""
+    asked = {kind for w in said for kind in KINDS.get(w, ())}
+    named = {kind for w in name for kind in KINDS.get(w, ())}
+    return bool(asked and named and not asked & named)
 
 
 def _squashed_codes(words: list[str]) -> list[str]:

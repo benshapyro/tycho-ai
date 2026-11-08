@@ -19,7 +19,7 @@ from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from typing import Any, cast
 
-from tycho.knowledge.items import GENERIC, NOT_ITEMS, search_text
+from tycho.knowledge.items import CLASH, GENERIC, NOT_ITEMS, clashes, search_text
 from tycho.knowledge.wiki import ITEM_KINDS, VEHICLES, Hit
 from tycho.text import name_score, normalize, similarity
 
@@ -233,6 +233,11 @@ def searched(asked: str) -> str:
     return search_text(" ".join(words))
 
 
+NOT_SHIP_ITEMS = frozenset({"Misc"})
+"""Toys and models named after a ship ("Gladius Dunlevy Model"): never the item a
+player asking the ship look-up meant (#233)."""
+
+
 def rescued(
     library: ShipLibrary, missed: NotFound, hits: Iterable[Hit]
 ) -> Ship | IsAnItem | NotFound:
@@ -254,15 +259,17 @@ def rescued(
     core = tuple(w for w in query if w not in GENERIC) or query
 
     def fit(name: str) -> float:
-        # As for items: "Atlas quantum drive" is the Atlas, a touch less surely.
+        # As for items: "Atlas quantum drive" is the Atlas, a touch less surely, and
+        # an item of another kind than the one said never fits ("Arrow pistol", #233).
         words = normalize(name)
-        return max(name_score(query, words), name_score(core, words) - 0.02)
+        score = max(name_score(query, words), name_score(core, words) - 0.02)
+        return min(score, CLASH) if clashes(query, words) else score
 
     items = sorted(
         (
             (fit(hit.name), hit.name)
             for hit in hits
-            if hit.kind in ITEM_KINDS and hit.label not in NOT_ITEMS
+            if hit.kind in ITEM_KINDS and hit.label not in NOT_ITEMS | NOT_SHIP_ITEMS
         ),
         key=lambda pair: (-pair[0], len(pair[1])),
     )

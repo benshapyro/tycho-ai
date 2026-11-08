@@ -87,6 +87,7 @@ class Trade:
         self.commodities: list[Commodity] = []
         self.terminals: dict[int, Mapping[str, Any]] = {}
         self._fetched: Fresh[list[dict[str, Any]]] = Fresh(FRESH_SECONDS, clock)
+        self._fetching: dict[str, asyncio.Task[list[dict[str, Any]]]] = {}
         self._loading = asyncio.Lock()
 
     @property
@@ -228,12 +229,31 @@ class Trade:
         return await self._fresh("/vehicles_purchases_prices_all", {})
 
     async def _fresh(self, path: str, params: Mapping[str, int]) -> list[dict[str, Any]]:
+        """Rows kept a while. A fetch goes on when the look-up that asked gives up, and
+        is kept when it lands: otherwise a list UEX sends slower than the look-up's
+        limit was never kept, and the same question failed every time (#231). Asking
+        again while it's on its way waits for the same fetch."""
         key = f"{path}?{sorted(params.items())}"
         if (hit := self._fetched.get(key)) is not None:
             return hit
+        task = self._fetching.get(key)
+        if task is None:
+            task = asyncio.create_task(self._fetch(key, path, params))
+            self._fetching[key] = task
+            task.add_done_callback(lambda done: self._fetched_by(key, done))
+        return await asyncio.shield(task)
+
+    async def _fetch(self, key: str, path: str, params: Mapping[str, int]) -> list[dict[str, Any]]:
         rows = await self._list(path, params)
         self._fetched.keep(key, rows)
         return rows
+
+    def _fetched_by(self, key: str, done: asyncio.Task[list[dict[str, Any]]]) -> None:
+        if self._fetching.get(key) is done:
+            del self._fetching[key]
+        if not done.cancelled() and (e := done.exception()) is not None:
+            # Read here, so a fetch nobody waited for to the end doesn't warn on exit.
+            log.debug("UEX %s failed: %s", key.split("?")[0], e)
 
     async def _list(
         self, path: str, params: Mapping[str, int] | None = None

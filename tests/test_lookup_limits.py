@@ -6,15 +6,16 @@ from tycho.runtime.session import LOOKING_SECONDS
 
 def test_no_look_up_can_take_most_of_the_extra_time_it_gets() -> None:
     # A look-up moves the request's deadline LOOKING_SECONDS on (#166, #178). A limit
-    # close to that left Claude no time to answer after a slow source gave up; every
-    # look-up measured under 1 s (8 November 2026), so 5 s is the most any may wait.
+    # close to that left Claude no time to answer after a slow source gave up: each
+    # leaves Claude at least 2 s. Every one measured under 1 s (8 November 2026).
+    # Not here: ship_lookup (local data, LOOKUP_SECONDS), the fleet (a local file) and
+    # web search (12 s, a separate Claude request that's slow by nature).
     limits = {
         "trade": trade_lookup.SECONDS,
         "items": item_lookup.SECONDS,
         "mining": mining.SECONDS,
         "refining": refining.SECONDS,
     }
-    assert all(seconds <= 5.0 for seconds in limits.values()), limits
     assert all(seconds <= LOOKING_SECONDS - 2.0 for seconds in limits.values()), limits
 
 

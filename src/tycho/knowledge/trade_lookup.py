@@ -29,8 +29,9 @@ SOURCE = "UEX (uexcorp.space), prices reported by players"
 SECONDS = 4.0
 """A route from a station asks UEX about each of its terminals at once. Measured on Ben's
 PC (8 November 2026, idle and with the game running): at most 0.9 s, so 4 s keeps
-room for UEX's slow moments (a 4.6 s answer in the 6 November play session) while a
-UEX that hangs fails a second sooner (#150)."""
+room for UEX's slow moments while a UEX that hangs fails a second sooner (#150). The
+4.6 s answer in the 6 November play session was the Obituary station question, which
+``PART_SECONDS`` now cuts short: don't raise this to fit it (#231)."""
 PART_SECONDS = 2.5
 """How long a station's terminals are waited for, when asked one by one: the routes
 from those that answered are given, so one slow terminal can't use up ``SECONDS``
