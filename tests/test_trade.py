@@ -542,3 +542,20 @@ def test_a_fetch_that_fails_after_its_look_up_gave_up_is_asked_again() -> None:
 
     assert asyncio.run(ask()) == uex._routes({"id_commodity": 47})  # pyright: ignore[reportPrivateUsage]
     assert [path for path, _ in uex.calls].count("/commodities_routes") == 2
+
+
+def test_closing_stops_the_fetches_still_on_their_way() -> None:
+    """#240: a fetch left running when Tycho quit warned "Task was destroyed"."""
+    uex = _SlowRoutes(delay=10.0)
+
+    async def ask() -> Trade:
+        trade = Trade(uex)
+        await trade.load()
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(trade.routes({"id_commodity": 47}), 0.02)
+        await trade.close()
+        await trade.close()  # each look-up sharing it closes it
+        return trade
+
+    trade = asyncio.run(ask())
+    assert not trade._fetching  # pyright: ignore[reportPrivateUsage]

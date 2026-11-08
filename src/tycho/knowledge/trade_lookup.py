@@ -74,6 +74,9 @@ class _TradeLookup:
         self._trade = trade
         self._problem = "the trade data is still loading"
 
+    async def close(self) -> None:
+        await self._trade.close()
+
     async def prepare(self) -> None:
         """Load the commodity and terminal lists once, shared by both look-ups. Never raises."""
         if self._trade.ready:

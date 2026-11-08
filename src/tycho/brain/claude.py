@@ -20,6 +20,7 @@ request at startup writes it, so the first real request is fast too.
 """
 
 import asyncio
+import contextlib
 import dataclasses
 import datetime
 import difflib
@@ -80,6 +81,9 @@ class _Turn:
     """The last act refused for naming unbound actions, for the final error (#167)."""
     refused: bool = False
     """This call's reply held a refused act: its result asks for another pick."""
+    owed: bool = False
+    """A look-up's "Checking." held back because its reply held a refused act: the next
+    call may press, so the next reply known not to says it (#214)."""
 
 
 SHOW_CARD: ToolParam = {
@@ -218,6 +222,10 @@ class ClaudeBrain:
         if self._preparing is not None and not self._preparing.done():
             self._preparing.cancel()
             await asyncio.gather(self._preparing, return_exceptions=True)
+        for lookup in self._lookups.values():  # fetches that outlived their look-up (#240)
+            if (close := getattr(lookup, "close", None)) is not None:
+                with contextlib.suppress(Exception):
+                    await close()
         if self._owns_client:
             await self._client.close()
 
@@ -385,9 +393,13 @@ class ClaudeBrain:
                                 )
                         return decided, None, []
                 message = await stream.get_final_message()
-            if checking and turn.checking is not None:
-                turn.checking()
-                turn.checking = None  # once a request
+            if (checking or turn.owed) and turn.checking is not None:
+                if turn.refused:  # the next call may press: never "Checking." just before
+                    turn.owed = True
+                else:
+                    turn.checking()
+                    turn.checking = None  # once a request
+                    turn.owed = False
         except BaseException:
             for _, task in looking:
                 task.cancel()

@@ -38,8 +38,9 @@ class Lookup(Protocol):
     A look-up may also set, read with ``getattr`` (so spell them exactly):
     ``seconds`` (its time limit), ``from_the_web`` (slow and unchecked: a filler line,
     and no pressing after it), ``instant`` (answers at once: no "Checking.", and it
-    runs alongside an act) and ``credit`` (the source a spoken answer must name when
-    it used the look-up's data, "UEX")."""
+    runs alongside an act), ``credit`` (the source a spoken answer must name when
+    it used the look-up's data, "UEX") and ``close`` (an async method the brain awaits
+    as it closes, to stop work still running: it may be called more than once)."""
 
     @property
     def name(self) -> str: ...
