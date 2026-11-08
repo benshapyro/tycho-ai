@@ -539,7 +539,7 @@ def test_a_stored_anthropic_key_with_a_hidden_character_is_no_key(
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
 
     def stored(name: str) -> str:
-        return "sk-ant-api03-" + "a" * 30 + "​"
+        return "sk-ant-api03-" + "a" * 30 + "\u200b"
 
     monkeypatch.setattr(app.credentials, "get", stored)
     with caplog.at_level(logging.WARNING, logger="tycho"):
