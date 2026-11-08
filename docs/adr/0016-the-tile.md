@@ -38,7 +38,7 @@ pywebview was ruled out earlier: its docs say transparent windows aren't support
 - **Strict schema.** The tool schema is strict. Strict schemas can't carry length limits, so `tycho.tile.cards` enforces them.
 - **Only while the Tile is on.** Claude is offered the tool only then, so it never says "two more on the Tile" when there's no Tile.
 
-**When to show anything: when the eye beats the ear.** Show a card for:
+**When to show anything: when the eye beats the ear** (the evidence is in the [research note](../research/output-modality.md)). Show a card for:
 - more than about three items or numbers;
 - exact text to find or type;
 - steps to follow;
