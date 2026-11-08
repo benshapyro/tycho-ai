@@ -15,6 +15,9 @@ Settings requests ("turn your voice down") go through the settings tool, on a sc
 settings file each case sets up ("settings", and "before" for changes already made);
 "settings_after", "settings_below" and "settings_unchanged" grade what it holds after.
 
+"Say that again" never reaches the brain: the session replays its last answer
+(#222), and a case expecting "say_again" checks that.
+
 The Tile is on, as it is by default (``--no-tile`` turns it off). "card" lists the
 kinds of card a case may show, and "no_card" says it must show none (#2).
 
@@ -62,6 +65,7 @@ from tycho.knowledge.store import ensure
 from tycho.knowledge.trade_lookup import trade_lookups
 from tycho.knowledge.web import WebSearch
 from tycho.lexicon import Lexicon
+from tycho.runtime.session import is_say_again
 from tycho.spoken_settings import SettingsTool
 
 CASES = Path(__file__).resolve().parents[1] / "spike" / "brain_cases.toml"
@@ -267,6 +271,9 @@ async def run_case(
 ) -> Outcome:
     outcome = Outcome(rule["heard"], str(rule.get("tag", "")))
     text = lexicon.correct(rule["heard"]).text
+    if is_say_again(text):  # the session replays the last answer itself (#222)
+        outcome.route, outcome.kind = "session", "say_again"
+        return outcome
     match = MATCHER.match(text)
     if not isinstance(match, Defer):
         outcome.route, outcome.kind = "fast", "actions"

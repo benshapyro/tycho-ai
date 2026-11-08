@@ -23,6 +23,8 @@ CI runs the same checks on Windows, plus the large-file and private-key checks.
 
 Every change goes through a pull request: branch from `main`, push, and open a PR. `main` is protected; a PR merges once CI and the automated Claude review pass. Pin any GitHub Action to a full commit SHA, with the version in a comment.
 
+If players will notice your change, add a line under **Unreleased** in [CHANGELOG.md](CHANGELOG.md), in plain words, with the PR or issue.
+
 ## Tests CI can't run
 
 Before a release, on a Windows PC with the game installed and nobody using it:

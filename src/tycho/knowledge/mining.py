@@ -24,8 +24,9 @@ from tycho.text import normalize
 log = logging.getLogger(__name__)
 
 SOURCE = "Star Citizen Wiki API (api.star-citizen.wiki), from the game files"
-SECONDS = 5.0
-"""The list, then every location at once: about 1.5 s measured, cached after."""
+SECONDS = 3.0
+"""The list, then every location at once: about 1.5 s measured, cached after (at most
+1.0 s once loaded, 8 November 2026, #150)."""
 DETAILED = 100
 """Locations looked at closely for their chances: all of them (66 at most measured,
 0.7 s at once), so the best are found, not the first in the alphabet."""

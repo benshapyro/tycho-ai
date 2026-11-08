@@ -14,8 +14,9 @@ log = logging.getLogger(__name__)
 
 MAX_NAMES = 3
 SOURCE = "Star Citizen Wiki API (api.star-citizen.wiki), from the game files"
-SECONDS = 6.0
-"""A name is tried in a few spellings, then its crafting recipe is fetched."""
+SECONDS = 5.0
+"""A name is tried in a few spellings, then its crafting recipe is fetched: FIND_SECONDS
+then QUERY_SECONDS at most. Measured at most 0.6 s (8 November 2026, #150)."""
 
 DESCRIPTION = """\
 Look up Star Citizen items by name, from the current patch's game files: FPS \
