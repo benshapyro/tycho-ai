@@ -383,12 +383,68 @@ def test_a_ship_found_is_never_searched_for() -> None:
     assert wiki.search.asked == []
 
 
-def test_a_miss_the_search_finds_one_ship_for_is_that_ship() -> None:
+STARFIGHTERS = [
+    vehicle("Ares Star Fighter Ion", "Crusader Industries", class_name="CRUS_Starfighter_Ion"),
+    vehicle(
+        "Ares Star Fighter Inferno", "Crusader Industries", class_name="CRUS_Starfighter_Inferno"
+    ),
+]
+
+
+def test_a_miss_the_search_finds_one_fitting_ship_for_is_that_ship() -> None:
     # The search reads class names too, so it can find a ship the names alone miss.
-    library = ShipLibrary(ships_from_wiki(FLEET[:3]), version="4.10.2-LIVE.1", as_of="2026-11-01")
-    missed = NotFound("Andromeda GS", ())
-    hits = [Hit("vehicles", "RSI Constellation Mk IV Andromeda", "Multi-Role")]
-    assert _name(rescued(library, missed, hits)) == "Constellation Mk IV Andromeda"
+    library = ShipLibrary(
+        ships_from_wiki(STARFIGHTERS), version="4.10.2-LIVE.1", as_of="2026-11-01"
+    )
+    missed = library.find("Starfighter Ion")
+    assert isinstance(missed, NotFound)
+    hits = [Hit("vehicles", "Crusader Ares Star Fighter Ion", "Combat")]
+    assert _name(rescued(library, missed, hits)) == "Ares Star Fighter Ion"
+
+
+def test_the_ship_the_search_names_must_fit_the_words_as_said() -> None:
+    """#221: the search is asked "mantis" for "Mantis gatling", and names the RSI
+    Mantis, the ship the gun is named for. Asked of the ship look-up, it's the gun."""
+    fleet = [*FLEET, vehicle("Mantis", class_name="RSI_Mantis")]
+    library = ShipLibrary(ships_from_wiki(fleet), version="4.10.2-LIVE.1", as_of="2026-11-01")
+    wiki = FakeWiki(fleet)
+    error, content = _run(ShipLookup(wiki, Path(), library=library), {"names": ["Mantis gatling"]})
+    assert not error
+    assert wiki.search.asked == ["mantis"]
+    assert content["ships"][0]["is_an_item"] == "Mantis GT-220 Gatling"
+
+
+def test_a_ship_the_search_names_that_doesnt_fit_is_only_a_closest_name() -> None:
+    hits = [Hit("vehicles", "Drake Caterpillar", "Industrial")]
+    found = rescued(LIBRARY, NotFound("Caterpillar Mk II", ()), hits)
+    assert isinstance(found, NotFound)
+    assert found.closest == ("Caterpillar",)
+
+
+def test_a_ship_miss_asks_the_search_once_in_a_while() -> None:
+    """#221: the search allows 60 requests a minute, and the same miss misses again."""
+    now = [0.0]
+    wiki = FakeWiki(FLEET)
+    lookup = ShipLookup(wiki, Path(), library=LIBRARY, clock=lambda: now[0])
+    for _ in range(2):
+        error, content = _run(lookup, {"names": ["the Odin"]})
+        assert not error
+        assert "closest" in content["ships"][0]
+    assert wiki.search.asked == ["odin"]
+    now[0] += ship_lookup.FRESH_SECONDS
+    _run(lookup, {"names": ["the Odin"]})
+    assert wiki.search.asked == ["odin", "odin"]
+
+
+def test_a_failed_search_is_asked_again_next_time() -> None:
+    wiki = FakeWiki(FLEET)
+    lookup = ShipLookup(wiki, Path(), library=LIBRARY)
+    wiki.search.down = True
+    _run(lookup, {"names": ["the Gallant"]})
+    wiki.search.down = False
+    _, content = _run(lookup, {"names": ["the Gallant"]})
+    assert content["ships"][0]["is_an_item"] == "Gallant Rifle"
+    assert wiki.search.asked == ["gallant", "gallant"]
 
 
 def test_a_miss_offers_the_closest_across_ships_and_items() -> None:

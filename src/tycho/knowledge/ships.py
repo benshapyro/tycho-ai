@@ -237,16 +237,20 @@ def rescued(
     library: ShipLibrary, missed: NotFound, hits: Iterable[Hit]
 ) -> Ship | IsAnItem | NotFound:
     """A name no ship matched, read again with the search's ``hits``: the one ship
-    they name, else an item whose name fits, else the closest across both."""
+    they name that fits the words asked, else an item whose name fits, else the
+    closest across both."""
     hits = list(hits)
+    query = _query(missed.asked)
     ships = {
         ship.key: ship
         for hit in hits
         if hit.kind == VEHICLES and isinstance(ship := library.find(hit.name), Ship)
     }
-    if len(ships) == 1:
-        return next(iter(ships.values()))
-    query = _query(missed.asked)
+    # The search matches part of a name or class name, and is asked without the
+    # kind-of-item words, so a ship it names must still fit every word as said:
+    # "Mantis gatling" isn't the RSI Mantis, nor "Arrow pistol" the Anvil Arrow (#221).
+    if len(fitting := [s for s in ships.values() if _fits(query, s)]) == 1:
+        return fitting[0]
     core = tuple(w for w in query if w not in GENERIC) or query
 
     def fit(name: str) -> float:
@@ -423,6 +427,13 @@ def _score(query: tuple[str, ...], key: tuple[str, ...], *, near: bool = True) -
     # rest looks ("baby Merchantman" isn't the Banu Merchantman). This only ranks
     # the closest names, and stays below MATCH.
     return 0.5 * similarity(" ".join(query), " ".join(key))
+
+
+def _fits(query: tuple[str, ...], ship: Ship) -> bool:
+    """Every word in ``query`` is in one of ``ship``'s names, or in its class name
+    ("CRUS_Starfighter_Ion"), which the search reads too."""
+    keys = (*ship.keys, tuple(normalize(ship.key)))
+    return bool(query) and max(_score(query, key, near=False) for key in keys) >= MATCH
 
 
 @lru_cache(maxsize=65536)
