@@ -123,6 +123,13 @@ def _run(command: str, name: str) -> int:
         if not value:
             print("Nothing entered; no key stored.")
             return 1
+        if not value.isascii():  # e.g. a zero-width space copied from a web page (#246)
+            print(
+                "That key has a character keys don't have, maybe an invisible one; "
+                "no key stored. Copy it again.",
+                file=sys.stderr,
+            )
+            return 1
         set_secret(name, value)
         print(f"Stored {name} key {masked(value)} in Windows Credential Manager.")
     elif command == "delete":
