@@ -31,6 +31,7 @@ import tomlkit.exceptions
 from tomlkit.items import AoT, Array, Table
 
 from tycho.commands import Command, CommandFileError, CommandMatcher, resolve
+from tycho.commands.reserved import USES, reserved_for
 from tycho.game.keybinds import Keybinds, KeyInput
 from tycho.safety import is_confirm_grade
 from tycho.text import normalize
@@ -157,6 +158,12 @@ class Commands:
             return {"ok": False, "problem": "Type the words you'll say."}
         if len(said) > MAX_PHRASE:
             return {"ok": False, "problem": f"Keep it under {MAX_PHRASE} characters."}
+        if (use := reserved_for(said)) is not None:  # the session answers it first (#227)
+            return {
+                "ok": False,
+                "problem": f"“{said}” is one of Tycho's own words, for {USES[use]}, so the "
+                "command would never hear it. Choose other words.",
+            }
         if mistake := self._mistake():
             return {"ok": False, "problem": mistake}
         try:

@@ -19,6 +19,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any, cast
 
+from tycho.commands.reserved import USES, reserved_for
 from tycho.text import normalize, similarity
 
 _LEADING_FILLER = (
@@ -177,7 +178,7 @@ class CommandMatcher:
                 raise CommandFileError(f"{source}: {e}") from e
             mine = _entries(user, source)
             extra = _phrase_entries(user, source)
-            warnings = _warnings(mine)
+            warnings = (*_warnings(mine), *_reserved_warnings(mine, extra))
             entries = _merge(entries, mine, extra, source)
         try:
             return cls(_build(entries), warnings=warnings)
@@ -357,6 +358,31 @@ def _warnings(entries: dict[str, _Entry]) -> tuple[str, ...]:
         for entry_id, entry in entries.items()
         if entry["_kind"] == "sequence" and (wrong := [k for k in _COMMAND_ONLY if k in entry])
     )
+
+
+def _reserved_warnings(
+    entries: dict[str, _Entry], extra: list[tuple[str, list[str]]]
+) -> tuple[str, ...]:
+    """The player's phrases that are the session's own words (#227). The session answers
+    them before any command is matched, so they're kept but said: refusing would drop
+    every command in the file over one phrase, and a Tile phrase still works with the
+    Tile off."""
+    given = [(entry_id, str(p)) for entry_id, e in entries.items() for p in e.get("say", ())]
+    given += [(command, phrase) for command, phrases in extra for phrase in phrases]
+    found: list[str] = []
+    for command, phrase in given:
+        if (use := reserved_for(phrase)) is None:
+            continue
+        effect = (
+            "so it runs the command only while the Tile is off"
+            if use == "tile"
+            else "so it never runs the command"
+        )
+        found.append(
+            f"{command!r}: {phrase!r} is one of Tycho's own words, for {USES[use]}, "
+            f"{effect}; choose another phrase"
+        )
+    return tuple(dict.fromkeys(found))
 
 
 def _phrase_entries(data: dict[str, Any], source: str) -> list[tuple[str, list[str]]]:

@@ -1706,6 +1706,45 @@ def test_say_that_again_isnt_a_follow_up_for_the_brain() -> None:
     assert [x.said for x in brain.asked[1].recent] == ["where to sell Laranite"]
 
 
+def test_say_that_again_repeats_what_the_brain_did_and_presses_nothing() -> None:
+    """#226: the line about an action is the last thing said, and replaying it is only
+    speech: the key goes down once."""
+    speaker = FakeSpeaker()
+    brain = FakeBrain(Reply("It's dark out there."), RunActions(("v_lights",), "Lights."))
+    r = _conversation(
+        "is it dark out there",
+        "make it dark in here",
+        "say that again",
+        brain=brain,
+        speaker=speaker,
+        keybinds=_WITH_LIGHTS,
+    )
+    assert speaker.spoken == ["It's dark out there.", "Lights.", "Lights."]
+    assert r.pressed() == _down_up("l")
+    assert r.results[2].pressed == ()
+    assert len(brain.asked) == 2
+
+
+def test_a_confirm_question_isnt_said_again_and_nothing_older_is_either() -> None:
+    """#226: the question was the last line, and the player's words have ended it (ADR
+    13), so neither it nor the answer before it is replayed, and confirm does nothing."""
+    speaker = FakeSpeaker()
+    brain = FakeBrain(Reply("Best is Everus Harbor."))
+    r = _conversation(
+        "where to sell laranite", "eject", "say that again", "confirm", brain=brain, speaker=speaker
+    )
+    assert [x.status for x in r.results] == [
+        "replied",
+        "asking",
+        "not_understood",
+        "not_understood",
+    ]
+    assert r.results[2].detail == "the question has ended"
+    assert speaker.spoken[0] == "Best is Everus Harbor."
+    assert [line.endswith("Say confirm.") for line in speaker.spoken[1:]] == [True]
+    assert r.keys.events == []
+
+
 def test_clear_the_target_is_still_the_games() -> None:
     display = FakeDisplay()
     r = _conversation("clear the target", display=display)

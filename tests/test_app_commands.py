@@ -147,6 +147,9 @@ def test_a_phrase_taken_from_another_built_in_says_whose_it_was(user_file: Path)
         ("landing_gear", "wheels down please", "filler"),
         ("landing_gear", "x" * 61, "under 60"),
         ("warp_drive", "engage", "no command called"),
+        ("landing_gear", "Repeat that.", "Tycho's own words"),  # #227: say that again
+        ("landing_gear", "affirmative", "confirm questions"),
+        ("landing_gear", "clear the tile", "the Tile"),
         ("space_mode", "landing gear", ""),  # taken from the built-in: allowed
     ],
 )

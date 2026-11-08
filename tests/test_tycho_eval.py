@@ -250,3 +250,12 @@ def _keybinds() -> object:
     from tests.test_runtime import KEYBINDS
 
     return KEYBINDS
+
+
+def test_the_model_benchmarks_load_the_real_case_file() -> None:
+    """#228: a duplicate case made brain_report and jev_report exit before running."""
+    _eval()  # puts tools/bench on the path
+    from brain_report import load_cases  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
+
+    cases, _ = load_cases(ROOT / "tools" / "spike" / "brain_cases.toml", engine="")  # pyright: ignore[reportUnknownVariableType]
+    assert cases

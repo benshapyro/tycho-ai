@@ -36,6 +36,12 @@ from tycho.audio.clip import Samples, trim_silence
 from tycho.audio.source import AudioError, AudioSource
 from tycho.brain import BrainError, BrainRequest, Exchange, Reply, commands_for
 from tycho.commands import Command, CommandMatcher, Defer, resolve
+from tycho.commands.reserved import (
+    CANCEL_WORDS,
+    CONFIRM_WORDS,
+    SAY_AGAIN_WORDS,
+    TILE_WORDS,
+)
 from tycho.game.keybinds import Action, Keybinds
 from tycho.input import NotPressable, Press, Presser, UnsupportedKey, plan
 from tycho.lexicon import Lexicon
@@ -72,37 +78,6 @@ TAIL_CHECK_SECONDS = 0.01
 
 CONFIRM_SECONDS = 5.0
 """How long a question waits for "confirm", unless the settings say otherwise."""
-CONFIRM_WORDS = frozenset({"confirm", "confirmed", "affirmative"})
-CANCEL_WORDS = frozenset({"cancel", "abort", "negative", "belay that", "never mind", "nevermind"})
-"""Replies to a question. Whole utterances only, and no command may use them as phrases."""
-TILE_WORDS: dict[str, frozenset[str]] = {
-    "pin": frozenset(
-        {"keep that up", "keep it up", "keep that", "pin that", "pin it", "leave that up"}
-    ),
-    "clear": frozenset(
-        {"clear", "clear that", "clear the tile", "clear tile", "hide that", "dismiss that"}
-    ),
-    "again": frozenset({"show that again", "show it again", "bring that back", "bring it back"}),
-    "show": frozenset(
-        {"show me that", "show that", "show me", "put that on the tile", "put it on the tile"}
-    ),
-}
-"""What the player says to the Tile (ADR 16), while it's on. Whole utterances only, so
-"clear the target" is still the game's; no command may use them as phrases."""
-SAY_AGAIN_WORDS = frozenset(
-    {
-        "say that again",
-        "say it again",
-        "say again",
-        "repeat that",
-        "repeat it",
-        "come again",
-    }
-)
-"""Asking to hear Tycho's last answer again (#222), Tile on or off. It's replayed word
-for word, without asking the brain, however long ago it was said. Whole utterances
-only, and no command may use them as phrases."""
-
 POLL_RETRY_SECONDS = 1.0
 """How long to wait before reading push-to-talk again after it failed."""
 
@@ -149,6 +124,16 @@ class _Question:
     deadline: float
     by_brain: bool = False
     say: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class _Line:
+    """The last line for the player (#226): spoken, or shown in the console without a
+    voice. Kept whether or not the voice managed to say it."""
+
+    text: str = ""
+    question: bool = False
+    """It was the safety gate's confirm question."""
 
 
 @dataclass(slots=True)
@@ -260,6 +245,8 @@ class Session:
         self._display = display
         self._last_reply: tuple[str, Card | None] = ("", None)
         """The brain's last answer, for "show me that" (ADR 16)."""
+        self._last_line = _Line()
+        """The last line for the player, for "say that again" (#222, #226)."""
         self._poll_interval = poll_interval
         self._clock = clock
         self._ids = itertools.count(1)
@@ -672,19 +659,19 @@ class Session:
         )
 
     def _say_again(self, request: int, trace: Trace, heard: str, text: str) -> Result:
-        """The last answer's line, word for word, with no call to the brain (#222). A
-        card isn't redrawn: that's "show that again"."""
-        said = self._last_reply[0].strip()
+        """The last line Tycho said, word for word, with no call to the brain (#222): an
+        answer, or the line about what it did (#226). Only ever spoken: nothing is
+        planned or pressed, and a card isn't redrawn (that's "show that again").
+
+        A confirm question isn't said again: the player's words have ended it (ADR 13),
+        and "Say confirm." would then ask for something that does nothing."""
+        line = self._last_line
+        said = "" if line.question else line.text.strip()
         progress = _Progress(commands=("say_again",), say=said)
         if not said:
+            detail = "the question has ended" if line.question else "nothing to say again"
             return self._result(
-                request,
-                "not_understood",
-                trace,
-                heard,
-                text,
-                "nothing to say again",
-                progress=progress,
+                request, "not_understood", trace, heard, text, detail, progress=progress
             )
         return self._result(request, "done", trace, heard, text, progress=progress)
 
@@ -755,6 +742,11 @@ class Session:
         self._remember(result)
         if result.status == "replied":
             self._last_reply = (result.say, result.card)
+        if result.commands != ("say_again",):  # a replay leaves the line it replayed
+            if result.status == "asking" and result.question:
+                self._last_line = _Line(result.question, question=True)
+            elif self._would_speak(result):
+                self._last_line = _Line(result.say)
         self._to_tile(result)
         if result.commands and self._action_log is not None:
             self._record(self._action_log, result, spoken=speak)
