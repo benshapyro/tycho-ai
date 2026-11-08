@@ -40,6 +40,11 @@ the graphics card: the decoder runs about 30 times a phrase, and each tiny GPU c
 behind the game's frames (#58). Off until measured with the game running."""
 CUDA_OPTIONS: Mapping[str, str] = LEAN_CUDA
 """What Tycho uses: see tools/bench/gpu_memory.py for the measurements behind it."""
+RETRY_SECONDS = 30.0
+"""After the processor copy fails to load mid-session, the first request this long after
+tries again (#210): the failure may be brief, the game holding memory for a moment. Each
+failure after doubles the wait, up to ``RETRY_MOST``."""
+RETRY_MOST = 300.0
 
 
 class ParakeetTranscriber:
@@ -56,7 +61,9 @@ class ParakeetTranscriber:
         self._switching: threading.Thread | None = None
         """The processor copy loading, after the graphics card failed mid-session."""
         self._broken = ""
-        """Why the processor copy couldn't load: every request after says so."""
+        """Why the processor copy couldn't load: every request until the retry says so."""
+        self._retry_at = 0.0
+        self._wait = RETRY_SECONDS
 
     @classmethod
     def load(cls, folder: Path, device: Device) -> Self:
@@ -131,8 +138,18 @@ class ParakeetTranscriber:
                     "speech recognition is still switching to the processor"
                 )
             if self._broken:
-                raise RecognitionUnavailable(self._broken)
+                if time.monotonic() < self._retry_at or self._folder is None:
+                    raise RecognitionUnavailable(self._broken)
+                retry = self._folder
+            else:
+                retry = None
             model, device = self._model, self.device
+        if retry is not None:
+            # Long enough since the processor copy failed to load: try again, for the
+            # requests after this one (loading takes about 20 s).
+            log.info("Trying again to load speech recognition on the processor")
+            self._move_to_processor(retry)
+            raise RecognitionUnavailable("speech recognition is still switching to the processor")
         failure, folder = "", self._folder
         try:
             return _recognize(model, samples)
@@ -171,13 +188,23 @@ class ParakeetTranscriber:
             cpu = type(self)._open(folder, "cpu")
             cpu._warm_up()
         except Exception as e:
-            log.error("Couldn't load speech recognition on the processor: %s", _first_line(e))
+            reason = _first_line(e)
             with self._lock:
-                self._broken = f"speech recognition couldn't load on the processor: {e}"
+                wait = self._wait
+                self._broken = f"speech recognition couldn't load on the processor ({reason})"
+                self._retry_at = time.monotonic() + wait
+                self._wait = min(wait * 2, RETRY_MOST)
                 self._switching = None
+            log.error(
+                "Couldn't load speech recognition on the processor (%s); trying again in "
+                "%.0f s, or restart Tycho",
+                reason,
+                wait,
+            )
             return
         with self._lock:
             self._model, self._switching = cpu._model, None
+            self._broken, self._wait = "", RETRY_SECONDS
         log.info("Speech recognition is on the processor (%.0f s)", time.perf_counter() - started)
 
     def _recognize(self, samples: Samples) -> str:
