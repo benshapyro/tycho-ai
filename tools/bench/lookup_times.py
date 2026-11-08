@@ -64,36 +64,42 @@ QUESTIONS: list[tuple[str, str, Mapping[str, object]]] = [
 ]
 
 
-def fresh_lookups() -> dict[str, Lookup]:
-    lookups: list[Lookup] = [
-        ItemLookup(WikiApi()),
-        MiningLookup(WikiApi()),
-        *trade_lookups(UexApi()),
-    ]
-    return {lookup.name: lookup for lookup in lookups}
+def fresh_lookups() -> tuple[dict[str, Lookup], list[WikiApi]]:
+    """New look-ups, and the API clients they use, for the caller to close."""
+    clients = [WikiApi(), WikiApi(), UexApi()]
+    items, mining, uex = clients
+    lookups: list[Lookup] = [ItemLookup(items), MiningLookup(mining), *trade_lookups(uex)]
+    return {lookup.name: lookup for lookup in lookups}, clients
 
 
 async def one_round() -> dict[str, tuple[float, str | None]]:
-    lookups = fresh_lookups()
-    await asyncio.gather(*(lookup.prepare() for lookup in lookups.values()))
-    times: dict[str, tuple[float, str | None]] = {}
-    for label, name, arguments in QUESTIONS:
-        lookup = lookups[name]
-        start = time.perf_counter()
-        # A long limit, so the real time is measured, not the cut-off.
-        result = await run_lookup(lookup, dict(arguments), seconds=30.0)
-        error = result.content if result.is_error else None
-        times[label] = (time.perf_counter() - start, error)
-    return times
+    lookups, clients = fresh_lookups()
+    try:
+        await asyncio.gather(*(lookup.prepare() for lookup in lookups.values()))
+        times: dict[str, tuple[float, str | None]] = {}
+        for label, name, arguments in QUESTIONS:
+            lookup = lookups[name]
+            start = time.perf_counter()
+            # A long limit, so the real time is measured, not the cut-off.
+            result = await run_lookup(lookup, dict(arguments), seconds=30.0)
+            error = result.content if result.is_error else None
+            times[label] = (time.perf_counter() - start, error)
+        return times
+    finally:
+        await asyncio.gather(*(client.aclose() for client in clients))
+
+
+async def time_limits() -> dict[str, float]:
+    lookups, clients = fresh_lookups()
+    await asyncio.gather(*(client.aclose() for client in clients))
+    return {name: float(getattr(lookup, "seconds", 0.0)) for name, lookup in lookups.items()}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Time each look-up against the live APIs.")
     parser.add_argument("--rounds", type=int, default=5)
     rounds = parser.parse_args().rounds
-    limits = {
-        name: float(getattr(lookup, "seconds", 0.0)) for name, lookup in fresh_lookups().items()
-    }
+    limits = asyncio.run(time_limits())
     results: dict[str, list[tuple[float, str | None]]] = {label: [] for label, _, _ in QUESTIONS}
     for n in range(rounds):
         for label, timing in asyncio.run(one_round()).items():

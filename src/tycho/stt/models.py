@@ -286,11 +286,15 @@ class ModelStore:
 
 def _still_to_fetch(folder: Path, missing: list[ModelFile]) -> int:
     """Bytes the missing files will add. A partial download is kept and continued, and
-    each finished file is renamed into place, not copied, so it needs no room twice."""
+    each finished file is renamed into place, not copied, so it needs no room twice.
+
+    Whatever is already on disk for a file counts against it: a wrong file in its
+    place, or a wrong or too-big ``.part``, is deleted before that file downloads
+    (``_download``), so its room comes back first (#205)."""
     total = 0
     for file in missing:
-        have = _size(folder / f"{file.name}.part")
-        total += file.size - have if have <= file.size else file.size
+        have = _size(folder / file.name) + _size(folder / f"{file.name}.part")
+        total += max(0, file.size - have)
     return total
 
 

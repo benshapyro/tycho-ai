@@ -52,6 +52,11 @@ class WikiApi:
         except (httpx2.HTTPError, ValueError) as e:
             raise WikiError(f"{path}: {e}") from e
 
+    async def aclose(self) -> None:
+        """Close the connection pool. Tycho keeps one for the whole session; the bench
+        tools make new ones each round (#213)."""
+        await self._client.aclose()
+
 
 async def current_version(source: WikiSource) -> str:
     """The patch the Wiki API serves by default, e.g. "4.10.2-LIVE.12881860"."""

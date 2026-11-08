@@ -1,5 +1,6 @@
 import hashlib
 import http.server
+import logging
 import os
 import threading
 import weakref
@@ -151,6 +152,38 @@ def test_a_model_already_there_needs_no_room(
     ModelStore(tmp_path, FakeDownloader()).ensure(spec)
     _free(monkeypatch, 0)
     ModelStore(tmp_path, FakeDownloader(fail=True)).ensure(spec)
+
+
+def test_a_wrong_file_in_place_gives_its_room_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The right size but the wrong hash (corrupt, or a new revision): it's deleted
+    # before the download, so it needs no more room than it already takes (#205).
+    spec = _spec()
+    folder = tmp_path / spec.folder
+    folder.mkdir(parents=True)
+    (folder / "a.onnx").write_bytes(b"x" * len(CONTENT["a.onnx"]))
+    (folder / "vocab.txt").write_bytes(CONTENT["vocab.txt"])
+    _free(monkeypatch, 0)
+    downloader = FakeDownloader()
+    ModelStore(tmp_path, downloader).ensure(spec)
+    assert downloader.fetched == ["a.onnx"]
+    assert ModelStore(tmp_path).ready(spec)
+
+
+def test_a_whole_wrong_part_needs_no_more_room_than_it_takes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Deleted and downloaded again: it gives back what the new copy takes (#205).
+    spec = _spec()
+    folder = tmp_path / spec.folder
+    folder.mkdir(parents=True)
+    (folder / "a.onnx.part").write_bytes(b"x" * len(CONTENT["a.onnx"]))
+    _free(monkeypatch, len(CONTENT["vocab.txt"]))
+    downloader = FakeDownloader()
+    ModelStore(tmp_path, downloader).ensure(spec)
+    assert "a.onnx" in downloader.fetched
+    assert ModelStore(tmp_path).ready(spec)
 
 
 def test_sizes_are_said_in_units_a_player_reads(
@@ -526,7 +559,7 @@ def test_a_processor_copy_that_wont_load_says_why_then_tries_again(
     from tycho.stt.parakeet import ParakeetTranscriber
 
     now = [0.0]
-    monkeypatch.setattr(tycho.stt.parakeet.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(tycho.stt.parakeet, "_clock", lambda: now[0])
     cpu = _Model(fails=2)  # the first load's warm-up, and the first retry's
     monkeypatch.setattr(ParakeetTranscriber, "_open", _gpu_then_cpu(0, [], cpu))
     transcriber = ParakeetTranscriber.load(tmp_path, "gpu")
@@ -551,6 +584,33 @@ def test_a_processor_copy_that_wont_load_says_why_then_tries_again(
         transcriber.transcribe(_QUIET, 16_000)
     _switched(transcriber)
     assert transcriber.transcribe(_QUIET, 16_000) == "hello"  # the game let go
+
+
+def test_a_processor_copy_that_loads_starts_the_wait_over(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """#216: after a load that works, the next failure waits 30 s again, not the
+    doubled wait; and the log says a request starts the retry, not a timer."""
+    import tycho.stt.parakeet
+    from tycho.stt.parakeet import RETRY_SECONDS, ParakeetTranscriber
+
+    now = [0.0]
+    monkeypatch.setattr(tycho.stt.parakeet, "_clock", lambda: now[0])
+    cpu = _Model(fails=1)  # the first load's warm-up only
+    monkeypatch.setattr(ParakeetTranscriber, "_open", _gpu_then_cpu(0, [], cpu))
+    transcriber = ParakeetTranscriber.load(tmp_path, "gpu")
+    transcriber._model.fails = 1  # type: ignore[union-attr]  # pyright: ignore[reportPrivateUsage, reportOptionalMemberAccess, reportAttributeAccessIssue]
+    with caplog.at_level(logging.ERROR), pytest.raises(RecognitionUnavailable):
+        transcriber.transcribe(_QUIET, 16_000)
+    _switched(transcriber)
+    assert "the next request after 30 s tries again" in caplog.text
+    assert transcriber._wait == RETRY_SECONDS * 2  # pyright: ignore[reportPrivateUsage]
+    now[0] = 31.0
+    with pytest.raises(RecognitionUnavailable, match="still switching"):
+        transcriber.transcribe(_QUIET, 16_000)
+    _switched(transcriber)
+    assert transcriber.transcribe(_QUIET, 16_000) == "hello"
+    assert transcriber._wait == RETRY_SECONDS  # pyright: ignore[reportPrivateUsage]
 
 
 def test_a_processor_failure_is_a_plain_model_error(
