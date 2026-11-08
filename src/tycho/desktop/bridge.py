@@ -35,6 +35,8 @@ log = logging.getLogger(__name__)
 
 GROUPS: dict[str, tuple[str, ...]] = {
     "Voice and sounds": (
+        "voice",
+        "voice_model",
         "voice_volume",
         "feedback_volume",
         "call_me",
@@ -475,6 +477,8 @@ def _label(name: str) -> str:
         "feedback_volume": "Sound volume",
         "game_root": "Game folder",
         "transcription_device": "Speech recognition on",
+        "voice": "Voice",
+        "voice_model": "Voice model",
     }
     if name in special:
         return special[name]
