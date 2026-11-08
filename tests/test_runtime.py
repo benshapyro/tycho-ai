@@ -34,7 +34,7 @@ from tycho.input import Presser, code_for
 from tycho.lexicon import Lexicon
 from tycho.ptt.binding import Binding
 from tycho.ptt.monitor import Edge, PushToTalk
-from tycho.runtime import AlreadyRunning, Result, Session, SingleInstance
+from tycho.runtime import AlreadyRunning, RecognitionUnavailable, Result, Session, SingleInstance
 from tycho.runtime.session import CHECKING, FILLERS, KEEP_CHARACTERS
 from tycho.tile import Card, Row
 
@@ -567,6 +567,29 @@ def test_a_failure_is_reported_and_the_loop_carries_on() -> None:
     assert [x.status for x in r.results] == ["failed", "done"]
     assert "model crashed" in r.results[0].detail
     assert r.feedback.played == ["not_done", "done"]
+
+
+def test_speech_that_cant_be_heard_now_fails_plainly_and_presses_nothing(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # The graphics card failed and the processor copy is loading (#204): the player hears
+    # the not-done sound and says it again. Expected, so no traceback in the log.
+    async def scenario() -> Rig:
+        r = rig(RecognitionUnavailable("switching to the processor"), "landing gear")
+        r.say()
+        await r.session.idle()
+        r.say()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert [x.status for x in r.results] == ["failed", "done"]
+    assert r.results[0].detail == "switching to the processor"
+    assert r.feedback.played == ["not_done", "done"]
+    assert r.pressed() == _down_up("n")  # only the second request's keys
+    assert "Traceback" not in caplog.text
+    assert not [x for x in caplog.records if x.levelno >= logging.ERROR]
 
 
 def test_audio_just_after_release_is_kept() -> None:

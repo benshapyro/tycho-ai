@@ -2,6 +2,7 @@ import hashlib
 import http.server
 import os
 import threading
+import weakref
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,6 +10,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from tycho.runtime.ports import RecognitionUnavailable
 from tycho.stt import ModelError, ModelFile, ModelSpec, ModelStore, choose_device, models
 from tycho.stt.device import smi_path
 from tycho.stt.models import HttpDownloader
@@ -430,22 +432,105 @@ def test_a_graphics_card_that_fails_the_warm_up_falls_back_to_the_processor(
     assert "cudaErrorUnknown" not in caplog.text  # one plain line, not ONNX Runtime's essay
 
 
-def test_a_graphics_card_that_fails_mid_session_moves_to_the_processor(
+_QUIET = np.zeros(16_000, dtype=np.float32)
+
+
+def _gpu_then_cpu(
+    gpu_fails: int, gpu_alive: list[bool], cpu: _Model, cpu_ready: threading.Event | None = None
+) -> Callable[..., object]:
+    """An ``_open`` whose GPU model only the transcriber holds: when the CPU copy starts
+    loading, ``gpu_alive`` records whether the GPU one was still in memory (#204)."""
+    from tycho.stt.parakeet import ParakeetTranscriber
+
+    gpu_ref: list[weakref.ref[_Model]] = []
+
+    def _open(cls: type[ParakeetTranscriber], folder: Path, device: Device) -> ParakeetTranscriber:
+        if device == "gpu":
+            gpu = _Model(fails=gpu_fails)
+            gpu_ref.append(weakref.ref(gpu))
+            return ParakeetTranscriber(gpu, "gpu", folder)  # type: ignore[arg-type]
+        gpu_alive.append(bool(gpu_ref) and gpu_ref[0]() is not None)
+        if cpu_ready is not None:
+            cpu_ready.wait(5)
+        return ParakeetTranscriber(cpu, "cpu", folder)  # type: ignore[arg-type]
+
+    return classmethod(_open)  # type: ignore[return-value]
+
+
+def _switched(transcriber: object) -> None:
+    switching = transcriber._switching  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
+    if switching is not None:
+        switching.join(5)  # pyright: ignore[reportUnknownMemberType]
+
+
+def test_a_failed_warm_up_frees_the_graphics_card_before_the_processor_copy_loads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The error's traceback held the half-built GPU session, so both copies were in the
+    # card's memory at once: the memory the game needed (#204; 3.4 GB on Ben's card).
+    from tycho.stt.parakeet import ParakeetTranscriber
+
+    gpu_alive: list[bool] = []
+    monkeypatch.setattr(ParakeetTranscriber, "_open", _gpu_then_cpu(1, gpu_alive, _Model()))
+    assert ParakeetTranscriber.load(tmp_path, "gpu").device == "cpu"
+    assert gpu_alive == [False]
+
+
+def test_a_mid_session_failure_fails_that_request_instead_of_acting_late(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Loading the CPU copy took about 20 s, and then the command was acted on: a key
+    # press 20 s after it was asked for (#204). Now that request fails at once.
+    from tycho.stt.parakeet import ParakeetTranscriber
+
+    cpu, gpu_alive = _Model(), list[bool]()
+    monkeypatch.setattr(ParakeetTranscriber, "_open", _gpu_then_cpu(0, gpu_alive, cpu))
+    transcriber = ParakeetTranscriber.load(tmp_path, "gpu")
+    assert transcriber.device == "gpu"
+    transcriber._model.fails = 1  # type: ignore[union-attr]  # pyright: ignore[reportPrivateUsage, reportOptionalMemberAccess, reportAttributeAccessIssue]
+    with pytest.raises(RecognitionUnavailable, match="failed on the graphics card"):
+        transcriber.transcribe(_QUIET, 16_000)
+    _switched(transcriber)
+    assert cpu.calls == 1  # the warm-up only: the failed request is never heard again
+    assert gpu_alive == [False]  # the card was free before the CPU copy loaded
+    assert "say that again" in caplog.text
+    assert transcriber.transcribe(_QUIET, 16_000) == "hello"
+    assert transcriber.device == "cpu"
+    assert cpu.calls == 2  # and it stays on the processor
+
+
+def test_a_request_while_switching_to_the_processor_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from tycho.stt.parakeet import ParakeetTranscriber
 
-    gpu, cpu = _Model(), _Model()
-    opened: list[str] = []
-    monkeypatch.setattr(ParakeetTranscriber, "_open", _opener(gpu, cpu, opened))
+    cpu, loaded = _Model(), threading.Event()
+    monkeypatch.setattr(ParakeetTranscriber, "_open", _gpu_then_cpu(0, [], cpu, loaded))
     transcriber = ParakeetTranscriber.load(tmp_path, "gpu")
-    assert transcriber.device == "gpu"
-    gpu.fails = 1  # the game took the card's memory
-    assert transcriber.transcribe(np.zeros(16_000, dtype=np.float32), 16_000) == "hello"
-    assert transcriber.device == "cpu"
-    assert opened == ["gpu", "cpu"]
-    transcriber.transcribe(np.zeros(16_000, dtype=np.float32), 16_000)
-    assert cpu.calls == 2  # stays on the processor
+    transcriber._model.fails = 1  # type: ignore[union-attr]  # pyright: ignore[reportPrivateUsage, reportOptionalMemberAccess, reportAttributeAccessIssue]
+    with pytest.raises(RecognitionUnavailable):
+        transcriber.transcribe(_QUIET, 16_000)
+    with pytest.raises(RecognitionUnavailable, match="still switching"):
+        transcriber.transcribe(_QUIET, 16_000)  # never queued until the CPU copy is ready
+    loaded.set()
+    _switched(transcriber)
+    assert transcriber.transcribe(_QUIET, 16_000) == "hello"
+
+
+def test_a_processor_copy_that_wont_load_says_why_each_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tycho.stt.parakeet import ParakeetTranscriber
+
+    monkeypatch.setattr(ParakeetTranscriber, "_open", _gpu_then_cpu(0, [], _Model(fails=1)))
+    transcriber = ParakeetTranscriber.load(tmp_path, "gpu")
+    transcriber._model.fails = 1  # type: ignore[union-attr]  # pyright: ignore[reportPrivateUsage, reportOptionalMemberAccess, reportAttributeAccessIssue]
+    with pytest.raises(RecognitionUnavailable):
+        transcriber.transcribe(_QUIET, 16_000)
+    _switched(transcriber)
+    for _ in range(2):
+        with pytest.raises(RecognitionUnavailable, match="couldn't load on the processor"):
+            transcriber.transcribe(_QUIET, 16_000)
 
 
 def test_a_processor_failure_is_a_plain_model_error(
