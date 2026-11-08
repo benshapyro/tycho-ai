@@ -44,6 +44,8 @@ class FakeBrain:
             await asyncio.sleep(0.02)
         if self._look and request.looking is not None:
             request.looking()
+            if request.checking is not None:  # a reply known not to end in a press
+                request.checking()
             await asyncio.sleep(0.02)
         answer = self._script.pop(0)
         if isinstance(answer, Exception):

@@ -894,8 +894,9 @@ def test_a_refused_act_isnt_told_to_answer_now() -> None:
 
 
 def test_no_checking_line_for_a_look_up_an_act_cuts_short() -> None:
-    """#176: "Checking." was said for a look-up the act then cancelled."""
-    looked: list[str] = []
+    """#176: "Checking." was said for a look-up the act then cancelled. The deadline
+    still moved, which is harmless: the press ends the request (#178)."""
+    told: list[str] = []
     lookup = _tool_stop("ship_lookup", {"name": "Cutlass"}, "toolu_1")
     act = _tool_stop(
         "run_actions", {"actions": ["v_toggle_landing_system"], "say": "Gear."}, "toolu_2"
@@ -903,9 +904,58 @@ def test_no_checking_line_for_a_look_up_an_act_cuts_short() -> None:
     brain = ClaudeBrain(
         MATCHER, client=cast(Any, _Calls(_reply(lookup, act))), lookups=(FakeLookup(),)
     )
-    request = BrainRequest("gear", KEYBINDS, looking=lambda: looked.append(""))
+    request = BrainRequest(
+        "gear",
+        KEYBINDS,
+        looking=lambda: told.append("looking"),
+        checking=lambda: told.append("checking"),
+    )
     assert isinstance(asyncio.run(brain.decide(request)), RunActions)
-    assert looked == []
+    assert told == ["looking"]
+
+
+def _ends_noted(seen: list[str], *calls: tuple[list[Any], Any]) -> Any:
+    """A client like ``_Calls`` that notes in ``seen`` when each reply's stream ends."""
+
+    class Stream(_Stream):
+        async def get_final_message(self) -> Any:
+            seen.append("reply ends")
+            return await super().get_final_message()
+
+    script = list(calls)
+
+    @asynccontextmanager
+    async def stream(**request: Any) -> AsyncGenerator[_Stream]:
+        events, final = script.pop(0)
+        yield Stream(events, final)
+
+    return SimpleNamespace(messages=SimpleNamespace(stream=stream))
+
+
+def test_the_deadline_moves_when_a_look_up_starts_not_when_the_reply_ends() -> None:
+    """#178: after #177 the deadline only moved once the whole reply had ended, so a
+    reply still streaming past the usual deadline failed where it used to get more time."""
+    seen: list[str] = []
+    client = _ends_noted(seen, _looks_up(), ([], _final("Area 18.")))
+    brain = ClaudeBrain(MATCHER, client=client, lookups=(FakeLookup(),))
+    request = BrainRequest("where do I sell gold", KEYBINDS, looking=lambda: seen.append("looking"))
+    assert asyncio.run(brain.decide(request)) == Reply("Area 18.")
+    assert seen == ["looking", "reply ends", "reply ends"]
+
+
+def test_checking_is_said_once_after_the_reply_ends_without_an_act() -> None:
+    seen: list[str] = []
+    calls = [_looks_up(use_id=f"toolu_{n}") for n in range(2)]
+    client = _ends_noted(seen, *calls, ([], _final("Area 18.")))
+    brain = ClaudeBrain(MATCHER, client=client, lookups=(FakeLookup(),))
+    request = BrainRequest(
+        "where do I sell gold",
+        KEYBINDS,
+        looking=lambda: seen.append("looking"),
+        checking=lambda: seen.append("checking"),
+    )
+    assert asyncio.run(brain.decide(request)) == Reply("Area 18.")
+    assert seen == ["looking", "reply ends", "checking", "looking", "reply ends", "reply ends"]
 
 
 def test_look_ups_in_one_reply_run_at_the_same_time() -> None:

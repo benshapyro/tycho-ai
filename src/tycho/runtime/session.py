@@ -503,8 +503,6 @@ class Session:
                             )
                             self._fill()
 
-                        checking: list[bool] = []
-
                         def looking() -> None:
                             # Only ever later, and never past the limit: an early look-up
                             # keeps the usual deadline, and each one after moves it on.
@@ -513,9 +511,6 @@ class Session:
                             )
                             if (when := budget.when()) is None or later > when:
                                 budget.reschedule(later)
-                            if not checking:  # "Checking." once a request
-                                checking.append(True)
-                                self._fill(self._checking)
 
                         decision = await self._brain.decide(
                             BrainRequest(
@@ -524,6 +519,7 @@ class Session:
                                 tuple(self._follow_ups()),
                                 waiting=searching,
                                 looking=looking,
+                                checking=lambda: self._fill(self._checking),
                             )
                         )
                     trace.mark("brain")

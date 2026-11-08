@@ -70,6 +70,7 @@ class _Turn:
 
     waiting: Callable[[], None] | None = None
     looking: Callable[[], None] | None = None
+    checking: Callable[[], None] | None = None
     searched: bool = False
     credits: list[str] = field(default_factory=list[str])
     """Sources an answer must name, from the look-ups whose results it got ("UEX", #164)."""
@@ -248,7 +249,7 @@ class ClaudeBrain:
         # The fleet line matches ship names, which is too slow for the event loop.
         about = await asyncio.to_thread(self._about)
         messages = history(request.recent, request.text, self._today(), about)
-        turn = _Turn(waiting=request.waiting, looking=request.looking)
+        turn = _Turn(waiting=request.waiting, looking=request.looking, checking=request.checking)
         try:
             for call in range(MAX_CALLS):
                 decided, message, looking = await self._call(messages, started, turn)
@@ -305,7 +306,7 @@ class ClaudeBrain:
         otherwise the whole message and the look-ups it started. Notes in ``turn``
         whether a look-up from the web started."""
         looking: list[tuple[str, asyncio.Task[LookupResult]]] = []
-        checking = 0
+        checking = False
         turn.refused = False
         instant: list[asyncio.Task[LookupResult]] = []
         """A fleet or settings note in the same reply as an act: it runs too (#156)."""
@@ -335,11 +336,13 @@ class ClaudeBrain:
                                 if turn.waiting is not None:
                                     turn.waiting()
                                     turn.waiting = None  # once a request
-                                turn.looking = None  # not after a search's line
+                                turn.looking = turn.checking = None  # not after a search's line
                             elif turn.looking is not None and not getattr(chosen, "instant", False):
-                                # Told once the reply is known not to end in an act: the
-                                # session moves its deadline and says "Checking." (#176).
-                                checking += 1
+                                # The deadline moves now: the rest of the reply can take
+                                # longer than what's left of it (#178). "Checking." waits
+                                # until the reply is known not to end in an act (#176).
+                                turn.looking()
+                                checking = True
                             seconds = float(getattr(chosen, "seconds", LOOKUP_SECONDS))
                             lookup = run_lookup(chosen, block.input, seconds)
                             turn.sources[block.id] = str(getattr(chosen, "credit", ""))
@@ -382,8 +385,9 @@ class ClaudeBrain:
                                 )
                         return decided, None, []
                 message = await stream.get_final_message()
-            for _ in range(checking if turn.looking is not None else 0):
-                turn.looking()  # type: ignore[misc]
+            if checking and turn.checking is not None:
+                turn.checking()
+                turn.checking = None  # once a request
         except BaseException:
             for _, task in looking:
                 task.cancel()
