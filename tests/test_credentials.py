@@ -153,16 +153,25 @@ def test_a_piped_key_is_refused_so_it_never_sits_in_a_transcript(
     assert 'start "Tycho key" cmd /k tycho key set anthropic' in err
 
 
+@pytest.mark.parametrize(
+    ("name", "key"),
+    [
+        ("elevenlabs", "sk_" + "a" * 30 + "\u200b"),  # #246
+        ("anthropic", "sk-ant-api03-" + "a" * 30 + "\u200b"),  # #248
+    ],
+)
 def test_tycho_key_set_refuses_a_key_with_a_hidden_character(
-    memory: MemoryKeyring, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    memory: MemoryKeyring,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    name: str,
+    key: str,
 ) -> None:
     # It can't go in a request header, so it would stop Tycho starting (#246).
     from tycho import app
 
-    monkeypatch.setattr(
-        credentials.getpass, "getpass", lambda prompt="": "sk_" + "a" * 30 + "\u200b"
-    )
+    monkeypatch.setattr(credentials.getpass, "getpass", lambda prompt="": key)
     monkeypatch.setattr(credentials, "_interactive", lambda: True)
-    assert app.main(["key", "set", "elevenlabs"]) == 1
+    assert app.main(["key", "set", name]) == 1
     assert memory.store == {}
     assert "invisible" in capsys.readouterr().err

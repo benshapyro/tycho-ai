@@ -29,6 +29,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - When the graphics card runs short mid-request, Tycho plays the "not done" sound at once instead of acting on what you said about 20 seconds later, and loads the processor copy in the background. It also frees the card's memory first. ([#209](https://github.com/benshapyro/tycho-ai/pull/209))
 - If the switch to the processor fails, Tycho tries again 30 seconds later, then waits longer between tries (up to 5 minutes), instead of staying without speech recognition until a restart. ([#215](https://github.com/benshapyro/tycho-ai/pull/215))
 - Since 0.4, an answer that needed a look-up could run out of time while it was still coming in. Each look-up gives it more time again. ([#212](https://github.com/benshapyro/tycho-ai/pull/212))
+- An Anthropic key stored with a hidden character, such as a zero-width space pasted from a web page, no longer reaches Claude and fails there. Tycho treats it as no key, says so in the log and in `tycho check`, and asks you to store it again, as it already does for an ElevenLabs key. `tycho key set` and Tycho's window refuse such a key. ([#248](https://github.com/benshapyro/tycho-ai/issues/248))
 - Sounds no longer hold Tycho up, the first request after a keybind change is as quick as any other, and quitting shuts down cleanly. ([#207](https://github.com/benshapyro/tycho-ai/pull/207))
 
 ### Security
