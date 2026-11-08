@@ -231,8 +231,16 @@ class TradeRoutes(_TradeLookup):
             if start is not None and self._narrow(start):
                 # A planet, an orbit or a few terminals: ask from there, for just the
                 # commodity if there is one. Small lists, in one round trip (#150).
-                rows, capped = await self._from(start, commodity)
-                wide = False
+                try:
+                    rows, capped = await self._from(start, commodity)
+                    wide = False
+                except WikiError:
+                    if commodity is None:
+                        raise
+                    # Should UEX ever refuse a start and a commodity together, the
+                    # commodity's own list still answers (review of #211).
+                    rows = await trade.routes({"id_commodity": commodity.id})
+                    capped, wide = len(rows) >= ROUTES_CAP, True
             elif commodity is not None:
                 # One request for every route of one commodity (#147), kept below to the
                 # start if there is one: a whole system ("gold in Pyro"), which a few of
@@ -341,19 +349,22 @@ async def _answered[T](
     requests: list[Coroutine[Any, Any, T]], seconds: float, where: str
 ) -> list[T]:
     """The answers to ``requests``, made at once, from those that answered within
-    ``seconds``. Raises ``WikiError`` only when none did."""
+    ``seconds``. While none has, it waits on for the first (the look-up's own time
+    limit still stops it). Raises ``WikiError`` only when every request failed."""
     tasks = [asyncio.ensure_future(r) for r in requests]
     try:
         done, waiting = await asyncio.wait(tasks, timeout=seconds)
+        while waiting and not any(t.exception() is None for t in done):
+            more, waiting = await asyncio.wait(waiting, return_when=asyncio.FIRST_COMPLETED)
+            done |= more
     finally:
         for task in tasks:
             task.cancel()
     answers = [t.result() for t in tasks if t in done and t.exception() is None]
     problems = [e for t in tasks if t in done and (e := t.exception()) is not None]
     if not answers:
-        if problems:
-            raise WikiError(str(problems[0])) from problems[0]
-        raise WikiError(f"no terminal at {where} answered within {seconds:.1f} s")
+        problem = problems[0] if problems else None
+        raise WikiError(str(problem or f"no terminal at {where} answered")) from problem
     if waiting or problems:
         log.info(
             "Routes from %s: %d of %d terminals answered in time",

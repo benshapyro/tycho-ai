@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from tests.fakes.fake_uex import NOW, FakeTradeUex
+from tycho.knowledge import WikiError
 from tycho.knowledge.trade import FRESH_SECONDS, Trade, TradeError, hours_ago
 from tycho.knowledge.trade_lookup import CommodityPrices, TradeRoutes, trade_lookups
 
@@ -332,15 +333,19 @@ def _arc_l1_and_area18(self: Trade, place: object) -> list[int]:
     return [1, 12]
 
 
-def test_no_terminal_answering_in_time_is_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_with_no_terminal_answered_it_waits_for_the_first(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review of #211: with none answered by PART_SECONDS, giving up would fail a look-up
+    that still had time left. It waits on for the first answer instead."""
     import tycho.knowledge.trade_lookup
 
     uex = FakeTradeUex()
     real_get = uex.get
 
-    async def slow(path: str, params: Any = None) -> Any:
+    async def slow(path: str, params: dict[str, int] | None = None) -> Any:
         if path == "/commodities_routes":
-            await asyncio.sleep(10)
+            await asyncio.sleep(0.2)
         return await real_get(path, params)
 
     monkeypatch.setattr(uex, "get", slow)
@@ -348,8 +353,54 @@ def test_no_terminal_answering_in_time_is_an_error(monkeypatch: pytest.MonkeyPat
     error, result = _run(
         _routes(uex), {"start": "ARC-L1", "commodity": "", "end": "", "cargo_scu": 0}
     )
+    assert not error
+    assert [r["commodity"] for r in result["routes"]] == ["Quantainium"]
+
+
+def test_terminals_that_fail_are_left_out_and_all_failing_is_an_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    uex = FakeTradeUex()
+    real_get = uex.get
+    failing = {12}
+
+    async def broken(path: str, params: dict[str, int] | None = None) -> Any:
+        if path == "/commodities_routes" and (params or {}).get("id_terminal_origin") in failing:
+            raise WikiError(f"{path}: HTTP 500")
+        return await real_get(path, params)
+
+    monkeypatch.setattr(uex, "get", broken)
+    monkeypatch.setattr(Trade, "terminals_at", _arc_l1_and_area18)
+    arguments = {"start": "ARC-L1", "commodity": "", "end": "", "cargo_scu": 0}
+    error, result = _run(_routes(uex), arguments)
+    assert not error
+    assert [r["commodity"] for r in result["routes"]] == ["Quantainium"]
+    failing.add(1)
+    error, result = _run(_routes(uex), arguments)
     assert error
-    assert "didn't answer" in result["error"]
+    assert "HTTP 500" in result["error"]
+
+
+def test_a_start_and_commodity_uex_refuses_ask_the_commoditys_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review of #211: should UEX refuse an origin and a commodity together, the
+    commodity's own list still answers."""
+    uex = FakeTradeUex()
+    real_get = uex.get
+
+    async def refuses_both(path: str, params: dict[str, int] | None = None) -> Any:
+        query = params or {}
+        if path == "/commodities_routes" and "id_commodity" in query and len(query) > 1:
+            return {"status": "invalid_input", "message": "one filter only"}
+        return await real_get(path, params)
+
+    monkeypatch.setattr(uex, "get", refuses_both)
+    error, result = _run(
+        _routes(uex), {"start": "Hurston", "commodity": "laranite", "end": "", "cargo_scu": 0}
+    )
+    assert not error
+    assert [r["sell_at"] for r in result["routes"]] == ["New Babbage", "Area18"]
 
 
 def test_a_commodity_that_fits_a_few_names_the_others(monkeypatch: pytest.MonkeyPatch) -> None:
