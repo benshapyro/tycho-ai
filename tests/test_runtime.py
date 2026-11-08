@@ -1001,6 +1001,17 @@ def test_a_modifier_pressed_on_its_own_counts_as_its_key(danger: str, refused: b
     assert ("v_eject" in verdict.reason) is refused
 
 
+def test_the_refusal_names_the_key_that_clashes() -> None:
+    """#208: "Lights is on ralt+x, which is also Eject" sent the player to rebind the
+    wrong key, when Eject was on ralt alone."""
+    lights = _action("v_lights", "ralt+x")
+    command = next(c for c in CommandMatcher.default().commands if c.actions == ("v_lights",))
+    alone = safety.check(command, lights, Keybinds([lights, _action("v_eject", "ralt")]))
+    assert "ralt+x, which holds down ralt, and ralt is v_eject" in alone.reason
+    same = safety.check(command, lights, Keybinds([lights, _action("v_eject", "ralt+x")]))
+    assert "ralt+x, which is also v_eject" in same.reason
+
+
 def test_modifiers_bound_together_are_caught_when_the_press_holds_them_all() -> None:
     lights = _action("v_lights", "lctrl+lalt+x")
     keybinds = Keybinds([lights, _action("v_self_destruct", "lalt+lctrl")])
