@@ -288,3 +288,16 @@ def test_no_command_uses_the_tiles_words_as_a_phrase() -> None:
     assert tile_command("Keep that up.") == "pin"
     assert tile_command("Clear the Tile") == "clear"
     assert tile_command("clear the target") is None  # whole utterances only
+
+
+def test_no_command_uses_say_that_again_as_a_phrase() -> None:
+    from tycho.runtime.session import SAY_AGAIN_WORDS, TILE_WORDS, is_say_again
+
+    tile = {phrase for phrases in TILE_WORDS.values() for phrase in phrases}
+    assert not SAY_AGAIN_WORDS & tile
+    for command in CommandMatcher.default().commands:
+        for phrase in command.say:
+            assert phrase not in SAY_AGAIN_WORDS, (command.id, phrase)
+    assert is_say_again("Say that again?")
+    assert is_say_again("Come again.")
+    assert not is_say_again("say that again slower")  # whole utterances only

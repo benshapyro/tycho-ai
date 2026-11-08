@@ -2,7 +2,8 @@
 #
 # heard:  what speech-to-text produced (mishearings included on purpose). The
 #         game lexicon runs on it first, as in the real pipeline.
-# expect: allowed kinds of response: "actions", "look_up", "reply".
+# expect: allowed kinds of response: "actions", "look_up", "reply", or "say_again"
+#         (the session replays the last answer itself, never asking the brain).
 # must:   for "actions", groups of actions; at least one from each group must be pressed.
 # never:  actions that must not be pressed, on top of the global list in brain_report.py
 #         (self-destruct, eject, jettison, quantum engage, respawn, firing weapons...).
@@ -1121,3 +1122,17 @@ tools = ["mining_lookup"]
 max_calls = 2
 no_errors = true
 tag = "mining"
+
+# "Say that again" (#222): the session replays the last answer word for word. It must
+# never reach the brain, which would cost a call and could word it differently.
+[[case]]
+heard = "say that again"
+expect = ["say_again"]
+max_calls = 0
+tag = "say_again"
+
+[[case]]
+heard = "come again?"
+expect = ["say_again"]
+max_calls = 0
+tag = "say_again"

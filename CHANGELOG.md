@@ -11,6 +11,9 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 <!-- A full draft of the 0.5.0 release notes, with examples, is in git:
      `git show 24b13cf:docs/releases/0.5.0.md`. Start the release notes from it. -->
 
+### Added
+- Missed what Tycho said? "Say that again" (or "repeat that", "come again") repeats its last answer word for word, at once and as often as you like, with the Tile on or off. Before, it went back to Claude, took a second or two, might come back worded differently, and stopped working after half a minute. ([#225](https://github.com/benshapyro/tycho-ai/pull/225), [#222](https://github.com/benshapyro/tycho-ai/issues/222))
+
 ### Changed
 - **Check after upgrading if you edit `commands.toml` by hand:** a `requires` or `accepted_risks` value Tycho doesn't know, such as a typo, now stops the whole file loading. Until you fix it, Tycho uses only its built-in commands, and the Commands page says so. `tycho check` names the value and the ones allowed: correct or remove it, then run `tycho check` again. Before, the typo was ignored and that command was always refused. ([#206](https://github.com/benshapyro/tycho-ai/pull/206), [#218](https://github.com/benshapyro/tycho-ai/issues/218))
 - A trade route asked from where you are ("I'm at Obituary, best route for refined gold?") is one small request to UEX instead of two, and a slow shop is left out instead of holding up the answer. ([#211](https://github.com/benshapyro/tycho-ai/pull/211))

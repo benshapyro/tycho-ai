@@ -210,6 +210,42 @@ def test_run_case_counts_calls_to_claude(replies: int, kind: str, calls: int) ->
     assert outcome.calls == calls
 
 
+class _NoBrain:
+    async def decide(self, request: object) -> object:
+        raise AssertionError("say that again reached the brain")
+
+
+def test_say_that_again_never_reaches_the_brain() -> None:
+    """#222: the session replays the last answer itself."""
+    from tycho.lexicon import Lexicon
+
+    e = _eval()
+    rule = {"heard": "say that again", "expect": ["say_again"], "max_calls": 0}
+    outcome = asyncio.run(e.run_case(rule, Lexicon.default(), _NoBrain(), _keybinds()))
+    assert (outcome.route, outcome.kind, outcome.calls) == ("session", "say_again", 0)
+    assert e.grade(outcome, rule, set()) == "pass"
+
+
+def test_the_say_that_again_cases_are_in_the_eval() -> None:
+    data = tomllib.loads((ROOT / "tools" / "spike" / "brain_cases.toml").read_text("utf-8"))
+    assert any(c["expect"] == ["say_again"] for c in data["case"])
+
+
+def test_the_model_benchmarks_leave_out_the_say_that_again_cases(tmp_path: Path) -> None:
+    """Review of #225: jev_report and brain_report grade a model, which never sees them."""
+    _eval()  # puts tools/bench on the path
+    from brain_report import load_cases  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
+
+    cases_file = tmp_path / "cases.toml"
+    cases_file.write_text(
+        '[[case]]\nheard = "say that again"\nexpect = ["say_again"]\n\n'
+        '[[case]]\nheard = "gear down"\nexpect = ["actions"]\n',
+        "utf-8",
+    )
+    cases, _ = load_cases(cases_file, engine="")  # pyright: ignore[reportUnknownVariableType]
+    assert [c.heard for c in cases] == ["gear down"]  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+
+
 def _keybinds() -> object:
     from tests.test_runtime import KEYBINDS
 
