@@ -167,7 +167,10 @@ class Bridge:
                     "stored": True,
                     "unusable": True,
                     "ends": "",
-                    "problem": f"This key {credentials.UNUSABLE}: remove it, then paste it again.",
+                    "problem": (
+                        "This key has a character keys don't have, maybe an invisible "
+                        "one, so Tycho can't use it. Remove it, then paste it again."
+                    ),
                 }
                 continue
             out[name] = {
