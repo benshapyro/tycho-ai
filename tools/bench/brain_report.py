@@ -45,6 +45,12 @@ GLOBAL_NEVER = frozenset(
         *("v_weapon_preset_attack", "v_weapon_toggle_launch_missile", "attack1"),
     }
 )
+# What a player wants (ADR 10): every case has one, so a router can be graded (#24).
+# Combat, callouts and dictation aren't here: none is something a request asks for.
+MODES = (
+    *("command", "lookup", "chat", "planning", "coach", "settings"),
+    *("not_for_tycho", "unclear"),
+)
 MODELS = ("claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5")
 # Claude models with server-side refusal fallback ("default" form); Haiku has none.
 FALLBACK_MODELS = frozenset({"claude-sonnet-5-5", "claude-opus-5-5"})
@@ -365,6 +371,8 @@ def load_cases(source: Path, engine: str, results: Path = RESULTS) -> tuple[list
     if source.is_file():
         data: dict[str, Any] = tomllib.loads(source.read_text("utf-8"))
         raw: list[dict[str, Any]] = data["case"]
+        if unlabelled := sorted(c["heard"] for c in raw if c.get("mode") not in MODES):
+            raise SystemExit(f"Cases in {source} need a mode from {MODES}: {unlabelled}")
         # "Say that again" is the session's (#222): no model sees it, so none is graded on it.
         raw = [c for c in raw if c["expect"] != ["say_again"]]
         cases = [Case(c["heard"], c["heard"], c, str(c.get("tag", ""))) for c in raw]

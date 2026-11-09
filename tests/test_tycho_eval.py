@@ -93,6 +93,7 @@ def test_a_counted_look_up_notes_its_errors_and_stands_in_for_the_real_one() -> 
 
 KNOWN = {
     "heard",
+    "mode",
     "expect",
     "must",
     "never",
@@ -125,6 +126,25 @@ def test_every_case_uses_only_keys_the_eval_reads() -> None:
     data = tomllib.loads((ROOT / "tools" / "spike" / "brain_cases.toml").read_text("utf-8"))
     unknown = {(c["heard"], k) for c in data["case"] for k in c if k not in KNOWN}
     assert not unknown
+
+
+def test_every_case_says_what_the_player_wants() -> None:
+    """#24: a router is graded on each case's mode (ADR 10), so none may be missing."""
+    _eval()  # puts tools/bench on the path
+    from brain_report import MODES  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
+
+    data = tomllib.loads((ROOT / "tools" / "spike" / "brain_cases.toml").read_text("utf-8"))
+    assert not [c["heard"] for c in data["case"] if c.get("mode") not in MODES]
+
+
+def test_the_model_benchmarks_refuse_a_case_with_no_mode(tmp_path: Path) -> None:
+    _eval()  # puts tools/bench on the path
+    from brain_report import load_cases  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
+
+    cases_file = tmp_path / "cases.toml"
+    cases_file.write_text('[[case]]\nheard = "gear down"\nexpect = ["actions"]\n', "utf-8")
+    with pytest.raises(SystemExit, match="gear down"):
+        load_cases(cases_file, engine="", results=tmp_path)
 
 
 class _Slow(_Failing):
@@ -238,8 +258,8 @@ def test_the_model_benchmarks_leave_out_the_say_that_again_cases(tmp_path: Path)
 
     cases_file = tmp_path / "cases.toml"
     cases_file.write_text(
-        '[[case]]\nheard = "say that again"\nexpect = ["say_again"]\n\n'
-        '[[case]]\nheard = "gear down"\nexpect = ["actions"]\n',
+        '[[case]]\nheard = "say that again"\nmode = "command"\nexpect = ["say_again"]\n\n'
+        '[[case]]\nheard = "gear down"\nmode = "command"\nexpect = ["actions"]\n',
         "utf-8",
     )
     cases, _ = load_cases(cases_file, engine="", results=tmp_path)  # pyright: ignore[reportUnknownVariableType]

@@ -11,6 +11,12 @@
 #         tycho_eval.py still fails them unless Tycho would ask "confirm" first.
 # answer: (questions) a reply that only points elsewhere ("check the wiki") fails.
 # tag:    group for the report.
+# mode:   (required) what the player wants, from ADR 10, for grading a router (#24):
+#         "command", "lookup" (one answer from data), "chat", "planning", "coach"
+#         (explain how something works), "settings" (Tycho itself), "not_for_tycho"
+#         (talking to someone else), or "unclear" (a request, but not what for). It's
+#         the request's mode, not the right response: "self destruct" is a command
+#         even when the right response is to ask.
 #
 # How it got there (#148): a right answer after retries is slow, and luck.
 # max_calls: calls to Claude allowed, about 1-1.5 s each (a look-up and its answer is 2).
@@ -24,162 +30,189 @@
 
 [[case]]
 heard = "can you get the lights"
+mode = "command"
 expect = ["actions"]
 must = [["v_lights", "v_lights_on"]]
 tag = "single"
 
 [[case]]
 heard = "flip the headlights on"
+mode = "command"
 expect = ["actions"]
 must = [["v_lights", "v_lights_on"]]
 tag = "single"
 
 [[case]]
 heard = "night vision"
+mode = "command"
 expect = ["actions"]
 must = [["v_light_amplification_toggle", "v_light_amplification_on"]]
 tag = "single"
 
 [[case]]
 heard = "turn on cruise control"
+mode = "command"
 expect = ["actions"]
 must = [["v_ifcs_throttle_swap_mode", "v_ifcs_throttle_set_sticky"]]
 tag = "single"
 
 [[case]]
 heard = "go decoupled"
+mode = "command"
 expect = ["actions"]
 must = [["v_ifcs_vector_decoupling_toggle", "v_ifcs_vector_decoupling_on"]]
 tag = "single"
 
 [[case]]
 heard = "switch to VTOL"
+mode = "command"
 expect = ["actions"]
 must = [["v_vtol_toggle", "v_vtol_on"]]
 tag = "single"
 
 [[case]]
 heard = "hit the brakes"
+mode = "command"
 expect = ["actions"]
 must = [["v_space_brake", "v_brake"]]
 tag = "single"
 
 [[case]]
 heard = "full throttle"
+mode = "command"
 expect = ["actions"]
 must = [["v_power_throttle_max"]]
 tag = "single"
 
 [[case]]
 heard = "cut the throttle"
+mode = "command"
 expect = ["actions"]
 must = [["v_power_throttle_min"]]
 tag = "single"
 
 [[case]]
 heard = "lock the gimbals"
+mode = "command"
 expect = ["actions"]
 must = [["v_weapon_gimbals_state_toggle", "v_weapon_gimbals_state_set_locked"]]
 tag = "single"
 
 [[case]]
 heard = "arm more missiles"
+mode = "command"
 expect = ["actions"]
 must = [["v_weapon_increase_max_missiles"]]
 tag = "single"
 
 [[case]]
 heard = "pop some noise"
+mode = "command"
 expect = ["actions"]
 must = [["v_weapon_countermeasure_noise_launch"]]
 tag = "single"
 
 [[case]]
 heard = "target whoever's shooting at us"
+mode = "command"
 expect = ["actions"]
 must = [["v_target_cycle_attacker_reset", "v_target_cycle_attacker_fwd"]]
 tag = "single"
 
 [[case]]
 heard = "unlock target"
+mode = "command"
 expect = ["actions"]
 must = [["v_target_unlock"]]
 tag = "single"
 
 [[case]]
 heard = "hail them"
+mode = "command"
 expect = ["actions"]
 must = [["v_target_hail"]]
 tag = "single"
 
 [[case]]
 heard = "check behind us"
+mode = "command"
 expect = ["actions"]
 must = [["v_view_look_behind"]]
 tag = "single"
 
 [[case]]
 heard = "request cargo loading"
+mode = "command"
 expect = ["actions"]
 must = [["v_atc_loading_area_request"]]
 tag = "single"
 
 [[case]]
 heard = "start scanning"
+mode = "command"
 expect = ["actions"]
 must = [["v_toggle_scan_mode", "v_set_scan_mode", "v_scanning_trigger_scan"]]
 tag = "single"
 
 [[case]]
 heard = "mining mode"
+mode = "command"
 expect = ["actions"]
 must = [["v_toggle_mining_mode", "v_set_mining_mode"]]
 tag = "single"
 
 [[case]]
 heard = "autoland"
+mode = "command"
 expect = ["actions"]
 must = [["v_autoland"]]
 tag = "single"
 
 [[case]]
 heard = "put my helmet on"
+mode = "command"
 expect = ["actions"]
 must = [["toggleEquipHelmet", "toggleAttachHelmet"]]
 tag = "single"
 
 [[case]]
 heard = "flashlight"
+mode = "command"
 expect = ["actions"]
 must = [["toggle_flashlight"]]
 tag = "single"
 
 [[case]]
 heard = "open the map"
+mode = "command"
 expect = ["actions"]
 must = [["v_starmap"]]
 tag = "single"
 
 [[case]]
 heard = "ping"
+mode = "command"
 expect = ["actions"]
 must = [["v_invoke_ping"]]
 tag = "single"
 
 [[case]]
 heard = "wipe my visor"
+mode = "command"
 expect = ["actions"]
 must = [["visor_wipe"]]
 tag = "single"
 
 [[case]]
 heard = "honk the horn"
+mode = "command"
 expect = ["actions"]
 must = [["v_horn"]]
 tag = "single"
 
 [[case]]
 heard = "third person"
+mode = "command"
 expect = ["actions"]
 must = [["thirdperson", "v_view_cycle_fwd"]]
 tag = "single"
@@ -188,54 +221,63 @@ tag = "single"
 
 [[case]]
 heard = "power up, lights on, and request landing"
+mode = "command"
 expect = ["actions"]
 must = [["v_power_toggle", "v_power_set_on", "v_flightready"], ["v_lights", "v_lights_on"], ["v_atc_request"]]
 tag = "chain"
 
 [[case]]
 heard = "lower the gear and turn on the lights"
+mode = "command"
 expect = ["actions"]
 must = [["v_toggle_landing_system", "v_deploy_landing_system"], ["v_lights", "v_lights_on"]]
 tag = "chain"
 
 [[case]]
 heard = "decoys and noise now"
+mode = "command"
 expect = ["actions"]
 must = [["v_weapon_countermeasure_decoy_launch"], ["v_weapon_countermeasure_noise_launch"]]
 tag = "chain"
 
 [[case]]
 heard = "max shields and target the nearest hostile"
+mode = "command"
 expect = ["actions"]
 must = [["v_engineering_assignment_shields_max", "v_engineering_assignment_shields_increase"], ["v_target_cycle_hostile_reset"]]
 tag = "chain"
 
 [[case]]
 heard = "close the doors, flight ready, then call ATC"
+mode = "command"
 expect = ["actions"]
 must = [["v_toggle_all_doors", "v_close_all_doors"], ["v_flightready"], ["v_atc_request"]]
 tag = "chain"
 
 [[case]]
 heard = "we're landing, gear down and request a pad"
+mode = "command"
 expect = ["actions"]
 must = [["v_toggle_landing_system", "v_deploy_landing_system"], ["v_atc_request"]]
 tag = "chain"
 
 [[case]]
 heard = "weapons hot and lock the gimbals"
+mode = "command"
 expect = ["actions"]
 must = [["v_power_toggle_weapons", "v_power_set_weapons_on"], ["v_weapon_gimbals_state_toggle", "v_weapon_gimbals_state_set_locked"]]
 tag = "chain"
 
 [[case]]
 heard = "throttle to zero and spacebrake"
+mode = "command"
 expect = ["actions"]
 must = [["v_power_throttle_min"], ["v_space_brake", "v_brake"]]
 tag = "chain"
 
 [[case]]
 heard = "after you power on, close the doors"
+mode = "command"
 expect = ["actions"]
 must = [["v_power_toggle", "v_power_set_on", "v_flightready"], ["v_toggle_all_doors", "v_close_all_doors"]]
 tag = "chain"
@@ -244,60 +286,70 @@ tag = "chain"
 
 [[case]]
 heard = "Open Moby Glass."
+mode = "command"
 expect = ["actions"]
 must = [["mobiglas"]]
 tag = "mishearing"
 
 [[case]]
 heard = "head lights"
+mode = "command"
 expect = ["actions"]
 must = [["v_lights"]]
 tag = "mishearing"
 
 [[case]]
 heard = "Request landing permission at Art Corp."
+mode = "command"
 expect = ["actions"]
 must = [["v_atc_request"]]
 tag = "mishearing"
 
 [[case]]
 heard = "Fly ready."
+mode = "command"
 expect = ["actions"]
 must = [["v_flightready"]]
 tag = "mishearing"
 
 [[case]]
 heard = "Deploy decoy's."
+mode = "command"
 expect = ["actions"]
 must = [["v_weapon_countermeasure_decoy_launch"]]
 tag = "mishearing"
 
 [[case]]
 heard = "Close the doors, please, the doors."
+mode = "command"
 expect = ["actions"]
 must = [["v_toggle_all_doors", "v_close_all_doors"]]
 tag = "mishearing"
 
 [[case]]
 heard = "Power two engines."
+mode = "command"
 expect = ["actions"]
 must = [["v_engineering_assignment_engine_increase", "v_engineering_assignment_engine_max"]]
 tag = "mishearing"
 
 [[case]]
 heard = "Target the nearest hostel."
+mode = "command"
 expect = ["actions"]
 must = [["v_target_cycle_hostile_reset"]]
 tag = "mishearing"
 
 [[case]]
 heard = "Landing gear dawn."
+mode = "command"
 expect = ["actions"]
 must = [["v_toggle_landing_system", "v_deploy_landing_system"]]
 tag = "mishearing"
 
 [[case]]
 heard = "Lights of."
+mode = "command"
 expect = ["actions", "reply"]
 tag = "mishearing"
 
@@ -305,41 +357,49 @@ tag = "mishearing"
 
 [[case]]
 heard = "do the thing"
+mode = "unclear"
 expect = ["reply"]
 tag = "vague"
 
 [[case]]
 heard = "fix it"
+mode = "unclear"
 expect = ["reply"]
 tag = "vague"
 
 [[case]]
 heard = "turn it off"
+mode = "unclear"
 expect = ["reply"]
 tag = "vague"
 
 [[case]]
 heard = "the usual"
+mode = "unclear"
 expect = ["reply"]
 tag = "vague"
 
 [[case]]
 heard = "again"
+mode = "unclear"
 expect = ["reply"]
 tag = "vague"
 
 [[case]]
 heard = "not that one"
+mode = "unclear"
 expect = ["reply"]
 tag = "vague"
 
 [[case]]
 heard = "can you help me"
+mode = "unclear"
 expect = ["reply"]
 tag = "vague"
 
 [[case]]
 heard = "hurry up"
+mode = "unclear"
 expect = ["reply"]
 never = ["v_boost", "v_afterburner", "v_power_throttle_max"]
 tag = "vague"
@@ -348,41 +408,49 @@ tag = "vague"
 
 [[case]]
 heard = "how much is laranite selling for"
+mode = "lookup"
 expect = ["look_up"]
 tag = "question"
 
 [[case]]
 heard = "where can I buy a Cutlass"
+mode = "lookup"
 expect = ["look_up"]
 tag = "question"
 
 [[case]]
 heard = "what's the best mining laser"
+mode = "lookup"
 expect = ["look_up"]
 tag = "question"
 
 [[case]]
 heard = "where's the closest place to refuel"
+mode = "lookup"
 expect = ["look_up"]
 tag = "question"
 
 [[case]]
 heard = "how far is microTech"
+mode = "lookup"
 expect = ["look_up"]
 tag = "question"
 
 [[case]]
 heard = "what's the fastest route to Pyro"
+mode = "lookup"
 expect = ["look_up"]
 tag = "question"
 
 [[case]]
 heard = "is hadanite worth mining"
+mode = "lookup"
 expect = ["look_up"]
 tag = "question"
 
 [[case]]
 heard = "what does the Vulture salvage"
+mode = "lookup"
 expect = ["look_up", "reply"]
 tag = "question"
 
@@ -390,27 +458,32 @@ tag = "question"
 
 [[case]]
 heard = "get me out of here"
+mode = "command"
 expect = ["reply", "actions"]
 tag = "danger"
 
 [[case]]
 heard = "blow it up"
+mode = "command"
 expect = ["reply", "actions"]
 tag = "danger"
 
 [[case]]
 heard = "dump everything"
+mode = "command"
 expect = ["reply", "actions"]
 tag = "danger"
 
 [[case]]
 heard = "jettison the cargo"
+mode = "command"
 expect = ["actions", "reply"]
 allow = ["v_jettison_volatile_cargo"]
 tag = "danger"
 
 [[case]]
 heard = "eject eject eject"
+mode = "command"
 expect = ["actions"]
 must = [["v_eject"]]
 allow = ["v_eject"]
@@ -418,39 +491,46 @@ tag = "danger"
 
 [[case]]
 heard = "self destruct"
+mode = "command"
 expect = ["actions", "reply"]
 allow = ["v_self_destruct"]
 tag = "danger"
 
 [[case]]
 heard = "jump to Hurston"
+mode = "command"
 expect = ["reply", "look_up", "actions"]
 tag = "danger"
 
 [[case]]
 heard = "spool and jump"
+mode = "command"
 expect = ["actions", "reply"]
 allow = ["v_toggle_qdrive_engagement"]
 tag = "danger"
 
 [[case]]
 heard = "I'm dead, respawn me"
+mode = "command"
 expect = ["actions", "reply"]
 allow = ["respawn", "force_respawn", "incapacitatedRespawn"]
 tag = "danger"
 
 [[case]]
 heard = "back off"
+mode = "command"
 expect = ["reply", "actions"]
 tag = "danger"
 
 [[case]]
 heard = "fire everything"
+mode = "command"
 expect = ["reply"]
 tag = "danger"
 
 [[case]]
 heard = "launch missiles"
+mode = "command"
 expect = ["actions", "reply"]
 allow = ["v_weapon_toggle_launch_missile", "v_weapon_launch_missile"]
 tag = "danger"
@@ -459,23 +539,27 @@ tag = "danger"
 
 [[case]]
 heard = "shields to front"
+mode = "command"
 expect = ["actions"]
 must = [["v_shield_raise_level_forward"]]
 tag = "single"
 
 [[case]]
 heard = "lock the doors"
+mode = "command"
 expect = ["actions"]
 must = [["v_lock_all_doors", "v_toggle_all_doorlocks"]]
 tag = "single"
 
 [[case]]
 heard = "switch to quantum mode"
+mode = "command"
 expect = ["actions", "reply"]
 tag = "unbound"
 
 [[case]]
 heard = "turn off the shields"
+mode = "command"
 expect = ["actions"]
 must = [["v_power_toggle_shields", "v_power_set_shields_off"]]
 tag = "unbound"
@@ -484,21 +568,25 @@ tag = "unbound"
 
 [[case]]
 heard = "hold on, my dog is barking"
+mode = "not_for_tycho"
 expect = ["reply"]
 tag = "chatter"
 
 [[case]]
 heard = "this view is incredible"
+mode = "chat"
 expect = ["reply"]
 tag = "chatter"
 
 [[case]]
 heard = "brb"
+mode = "not_for_tycho"
 expect = ["reply"]
 tag = "chatter"
 
 [[case]]
 heard = "nice shot"
+mode = "not_for_tycho"
 expect = ["reply"]
 tag = "chatter"
 
@@ -509,12 +597,14 @@ tag = "chatter"
 
 [[case]]
 heard = "Hang your request."
+mode = "command"
 expect = ["actions"]
 must = [["v_atc_request"]]
 tag = "log"
 
 [[case]]
 heard = "Flight ready and open hangar."
+mode = "command"
 expect = ["actions"]
 must = [["v_flightready"], ["v_atc_request"]]
 never = ["v_open_all_doors", "v_toggle_all_doors"]
@@ -522,54 +612,63 @@ tag = "log"
 
 [[case]]
 heard = "Space mode."
+mode = "command"
 expect = ["actions"]
 must = [["v_master_mode_set_scm"]]
 tag = "log"
 
 [[case]]
 heard = "I am in flight operator modes set to space combat."
+mode = "command"
 expect = ["actions"]
 must = [["v_master_mode_set_scm"]]
 tag = "log"
 
 [[case]]
 heard = "Switch to now"
+mode = "command"
 expect = ["actions"]
 must = [["v_master_mode_set_nav"]]
 tag = "log"
 
 [[case]]
 heard = "Switch to nav map."
+mode = "command"
 expect = ["actions"]
 must = [["v_master_mode_set_nav"]]
 tag = "log"
 
 [[case]]
 heard = "can we get clearance to leave"
+mode = "command"
 expect = ["actions"]
 must = [["v_atc_request"]]
 tag = "log"
 
 [[case]]
 heard = "What's the best all-around ship in the game for all playstyles?"
+mode = "chat"
 expect = ["reply"]
 answer = true
 tag = "log"
 
 [[case]]
 heard = "What's the best money-making loop in the game right now?"
+mode = "coach"
 expect = ["reply"]
 answer = true
 tag = "log"
 
 [[case]]
 heard = "what's a good starter mining ship"
+mode = "chat"
 expect = ["reply"]
 answer = true
 tag = "log"
 
 [[case]]
 heard = "What's so good about the Andromeda?"
+mode = "chat"
 expect = ["reply"]
 answer = true
 tag = "log"
@@ -579,24 +678,28 @@ tag = "log"
 
 [[case]]
 heard = "what systems can I fly to right now"
+mode = "lookup"
 expect = ["reply"]
 answer = true
 tag = "question"
 
 [[case]]
 heard = "how do I get to Port Olisar"
+mode = "coach"
 expect = ["reply"]
 answer = true
 tag = "question"
 
 [[case]]
 heard = "is the Caterpillar good for solo hauling"
+mode = "chat"
 expect = ["reply"]
 answer = true
 tag = "question"
 
 [[case]]
 heard = "where's the main landing zone in Nyx"
+mode = "lookup"
 expect = ["reply"]
 answer = true
 tag = "question"
@@ -608,96 +711,112 @@ tag = "question"
 
 [[case]]
 heard = "who makes the Andromeda"
+mode = "lookup"
 expect = ["reply"]
 mentions = [["RSI", "Roberts Space"]]
 tag = "ships"
 
 [[case]]
 heard = "how much cargo does the Caterpillar hold"
+mode = "lookup"
 expect = ["reply"]
 mentions = [["576"]]
 tag = "ships"
 
 [[case]]
 heard = "how much can a cutty black carry"
+mode = "lookup"
 expect = ["reply"]
 mentions = [["46"]]
 tag = "ships"
 
 [[case]]
 heard = "how much cargo does the C2 hold"
+mode = "lookup"
 expect = ["reply"]
 mentions = [["696"]]
 tag = "ships"
 
 [[case]]
 heard = "how many crew does the Hammerhead take"
+mode = "lookup"
 expect = ["reply"]
 mentions = [["11", "eleven"]]
 tag = "ships"
 
 [[case]]
 heard = "compare cargo on the Connie Taurus and the Freelancer MAX"
+mode = "lookup"
 expect = ["reply"]
 mentions = [["174"], ["120"]]
 tag = "ships"
 
 [[case]]
 heard = "where can I buy a Cutlass Black in game"
+mode = "lookup"
 expect = ["reply"]
 mentions = [["Lorville", "Teasa", "Hurston"]]
 tag = "ships"
 
 [[case]]
 heard = "how long is the insurance claim on a Carrack"
+mode = "lookup"
 expect = ["reply"]
 mentions = [["48"]]
 tag = "ships"
 
 [[case]]
 heard = "what loaner comes with the Caterpillar"
+mode = "lookup"
 expect = ["reply"]
 mentions = [["Buccaneer"]]
 tag = "ships"
 
 [[case]]
 heard = "who makes the Mercury Star Runner"
+mode = "lookup"
 expect = ["reply"]
 mentions = [["Crusader"]]
 tag = "ships"
 
 [[case]]
 heard = "what's the top speed of the Avenger Titan"
+mode = "lookup"
 expect = ["reply"]
 mentions = [["1,?425", "262"]]
 tag = "ships"
 
 [[case]]
 heard = "how much cargo does the Connie carry"
+mode = "lookup"
 expect = ["reply"]
 tag = "ships"
 
 # Ships still in concept, from UEX's list (ADR 15).
 [[case]]
 heard = "who makes the Kraken"
+mode = "lookup"
 expect = ["reply"]
 mentions = [["Drake"]]
 tag = "ships"
 
 [[case]]
 heard = "how much cargo does the Kraken carry"
+mode = "lookup"
 expect = ["reply"]
 mentions = [["3,?792"]]
 tag = "ships"
 
 [[case]]
 heard = "can I fly the Galaxy yet"
+mode = "lookup"
 expect = ["reply"]
 mentions = [["concept", "not (yet )?(in|flyable|available|released)", "isn't", "not yet", "can't"]]
 tag = "ships"
 
 [[case]]
 heard = "how many crew does the Merchantman need"
+mode = "lookup"
 expect = ["reply"]
 mentions = [["4", "four"], ["8", "eight"]]
 tag = "ships"
@@ -705,23 +824,27 @@ tag = "ships"
 # Web search (ADR 15): news and what's coming, from RSI's sites and the community wiki.
 [[case]]
 heard = "what's coming in the next patch"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['4\.11', '4\.10\.3']]
 tag = "web"
 
 [[case]]
 heard = "when is the Kraken coming out"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['no official', 'not announced', "hasn't", 'no (confirmed |firm |set )?(release )?date', 'TBA', 'to be announced', 'not (yet )?confirmed', 'unconfirmed', 'no confirmed', "(couldn't|could not) find an official"]]
 tag = "web"
 
 [[case]]
 heard = "is there a free fly event on right now"
+mode = "lookup"
 expect = ["reply"]
 tag = "web"
 
 [[case]]
 heard = "what was revealed at CitizenCon this year"
+mode = "lookup"
 expect = ["reply"]
 tag = "web"
 
@@ -729,30 +852,35 @@ tag = "web"
 # grade is that the answer credits UEX and gives a number.
 [[case]]
 heard = "where's the best place to sell quantanium"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['UEX'], ['\d']]
 tag = "trade"
 
 [[case]]
 heard = "what's laranite going for at Area 18"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['UEX'], ['\d']]
 tag = "trade"
 
 [[case]]
 heard = "where can I sell raw laranite"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['UEX'], ['\d']]
 tag = "trade"
 
 [[case]]
 heard = "what's the best trade route from Lorville with 96 SCU"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['UEX'], ['\d']]
 tag = "trade"
 
 [[case]]
 heard = "what should I haul from Port Tressler in my Cutlass Black"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['UEX'], ['\d']]
 tag = "trade"
@@ -761,6 +889,7 @@ tag = "trade"
 # or a question back before #145 and #147.
 [[case]]
 heard = "what's the best route to buy and sell refined gold"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['UEX'], ['\d']]
 tools = ["trade_routes"]
@@ -770,6 +899,7 @@ tag = "trade"
 
 [[case]]
 heard = "what is the best route to buy and sell gold"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['UEX'], ['\d']]
 max_calls = 2
@@ -778,6 +908,7 @@ tag = "trade"
 
 [[case]]
 heard = "what are the best places to buy and sell gold purely in the pyro system"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['UEX'], ['\d']]
 max_calls = 2
@@ -786,6 +917,7 @@ tag = "trade"
 
 [[case]]
 heard = "I'm in Pyro at Obituary"
+mode = "chat"
 recent = [["what's the best route for buying and selling refined gold", "Where are you starting from?"]]
 expect = ["reply"]
 mentions = [['UEX']]
@@ -795,6 +927,7 @@ tag = "trade"
 
 [[case]]
 heard = "where can I sell gold ore"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['UEX'], ['\d']]
 max_calls = 2
@@ -803,6 +936,7 @@ tag = "trade"
 
 [[case]]
 heard = "what do you need to craft the uh S F nine"
+mode = "lookup"
 expect = ["reply"]
 tools = ["item_lookup"]
 max_calls = 3
@@ -812,6 +946,7 @@ tag = "items"
 # each request's header. "fleet" and "flying" set it up; the rest check it after.
 [[case]]
 heard = "I just bought a Carrack"
+mode = "chat"
 expect = ["reply"]
 fleet = ["Cutlass Black"]
 fleet_has = ["Carrack", "Cutlass Black"]
@@ -819,6 +954,7 @@ tag = "fleet"
 
 [[case]]
 heard = "I sold my Prospector"
+mode = "chat"
 expect = ["reply"]
 fleet = ["Cutlass Black", "Prospector"]
 fleet_has = ["Cutlass Black"]
@@ -827,6 +963,7 @@ tag = "fleet"
 
 [[case]]
 heard = "I'm flying the cutty black today"
+mode = "chat"
 expect = ["reply"]
 fleet = ["Cutlass Black", "Prospector"]
 flying_after = "Cutlass Black"
@@ -834,6 +971,7 @@ tag = "fleet"
 
 [[case]]
 heard = "which of my ships is best for mining"
+mode = "lookup"
 expect = ["reply"]
 fleet = ["Cutlass Black", "Prospector", "Carrack"]
 mentions = [['Prospector']]
@@ -841,6 +979,7 @@ tag = "fleet"
 
 [[case]]
 heard = "what should I haul from Port Tressler"
+mode = "lookup"
 expect = ["reply"]
 fleet = ["Cutlass Black", "Prospector"]
 flying = "Cutlass Black"
@@ -849,6 +988,7 @@ tag = "fleet"
 
 [[case]]
 heard = "how much cargo does the Hammerhead carry"
+mode = "lookup"
 expect = ["reply"]
 fleet = ["Cutlass Black"]
 fleet_lacks = ["Hammerhead"]
@@ -857,6 +997,7 @@ tag = "fleet"
 # Items and crafting (ADR 15): live from the Wiki API, named as players say them.
 [[case]]
 heard = "what do I need to craft an FS-9"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['Lindinium'], ['Hephaestanite'], ['Iron']]
 card = ["recipe", "list"]  # it was also a "tile" case; one case now (#228)
@@ -864,24 +1005,28 @@ tag = "items"
 
 [[case]]
 heard = "what's the DPS on the gallant"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['315']]
 tag = "items"
 
 [[case]]
 heard = "compare the bulwark and the palisade shields"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['2,?160']]
 tag = "items"
 
 [[case]]
 heard = "where can I buy a bulldog repeater"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['New Babbage', 'Area 18', 'CenterMass', 'CRU-L5']]
 tag = "items"
 
 [[case]]
 heard = "how fast is the Atlas quantum drive"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['259']]
 tag = "items"
@@ -894,18 +1039,21 @@ tag = "items"
 
 [[case]]
 heard = "turn your voice down a bit"
+mode = "settings"
 expect = ["reply"]
 settings_below = { voice_volume = 0.8 }
 tag = "settings"
 
 [[case]]
 heard = "set your voice to forty percent"
+mode = "settings"
 expect = ["reply"]
 settings_after = { voice_volume = 0.4 }
 tag = "settings"
 
 [[case]]
 heard = "make the beeps quieter"
+mode = "settings"
 expect = ["reply"]
 settings_below = { feedback_volume = 0.5 }
 settings_after = { voice_volume = 0.8 }
@@ -913,18 +1061,21 @@ tag = "settings"
 
 [[case]]
 heard = "mute the sounds"
+mode = "settings"
 expect = ["reply"]
 settings_after = { feedback_volume = 0.0 }
 tag = "settings"
 
 [[case]]
 heard = "give me less time to confirm"
+mode = "settings"
 expect = ["reply"]
 settings_below = { confirm_seconds = 5.0 }
 tag = "settings"
 
 [[case]]
 heard = "give me ten seconds to confirm"
+mode = "settings"
 expect = ["reply"]
 settings_unchanged = true
 mentions = [["settings\\.toml", "file", "settings screen"]]
@@ -932,6 +1083,7 @@ tag = "settings"
 
 [[case]]
 heard = "stop keeping transcripts"
+mode = "settings"
 expect = ["reply"]
 settings = { keep_transcripts = true }
 settings_after = { keep_transcripts = false }
@@ -939,6 +1091,7 @@ tag = "settings"
 
 [[case]]
 heard = "start keeping transcripts"
+mode = "settings"
 expect = ["reply"]
 settings_unchanged = true
 mentions = [["settings\\.toml", "file", "settings screen"]]
@@ -946,12 +1099,14 @@ tag = "settings"
 
 [[case]]
 heard = "don't search the web anymore"
+mode = "settings"
 expect = ["reply"]
 settings_after = { web_search = false }
 tag = "settings"
 
 [[case]]
 heard = "turn web search back on"
+mode = "settings"
 expect = ["reply"]
 settings = { web_search = false }
 settings_unchanged = true
@@ -959,6 +1114,7 @@ tag = "settings"
 
 [[case]]
 heard = "switch to the PTU"
+mode = "settings"
 expect = ["reply"]
 settings_after = { game_channel = "PTU" }
 mentions = [["restart", "next start", "next time", "starts"]]
@@ -966,6 +1122,7 @@ tag = "settings"
 
 [[case]]
 heard = "what's your voice volume at"
+mode = "settings"
 expect = ["reply"]
 settings = { voice_volume = 0.6 }
 settings_unchanged = true
@@ -974,6 +1131,7 @@ tag = "settings"
 
 [[case]]
 heard = "change my push to talk button"
+mode = "settings"
 expect = ["reply"]
 settings_unchanged = true
 mentions = [["tycho bind"]]
@@ -981,6 +1139,7 @@ tag = "settings"
 
 [[case]]
 heard = "undo that"
+mode = "settings"
 expect = ["reply"]
 before = [["voice_volume", "40%"]]
 recent = [["voice at forty percent", "Changed voice_volume from 80% to 40%"]]
@@ -989,6 +1148,7 @@ tag = "settings"
 
 [[case]]
 heard = "lights on and turn your voice down"
+mode = "command"
 expect = ["actions"]
 must = [["v_lights", "v_lights_on"]]
 settings_below = { voice_volume = 0.8 }
@@ -998,18 +1158,21 @@ tag = "settings"
 
 [[case]]
 heard = "call me Ace"
+mode = "settings"
 expect = ["reply"]
 settings_after = { call_me = "Ace" }
 tag = "settings"
 
 [[case]]
 heard = "you can call me Captain Reyes from now on"
+mode = "settings"
 expect = ["reply"]
 settings_after = { call_me = "Captain Reyes" }
 tag = "settings"
 
 [[case]]
 heard = "stop calling me commander"
+mode = "settings"
 expect = ["reply"]
 settings_after = { call_me = "" }
 tag = "settings"
@@ -1018,54 +1181,63 @@ tag = "settings"
 
 [[case]]
 heard = "where's the best place to sell laranite"
+mode = "lookup"
 expect = ["reply"]
 card = ["list"]
 tag = "tile"
 
 [[case]]
 heard = "best trade route from lorville with 96 SCU"
+mode = "lookup"
 expect = ["reply"]
 card = ["route", "list"]
 tag = "tile"
 
 [[case]]
 heard = "tell me about the corsair"
+mode = "chat"
 expect = ["reply"]
 card = ["ship"]
 tag = "tile"
 
 [[case]]
 heard = "how do I refuel my ship"
+mode = "coach"
 expect = ["reply"]
 card = ["steps"]
 tag = "tile"
 
 [[case]]
 heard = "what's a good first fighter"
+mode = "chat"
 expect = ["reply"]
 no_card = true
 tag = "tile"
 
 [[case]]
 heard = "thanks tycho, nice work"
+mode = "chat"
 expect = ["reply"]
 no_card = true
 tag = "tile"
 
 [[case]]
 heard = "who makes the cutlass black"
+mode = "lookup"
 expect = ["reply"]
 no_card = true
 tag = "tile"
 
 [[case]]
 heard = "make the tile bigger"
+mode = "settings"
 expect = ["reply"]
 settings_after = { tile_size = "large" }
 tag = "settings"
 
 [[case]]
 heard = "hide the tile"
+mode = "settings"
 expect = ["reply"]
 settings_after = { tile = false }
 tag = "settings"
@@ -1075,6 +1247,7 @@ tag = "settings"
 # request, so the Pitbull was never noted. Fails until #156 is fixed.
 [[case]]
 heard = "can you turn off power I'm in my uh Drake Pitbull right now"
+mode = "command"
 expect = ["actions"]
 must = [["v_power_set_off", "v_power_toggle"]]
 never = ["v_power_set_on"]
@@ -1084,6 +1257,7 @@ tag = "fleet"
 # Refining and buying ships with aUEC (#152), from UEX.
 [[case]]
 heard = "where should I refine my quantanium"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['UEX']]
 tools = ["refining"]
@@ -1093,6 +1267,7 @@ tag = "trade"
 
 [[case]]
 heard = "where can I buy a prospector in game"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['UEX'], ['\d']]
 tools = ["ship_purchases"]
@@ -1103,6 +1278,7 @@ tag = "trade"
 # Mining (#151): where a resource is, from the game files.
 [[case]]
 heard = "where are the best places to get lindinium"
+mode = "lookup"
 expect = ["reply"]
 mentions = [['Nyx', 'Glaciem', 'Keeger']]
 tools = ["mining_lookup"]
@@ -1112,6 +1288,7 @@ tag = "mining"
 
 [[case]]
 heard = "where can I mine quantanium in stanton"
+mode = "lookup"
 expect = ["reply"]
 tools = ["mining_lookup"]
 max_calls = 2
@@ -1122,12 +1299,135 @@ tag = "mining"
 # never reach the brain, which would cost a call and could word it differently.
 [[case]]
 heard = "say that again"
+mode = "command"
 expect = ["say_again"]
 max_calls = 0
 tag = "say_again"
 
 [[case]]
 heard = "come again?"
+mode = "command"
 expect = ["say_again"]
 max_calls = 0
 tag = "say_again"
+
+
+# --- The routing set (#24): modes the cases above had too few of -----------------
+# Squadmate chatter and talk to people in the room: not for Tycho. Nothing may be
+# pressed.
+
+[[case]]
+heard = "I'm pushing left, cover me"
+mode = "not_for_tycho"
+expect = ["reply"]
+tag = "routing"
+
+[[case]]
+heard = "watch your six, two on your tail"
+mode = "not_for_tycho"
+expect = ["reply"]
+tag = "routing"
+
+[[case]]
+heard = "anyone got a spare multitool"
+mode = "not_for_tycho"
+expect = ["reply"]
+tag = "routing"
+
+[[case]]
+heard = "sorry guys, my mic was muted"
+mode = "not_for_tycho"
+expect = ["reply"]
+tag = "routing"
+
+[[case]]
+heard = "good fight everyone, o7"
+mode = "not_for_tycho"
+expect = ["reply"]
+tag = "routing"
+
+[[case]]
+heard = "hey mom, I'll be down in five"
+mode = "not_for_tycho"
+expect = ["reply"]
+tag = "routing"
+
+# Unclear: a request, but not what for. Should ask.
+
+[[case]]
+heard = "uh, can you, um"
+mode = "unclear"
+expect = ["reply"]
+tag = "routing"
+
+[[case]]
+heard = "the thing on the left"
+mode = "unclear"
+expect = ["reply"]
+tag = "routing"
+
+[[case]]
+heard = "what about that one"
+mode = "unclear"
+expect = ["reply"]
+tag = "routing"
+
+# Planning: a multi-step task. Planning mode isn't built yet (ADR 10), so for now the
+# brain answers in one reply.
+
+[[case]]
+heard = "help me plan a trade run"
+mode = "planning"
+expect = ["reply"]
+tag = "routing"
+
+[[case]]
+heard = "plan a mining trip in my Prospector"
+mode = "planning"
+expect = ["reply"]
+tag = "routing"
+
+[[case]]
+heard = "I've got two hours, plan me a route that makes the most money"
+mode = "planning"
+expect = ["reply"]
+tag = "routing"
+
+[[case]]
+heard = "help me plan a bounty hunting session"
+mode = "planning"
+expect = ["reply"]
+tag = "routing"
+
+[[case]]
+heard = "let's plan a cargo run from Area 18 to Lorville"
+mode = "planning"
+expect = ["reply"]
+tag = "routing"
+
+# Coach: how something works. An explanation, never a press ("walk me through
+# quantum travel" must not jump).
+
+[[case]]
+heard = "how does mining work"
+mode = "coach"
+expect = ["reply"]
+tag = "routing"
+
+[[case]]
+heard = "teach me how to salvage"
+mode = "coach"
+expect = ["reply"]
+tag = "routing"
+
+[[case]]
+heard = "how do I land without crashing"
+mode = "coach"
+expect = ["reply"]
+tag = "routing"
+
+[[case]]
+heard = "walk me through quantum travel"
+mode = "coach"
+expect = ["reply"]
+tag = "routing"
