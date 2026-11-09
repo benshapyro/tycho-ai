@@ -4,7 +4,9 @@ Claude decides what to do with anything the fast path doesn't match. Its output 
 
 ## Files
 
+- `rounds.py`: what every adapter does with a complete tool call (`Round`): start a look-up, refuse an unbound act, or take the first act. The rules below live here once.
 - `claude.py`: the adapter. One request is up to `MAX_CALLS` calls to Claude: look-ups run, their results go back, Claude carries on.
+- `openrouter.py`: the same through OpenRouter, for any model (#192). Only the eval uses it: players can't pick a model until #112. It has no web search.
 - `decisions.py`: what Claude can decide (`RunActions`, `RunSequence`, `Reply`), `parse_tool_call`, and the errors.
 - `briefing.py`: the cached system prompt. It lists the player's bound actions.
 - `lookups.py`: the `Lookup` Protocol and `run_lookup`, which never raises.
@@ -21,5 +23,6 @@ Claude decides what to do with anything the fast path doesn't match. Its output 
 
 ## Testing
 
+- `tests/test_openrouter.py` scripts an OpenAI-style stream (`tests/fakes/fake_chat.py`).
 - `tests/test_brain.py` scripts Claude's stream (`_Calls`, `_looks_up`, `_picks`, `_reply`). It needs no key.
 - Any change here should be judged by the eval, which is paid (about 10 cents a run, ask first): `uv run python tools/bench/tycho_eval.py`. The bar is zero wrong presses. Compare the mean calls a request and the acting p50 with the last run.

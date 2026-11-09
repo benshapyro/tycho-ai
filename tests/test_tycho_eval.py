@@ -3,6 +3,7 @@ it was reached. Free: nothing here calls Claude."""
 
 import asyncio
 import importlib.util
+import logging
 import sys
 import tomllib
 from pathlib import Path
@@ -301,3 +302,90 @@ def test_the_model_benchmarks_load_the_real_case_file(tmp_path: Path) -> None:
     assert cases
     assert out == results / "brain_cases.results.jsonl"
     assert results.is_dir()
+
+
+# --- Across models (#192) ---------------------------------------------------------------
+
+
+def _run(provider: str, verdicts: list[str], cost: float = 0.01, calls: int = 1) -> Any:
+    e = _eval()
+    outcomes = [
+        _outcome(heard=f"case {n}", verdict=v, calls=calls, ms=1000.0 + n)
+        for n, v in enumerate(verdicts)
+    ]
+    costs = e._Costs()
+    costs.add(cost, "reported")
+    return e.Run(provider, "some/model", outcomes, costs)
+
+
+def test_the_eval_takes_a_provider_and_a_model() -> None:
+    e = _eval()
+    args = e._arguments(["--provider", "openrouter", "--model", "deepseek/deepseek-v4"])
+    assert (args.provider, args.model, args.per_hour) == ("openrouter", "deepseek/deepseek-v4", 30)
+    assert e._arguments([]).provider == "anthropic"
+    with pytest.raises(SystemExit):
+        e._arguments(["--provider", "openrouter"])  # which model?
+    assert e._arguments(["--adapter-check"]).no_web  # neither side searches the web
+
+
+def test_costs_say_where_they_came_from() -> None:
+    e = _eval()
+    costs = e._Costs()
+    for message in (
+        "Brain replied in 900 ms: 1000 in, 20 out, 800 cached, about $0.00042 (reported)",
+        "Brain replied in 900 ms: 1000 in, 20 out, 800 cached, about $0.00010 (price list)",
+        "Brain replied in 900 ms: 1 in, 1 out, 0 cached, 0 cache write, about $0.00020",
+        "Brain acted in 700 ms, generation gen-123",
+        "Brain acted in 700 ms, generation ?",
+    ):
+        costs.emit(logging.makeLogRecord({"msg": message}))
+    assert costs.sources == {"reported": 1, "price list": 1, "estimate": 1}
+    assert costs.total == pytest.approx(0.00072)
+    assert costs.replies == 3
+    assert costs.generations == ["gen-123"]
+
+
+def test_cost_per_request_and_per_hour_of_play() -> None:
+    e = _eval()
+    summary = e.metrics(_run("openrouter", ["pass", "pass", "WRONG PRESS ['v_eject']", "x"]), 60)
+    assert summary["passed"] == 2
+    assert summary["wrong_presses"] == 1
+    assert summary["model"] == "some/model"
+    assert summary["cost_per_request"] == pytest.approx(0.0025)
+    assert summary["cost_per_hour"] == pytest.approx(0.15)
+
+
+def test_the_price_list_gives_prices_per_token() -> None:
+    e = _eval()
+    listed = [
+        {"id": "other/model", "pricing": {"prompt": "1", "completion": "1"}},
+        {
+            "id": "some/model",
+            "pricing": {"prompt": "0.0000001", "completion": "0.0000005", "input_cache_read": ""},
+        },
+    ]
+    prices = e.prices_for(listed, "some/model")
+    assert (prices.prompt, prices.completion, prices.cache_read) == (1e-7, 5e-7, None)
+    assert e.prices_for(listed, "missing/model") is None
+
+
+def test_the_adapter_check_says_close_when_the_runs_agree() -> None:
+    e = _eval()
+    direct, routed = _run("anthropic", ["pass"] * 20), _run("openrouter", ["pass"] * 20)
+    lines = e.compare(direct, routed)
+    assert lines[-1].startswith("Adapter check: close")
+    assert not any("differ" in line for line in lines)
+
+
+@pytest.mark.parametrize(
+    ("verdicts", "calls"),
+    [
+        (["pass"] * 18 + ["missing v_eject"] * 2, 1),  # 10 points apart
+        (["pass"] * 19 + ["WRONG PRESS ['v_eject']"], 1),  # any wrong press
+        (["pass"] * 20, 2),  # many more calls a request
+    ],
+)
+def test_the_adapter_check_says_far_apart(verdicts: list[str], calls: int) -> None:
+    e = _eval()
+    lines = e.compare(_run("anthropic", ["pass"] * 20), _run("openrouter", verdicts, calls=calls))
+    assert lines[-1].startswith("Adapter check: FAR APART")

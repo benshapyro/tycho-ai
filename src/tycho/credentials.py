@@ -18,9 +18,9 @@ import keyring.errors
 from tycho import logs
 
 SERVICE = "tycho"
-KNOWN = ("anthropic", "cerebras", "typesafe", "elevenlabs")
+KNOWN = ("anthropic", "cerebras", "typesafe", "elevenlabs", "openrouter")
 # Public prefixes that say which provider a key is for, and are safe to show.
-_PUBLIC_PREFIXES = ("sk-ant-", "csk-", "sk_")
+_PUBLIC_PREFIXES = ("sk-ant-", "sk-or-v1-", "csk-", "sk_")
 
 
 class CredentialStoreError(Exception):

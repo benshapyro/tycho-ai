@@ -779,6 +779,11 @@ def anthropic_key() -> str | None:
     return _stored_key("anthropic", "Anthropic", BRAIN_KEY_HELP)
 
 
+def openrouter_key() -> str | None:
+    """For the brain eval across models (#192); players can't pick a model yet (#112)."""
+    return _stored_key("openrouter", "OpenRouter", f"{TYCHO} key set openrouter")
+
+
 def load_brain(
     matcher: CommandMatcher,
     current: Settings,

@@ -21,30 +21,30 @@ request at startup writes it, so the first real request is fast too.
 
 import asyncio
 import contextlib
-import dataclasses
 import datetime
-import difflib
 import logging
-import re
 import time
-from collections.abc import Callable, Collection, Iterable, Sequence
-from dataclasses import dataclass, field
-from typing import Any
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any, cast
 
 import anthropic
 from anthropic.types import MessageParam, TextBlockParam, ToolParam, ToolResultBlockParam
 
 from tycho.brain.briefing import briefing, offered_actions
-from tycho.brain.decisions import (
-    BrainError,
-    BrainRequest,
-    Decision,
-    Exchange,
-    Reply,
-    UnboundAction,
-    parse_tool_call,
+from tycho.brain.decisions import BrainError, BrainRequest, Decision, Exchange, Reply
+from tycho.brain.lookups import Lookup, LookupResult
+from tycho.brain.rounds import (
+    ACTS,
+    MAX_CALLS,
+    NO_PRESS_AFTER_SEARCH,
+    Round,
+    Turn,
+    credited,
+    final_reply,
+    last_note,
+    ms,
+    tool_specs,
 )
-from tycho.brain.lookups import LOOKUP_SECONDS, Lookup, LookupResult, failure, run_lookup
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Keybinds
 from tycho.tile.cards import TOOL_DESCRIPTION, TOOL_SCHEMA
@@ -56,31 +56,8 @@ EFFORT = "low"
 """97% on the 82-case eval at about 1.2 s; medium scored the same, slower (ADR 6)."""
 MAX_TOKENS = 1024
 """Replies are a sentence or two and tool calls a few dozen tokens; this is headroom."""
-MAX_CALLS = 3
-"""Calls to Claude per request: up to two rounds of look-ups, then the answer (ADR 15)."""
 # Haiku 5.5 per million tokens: input, output, cache read, cache write (1 hour).
 _PRICES = (0.10, 0.50, 0.01, 0.20)
-NO_PRESS_AFTER_SEARCH = (
-    "I looked that up online, so I won't press anything for it. Say the command again."
-)
-
-
-@dataclass
-class _Turn:
-    """What one request has done so far, across its calls to Claude."""
-
-    waiting: Callable[[], None] | None = None
-    looking: Callable[[], None] | None = None
-    checking: Callable[[], None] | None = None
-    searched: bool = False
-    credits: list[str] = field(default_factory=list[str])
-    """Sources an answer must name, from the look-ups whose results it got ("UEX", #164)."""
-    sources: dict[str, str] = field(default_factory=dict[str, str])
-    """Each look-up's source, by its tool call's id, until its result is in."""
-    unbound: UnboundAction | None = None
-    """The last act refused for naming unbound actions, for the final error (#167)."""
-    refused: bool = False
-    """This call's reply held a refused act: its result asks for another pick."""
 
 
 SHOW_CARD: ToolParam = {
@@ -90,54 +67,10 @@ SHOW_CARD: ToolParam = {
     "input_schema": dict(TOOL_SCHEMA),
 }
 """Offered only while the Tile is on, so Claude never says "on the Tile" without one."""
-ACTS = frozenset({"run_actions", "run_sequence", "show_card"})
 
 
 def _tools(sequences: list[str], lookups: Iterable[Lookup] = ()) -> list[ToolParam]:
-    looks: list[ToolParam] = [
-        {
-            "name": lookup.name,
-            "description": lookup.description,
-            "strict": True,
-            "input_schema": dict(lookup.input_schema),
-        }
-        for lookup in lookups
-    ]
-    return [
-        {
-            "name": "run_sequence",
-            "description": "Run one of the player's named sequences.",
-            "strict": True,
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string", "enum": sequences or [""]},
-                    "say": {"type": "string", "description": "A short spoken line."},
-                },
-                "required": ["name", "say"],
-                "additionalProperties": False,
-            },
-        },
-        {
-            "name": "run_actions",
-            "description": "Press game actions, in order, with the player's own keys.",
-            "strict": True,
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "actions": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Action names from the list, e.g. v_flightready.",
-                    },
-                    "say": {"type": "string", "description": "A short spoken line."},
-                },
-                "required": ["actions", "say"],
-                "additionalProperties": False,
-            },
-        },
-        *looks,
-    ]
+    return [cast(ToolParam, {**spec, "strict": True}) for spec in tool_specs(sequences, lookups)]
 
 
 def history(
@@ -254,44 +187,27 @@ class ClaudeBrain:
         # The fleet line matches ship names, which is too slow for the event loop.
         about = await asyncio.to_thread(self._about)
         messages = history(request.recent, request.text, self._today(), about)
-        turn = _Turn(waiting=request.waiting, looking=request.looking, checking=request.checking)
+        turn = Turn(waiting=request.waiting, looking=request.looking, checking=request.checking)
         try:
             for call in range(MAX_CALLS):
-                decided, message, looking = await self._call(messages, started, turn)
+                decided, message, round_ = await self._call(messages, started, turn)
                 if decided is not None:
                     if turn.searched and not isinstance(decided, Reply):
                         log.warning("The brain chose to act after a web search; not pressing")
                         return Reply(NO_PRESS_AFTER_SEARCH)
                     if isinstance(decided, Reply):
-                        return _credited(decided, turn.credits)
+                        return credited(decided, turn.credits)
                     return decided
                 _log_usage(message.usage, started)
                 if message.stop_reason == "refusal":
                     raise BrainError("Claude declined")
-                if not looking:
-                    reply = spoken(" ".join(b.text for b in message.content if b.type == "text"))
-                    if not reply:
-                        raise BrainError(f"no answer (stopped: {message.stop_reason})")
-                    if found := _TOOL_AS_TEXT.search(reply):
-                        # 'show_card({"say": ...' read out is gibberish to the player:
-                        # what came before it can be said; with nothing before, it fails.
-                        reply = reply[: found.start()].strip()
-                        if not reply:
-                            raise BrainError("it wrote a tool call as text")
-                    return _credited(Reply(reply[:400]), turn.credits)
-                results = await asyncio.gather(*(task for _, task in looking))
-                for (use_id, _), result in zip(looking, results, strict=True):
-                    # Credited only for what it found: not for a miss, an error, or a
-                    # look-up a card cut short (review of #179).
-                    credit = turn.sources.get(use_id, "")
-                    if credit and _found(result) and credit not in turn.credits:
-                        turn.credits.append(credit)
+                if not round_.looking:
+                    text = " ".join(b.text for b in message.content if b.type == "text")
+                    return final_reply(text, turn.credits, str(message.stop_reason))
+                results = await round_.results()
                 messages.append({"role": "assistant", "content": message.content})
-                content: list[Any] = [*_results(looking, results)]
-                if call == MAX_CALLS - 2:
-                    # The next call is the last: answer with what's here, a card included;
-                    # beside a refused act, pick again or answer, but look nothing up.
-                    note = LAST_PICK if turn.refused else LAST_CALL
+                content: list[Any] = [*_results(round_.looking, results)]
+                if note := last_note(call, turn):
                     content.append({"type": "text", "text": note})
                 messages.append({"role": "user", "content": content})
         except anthropic.AuthenticationError as e:
@@ -305,16 +221,11 @@ class ClaudeBrain:
         raise BrainError(f"still looking things up after {MAX_CALLS} tries")
 
     async def _call(
-        self, messages: list[MessageParam], started: float, turn: _Turn
-    ) -> tuple[Decision | None, Any, list[tuple[str, asyncio.Task[LookupResult]]]]:
+        self, messages: list[MessageParam], started: float, turn: Turn
+    ) -> tuple[Decision | None, Any, Round]:
         """One call to Claude: an act if it picked one (the stream is left there),
-        otherwise the whole message and the look-ups it started. Notes in ``turn``
-        whether a look-up from the web started."""
-        looking: list[tuple[str, asyncio.Task[LookupResult]]] = []
-        checking = False
-        turn.refused = False
-        instant: list[asyncio.Task[LookupResult]] = []
-        """A fleet or settings note in the same reply as an act: it runs too (#156)."""
+        otherwise the whole message and the round, with the look-ups it started."""
+        round_ = Round(turn, self._lookups, self._actions, self._sequences, started)
         try:
             async with self._client.messages.stream(
                 model=self._model,
@@ -331,75 +242,15 @@ class ClaudeBrain:
                         and event.content_block.type == "tool_use"
                     ):
                         block = event.content_block
-                        log.debug("Brain chose %s in %.0f ms", block.name, _ms(started))
-                        if block.name in self._lookups:
-                            # Start now; Claude's message may still be finishing.
-                            chosen = self._lookups[block.name]
-                            if getattr(chosen, "from_the_web", False):
-                                log.debug("Brain searching the web at %.0f ms", _ms(started))
-                                turn.searched = True
-                                if turn.waiting is not None:
-                                    turn.waiting()
-                                    turn.waiting = None  # once a request
-                                turn.looking = turn.checking = None  # not after a search's line
-                            elif turn.looking is not None and not getattr(chosen, "instant", False):
-                                # The deadline moves now: the rest of the reply can take
-                                # longer than what's left of it (#178). "Checking." waits
-                                # until the reply is known not to end in an act (#176).
-                                turn.looking()
-                                checking = True
-                            seconds = float(getattr(chosen, "seconds", LOOKUP_SECONDS))
-                            lookup = run_lookup(chosen, block.input, seconds)
-                            turn.sources[block.id] = str(getattr(chosen, "credit", ""))
-                            task = asyncio.create_task(lookup)
-                            looking.append((block.id, task))
-                            if getattr(chosen, "instant", False):
-                                instant.append(task)
-                            continue
-                        if turn.refused:
-                            # Only the first act in a reply may be pressed, even when that
-                            # one was refused (#176): this one waits for the next call.
-                            refused = SECOND_ACT.format(tool=block.name)
-                            looking.append((block.id, _answered(failure(refused))))
-                            continue
-                        try:
-                            decided = parse_tool_call(
-                                block.name, block.input, self._actions, self._sequences
-                            )
-                        except UnboundAction as e:
-                            # Not pressed: Claude hears why, with the closest bound names,
-                            # and picks again on the next call (#164).
-                            log.debug("Brain named unbound actions: %s", e.unknown)
-                            turn.unbound, turn.refused = e, True
-                            looking.append((block.id, _answered(_unbound(e, self._actions))))
-                            continue
-                        # Leaving the stream here ends the request, so only the first act
-                        # in a reply is ever pressed. A look-up started with it is no longer
-                        # needed; a fleet or settings note is ("I'm in my Pitbull, power
-                        # off", #156): it's local and quick, so it finishes first.
-                        for _, task in looking:
-                            if task not in instant:
-                                task.cancel()
-                        if instant:
-                            _, pending = await asyncio.wait(instant, timeout=INSTANT_SECONDS)
-                            if pending:
-                                log.warning(
-                                    "Pressing before %d fleet or settings note(s) finished;"
-                                    " they carry on",
-                                    len(pending),
-                                )
-                        return decided, None, []
+                        decided = await round_.tool_call(block.id, block.name, block.input)
+                        if decided is not None:
+                            return decided, None, round_
                 message = await stream.get_final_message()
-            # Not beside a refused act: the next call may press (#214). Its look-up's
-            # line isn't owed later either: by the next reply's end, the results are in.
-            if checking and not turn.refused and turn.checking is not None:
-                turn.checking()
-                turn.checking = None  # once a request
+            round_.finished()
         except BaseException:
-            for _, task in looking:
-                task.cancel()
+            round_.cancel()
             raise
-        return None, message, looking
+        return None, message, round_
 
     def _offered(self) -> list[ToolParam]:
         """The tools for this call: ``show_card`` only while the Tile is on. Turning
@@ -432,81 +283,10 @@ def _results(
     ]
 
 
-_MARKUP = re.compile(r"[*`#]+")
-
-
-def _answered(result: LookupResult) -> asyncio.Task[LookupResult]:
-    """A result that's ready now, in the shape of a look-up still running."""
-
-    async def ready() -> LookupResult:
-        return result
-
-    return asyncio.create_task(ready())
-
-
-def _unbound(error: UnboundAction, actions: Collection[str]) -> LookupResult:
-    """What Claude hears when it names actions that aren't bound: the closest that
-    are, or that there's no key for it, so it says so."""
-    close = {
-        name: difflib.get_close_matches(name, actions, n=3, cutoff=0.5) for name in error.unknown
-    }
-    hints = "; ".join(
-        f"{name}: did you mean {', '.join(found)}?" if found else f"{name}: nothing close is bound"
-        for name, found in close.items()
-    )
-    return failure(
-        f"Nothing was pressed. Not bound: {hints}. Pick from the bound actions, or say "
-        "there's no key for it and what to bind."
-    )
-
-
 TOOL_CHOICE: Any = {"type": "auto"}
 """Several tools in one reply (#149, #156): look-ups at once instead of one call
 after another, and a fleet or settings note alongside an act. Only the first act in
 a reply is pressed (the stream is left there), and every act is still checked."""
-INSTANT_SECONDS = 1.0
-"""How long an act waits for a fleet or settings note from the same reply."""
-
-SECOND_ACT = (
-    "Not done: an earlier action in this reply was refused, so {tool} wasn't used. Call "
-    "it again on its own if it's still wanted."
-)
-
-
-def _found(result: LookupResult) -> bool:
-    """Whether a look-up's result holds data: not an error, not a miss."""
-    return not result.is_error and '"not_found"' not in result.content
-
-
-def _credited(reply: Reply, credits: list[str]) -> Reply:
-    """The answer, naming each source it used that it didn't name itself: Claude is
-    asked to credit UEX, but with the details on a card it often doesn't (#164)."""
-    said = re.sub(r"\b(\w)\.(?=\w\.)", r"\1", reply.text)  # "U.E.X." names UEX too
-    missing = [c for c in credits if not re.search(rf"\b{re.escape(c)}", said, re.IGNORECASE)]
-    if not missing:
-        return reply
-    return dataclasses.replace(reply, text=f"{reply.text} From {' and '.join(missing)}.")
-
-
-LAST_PICK = "No more look-ups for this request: pick the actions again, or say what you can't do."
-"""Instead of LAST_CALL, when the turn holds a refused act (review of #177)."""
-
-LAST_CALL = (
-    "No more look-ups for this request. Answer now with what you found: speak, or "
-    "use show_card. If something wasn't found, say so briefly."
-)
-"""Added to the results before the last call, so a third look-up isn't the end."""
-_TOOL_AS_TEXT = re.compile(r"\b[a-z_]{3,}\s*\(\s*\{", re.IGNORECASE)
-"""A tool call written as text: never said out loud."""
-
-
-def spoken(text: str) -> str:
-    """A reply as one line to say: no markdown (it would be read out), no line breaks."""
-    return " ".join(_MARKUP.sub("", text).split())
-
-
-def _ms(started: float) -> float:
-    return (time.perf_counter() - started) * 1000
 
 
 def _log_usage(usage: Any, started: float, what: str = "Brain replied") -> None:
@@ -520,7 +300,7 @@ def _log_usage(usage: Any, started: float, what: str = "Brain replied") -> None:
     log.debug(
         "%s in %.0f ms: %d in, %d out, %d cached, %d cache write, about $%.5f",
         what,
-        _ms(started),
+        ms(started),
         *tokens,
         cost,
     )
