@@ -32,7 +32,7 @@ Live filings:
 | Mark | Serial | Owner | Status | Goods and services | Risk to us |
 |---|---|---|---|---|---|
 | TYCHO | 77899442 (reg. 4017612) | Scott Hansen, the ambient musician Tycho | Registered 2011, renewed 2020 (TSDR) | Classes 9 and 42 as filed: CDs, records, downloadable music and video; live musical performances and DJ services | Low. Different goods. Hansen's act is well known, so keep branding away from music. |
-| TYCHO | 50046629 | Joseph A Rodriguez, San Antonio, TX | Pending: intent-to-use, filed 2026-08-13, awaiting examination (TSDR) | Class 42: "online, non-downloadable, Internet-based software application for medical billing for physicians and health care institutions" | Low. Software, but medical billing, a different market and buyer. Worth watching: if it's ever broadened, an opposition window opens when it's published. |
+| TYCHO | 50046629 | Joseph A Rodriguez, San Antonio, TX | Pending: intent-to-use, filed 2026-08-13, awaiting examination (TSDR) | Class 42: "Providing on-line, non-downloadable, Internet-based software application for medical billing for physicians and health care institutions" | Low. Software, but medical billing, a different market and buyer. Worth watching: if it's ever broadened, an opposition window opens when it's published. |
 | TYCHO SPACE | 98906977 | Tycho Space, LLC, Washington | Pending | Class 42: architectural and engineering services, product development | Very low. Engineering services, and a two-word mark. |
 | TYCHO | 90171311 | Individual | Registered | Class 3: shampoo | None. |
 | TYCHO | 99694646 | Individual | Registered | Class 25: hats, sweaters, T-shirts | None. Matters only if we sell merchandise. |
