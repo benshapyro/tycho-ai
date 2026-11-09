@@ -550,3 +550,35 @@ def test_a_stored_anthropic_key_with_a_hidden_character_is_no_key(
     app.main(["check", "--quick", "--json"])
     brain = {f["what"]: f for f in json.loads(capsys.readouterr().out)["findings"]}["Brain"]
     assert brain["level"] == "warn"
+
+
+@pytest.mark.parametrize(
+    ("name", "key", "what"),
+    [
+        ("anthropic", "sk-ant-api03-" + "a" * 30 + "\u200b", "Brain"),
+        ("elevenlabs", "sk_" + "a" * 30 + "\u200b", "Voice"),
+    ],
+)
+def test_tycho_check_says_a_stored_key_is_unusable_not_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    name: str,
+    key: str,
+    what: str,
+) -> None:
+    # "no Anthropic key" sent the player looking for a key that was there: the fix is to
+    # store it again (#250).
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    def stored(asked: str) -> str | None:
+        return key if asked == name else None
+
+    monkeypatch.setattr(app.credentials, "get", stored)
+    monkeypatch.setattr(app, "find_install", _no_game)
+    app.main(["check", "--quick", "--json"])
+    finding = {f["what"]: f for f in json.loads(capsys.readouterr().out)["findings"]}[what]
+    assert finding["level"] == "warn"
+    assert "stored but unusable" in finding["detail"]
+    assert "no " + ("Anthropic" if name == "anthropic" else "ElevenLabs") not in finding["detail"]
+    assert f"key set {name}" in finding["fix"]

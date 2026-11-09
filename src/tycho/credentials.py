@@ -71,6 +71,17 @@ def delete(name: str) -> bool:
     return True
 
 
+def usable(value: str) -> bool:
+    """Whether a stored key can be sent. A character keys don't have, such as a
+    zero-width space pasted with it, can't go in a request header (#246, #248)."""
+    return value.isascii()
+
+
+UNUSABLE = (
+    "has a character keys don't have, maybe an invisible one, so Tycho can't use it. Store it again"
+)
+
+
 def masked(value: str) -> str:
     """Enough of a key to tell which one it is, never the whole thing.
 
@@ -123,7 +134,7 @@ def _run(command: str, name: str) -> int:
         if not value:
             print("Nothing entered; no key stored.")
             return 1
-        if not value.isascii():  # e.g. a zero-width space copied from a web page (#246)
+        if not usable(value):  # e.g. a zero-width space copied from a web page (#246)
             print(
                 "That key has a character keys don't have, maybe an invisible one; "
                 "no key stored. Copy it again.",
@@ -136,6 +147,9 @@ def _run(command: str, name: str) -> int:
         print("Removed." if delete(name) else "No key was stored.")
     else:
         value = get(name)
+        if value and not usable(value):
+            print(f"Stored, but unusable: this key {UNUSABLE}: tycho key set {name}")
+            return 1
         print(f"Stored: {masked(value)}" if value else "No key stored.")
         return 0 if value else 1
     return 0

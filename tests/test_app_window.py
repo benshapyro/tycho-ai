@@ -197,6 +197,31 @@ def test_a_key_that_cant_be_right_isnt_even_checked(
     assert vault == {}
 
 
+@pytest.mark.parametrize(
+    ("name", "key"),
+    [("anthropic", GOOD + "\u200b"), ("elevenlabs", "sk_" + "b" * 30 + "\u200b")],
+)
+def test_a_stored_key_with_a_hidden_character_shows_as_unusable(
+    path: Path, vault: dict[str, str], name: str, key: str
+) -> None:
+    # Stored before the window refused such keys, Tycho ignores it (#246, #248): the
+    # Keys page says so instead of "Stored", and shows no ending with the character in it.
+    vault[name] = key
+    bridge, _ = _bridge(path)
+    shown = bridge.keys()[name]
+    assert shown["stored"] is True  # so the page offers Remove
+    assert shown["unusable"] is True
+    assert shown["ends"] == ""
+    assert "invisible" in str(shown["problem"])
+    assert "\u200b" not in repr(shown)
+
+
+def test_the_keys_page_marks_an_unusable_key() -> None:
+    page = (Path(__file__).parents[1] / "src/tycho/desktop/app/app.js").read_text("utf-8")
+    assert "k.unusable" in page
+    assert ">Unusable<" in page
+
+
 def test_removing_a_key(path: Path, vault: dict[str, str]) -> None:
     vault["elevenlabs"] = "sk_" + "b" * 30
     bridge, _ = _bridge(path)

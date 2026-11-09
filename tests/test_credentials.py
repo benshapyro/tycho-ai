@@ -110,6 +110,19 @@ def test_tycho_key_stores_and_checks_a_key(
     assert app.main(["key", "check", "anthropic"]) == 1
 
 
+def test_tycho_key_check_says_a_stored_key_with_a_hidden_character_is_unusable(
+    memory: MemoryKeyring, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Stored before `tycho key set` refused such keys, Tycho ignores it: the check
+    # mustn't say "Stored" as if it were in use (#250).
+    credentials.set_secret("elevenlabs", "sk_" + "a" * 30 + "\u200b")
+    assert credentials.main(["check", "elevenlabs"]) == 1
+    out = capsys.readouterr().out
+    assert out.startswith("Stored, but unusable")
+    assert "tycho key set elevenlabs" in out
+    assert "aaaa" not in out
+
+
 def test_every_use_of_the_store_sets_up_the_backend_first(
     memory: MemoryKeyring, monkeypatch: pytest.MonkeyPatch
 ) -> None:
