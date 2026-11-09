@@ -84,6 +84,8 @@ uv run python tools/bench/jev_report.py tools/spike/brain_cases.toml --runs 2
 
 Asks Jev, in one request per case, for the mode, the control category, the action in each category, whether the request has several parts, and explicit-danger checks. It logs the raw answers and prints how many requests Jev would handle, and how many it gets wrong, at each confidence threshold.
 
+Since [#24](https://github.com/benshapyro/tycho-ai/issues/24), each action is described by what it does, what it isn't for and how it's said, with an "other" way out, and every choice's options come in an order shuffled from `--seed` (`--no-shuffle` for a fixed order). The report gives Jev's mode accuracy against each case's `mode` label (ADR 10), how often it is confident and wrong, the non-commands it called a command, how often it picks whichever option came first, and latency p50 and p90 for the router ([#193](https://github.com/benshapyro/tycho-ai/issues/193)). Re-grade a log without new requests with `--replay recordings/jev.results.jsonl`. For the re-test, do two runs with different seeds.
+
 ## Voices
 
 ```powershell
