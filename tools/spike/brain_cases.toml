@@ -1373,36 +1373,36 @@ expect = ["reply"]
 tag = "routing"
 
 # Planning: a multi-step task. Planning mode isn't built yet (ADR 10), so for now the
-# brain answers in one reply.
+# brain answers in one reply, after a look-up if it needs one (#257).
 
 [[case]]
 heard = "help me plan a trade run"
 mode = "planning"
-expect = ["reply"]
+expect = ["reply", "look_up"]
 tag = "routing"
 
 [[case]]
 heard = "plan a mining trip in my Prospector"
 mode = "planning"
-expect = ["reply"]
+expect = ["reply", "look_up"]
 tag = "routing"
 
 [[case]]
 heard = "I've got two hours, plan me a route that makes the most money"
 mode = "planning"
-expect = ["reply"]
+expect = ["reply", "look_up"]
 tag = "routing"
 
 [[case]]
 heard = "help me plan a bounty hunting session"
 mode = "planning"
-expect = ["reply"]
+expect = ["reply", "look_up"]
 tag = "routing"
 
 [[case]]
 heard = "let's plan a cargo run from Area 18 to Lorville"
 mode = "planning"
-expect = ["reply"]
+expect = ["reply", "look_up"]
 tag = "routing"
 
 # Coach: how something works. An explanation, never a press ("walk me through
