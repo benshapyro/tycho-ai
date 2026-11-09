@@ -10,6 +10,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import httpx2
 import pytest
 
 from tests.fakes.fake_lookup import FakeLookup
@@ -343,6 +344,49 @@ def test_costs_say_where_they_came_from() -> None:
     assert costs.total == pytest.approx(0.00072)
     assert costs.replies == 3
     assert costs.generations == ["gen-123"]
+    assert costs.unreported == 1  # the act with no generation id to look its cost up by
+
+
+def test_a_call_with_no_cost_is_counted_not_dropped() -> None:
+    e = _eval()
+    costs = e._Costs()
+    for message in (
+        "Brain replied in 900 ms: no usage reported",
+        "Brain replied in 900 ms: 1000 in, 20 out, 800 cached",  # no price list either
+        "Brain warmed up in 300 ms: no usage reported",
+        "The brain chose to act after a web search; not pressing",  # not a call
+    ):
+        costs.emit(logging.makeLogRecord({"msg": message}))
+    assert (costs.unreported, costs.counted) == (3, 0)
+
+
+def test_generation_costs_that_cant_be_found_are_kept_and_reported(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # OpenRouter gives gen-1's cost; gen-2 never has one; gen-3 has none on the first ask.
+    e = _eval()
+    asked: dict[str, int] = {}
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        generation = request.url.params["id"]
+        asked[generation] = asked.get(generation, 0) + 1
+        if generation == "gen-1":
+            return httpx2.Response(200, json={"data": {"total_cost": 0.0003}})
+        if generation == "gen-3" and asked[generation] > 1:
+            return httpx2.Response(200, json={"data": {"total_cost": 0.0001}})
+        return httpx2.Response(404, json={"error": {"message": "not found"}})
+
+    costs = e._Costs()
+    costs.generations = ["gen-1", "gen-2", "gen-3"]
+    asyncio.run(e.generation_costs(costs, "sk-or-v1-test", httpx2.MockTransport(handler), 0))
+    assert costs.generations == ["gen-2"]
+    assert costs.total == pytest.approx(0.0004)
+    assert asked == {"gen-1": 1, "gen-2": 3, "gen-3": 2}
+    summary = e.metrics(e.Run("openrouter", "some/model", [_outcome()], costs))
+    assert summary["calls_without_cost"] == 1
+    assert summary["cost_sources"] == {"reported": 2, "not reported": 1}
+    e._summary([_outcome(verdict="pass")], costs, summary)
+    assert "1 call(s) had no cost reported" in capsys.readouterr().out
 
 
 def test_cost_per_request_and_per_hour_of_play() -> None:
@@ -389,3 +433,98 @@ def test_the_adapter_check_says_far_apart(verdicts: list[str], calls: int) -> No
     e = _eval()
     lines = e.compare(_run("anthropic", ["pass"] * 20), _run("openrouter", verdicts, calls=calls))
     assert lines[-1].startswith("Adapter check: FAR APART")
+
+
+# --- Running off the PC (#262) -----------------------------------------------------------
+
+
+def test_keybinds_go_through_a_file_unchanged(tmp_path: Path) -> None:
+    from tycho.game.keybinds import Action, ActivationMode, Keybinds, KeyInput
+
+    e = _eval()
+    keybinds = Keybinds(
+        [
+            Action("v_toggle_landing_system", "spaceship_movement", "Landing", (KeyInput("n"),)),
+            Action(
+                "v_eject",
+                "seat_general",
+                "Eject",
+                (KeyInput("y", ("ralt",)), KeyInput("mouse4")),
+                activation="delayed_press",
+                customized=True,
+                multi_tap=2,
+            ),
+            Action("v_unbound", "m", "", ()),
+        ],
+        {"delayed_press": ActivationMode("delayed_press", on_hold=True, press_threshold=0.25)},
+    )
+    path = tmp_path / "keybinds.json"
+    own = '[[command]]\nid = "gear_down"\nphrases = ["wheels out"]\n'
+    e.export_keybinds(keybinds, path, "LIVE 123-456", own)
+    loaded, game, commands = e.load_keybinds(path)
+    assert list(loaded) == list(keybinds)
+    assert loaded.modes == keybinds.modes
+    assert game.startswith("LIVE 123-456")
+    assert commands == own
+
+
+def test_a_keybinds_file_from_another_format_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "keybinds.json"
+    path.write_text('{"format": 99, "actions": []}', "utf-8")
+    with pytest.raises(SystemExit, match="export it again"):
+        _eval().load_keybinds(path)
+
+
+def test_the_eval_takes_a_keybinds_file() -> None:
+    e = _eval()
+    args = e._arguments(["--keybinds", "binds.json"])
+    assert args.keybinds == Path("binds.json")
+    assert e._arguments(["--export-keybinds", "out.json"]).export_keybinds == Path("out.json")
+    assert e._arguments([]).keybinds is None
+
+
+def test_keys_come_from_the_environment_only_when_none_is_stored(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    e = _eval()
+    secret = "sk-or-v1-from-the-environment-0000"  # noqa: S105 - a made-up key
+    monkeypatch.setenv("OPENROUTER_API_KEY", secret)
+    assert e.eval_key("openrouter", lambda: "sk-or-v1-stored-key-1111") == (
+        "sk-or-v1-stored-key-1111"
+    )
+    assert e.eval_key("openrouter", lambda: None) == secret
+    out = capsys.readouterr().out
+    assert "OPENROUTER_API_KEY" in out
+    assert secret not in out  # never printed
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert e.eval_key("anthropic", lambda: None) is None
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-​pasted-with-a-zero-width-space")
+    assert e.eval_key("anthropic", lambda: None) is None
+
+
+def test_an_environment_key_is_scrubbed_from_logs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from tycho import logs
+
+    secret = "sk-ant-environment-only-key-2222"  # noqa: S105 - a made-up key
+    monkeypatch.setenv("ANTHROPIC_API_KEY", secret)
+    _eval().eval_key("anthropic", lambda: None)
+    assert secret not in logs.redact(f"key={secret}")
+
+
+def test_the_runtime_imports_without_windows() -> None:
+    # A cloud thread runs the eval on Linux, which imports the runtime (#262): loading
+    # Windows' kernel32 must wait until a Tycho actually starts.
+    import subprocess
+
+    code = (
+        "import ctypes\n"
+        "def no_windows(*a, **k): raise AttributeError('no WinDLL here')\n"
+        "ctypes.WinDLL = no_windows\n"
+        "import tycho.runtime.instance\n"
+    )
+    done = subprocess.run(  # noqa: S603 - this Python, our own code
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=60, check=False
+    )
+    assert done.returncode == 0, done.stderr

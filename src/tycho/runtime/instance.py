@@ -6,6 +6,7 @@ the first. Nothing listens on the network.
 """
 
 import ctypes
+import functools
 import logging
 import threading
 from collections.abc import Callable
@@ -25,24 +26,30 @@ _ASFW_ANY = -1
 
 log = logging.getLogger(__name__)
 
-_kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-_kernel32.CreateMutexW.argtypes = (wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR)
-_kernel32.CreateMutexW.restype = wintypes.HANDLE
-_kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
-_kernel32.CloseHandle.restype = wintypes.BOOL
-_kernel32.CreateEventW.argtypes = (wintypes.LPVOID, wintypes.BOOL, wintypes.BOOL, wintypes.LPCWSTR)
-_kernel32.CreateEventW.restype = wintypes.HANDLE
-_kernel32.OpenEventW.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR)
-_kernel32.OpenEventW.restype = wintypes.HANDLE
-_kernel32.SetEvent.argtypes = (wintypes.HANDLE,)
-_kernel32.SetEvent.restype = wintypes.BOOL
-_kernel32.WaitForMultipleObjects.argtypes = (
-    wintypes.DWORD,
-    ctypes.POINTER(wintypes.HANDLE),
-    wintypes.BOOL,
-    wintypes.DWORD,
-)
-_kernel32.WaitForMultipleObjects.restype = wintypes.DWORD
+
+@functools.cache
+def _kernel32() -> ctypes.WinDLL:
+    """Loaded on first use, so the module imports anywhere: the brain eval runs on
+    Linux in the cloud (#262), and imports the runtime without starting it."""
+    k = ctypes.WinDLL("kernel32", use_last_error=True)
+    k.CreateMutexW.argtypes = (wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR)
+    k.CreateMutexW.restype = wintypes.HANDLE
+    k.CloseHandle.argtypes = (wintypes.HANDLE,)
+    k.CloseHandle.restype = wintypes.BOOL
+    k.CreateEventW.argtypes = (wintypes.LPVOID, wintypes.BOOL, wintypes.BOOL, wintypes.LPCWSTR)
+    k.CreateEventW.restype = wintypes.HANDLE
+    k.OpenEventW.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR)
+    k.OpenEventW.restype = wintypes.HANDLE
+    k.SetEvent.argtypes = (wintypes.HANDLE,)
+    k.SetEvent.restype = wintypes.BOOL
+    k.WaitForMultipleObjects.argtypes = (
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.HANDLE),
+        wintypes.BOOL,
+        wintypes.DWORD,
+    )
+    k.WaitForMultipleObjects.restype = wintypes.DWORD
+    return k
 
 
 class AlreadyRunning(Exception):
@@ -60,12 +67,12 @@ class SingleInstance:
         self._handle: int | None = None
 
     def __enter__(self) -> Self:
-        handle = _kernel32.CreateMutexW(None, False, self.name)
+        handle = _kernel32().CreateMutexW(None, False, self.name)
         error = ctypes.get_last_error()
         if not handle:
             raise ctypes.WinError(error)
         if error == _ERROR_ALREADY_EXISTS:
-            _kernel32.CloseHandle(handle)
+            _kernel32().CloseHandle(handle)
             raise AlreadyRunning("Tycho is already running. Close the other one first.")
         self._handle = handle
         return self
@@ -77,23 +84,23 @@ class SingleInstance:
         traceback: TracebackType | None,
     ) -> None:
         if self._handle is not None:
-            _kernel32.CloseHandle(self._handle)
+            _kernel32().CloseHandle(self._handle)
             self._handle = None
 
 
 def ask_to_open(name: str = OPEN_NAME) -> bool:
     """Ask the running Tycho to show its window. False if it isn't listening for that
     (a terminal-only Tycho, or one still starting)."""
-    handle = _kernel32.OpenEventW(_EVENT_MODIFY_STATE, False, name)
+    handle = _kernel32().OpenEventW(_EVENT_MODIFY_STATE, False, name)
     if not handle:
         return False
     try:
         # Windows lets the process just started bring a window forward, not the one
         # that opens it; this hands that right on, so the window isn't behind the game.
         ctypes.windll.user32.AllowSetForegroundWindow(_ASFW_ANY)
-        return bool(_kernel32.SetEvent(handle))
+        return bool(_kernel32().SetEvent(handle))
     finally:
-        _kernel32.CloseHandle(handle)
+        _kernel32().CloseHandle(handle)
 
 
 class OpenRequests:
@@ -109,12 +116,12 @@ class OpenRequests:
         self._thread: threading.Thread | None = None
 
     def __enter__(self) -> Self:
-        event = _kernel32.CreateEventW(None, False, False, self.name)  # auto-reset
-        stop = _kernel32.CreateEventW(None, True, False, None)
+        event = _kernel32().CreateEventW(None, False, False, self.name)  # auto-reset
+        stop = _kernel32().CreateEventW(None, True, False, None)
         if not event or not stop:
             for handle in (event, stop):
                 if handle:
-                    _kernel32.CloseHandle(handle)
+                    _kernel32().CloseHandle(handle)
             raise ctypes.WinError(ctypes.get_last_error())
         self._event, self._stop = event, stop
         self._thread = threading.Thread(target=self._wait, name="tycho-open", daemon=True)
@@ -126,7 +133,7 @@ class OpenRequests:
             return
         handles = (wintypes.HANDLE * 2)(self._event, self._stop)
         while True:
-            which = _kernel32.WaitForMultipleObjects(2, handles, False, _INFINITE)
+            which = _kernel32().WaitForMultipleObjects(2, handles, False, _INFINITE)
             if which != _WAIT_OBJECT_0:
                 return  # stopped, or the wait failed
             try:
@@ -141,10 +148,10 @@ class OpenRequests:
         traceback: TracebackType | None,
     ) -> None:
         if self._stop is not None:
-            _kernel32.SetEvent(self._stop)
+            _kernel32().SetEvent(self._stop)
         if self._thread is not None:
             self._thread.join(timeout=2.0)
         for handle in (self._event, self._stop):
             if handle:
-                _kernel32.CloseHandle(handle)
+                _kernel32().CloseHandle(handle)
         self._event = self._stop = None
