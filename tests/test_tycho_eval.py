@@ -138,6 +138,22 @@ def test_every_case_says_what_the_player_wants() -> None:
     assert not [c["heard"] for c in data["case"] if c.get("mode") not in MODES]
 
 
+def test_planning_cases_accept_a_look_up() -> None:
+    """#257: brain_report and jev_report grade look_up apart from reply, and a trade
+    plan rightly starts with one."""
+    data = tomllib.loads((ROOT / "tools" / "spike" / "brain_cases.toml").read_text("utf-8"))
+    planning = [c for c in data["case"] if c["mode"] == "planning"]
+    assert planning
+    assert all("look_up" in c["expect"] for c in planning)
+
+
+def test_the_add_command_skill_writes_cases_with_a_mode() -> None:
+    """#256: a case without one makes the eval refuse the whole file."""
+    for folder in (".claude", ".agents"):
+        skill = ROOT / folder / "skills" / "add-voice-command" / "SKILL.md"
+        assert '`mode = "command"`' in skill.read_text("utf-8")
+
+
 def test_the_model_benchmarks_refuse_a_case_with_no_mode(tmp_path: Path) -> None:
     _eval()  # puts tools/bench on the path
     from brain_report import load_cases  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
