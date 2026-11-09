@@ -8,8 +8,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ## [Unreleased]
 
-<!-- A full draft of the 0.5.0 release notes, with examples, is in git:
-     `git show 24b13cf:docs/releases/0.5.0.md`. Start the release notes from it. -->
+## [0.5.0] - 2026-11-09
 
 ### Added
 - Missed what Tycho said? "Say that again" (or "repeat that", "come again") repeats the last thing it said word for word, an answer or what it just did ("Lights."), at once and as often as you like, with the Tile on or off. Asked while Tycho waits for you to confirm, it asks the question again and gives you the full time to answer. It only repeats the words: it never presses a key again. Before, it went back to Claude, took a second or two, might come back worded differently, and stopped working after half a minute. ([#225](https://github.com/benshapyro/tycho-ai/pull/225), [#222](https://github.com/benshapyro/tycho-ai/issues/222), [#226](https://github.com/benshapyro/tycho-ai/issues/226))
@@ -94,7 +93,8 @@ The first release with an installer, as a preview. Earlier versions weren't rele
 - A fleet Tycho remembers, and speech recognition on your PC.
 - A check for a newer version when Tycho starts (it never updates itself).
 
-[Unreleased]: https://github.com/benshapyro/tycho-ai/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/benshapyro/tycho-ai/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.5.0
 [0.4.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.4.0
 [0.3.3]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.3.3
 [0.3.2]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.3.2
