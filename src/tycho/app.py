@@ -745,17 +745,34 @@ def _stored_key(name: str, label: str, fix: str) -> str | None:
     except credentials.CredentialStoreError as e:
         log.warning("Couldn't read your %s key: %s", label, e)
         return None
-    if key is not None and not key.isascii():
+    if key is not None and not credentials.usable(key):
         # A pasted zero-width space, say: it can't go in a request header, and would stop
         # Tycho starting (#246, #248). Keys stored before `tycho key set` refused these.
-        log.warning(
-            "Your %s key has a character keys don't have, maybe an invisible one, "
-            "so Tycho can't use it. Store it again: %s",
-            label,
-            fix,
-        )
+        log.warning("Your %s key %s: %s", label, credentials.UNUSABLE, fix)
         return None
     return key
+
+
+def _unusable_key(name: str) -> bool:
+    """Whether a key is stored but can't be used, so a check says so, not "no key" (#250)."""
+    from tycho import credentials
+
+    try:
+        key = credentials.get(name)
+    except credentials.CredentialStoreError:
+        return False
+    return key is not None and not credentials.usable(key)
+
+
+def _key_finding(name: str, what: str, label: str, without: str, fix: str) -> Finding:
+    """The warning for a missing key, or for a stored one Tycho can't use (#250)."""
+    if _unusable_key(name):
+        detail = (
+            f"your {label} key is stored but unusable: it has a character keys don't have, "
+            f"maybe an invisible one, so {without}. Store it again: {fix}"
+        )
+        return Finding("warn", what, detail, fix=fix)
+    return Finding("warn", what, f"no {label} key, so {without}: {fix}", fix=fix)
 
 
 def anthropic_key() -> str | None:
@@ -1120,11 +1137,8 @@ def _checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Findin
         yield microphone_finding(current)
 
     if anthropic_key() is None:
-        yield Finding(
-            "warn",
-            "Brain",
-            f"no Anthropic key, so only built-in phrasings work: {BRAIN_KEY_HELP}",
-            fix=BRAIN_KEY_HELP,
+        yield _key_finding(
+            "anthropic", "Brain", "Anthropic", "only built-in phrasings work", BRAIN_KEY_HELP
         )
     else:
         yield Finding("ok", "Brain", "Claude, with your Anthropic key")
@@ -1134,11 +1148,12 @@ def _checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Findin
             "ok", "Voice", "off (voice_volume is 0); Tycho's replies are shown in its window"
         )
     elif elevenlabs_key() is None:
-        yield Finding(
-            "warn",
+        yield _key_finding(
+            "elevenlabs",
             "Voice",
-            f"no ElevenLabs key, so replies are shown in Tycho's window: {VOICE_KEY_HELP}",
-            fix=VOICE_KEY_HELP,
+            "ElevenLabs",
+            "replies are shown in Tycho's window",
+            VOICE_KEY_HELP,
         )
     else:
         yield voice_finding(current, quick)

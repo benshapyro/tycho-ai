@@ -88,6 +88,8 @@ $tycho = "$env:LOCALAPPDATA\Programs\Tycho\tycho.exe"
 & $tycho key check anthropic    # prints a masked key, e.g. sk-ant-...AB12, and exits 0
 ```
 
+If it says "Stored, but unusable", the key was pasted with a hidden character: open the `key set` window again and have the user copy the key afresh.
+
 ### Push-to-talk (finding "Push-to-talk")
 
 The user picks the button they'll hold to talk. A mouse side button works well, and a joystick button is fine too. Open a window for it:

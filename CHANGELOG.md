@@ -30,6 +30,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - If the switch to the processor fails, Tycho tries again 30 seconds later, then waits longer between tries (up to 5 minutes), instead of staying without speech recognition until a restart. ([#215](https://github.com/benshapyro/tycho-ai/pull/215))
 - Since 0.4, an answer that needed a look-up could run out of time while it was still coming in. Each look-up gives it more time again. ([#212](https://github.com/benshapyro/tycho-ai/pull/212))
 - An Anthropic key stored with a hidden character, such as a zero-width space pasted from a web page, no longer reaches Claude and fails there. Tycho treats it as no key, says so in the log and in `tycho check`, and asks you to store it again, as it already does for an ElevenLabs key. `tycho key set` and Tycho's window refuse such a key. ([#248](https://github.com/benshapyro/tycho-ai/issues/248))
+- A key stored with a hidden character now shows as **Unusable** on the Keys page of Tycho's window, with a note to remove it and paste it again, instead of "Stored". `tycho check` says the key is stored but unusable, rather than "no key", and `tycho key check` says the same. This is true for both the Anthropic and ElevenLabs keys. ([#250](https://github.com/benshapyro/tycho-ai/issues/250))
 - Sounds no longer hold Tycho up, the first request after a keybind change is as quick as any other, and quitting shuts down cleanly. ([#207](https://github.com/benshapyro/tycho-ai/pull/207))
 
 ### Security

@@ -159,6 +159,17 @@ class Bridge:
             except credentials.CredentialStoreError as e:
                 out[name] = {"label": label, "stored": False, "ends": "", "problem": str(e)}
                 continue
+            if stored and not credentials.usable(stored):
+                # Tycho ignores it (#248), so the page mustn't say it's in use, nor show
+                # an ending with the invisible character in it (#250).
+                out[name] = {
+                    "label": label,
+                    "stored": True,
+                    "unusable": True,
+                    "ends": "",
+                    "problem": f"This key {credentials.UNUSABLE}: remove it, then paste it again.",
+                }
+                continue
             out[name] = {
                 "label": label,
                 "stored": bool(stored),
@@ -513,7 +524,7 @@ def _shape(name: str, key: str) -> str:
         return "That doesn't look like an ElevenLabs key: it starts with sk_."
     if len(key) < 24 or any(c.isspace() for c in key):
         return "That key looks cut short. Copy it again, all of it."
-    if not key.isascii():
+    if not credentials.usable(key):
         return "That key has a character keys don't have, maybe an invisible one. Copy it again."
     return ""
 
