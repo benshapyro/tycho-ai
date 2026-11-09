@@ -70,6 +70,15 @@ Runs each case through Tycho's own path: the lexicon, the fast path, then `Claud
 
 Across models (#192): `--provider openrouter --model <id>` runs the same cases through `OpenRouterBrain`, with the OpenRouter key (`uv run tycho key set openrouter`). It has no web search, so web cases fail as such. Each results line names the provider and model, and the run ends with a `summary` line. Cost comes from OpenRouter's own report for each call (an act ends its call early, so its cost is looked up afterwards by the generation's id), or from OpenRouter's price list when a reply reports none; the summary says how many came from where. Cost an hour of play is the cost a brain request times `--per-hour` (30 brain requests an hour, a placeholder until play logs measure it). `--adapter-check` runs Haiku directly and through OpenRouter with no web search and compares them: far apart means the adapter is wrong, not the model. Paid: ask first.
 
+Off the PC, in a cloud thread (#262): export the keybinds once on the PC, for free, then point the eval at the file. The export holds your bound actions, the game's activation modes and your own `commands.toml`, and nothing secret.
+
+```powershell
+uv run python tools/bench/tycho_eval.py --export-keybinds recordings/keybinds.json   # on the PC
+uv run python tools/bench/tycho_eval.py --keybinds keybinds.json --adapter-check      # anywhere
+```
+
+Where Credential Manager has no key, the eval takes `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY` from the environment (the cloud environment's secrets). Only the eval does this: Tycho itself keeps keys in Credential Manager. Keys are never printed. The Wiki API (`api.star-citizen.wiki`), UEX (`api.uexcorp.uk`) and `openrouter.ai` must be allowed in the cloud environment's network access. A cost OpenRouter never reports is counted in the summary ("N call(s) had no cost reported") rather than dropped (#261).
+
 ## Language model
 
 ```powershell

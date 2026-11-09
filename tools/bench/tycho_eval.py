@@ -31,14 +31,22 @@ and compares them. The summary gives the cost a brain request and an hour of pla
 
 Uses the keys in Windows Credential Manager. About $0.0002 a request on Haiku.
 
+It runs off the PC too, in a cloud thread (#262): ``--export-keybinds <file>`` on the PC
+writes the player's keybinds (and own commands) to a file, free, and ``--keybinds <file>``
+reads them instead of the game. Where Credential Manager has no key, the eval (and only
+the eval: Tycho never reads keys from the environment) takes ANTHROPIC_API_KEY and
+OPENROUTER_API_KEY from the environment. Keys are never printed.
+
 Usage: uv run python tools/bench/tycho_eval.py [cases.toml] [--tag ships] [--ships table]
        [--provider openrouter --model <id>] [--adapter-check] [--per-hour 30]
+       [--keybinds <file>] [--export-keybinds <file>]
 """
 
 import argparse
 import asyncio
 import json
 import logging
+import os
 import re
 import statistics
 import sys
@@ -54,7 +62,7 @@ import anthropic
 import httpx2
 from brain_report import GLOBAL_NEVER  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
 
-from tycho import paths, safety, settings
+from tycho import credentials, logs, paths, safety, settings
 from tycho.address import Address
 from tycho.app import anthropic_key, find_install, load_commands, openrouter_key
 from tycho.brain import BrainError, BrainRequest, Exchange, Reply, commands_for
@@ -62,8 +70,8 @@ from tycho.brain.claude import MODEL, ClaudeBrain
 from tycho.brain.lookups import Lookup, LookupResult
 from tycho.brain.openrouter import OpenRouterBrain, Prices
 from tycho.brain.rounds import NO_PRESS_AFTER_SEARCH
-from tycho.commands import Command, Defer, resolve
-from tycho.game.keybinds import Keybinds
+from tycho.commands import Command, CommandMatcher, Defer, resolve
+from tycho.game.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.game.store import KeybindStore
 from tycho.knowledge import ShipLookup, UexApi, WikiApi
 from tycho.knowledge.fleet import Fleet, FleetUpdate
@@ -86,6 +94,8 @@ DODGE = re.compile(
 SAY_WORDS = 8
 """What Tycho says after acting should be a few words: the press already happened."""
 COST_GUESS = 0.0002
+CALL_LOGGED = re.compile(r"(Brain (replied|acted|warmed up)|Web search)\b")
+"""The debug lines each call to a model logs, with its cost when it's known."""
 UNASKED = frozenset({"v_unlock_all_doors", "v_toggle_all_doorlocks"})
 """Presses that are wrong whenever the case didn't ask for them: unlocking the
 doors when the player said something else leaves the ship open."""
@@ -133,16 +143,28 @@ class _Costs(logging.Handler):
         """Where each counted cost came from: "reported" by OpenRouter, its "price
         list", or Tycho's own "estimate" from Anthropic's prices."""
         self.generations: list[str] = []
-        """OpenRouter calls that ended early at an act: their cost is looked up after."""
+        """OpenRouter calls that ended early at an act: their cost is looked up after.
+        Those still here after ``generation_costs`` had no cost reported."""
+        self.unreported = 0
+        """Calls that said nothing of their cost (no usage, no price, no generation id):
+        the total is too low by these, and the summary says so (#261)."""
 
     def emit(self, record: logging.LogRecord) -> None:
         message = record.getMessage()
+        generation = re.search(r"generation (\S+)", message)
         if match := re.search(r"about \$([0-9.]+)(?: \(([a-z ]+)\))?", message):
             self.add(float(match.group(1)), match.group(2) or "estimate")
+        elif generation and generation.group(1) != "?":
+            self.generations.append(generation.group(1))
+        elif CALL_LOGGED.match(message):
+            self.unreported += 1
         if message.startswith("Brain replied"):
             self.replies += 1
-        if (match := re.search(r"generation (\S+)", message)) and match.group(1) != "?":
-            self.generations.append(match.group(1))
+
+    @property
+    def missing(self) -> int:
+        """Calls whose cost isn't in the total."""
+        return self.unreported + len(self.generations)
 
     def add(self, cost: float, source: str) -> None:
         self.total += cost
@@ -287,13 +309,15 @@ async def run_case(
     counted: _Counted | None = None,
     journal: list[tuple[str, str]] | None = None,
     costs: _Costs | None = None,
+    matcher: CommandMatcher | None = None,
 ) -> Outcome:
     outcome = Outcome(rule["heard"], str(rule.get("tag", "")))
     text = lexicon.correct(rule["heard"]).text
     if is_say_again(text):  # the session replays the last answer itself (#222)
         outcome.route, outcome.kind = "session", "say_again"
         return outcome
-    match = MATCHER.match(text)
+    matcher = matcher or MATCHER
+    match = matcher.match(text)
     if not isinstance(match, Defer):
         outcome.route, outcome.kind = "fast", "actions"
         outcome.actions = pressed(match.commands, keybinds)
@@ -336,7 +360,7 @@ async def run_case(
     outcome.kind, outcome.say = "actions", decision.say
     outcome.calls += 1  # the call that chose the act ended early, so it logged no reply
     try:
-        commands = commands_for(decision, MATCHER)
+        commands = commands_for(decision, matcher)
         outcome.actions = pressed(commands, keybinds)
         outcome.asks = _asks(commands, outcome.actions)
     except BrainError as e:
@@ -376,9 +400,105 @@ class Run:
     costs: _Costs
 
 
+ENVIRONMENT = {"anthropic": "ANTHROPIC_API_KEY", "openrouter": "OPENROUTER_API_KEY"}
+"""Where the eval looks for a key when Credential Manager has none (#262): a cloud thread,
+whose keys are environment secrets. Tycho itself never reads keys from the environment."""
+
+
+def eval_key(name: str, stored: Callable[[], str | None]) -> str | None:
+    """The stored key, else the environment's. Never printed: it's registered with the
+    log redactor, and only where it came from is said."""
+    key = stored()
+    if key is None and (key := os.environ.get(ENVIRONMENT[name], "").strip() or None):
+        if not credentials.usable(key):
+            print(f"{ENVIRONMENT[name]} {credentials.UNUSABLE}; not using it.")
+            return None
+        logs.register_secret(key)
+        print(f"The {name} key is from the environment ({ENVIRONMENT[name]}).")
+    return key
+
+
+KEYBINDS_FORMAT = 1
+
+
+def export_keybinds(keybinds: Keybinds, path: Path, game: str = "", commands: str = "") -> None:
+    """The player's keybinds as JSON, for an eval that can't read the game (#262).
+    ``commands`` is the text of their own commands.toml, so the fast path matches as
+    on their PC. Nothing secret is in either."""
+    data = {
+        "format": KEYBINDS_FORMAT,
+        "exported": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "game": game,
+        "actions": [
+            {
+                **{k: v for k, v in asdict(action).items() if k != "inputs"},
+                "inputs": [[i.key, *i.modifiers] for i in action.inputs],
+            }
+            for action in keybinds
+        ],
+        "modes": {name: asdict(mode) for name, mode in keybinds.modes.items()},
+        "commands": commands,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=1), "utf-8")
+
+
+def load_keybinds(path: Path) -> tuple[Keybinds, str, str]:
+    """Keybinds written by ``export_keybinds``, the game build they came from, and the
+    player's own commands (empty if they have none)."""
+    data: dict[str, Any] = json.loads(path.read_text("utf-8"))
+    if data.get("format") != KEYBINDS_FORMAT:
+        raise SystemExit(f"{path} isn't a keybinds file this eval reads; export it again.")
+    actions = [
+        Action(
+            **{k: v for k, v in entry.items() if k != "inputs"},
+            inputs=tuple(KeyInput(key, tuple(mods)) for key, *mods in entry["inputs"]),
+        )
+        for entry in data["actions"]
+    ]
+    modes = {name: ActivationMode(**mode) for name, mode in data["modes"].items()}
+    game = f"{data.get('game') or 'an unknown build'}, exported {data.get('exported', '?')}"
+    return Keybinds(actions, modes), game, str(data.get("commands") or "")
+
+
+def _export(path: Path) -> None:
+    """``--export-keybinds``: free, reads only the game's files and the player's own."""
+    install = find_install(settings.load())
+    store = KeybindStore.load(install)
+    stamp = install.data_p4k.stat()
+    game = f"{install.channel} {stamp.st_size}-{int(stamp.st_mtime)}"
+    own = paths.commands_file()
+    commands = own.read_text("utf-8-sig") if own.is_file() else ""
+    export_keybinds(store.keybinds, path, game, commands)
+    bound = sum(a.bound for a in store.keybinds)
+    print(f"Wrote {bound} bound actions from {game} to {path}", end="")
+    print(", with your own commands." if commands else ".")
+
+
+def _matcher(commands: str) -> CommandMatcher:
+    """The fast path with a keybinds file's own commands, as on the player's PC."""
+    if not commands:
+        return CommandMatcher.default()
+    with tempfile.TemporaryDirectory() as folder:
+        own = Path(folder) / "commands.toml"
+        own.write_text(commands, "utf-8")
+        return CommandMatcher.default(own)
+
+
 def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("cases", type=Path, nargs="?", default=CASES)
+    parser.add_argument(
+        "--keybinds",
+        type=Path,
+        help="read the keybinds from a file --export-keybinds wrote, not the game (#262)",
+    )
+    parser.add_argument(
+        "--export-keybinds",
+        type=Path,
+        metavar="FILE",
+        help="write your keybinds and own commands to FILE for a run elsewhere, then stop (free)",
+    )
     parser.add_argument("--tag", action="append", help="only cases with this tag; repeatable")
     parser.add_argument(
         "--ships",
@@ -434,6 +554,9 @@ async def main() -> None:
         if reconfigure is not None:
             reconfigure(encoding="utf-8", errors="replace")
     args = _arguments()
+    if args.export_keybinds:
+        _export(args.export_keybinds)
+        return
     if args.adapter_check:
         direct = await run(args, "anthropic", MODEL)
         routed = await run(args, "openrouter", args.model or OPENROUTER_HAIKU)
@@ -452,16 +575,28 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     rules: list[dict[str, Any]] = data["case"]
     if args.tag:
         rules = [r for r in rules if r.get("tag") in args.tag]
-    key = anthropic_key()
-    routed = openrouter_key() if provider == "openrouter" else None
-    if provider == "openrouter" and routed is None:
-        raise SystemExit("No OpenRouter key. Run: uv run tycho key set openrouter")
-    if key is None and (provider == "anthropic" or not args.no_web):
-        raise SystemExit("No Anthropic key. Run: uv run tycho key set anthropic")
     print(f"\nBrain: {model} through {provider}")
+    needs_anthropic = provider == "anthropic" or not args.no_web
+    key = eval_key("anthropic", anthropic_key) if needs_anthropic else None
+    routed = eval_key("openrouter", openrouter_key) if provider == "openrouter" else None
+    if provider == "openrouter" and routed is None:
+        raise SystemExit(
+            "No OpenRouter key. Run: uv run tycho key set openrouter (or, off the PC, set "
+            "OPENROUTER_API_KEY)"
+        )
+    if needs_anthropic and key is None:
+        raise SystemExit(
+            "No Anthropic key. Run: uv run tycho key set anthropic (or, off the PC, set "
+            "ANTHROPIC_API_KEY)"
+        )
 
-    store = KeybindStore.load(find_install(settings.load()))
-    keybinds = store.keybinds
+    matcher = MATCHER
+    if args.keybinds:
+        keybinds, game, own = load_keybinds(args.keybinds)
+        matcher = _matcher(own)
+        print(f"Keybinds: {args.keybinds} ({game}){', with own commands' if own else ''}")
+    else:
+        keybinds = KeybindStore.load(find_install(settings.load())).keybinds
     valid = {a.name for a in keybinds if a.bound}
     costs = _Costs()
     for name in ("tycho.brain", "tycho.knowledge.web"):  # the search is its own request
@@ -513,7 +648,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
         prices = await price_list(model)
         print(f"Prices: {'from OpenRouter' if prices else 'not found; only reported costs'}")
         brain = OpenRouterBrain(
-            MATCHER,
+            matcher,
             model=model,
             api_key=routed,
             lookups=lookups,
@@ -525,7 +660,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
         )
     else:
         brain = ClaudeBrain(
-            MATCHER,
+            matcher,
             api_key=key,
             model=model,
             lookups=lookups,
@@ -547,7 +682,9 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
                 changes = [{"name": n, "value": v} for n, v in before]
                 await settings_tool.inner.run({"action": "set", "changes": changes})
                 start = settings.load(settings_file)
-            outcome = await run_case(rule, lexicon, brain, keybinds, counted, journal, costs)
+            outcome = await run_case(
+                rule, lexicon, brain, keybinds, counted, journal, costs, matcher
+            )
             outcome.verdict = grade(outcome, rule, valid)
             if outcome.verdict == "pass":
                 outcome.verdict = grade_fleet(fleet, rule)
@@ -622,13 +759,24 @@ def prices_for(listed: list[dict[str, Any]], model: str) -> Prices | None:
     return None
 
 
-async def generation_costs(costs: _Costs, key: str) -> None:
+async def generation_costs(
+    costs: _Costs,
+    key: str,
+    transport: httpx2.AsyncBaseTransport | None = None,
+    pause: float = 1.0,
+) -> None:
     """The cost OpenRouter reports for each call that ended early at an act. It can
-    take a moment to be ready, so each is asked for up to three times."""
+    take a moment to be ready, so each is asked for up to three times. Those it never
+    gives stay in ``costs.generations``, so the summary counts them (#261)."""
     headers = {"Authorization": f"Bearer {key}"}
-    async with httpx2.AsyncClient(base_url=OPENROUTER, timeout=10.0, headers=headers) as http:
+    missing: list[str] = []
+    async with httpx2.AsyncClient(
+        base_url=OPENROUTER, timeout=10.0, headers=headers, transport=transport
+    ) as http:
         for generation in costs.generations:
             for attempt in range(3):
+                if attempt:
+                    await asyncio.sleep(pause * attempt)
                 try:
                     response = await http.get("/generation", params={"id": generation})
                     if response.status_code == 200:
@@ -636,11 +784,12 @@ async def generation_costs(costs: _Costs, key: str) -> None:
                         cost = data.get("total_cost")
                         if isinstance(cost, int | float):
                             costs.add(float(cost), "reported")
-                        break
+                            break
                 except httpx2.HTTPError, ValueError:
                     pass
-                await asyncio.sleep(1.0 + attempt)
-    costs.generations.clear()
+            else:
+                missing.append(generation)
+    costs.generations = missing
 
 
 def _percentile(values: list[float], n: int) -> float | None:
@@ -672,7 +821,10 @@ def metrics(run: Run, per_hour: float = PER_HOUR) -> dict[str, Any]:
         "acting_p90_ms": _percentile(picks, 9),
         "mean_calls": statistics.mean(o.calls for o in brain) if brain else None,
         "cost": total,
-        "cost_sources": dict(costs.sources) | ({"guessed": unpriced} if unpriced else {}),
+        "cost_sources": dict(costs.sources)
+        | ({"guessed": unpriced} if unpriced else {})
+        | ({"not reported": costs.missing} if costs.missing else {}),
+        "calls_without_cost": costs.missing,
         "cost_per_request": per_request,
         "per_hour": per_hour,
         "cost_per_hour": per_request * per_hour,
@@ -722,8 +874,10 @@ def _summary(outcomes: list[Outcome], costs: _Costs, summary: dict[str, Any]) ->
         f"about ${summary['cost_per_hour']:.3f} at {summary['per_hour']:g} brain requests an hour"
         + (" (a placeholder: --per-hour)" if summary["per_hour"] == PER_HOUR else "")
     )
-    if costs.generations:
-        print(f"{len(costs.generations)} call(s) had no cost reported")
+    if costs.missing:
+        print(
+            f"{costs.missing} call(s) had no cost reported, so the cost above is too low by theirs"
+        )
 
 
 FAR_PASS = 0.05

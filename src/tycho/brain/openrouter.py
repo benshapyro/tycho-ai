@@ -155,6 +155,12 @@ class _Partial:
         except json.JSONDecodeError:
             return self.arguments
 
+    def echoed(self) -> str:
+        """The arguments to send back with the call. Malformed ones (``{"name": ``) go
+        back as ``{}``: a provider refuses a turn that holds invalid JSON, which would fail
+        the whole request where the look-up has already answered with an error (#260)."""
+        return self.arguments if isinstance(self.parsed(), dict) else "{}"
+
     def whole(self) -> bool:
         """Whether the arguments are already a complete object: nothing more can follow."""
         if not self.name or not self.arguments.rstrip().endswith("}"):
@@ -322,7 +328,7 @@ class OpenRouterBrain:
                         {
                             "id": c.id,
                             "type": "function",
-                            "function": {"name": c.name, "arguments": c.arguments or "{}"},
+                            "function": {"name": c.name, "arguments": c.echoed()},
                         }
                         for c in message.calls
                     ],

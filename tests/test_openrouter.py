@@ -187,6 +187,19 @@ def test_a_malformed_look_up_becomes_an_error_result() -> None:
     assert "must be an object" in result["content"]
 
 
+@pytest.mark.parametrize("arguments", ['{"name": ', "not json", '["Andromeda"]'])
+def test_a_malformed_look_up_goes_back_as_valid_json(arguments: str) -> None:
+    # A real provider refuses a turn whose tool call holds invalid JSON (#260).
+    client = FakeChat(
+        [*tool_call("ship_lookup", arguments), *finished()], text("I couldn't check.")
+    )
+    assert _ask(client, FakeLookup()) == Reply("I couldn't check.")
+    (turn,) = [m for m in client.requests[1]["messages"] if m.get("tool_calls")]
+    (call,) = turn["tool_calls"]
+    assert json.loads(call["function"]["arguments"]) == {}
+    assert call["id"] == "call_1"  # still paired with its error result
+
+
 def test_nothing_presses_after_a_web_search() -> None:
     web = FakeLookup(name="web_search", answer='{"results": []}', from_the_web=True)
     client = FakeChat(
