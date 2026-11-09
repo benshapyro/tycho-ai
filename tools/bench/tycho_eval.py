@@ -25,9 +25,14 @@ Ship questions go through the ship look-up by default. ``--ships table`` puts a
 table of every ship in the briefing instead, and ``--ships none`` gives Claude
 neither, to measure the two designs ADR 15 compares.
 
-Uses the Anthropic key in Windows Credential Manager. About $0.0002 a request.
+Other models go through OpenRouter (#192): ``--provider openrouter --model <id>``,
+with the OpenRouter key. ``--adapter-check`` runs Haiku directly and through OpenRouter
+and compares them. The summary gives the cost a brain request and an hour of play.
+
+Uses the keys in Windows Credential Manager. About $0.0002 a request on Haiku.
 
 Usage: uv run python tools/bench/tycho_eval.py [cases.toml] [--tag ships] [--ships table]
+       [--provider openrouter --model <id>] [--adapter-check] [--per-hour 30]
 """
 
 import argparse
@@ -46,14 +51,17 @@ from pathlib import Path
 from typing import Any
 
 import anthropic
+import httpx2
 from brain_report import GLOBAL_NEVER  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
 
 from tycho import paths, safety, settings
 from tycho.address import Address
-from tycho.app import anthropic_key, find_install, load_commands
+from tycho.app import anthropic_key, find_install, load_commands, openrouter_key
 from tycho.brain import BrainError, BrainRequest, Exchange, Reply, commands_for
-from tycho.brain.claude import NO_PRESS_AFTER_SEARCH, ClaudeBrain
+from tycho.brain.claude import MODEL, ClaudeBrain
 from tycho.brain.lookups import Lookup, LookupResult
+from tycho.brain.openrouter import OpenRouterBrain, Prices
+from tycho.brain.rounds import NO_PRESS_AFTER_SEARCH
 from tycho.commands import Command, Defer, resolve
 from tycho.game.keybinds import Keybinds
 from tycho.game.store import KeybindStore
@@ -120,15 +128,26 @@ class _Costs(logging.Handler):
         self.total = 0.0
         self.counted = 0
         self.replies = 0
-        """Calls to Claude that ended in a message (an act ends its call early)."""
+        """Calls to the model that ended in a message (an act ends its call early)."""
+        self.sources: dict[str, int] = {}
+        """Where each counted cost came from: "reported" by OpenRouter, its "price
+        list", or Tycho's own "estimate" from Anthropic's prices."""
+        self.generations: list[str] = []
+        """OpenRouter calls that ended early at an act: their cost is looked up after."""
 
     def emit(self, record: logging.LogRecord) -> None:
         message = record.getMessage()
-        if match := re.search(r"about \$([0-9.]+)", message):
-            self.total += float(match.group(1))
-            self.counted += 1
+        if match := re.search(r"about \$([0-9.]+)(?: \(([a-z ]+)\))?", message):
+            self.add(float(match.group(1)), match.group(2) or "estimate")
         if message.startswith("Brain replied"):
             self.replies += 1
+        if (match := re.search(r"generation (\S+)", message)) and match.group(1) != "?":
+            self.generations.append(match.group(1))
+
+    def add(self, cost: float, source: str) -> None:
+        self.total += cost
+        self.counted += 1
+        self.sources[source] = self.sources.get(source, 0) + 1
 
 
 def pressed(commands: tuple[Command, ...], keybinds: Keybinds) -> list[str]:
@@ -263,7 +282,7 @@ class _Counted:
 async def run_case(
     rule: dict[str, Any],
     lexicon: Lexicon,
-    brain: ClaudeBrain,
+    brain: ClaudeBrain | OpenRouterBrain,
     keybinds: Keybinds,
     counted: _Counted | None = None,
     journal: list[tuple[str, str]] | None = None,
@@ -341,13 +360,23 @@ LIVE: dict[str, Callable[[object], None]] = {
 """As tycho run wires them, so the brain hears "applies now" where the player would."""
 
 
-async def main() -> None:
-    # Cards hold "→" and the like: a console or file in Windows' own code page can't
-    # print them, and the run stopped halfway (6 November 2026).
-    for stream in (sys.stdout, sys.stderr):
-        reconfigure = getattr(stream, "reconfigure", None)
-        if reconfigure is not None:
-            reconfigure(encoding="utf-8", errors="replace")
+PROVIDERS = ("anthropic", "openrouter")
+OPENROUTER_HAIKU = "anthropic/claude-haiku-5.5"
+"""Haiku through OpenRouter, for the adapter check. Check the id on openrouter.ai/models."""
+PER_HOUR = 30.0
+"""Brain requests in an hour of play: a placeholder until the play logs measure it (#192)."""
+OPENROUTER = "https://openrouter.ai/api/v1"
+
+
+@dataclass
+class Run:
+    provider: str
+    model: str
+    outcomes: list[Outcome]
+    costs: _Costs
+
+
+def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("cases", type=Path, nargs="?", default=CASES)
     parser.add_argument("--tag", action="append", help="only cases with this tag; repeatable")
@@ -359,15 +388,77 @@ async def main() -> None:
     )
     parser.add_argument("--no-web", action="store_true", help="don't offer web search")
     parser.add_argument("--no-tile", action="store_true", help="don't offer Tile cards")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--provider",
+        choices=PROVIDERS,
+        default="anthropic",
+        help="Claude directly (default), or any model through OpenRouter (#192)",
+    )
+    parser.add_argument(
+        "--model",
+        help=f"the model id: {MODEL} by default for anthropic; required for openrouter, "
+        f"e.g. {OPENROUTER_HAIKU}",
+    )
+    parser.add_argument(
+        "--per-hour",
+        type=float,
+        default=PER_HOUR,
+        help=f"brain requests in an hour of play, for the cost an hour (a placeholder "
+        f"{PER_HOUR:g} until play logs measure it)",
+    )
+    parser.add_argument(
+        "--effort",
+        choices=["low", "medium", "high"],
+        help="through OpenRouter only: how hard a model that reasons should (default: "
+        "as its provider runs it)",
+    )
+    parser.add_argument(
+        "--adapter-check",
+        action="store_true",
+        help="run Haiku directly, then through OpenRouter (--model overrides "
+        f"{OPENROUTER_HAIKU}), with no web search, and compare the two",
+    )
+    args = parser.parse_args(argv)
+    if args.adapter_check:
+        args.no_web = True  # the OpenRouter brain has none, so neither side gets it
+    elif args.provider == "openrouter" and not args.model:
+        parser.error("--provider openrouter needs --model, e.g. " + OPENROUTER_HAIKU)
+    return args
 
+
+async def main() -> None:
+    # Cards hold "→" and the like: a console or file in Windows' own code page can't
+    # print them, and the run stopped halfway (6 November 2026).
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+    args = _arguments()
+    if args.adapter_check:
+        direct = await run(args, "anthropic", MODEL)
+        routed = await run(args, "openrouter", args.model or OPENROUTER_HAIKU)
+        print()
+        for line in compare(direct, routed, args.per_hour):
+            print(line)
+        return
+    provider = args.provider
+    await run(args, provider, args.model or MODEL)
+
+
+async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
+    """Every case through one brain; prints each, appends them to the results, and
+    prints the summary."""
     data: dict[str, Any] = tomllib.loads(args.cases.read_text("utf-8"))
     rules: list[dict[str, Any]] = data["case"]
     if args.tag:
         rules = [r for r in rules if r.get("tag") in args.tag]
     key = anthropic_key()
-    if key is None:
-        raise SystemExit("No Anthropic key. Run: uv run python -m tycho.credentials set anthropic")
+    routed = openrouter_key() if provider == "openrouter" else None
+    if provider == "openrouter" and routed is None:
+        raise SystemExit("No OpenRouter key. Run: uv run tycho key set openrouter")
+    if key is None and (provider == "anthropic" or not args.no_web):
+        raise SystemExit("No Anthropic key. Run: uv run tycho key set anthropic")
+    print(f"\nBrain: {model} through {provider}")
 
     store = KeybindStore.load(find_install(settings.load()))
     keybinds = store.keybinds
@@ -386,7 +477,11 @@ async def main() -> None:
             reference = "Ships and vehicles in this patch:\n" + library.table()
         else:
             counted = _Counted(ShipLookup(WikiApi(), paths.knowledge_dir(), library=library))
-    web = [] if args.no_web else [WebSearch(anthropic.AsyncAnthropic(api_key=key))]
+    web: list[Lookup] = []
+    if provider == "openrouter" and not args.no_web:
+        print("Web search: not offered. The OpenRouter brain has none (it's Anthropic's tool).")
+    elif not args.no_web:
+        web = [WebSearch(anthropic.AsyncAnthropic(api_key=key))]
     # A fleet in a scratch file, set by each case ("fleet", "flying"): never the player's own.
     scratch = Path(tempfile.mkdtemp())
     fleet = Fleet(scratch / "fleet.toml")
@@ -396,83 +491,213 @@ async def main() -> None:
     if counted is not None:
         counted.journal = journal
     settings_tool = _Counted(SettingsTool(settings_file, live=LIVE), journal)
-    brain = ClaudeBrain(
-        MATCHER,
-        api_key=key,
-        lookups=[
-            *([counted] if counted else []),
-            _Counted(FleetUpdate(fleet, lambda: library), journal),
-            _Counted(ItemLookup(WikiApi()), journal),
-            _Counted(MiningLookup(WikiApi()), journal),
-            *(_Counted(lookup, journal) for lookup in trade_lookups(UexApi())),
-            settings_tool,
-            *(_Counted(lookup, journal) for lookup in web),
-        ],
-        reference=reference,
-        # As tycho run does: the fleet, then what to call the player (#15).
-        about=lambda: "\n".join(p for p in (fleet.describe(library), Address().header()) if p),
-        cards=lambda: not args.no_tile,
-    )
+    lookups: list[Lookup] = [
+        *([counted] if counted else []),
+        _Counted(FleetUpdate(fleet, lambda: library), journal),
+        _Counted(ItemLookup(WikiApi()), journal),
+        _Counted(MiningLookup(WikiApi()), journal),
+        *(_Counted(lookup, journal) for lookup in trade_lookups(UexApi())),
+        settings_tool,
+        *(_Counted(lookup, journal) for lookup in web),
+    ]
+
+    # As tycho run does: the fleet, then what to call the player (#15).
+    def about() -> str:
+        return "\n".join(p for p in (fleet.describe(library), Address().header()) if p)
+
+    def cards() -> bool:
+        return not args.no_tile
+
+    brain: ClaudeBrain | OpenRouterBrain
+    if provider == "openrouter":
+        prices = await price_list(model)
+        print(f"Prices: {'from OpenRouter' if prices else 'not found; only reported costs'}")
+        brain = OpenRouterBrain(
+            MATCHER,
+            model=model,
+            api_key=routed,
+            lookups=lookups,
+            reference=reference,
+            about=about,
+            cards=cards,
+            prices=prices,
+            effort=args.effort,
+        )
+    else:
+        brain = ClaudeBrain(
+            MATCHER,
+            api_key=key,
+            model=model,
+            lookups=lookups,
+            reference=reference,
+            about=about,
+            cards=cards,
+        )
     await brain.warm(keybinds)
     lexicon = Lexicon.default()
 
     outcomes: list[Outcome] = []
-    for rule in rules:
-        fleet.ships, fleet.flying = list(rule.get("fleet", [])), str(rule.get("flying", ""))
-        start = settings.Settings.model_validate(rule.get("settings", {}))
-        settings.save(start, settings_file)
-        settings_tool.inner = SettingsTool(settings_file, live=LIVE)
-        if before := rule.get("before"):
-            changes = [{"name": n, "value": v} for n, v in before]
-            await settings_tool.inner.run({"action": "set", "changes": changes})
-            start = settings.load(settings_file)
-        outcome = await run_case(rule, lexicon, brain, keybinds, counted, journal, costs)
-        outcome.verdict = grade(outcome, rule, valid)
-        if outcome.verdict == "pass":
-            outcome.verdict = grade_fleet(fleet, rule)
-        if outcome.verdict == "pass":
-            outcome.verdict = grade_settings(settings_file, start, rule)
-        outcomes.append(outcome)
-        mark = "  " if outcome.verdict == "pass" else "XX"
-        what = ", ".join(outcome.actions) if outcome.kind == "actions" else outcome.kind
-        what += " (asks first)" if outcome.asks else ""
-        what += f" after {', '.join(outcome.tools)}" if outcome.tools else ""
-        what += f" ({outcome.calls} calls)" if outcome.route == "brain" else ""
-        what += " after a web search" if outcome.searched else ""
-        print(f"{mark} {outcome.route:5} {outcome.ms:5.0f} ms  {outcome.heard!r} -> {what}")
-        if outcome.say:
-            print(f"{'':16}says ({len(outcome.say.split())} words): {outcome.say}")
-        if outcome.card:
-            print(f"{'':16}card ({outcome.card}): {' / '.join(outcome.card_rows)}")
-        if outcome.verdict != "pass" or outcome.notes:
-            print(f"{'':16}{'; '.join([outcome.verdict, *outcome.notes])}")
+    try:
+        for rule in rules:
+            fleet.ships, fleet.flying = list(rule.get("fleet", [])), str(rule.get("flying", ""))
+            start = settings.Settings.model_validate(rule.get("settings", {}))
+            settings.save(start, settings_file)
+            settings_tool.inner = SettingsTool(settings_file, live=LIVE)
+            if before := rule.get("before"):
+                changes = [{"name": n, "value": v} for n, v in before]
+                await settings_tool.inner.run({"action": "set", "changes": changes})
+                start = settings.load(settings_file)
+            outcome = await run_case(rule, lexicon, brain, keybinds, counted, journal, costs)
+            outcome.verdict = grade(outcome, rule, valid)
+            if outcome.verdict == "pass":
+                outcome.verdict = grade_fleet(fleet, rule)
+            if outcome.verdict == "pass":
+                outcome.verdict = grade_settings(settings_file, start, rule)
+            outcomes.append(outcome)
+            _print(outcome)
+    finally:
+        await brain.close()
+        for name in ("tycho.brain", "tycho.knowledge.web"):
+            logging.getLogger(name).removeHandler(costs)
 
+    if routed is not None and costs.generations:
+        await generation_costs(costs, routed)
+    done = Run(provider, model, outcomes, costs)
+    summary = metrics(done, args.per_hour)
     RESULTS.parent.mkdir(exist_ok=True)
     with RESULTS.open("a", encoding="utf-8") as f:
-        f.write(json.dumps({"type": "meta", "time": time.strftime("%Y-%m-%dT%H:%M:%S")}) + "\n")
+        meta = {"type": "meta", "time": time.strftime("%Y-%m-%dT%H:%M:%S")}
+        f.write(json.dumps({**meta, "provider": provider, "model": model}) + "\n")
         for outcome in outcomes:
-            f.write(json.dumps(asdict(outcome)) + "\n")
-    _summary(outcomes, costs)
+            f.write(json.dumps({**asdict(outcome), "provider": provider, "model": model}) + "\n")
+        f.write(json.dumps({"type": "summary", **summary}) + "\n")
+    _summary(outcomes, costs, summary)
+    return done
 
 
-def _summary(outcomes: list[Outcome], costs: _Costs) -> None:
-    passed = sum(o.verdict == "pass" for o in outcomes)
-    wrong = [o for o in outcomes if o.verdict.startswith("WRONG PRESS")]
-    brain = [o.ms for o in outcomes if o.route == "brain" and o.kind != "error"]
-    picks = [o.ms for o in outcomes if o.route == "brain" and o.kind == "actions"]
-    print(f"\n{passed}/{len(outcomes)} pass, {len(wrong)} wrong presses")
+def _print(outcome: Outcome) -> None:
+    mark = "  " if outcome.verdict == "pass" else "XX"
+    what = ", ".join(outcome.actions) if outcome.kind == "actions" else outcome.kind
+    what += " (asks first)" if outcome.asks else ""
+    what += f" after {', '.join(outcome.tools)}" if outcome.tools else ""
+    what += f" ({outcome.calls} calls)" if outcome.route == "brain" else ""
+    what += " after a web search" if outcome.searched else ""
+    print(f"{mark} {outcome.route:5} {outcome.ms:5.0f} ms  {outcome.heard!r} -> {what}")
+    if outcome.say:
+        print(f"{'':16}says ({len(outcome.say.split())} words): {outcome.say}")
+    if outcome.card:
+        print(f"{'':16}card ({outcome.card}): {' / '.join(outcome.card_rows)}")
+    if outcome.verdict != "pass" or outcome.notes:
+        print(f"{'':16}{'; '.join([outcome.verdict, *outcome.notes])}")
+
+
+async def price_list(model: str) -> Prices | None:
+    """The model's prices from OpenRouter's public list, for replies that don't report
+    their cost. Free, and needs no key."""
+    try:
+        async with httpx2.AsyncClient(timeout=10.0) as http:
+            response = await http.get(f"{OPENROUTER}/models")
+            response.raise_for_status()
+            listed: list[dict[str, Any]] = response.json().get("data", [])
+    except (httpx2.HTTPError, ValueError) as e:
+        print(f"Couldn't read OpenRouter's price list: {e}")
+        return None
+    return prices_for(listed, model)
+
+
+def prices_for(listed: list[dict[str, Any]], model: str) -> Prices | None:
+    """``Prices`` for a model in OpenRouter's list (prices per token, as strings)."""
+    for entry in listed:
+        if entry.get("id") == model:
+            pricing: dict[str, Any] = entry.get("pricing") or {}
+            try:
+                read = pricing.get("input_cache_read")
+                return Prices(
+                    prompt=float(pricing["prompt"]),
+                    completion=float(pricing["completion"]),
+                    cache_read=float(read) if read not in (None, "") else None,
+                )
+            except KeyError, ValueError:
+                return None
+    return None
+
+
+async def generation_costs(costs: _Costs, key: str) -> None:
+    """The cost OpenRouter reports for each call that ended early at an act. It can
+    take a moment to be ready, so each is asked for up to three times."""
+    headers = {"Authorization": f"Bearer {key}"}
+    async with httpx2.AsyncClient(base_url=OPENROUTER, timeout=10.0, headers=headers) as http:
+        for generation in costs.generations:
+            for attempt in range(3):
+                try:
+                    response = await http.get("/generation", params={"id": generation})
+                    if response.status_code == 200:
+                        data: dict[str, Any] = response.json().get("data") or {}
+                        cost = data.get("total_cost")
+                        if isinstance(cost, int | float):
+                            costs.add(float(cost), "reported")
+                        break
+                except httpx2.HTTPError, ValueError:
+                    pass
+                await asyncio.sleep(1.0 + attempt)
+    costs.generations.clear()
+
+
+def _percentile(values: list[float], n: int) -> float | None:
+    if len(values) < 10:
+        return None
+    return statistics.quantiles(values, n=10)[n - 1]
+
+
+def metrics(run: Run, per_hour: float = PER_HOUR) -> dict[str, Any]:
+    """What one run measured, for the summary, the results file and comparing runs."""
+    outcomes, costs = run.outcomes, run.costs
+    brain = [o for o in outcomes if o.route == "brain"]
+    answered = [o.ms for o in brain if o.kind != "error"]
+    picks = [o.ms for o in brain if o.kind == "actions"]
+    unpriced = max(0, len(brain) - costs.counted) if run.provider == "anthropic" else 0
+    total = costs.total + unpriced * COST_GUESS
+    per_request = total / len(brain) if brain else 0.0
+    return {
+        "provider": run.provider,
+        "model": run.model,
+        "cases": len(outcomes),
+        "passed": sum(o.verdict == "pass" for o in outcomes),
+        "wrong_presses": sum(o.verdict.startswith("WRONG PRESS") for o in outcomes),
+        "brain_requests": len(brain),
+        "errors": sum(o.kind == "error" for o in brain),
+        "p50_ms": statistics.median(answered) if answered else None,
+        "p90_ms": _percentile(answered, 9),
+        "acting_p50_ms": statistics.median(picks) if picks else None,
+        "acting_p90_ms": _percentile(picks, 9),
+        "mean_calls": statistics.mean(o.calls for o in brain) if brain else None,
+        "cost": total,
+        "cost_sources": dict(costs.sources) | ({"guessed": unpriced} if unpriced else {}),
+        "cost_per_request": per_request,
+        "per_hour": per_hour,
+        "cost_per_hour": per_request * per_hour,
+    }
+
+
+def _summary(outcomes: list[Outcome], costs: _Costs, summary: dict[str, Any]) -> None:
+    print(
+        f"\n{summary['passed']}/{summary['cases']} pass, {summary['wrong_presses']} wrong presses"
+    )
     by_tag: dict[str, list[Outcome]] = {}
     for o in outcomes:
         by_tag.setdefault(o.tag, []).append(o)
     for tag, group in sorted(by_tag.items()):
         print(f"  {tag or '(none)':12} {sum(o.verdict == 'pass' for o in group)}/{len(group)}")
-    if brain:
-        print(f"Brain: p50 {statistics.median(brain):.0f} ms over {len(brain)} requests", end="")
-        if len(brain) >= 10:
-            print(f", p90 {statistics.quantiles(brain, n=10)[-1]:.0f} ms", end="")
+    if summary["p50_ms"] is not None:
+        print(
+            f"Brain: p50 {summary['p50_ms']:.0f} ms over {summary['brain_requests']} requests",
+            end="",
+        )
+        if summary["p90_ms"] is not None:
+            print(f", p90 {summary['p90_ms']:.0f} ms", end="")
         print()
-    if picks:
-        print(f"Brain picks (acting): p50 {statistics.median(picks):.0f} ms (bar: 1500)")
+    if summary["acting_p50_ms"] is not None:
+        print(f"Brain picks (acting): p50 {summary['acting_p50_ms']:.0f} ms (bar: 1500)")
     if searched := [o for o in outcomes if o.searched]:
         print(
             f"Web searches: {len(searched)} requests, "
@@ -484,14 +709,68 @@ def _summary(outcomes: list[Outcome], costs: _Costs) -> None:
             f"Look-ups: {len(looked)} requests used them, "
             f"p50 {statistics.median(o.ms for o in looked):.0f} ms"
         )
-    if calls := [o.calls for o in outcomes if o.route == "brain"]:
+    if (calls := [o.calls for o in outcomes if o.route == "brain"]) and calls:
         retried = sum(1 for o in outcomes if o.errors)
         print(
-            f"Calls to Claude: mean {statistics.mean(calls):.2f} a request, "
+            f"Calls to the model: mean {statistics.mean(calls):.2f} a request, "
             f"most {max(calls)}; {retried} request(s) hit a look-up error"
         )
-    unpriced = len(brain) - costs.counted
-    print(f"Cost: about ${costs.total + max(0, unpriced) * COST_GUESS:.3f}")
+    sources = ", ".join(f"{n} {source}" for source, n in summary["cost_sources"].items())
+    print(f"Cost: about ${summary['cost']:.3f} ({sources or 'none counted'})")
+    print(
+        f"Cost a brain request: about ${summary['cost_per_request']:.5f}; an hour of play: "
+        f"about ${summary['cost_per_hour']:.3f} at {summary['per_hour']:g} brain requests an hour"
+        + (" (a placeholder: --per-hour)" if summary["per_hour"] == PER_HOUR else "")
+    )
+    if costs.generations:
+        print(f"{len(costs.generations)} call(s) had no cost reported")
+
+
+FAR_PASS = 0.05
+"""The adapter check fails if pass rates differ by more than this share of the cases..."""
+FAR_CALLS = 0.3
+"""...or the mean calls a request by more than this, or wrong presses at all."""
+
+
+def compare(direct: Run, routed: Run, per_hour: float = PER_HOUR) -> list[str]:
+    """The adapter check: the same model directly and through OpenRouter. Far apart
+    means the adapter is wrong, not the model."""
+    a, b = metrics(direct, per_hour), metrics(routed, per_hour)
+
+    def show(value: Any, form: str) -> str:
+        return "-" if value is None else format(value, form)
+
+    rows = [
+        ("pass", "passed", "d"),
+        ("wrong presses", "wrong_presses", "d"),
+        ("errors", "errors", "d"),
+        ("mean calls", "mean_calls", ".2f"),
+        ("p50 ms", "p50_ms", ".0f"),
+        ("acting p50 ms", "acting_p50_ms", ".0f"),
+        ("cost a request $", "cost_per_request", ".5f"),
+        ("cost an hour $", "cost_per_hour", ".3f"),
+    ]
+    head = f"{direct.provider}: {direct.model}"
+    lines = [f"{'':18}{head:>34}  {routed.provider}: {routed.model}"]
+    lines += [f"{label:18}{show(a[k], form):>34}  {show(b[k], form)}" for label, k, form in rows]
+    differ = [
+        f"  {x.heard!r}: {x.verdict} ({x.kind}) vs {y.verdict} ({y.kind})"
+        for x, y in zip(direct.outcomes, routed.outcomes, strict=False)
+        if (x.verdict == "pass") != (y.verdict == "pass") or x.actions != y.actions
+    ]
+    if differ:
+        lines += [f"{len(differ)} case(s) differ:", *differ]
+    far = (
+        a["wrong_presses"] != b["wrong_presses"]
+        or abs(a["passed"] - b["passed"]) > FAR_PASS * max(1, a["cases"])
+        or abs((a["mean_calls"] or 0) - (b["mean_calls"] or 0)) > FAR_CALLS
+    )
+    lines.append(
+        "Adapter check: FAR APART. Look at the adapter before measuring other models."
+        if far
+        else "Adapter check: close. The adapter is fine; other models can be measured."
+    )
+    return lines
 
 
 if __name__ == "__main__":

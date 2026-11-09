@@ -29,16 +29,9 @@ from tycho.brain.briefing import (
     game_facts,
     unbound_commands,
 )
-from tycho.brain.claude import (
-    LAST_CALL,
-    LAST_PICK,
-    MAX_CALLS,
-    NO_PRESS_AFTER_SEARCH,
-    ClaudeBrain,
-    history,
-    spoken,
-)
+from tycho.brain.claude import ClaudeBrain, history
 from tycho.brain.lookups import LOOKUP_SECONDS, run_lookup
+from tycho.brain.rounds import LAST_CALL, LAST_PICK, MAX_CALLS, NO_PRESS_AFTER_SEARCH, spoken
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Action, Keybinds, KeyInput
 
