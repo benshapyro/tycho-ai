@@ -15,7 +15,14 @@ from tests.fakes.fake_lookup import FakeLookup
 from tycho import credentials
 from tycho.brain import BrainError, BrainRequest, Reply, RunActions
 from tycho.brain.decisions import UnboundAction
-from tycho.brain.openrouter import OpenRouterBrain, OpenRouterClient, Prices, chunks
+from tycho.brain.openrouter import (
+    MAX_TOKENS,
+    REASONING_TOKENS,
+    OpenRouterBrain,
+    OpenRouterClient,
+    Prices,
+    chunks,
+)
 from tycho.brain.rounds import LAST_CALL, MAX_CALLS, NO_PRESS_AFTER_SEARCH
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Action, Keybinds, KeyInput
@@ -84,6 +91,13 @@ def test_the_request_is_openai_shaped_with_the_same_briefing_and_tools() -> None
     names = [t["function"]["name"] for t in body["tools"]]
     assert names == ["run_sequence", "run_actions"]
     assert all(t["type"] == "function" for t in body["tools"])
+
+
+def test_a_model_that_reasons_has_room_to_answer() -> None:
+    # GLM, Qwen and Kimi spent all 1024 tokens reasoning and never answered (#268).
+    client = FakeChat(text("Hi."))
+    asyncio.run(_brain(client).decide(BrainRequest("hi", KEYBINDS)))
+    assert client.requests[0]["max_tokens"] == MAX_TOKENS + REASONING_TOKENS
 
 
 def test_an_effort_is_asked_for_only_when_given() -> None:
@@ -312,7 +326,7 @@ def test_the_client_reads_server_sent_events() -> None:
 
 @pytest.mark.parametrize(
     ("status", "problem"),
-    [(401, "key was refused"), (402, "out of credit"), (500, r"error \(500\)")],
+    [(401, "key was refused"), (402, "out of credit"), (500, r"error \(500\)$")],
 )
 def test_the_client_explains_a_failed_request(status: int, problem: str) -> None:
     def fail(_: httpx2.Request) -> httpx2.Response:
@@ -321,6 +335,39 @@ def test_the_client_explains_a_failed_request(status: int, problem: str) -> None
     client = _client(fail)
     with pytest.raises(BrainError, match=problem):
         asyncio.run(_read(client))
+
+
+def test_the_client_says_why_openrouter_refused() -> None:
+    # A bare "error (404)" hid that the account's privacy setting refused the model (#268).
+    said = "No endpoints found matching your data policy.\n ZDR violation (account settings)"
+
+    def refuse(_: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(404, json={"error": {"message": said, "code": 404}})
+
+    with pytest.raises(BrainError) as raised:
+        asyncio.run(_read(_client(refuse)))
+    assert str(raised.value) == (
+        "OpenRouter returned an error (404): No endpoints found matching your data "
+        "policy. ZDR violation (account settings)"
+    )
+
+
+def test_a_long_error_is_cut_short() -> None:
+    def refuse(_: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(400, json={"error": {"message": "x" * 1000}})
+
+    with pytest.raises(BrainError) as raised:
+        asyncio.run(_read(_client(refuse)))
+    assert len(str(raised.value)) < 260
+
+
+def test_a_slow_model_is_not_called_offline() -> None:
+    # Gemini's slow first tokens read as "can't reach OpenRouter (offline?)" (#268).
+    def slow(request: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ReadTimeout("timed out", request=request)
+
+    with pytest.raises(BrainError, match="too slow"):
+        asyncio.run(_read(_client(slow)))
 
 
 def test_the_client_says_when_openrouter_cant_be_reached() -> None:

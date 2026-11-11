@@ -743,7 +743,11 @@ async def price_list(model: str) -> Prices | None:
 
 
 def prices_for(listed: list[dict[str, Any]], model: str) -> Prices | None:
-    """``Prices`` for a model in OpenRouter's list (prices per token, as strings)."""
+    """``Prices`` for a model in OpenRouter's list (prices per token, as strings). A
+    variant such as ``:nitro`` isn't listed, so it takes its model's prices (#268)."""
+    listed_ids = {entry.get("id") for entry in listed}
+    if model not in listed_ids:
+        model = model.split(":", 1)[0]
     for entry in listed:
         if entry.get("id") == model:
             pricing: dict[str, Any] = entry.get("pricing") or {}

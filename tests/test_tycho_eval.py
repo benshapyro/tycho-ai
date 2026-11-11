@@ -413,6 +413,16 @@ def test_the_price_list_gives_prices_per_token() -> None:
     assert e.prices_for(listed, "missing/model") is None
 
 
+def test_a_variant_takes_its_models_prices() -> None:
+    # ":nitro" isn't in the list, so its runs had no prices to fall back on (#268).
+    e = _eval()
+    listed = [{"id": "some/model", "pricing": {"prompt": "0.0000001", "completion": "0.0000005"}}]
+    prices = e.prices_for(listed, "some/model:nitro")
+    assert prices is not None
+    assert prices.prompt == 1e-7
+    assert e.prices_for(listed, "missing/model:nitro") is None
+
+
 def test_the_adapter_check_says_close_when_the_runs_agree() -> None:
     e = _eval()
     direct, routed = _run("anthropic", ["pass"] * 20), _run("openrouter", ["pass"] * 20)
