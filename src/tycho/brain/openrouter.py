@@ -53,6 +53,13 @@ URL = "https://openrouter.ai/api/v1"
 WARM_TOKENS = 16
 """The warm-up's reply: some providers refuse fewer."""
 MAX_TOKENS = 1024
+REASONING_TOKENS = 2048
+"""Room for a model that reasons before it answers (#268): its reasoning counts against
+``max_tokens``, and GLM, Qwen and Kimi ran out at 1024 with no answer. It's a cap, so a
+model that doesn't reason pays nothing for it."""
+READ_SECONDS = 30.0
+"""How long to wait for the next byte. Some models take over 8 s to their first token
+(Gemini, #268); the session's own deadline still gives up first in play."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,7 +94,7 @@ class OpenRouterClient:
     def __init__(self, api_key: str, *, client: httpx2.AsyncClient | None = None) -> None:
         # The session gives up after its own deadline, so no retries here.
         self._http = client or httpx2.AsyncClient(
-            base_url=URL, timeout=httpx2.Timeout(8.0, connect=3.0)
+            base_url=URL, timeout=httpx2.Timeout(READ_SECONDS, connect=3.0)
         )
         self._headers = {
             "Authorization": f"Bearer {api_key}",
@@ -103,9 +110,10 @@ class OpenRouterClient:
                 "POST", "/chat/completions", json=dict(body), headers=self._headers
             ) as response:
                 if response.status_code != 200:
-                    await response.aread()
-                    raise BrainError(_explain(response.status_code))
+                    raise BrainError(_explain(response.status_code, await response.aread()))
                 yield chunks(response.aiter_lines())
+        except httpx2.TimeoutException as e:
+            raise BrainError(f"OpenRouter was too slow to answer ({e.__class__.__name__})") from e
         except httpx2.HTTPError as e:
             raise BrainError("can't reach OpenRouter (offline?)") from e
 
@@ -113,12 +121,37 @@ class OpenRouterClient:
         await self._http.aclose()
 
 
-def _explain(status: int) -> str:
+def _explain(status: int, body: bytes = b"") -> str:
     if status == 401:
         return "the OpenRouter key was refused"
     if status == 402:
         return "the OpenRouter account is out of credit"
-    return f"OpenRouter returned an error ({status})"
+    problem = f"OpenRouter returned an error ({status})"
+    if said := _said(body):
+        problem += f": {said}"
+    return problem
+
+
+SAID_CHARACTERS = 200
+
+
+def _said(body: bytes) -> str:
+    """OpenRouter's own reason for an error (#268): "ZDR violation (account settings)"
+    said why every call failed, and a bare status hid it. It holds no key."""
+    try:
+        parsed: object = json.loads(body)
+    except ValueError:
+        return ""
+    if not isinstance(parsed, dict):
+        return ""
+    error = cast("dict[str, object]", parsed).get("error")
+    if not isinstance(error, dict):
+        return ""
+    said = cast("dict[str, object]", error).get("message")
+    if not isinstance(said, str):
+        return ""
+    message = " ".join(said.split())
+    return message[:SAID_CHARACTERS]
 
 
 async def chunks(lines: AsyncIterator[str]) -> AsyncIterator[Chunk]:
@@ -380,7 +413,9 @@ class OpenRouterBrain:
             )
         return decided
 
-    def _body(self, messages: list[dict[str, Any]], max_tokens: int = MAX_TOKENS) -> dict[str, Any]:
+    def _body(
+        self, messages: list[dict[str, Any]], max_tokens: int = MAX_TOKENS + REASONING_TOKENS
+    ) -> dict[str, Any]:
         tools = self._tools
         if self._cards():
             tools = [*tools[:2], _function(_SHOW_CARD), *tools[2:]]
