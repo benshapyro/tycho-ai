@@ -65,6 +65,13 @@ def test_the_path_is_graded(fields: dict[str, Any], rule: dict[str, Any], verdic
     assert e.grade(_outcome(**fields), rule, set()).startswith(verdict)
 
 
+def test_a_curly_apostrophe_still_mentions_it() -> None:
+    e = _eval()
+    rule = {"expect": ["reply"], "mentions": [["hasn't"]]}
+    said = _outcome(say="CIG hasn\u2019t announced an official release date.")
+    assert e.grade(said, rule, set()) == "pass"
+
+
 class _Failing:
     """A look-up that answers with an error, as the real ones do (they never raise)."""
 

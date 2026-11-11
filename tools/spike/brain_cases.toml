@@ -215,6 +215,7 @@ heard = "third person"
 mode = "command"
 expect = ["actions"]
 must = [["thirdperson", "v_view_cycle_fwd"]]
+never = ["v_power_toggle_thrusters"]  # Haiku pressed it (#271): it would fire in play
 tag = "single"
 
 # --- Chains -----------------------------------------------------------------

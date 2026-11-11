@@ -832,10 +832,12 @@ def test_the_briefing_says_what_not_to_guess() -> None:
     text = " ".join(briefing(KEYBINDS, MATCHER).split())
     assert "Never guess a sequence, a boost or the throttle" in text
     assert "press nothing, not even shields or targeting" in text
+    assert "A request for something you can press is still for you" in text
     assert "the destination is set in the star map" in text
     assert "never engage quantum for a named place" in text
     assert "Tycho doesn't fire them" in text
-    for case in ("the usual", "hurry up", "watch your six", "jump to Hurston", "fire everything"):
+    cases = ("the usual", "hurry up", "watch your six", "jump to Hurston", "fire everything")
+    for case in (*cases, "check behind us", "third person"):
         assert f'"{case}"' not in text
 
 
