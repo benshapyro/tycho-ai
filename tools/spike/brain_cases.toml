@@ -834,7 +834,7 @@ tag = "web"
 heard = "when is the Kraken coming out"
 mode = "lookup"
 expect = ["reply"]
-mentions = [['no official', 'not announced', "hasn't", 'no (confirmed |firm |set )?(release )?date', 'TBA', 'to be announced', 'not (yet )?confirmed', 'unconfirmed', 'no confirmed', "(couldn't|could not) find an official"]]
+mentions = [['no official', 'not announced', "hasn't", 'no (confirmed |firm |set )?(release )?date', 'TBA', 'to be announced', 'not (yet )?confirmed', 'unconfirmed', 'no confirmed', "(couldn't|could not) find an official", "(don't|do not) have an official"]]
 tag = "web"
 
 [[case]]

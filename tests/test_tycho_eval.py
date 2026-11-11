@@ -87,6 +87,8 @@ def test_a_curly_apostrophe_still_dodges() -> None:
         "This is chat for the squad, not a request for me, so I'm just acknowledging it. Copy.",
         "The player trailed off mid-request, so there's nothing to act on yet.",
         "This is chat aimed at the squad or the room, not for me, so no action. Copy.",
+        "This sounds like squad chat, not a request for me, so I'll just acknowledge it. Copy.",
+        "This is chat to me, not a request, so a short friendly reply. Glad you're enjoying it.",
     ],
 )
 def test_a_reply_that_explains_itself_fails(say: str) -> None:
@@ -103,11 +105,22 @@ def test_a_reply_that_explains_itself_fails(say: str) -> None:
         "Go ahead, Commander. What do you need?",
         "There's no action bound for that.",
         "In 4.10 the player can claim a ship at any terminal.",
+        "You're welcome, Commander.",
+        "Glad you're enjoying it, Commander. Take a moment and soak it in.",
     ],
 )
 def test_a_plain_reply_is_not_narrated(say: str) -> None:
     e = _eval()
     assert e.grade(_outcome(say=say), {"expect": ["reply"]}, set()) == "pass"
+
+
+def test_the_kraken_case_takes_a_right_answer_worded_another_way() -> None:
+    """The #192 eval after #280: "I don't have an official release date" failed."""
+    e = _eval()
+    data = tomllib.loads((ROOT / "tools" / "spike" / "brain_cases.toml").read_text("utf-8"))
+    rule = next(c for c in data["case"] if c["heard"] == "when is the Kraken coming out")
+    said = _outcome(say="The Kraken is in concept. I don't have an official release date for it.")
+    assert e.grade(said, rule, set()) == "pass"
 
 
 class _Failing:

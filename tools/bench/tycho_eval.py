@@ -97,7 +97,8 @@ DODGE = re.compile(
     re.IGNORECASE,
 )
 NARRATED = re.compile(
-    r"\bnot (a|an) (request|command|question) for me\b|\bsquad callout\b|"
+    r"\bnot (a|an) (request|command|question)\b|\bsquad callout\b|\bso a short\b|"
+    r"\b(this|that) (is|sounds like) (squad |room )?chat\b|\bchat (to|for) (me|the squad)\b|"
     r"\bthe player (is|was|said|asked|wants|trailed|didn't)\b|\bjust acknowledg|"
     r"\bso (there's )?no action\b|\bpress(ing)? nothing\b|\bcall(ing)? no tool\b",
     re.IGNORECASE,
