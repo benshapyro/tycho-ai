@@ -222,14 +222,24 @@ def grade(outcome: Outcome, rule: dict[str, Any], valid: set[str]) -> str:
     if outcome.kind == "reply" and rule.get("answer") and DODGE.search(outcome.say):
         return "dodged the question"
     if outcome.kind == "reply":
+        said = plain(outcome.say)
         for group in rule.get("mentions", []):
-            if not any(re.search(p, outcome.say, re.IGNORECASE) for p in group):
+            if not any(re.search(p, said, re.IGNORECASE) for p in group):
                 return f"missing {'/'.join(group)}"
     if rule.get("no_card") and outcome.card:
         return f"showed a {outcome.card} card, expected none"
     if (kinds := rule.get("card")) and outcome.card not in kinds:
         return f"showed {outcome.card or 'no card'}, expected {'/'.join(kinds)}"
     return grade_path(outcome, rule)
+
+
+CURLY = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'})
+
+
+def plain(say: str) -> str:
+    """Curly quotes as straight ones, so a case's "hasn't" matches "hasn\u2019t" (#271:
+    GPT-6 Luna's right answer on the Kraken failed on its apostrophe)."""
+    return say.translate(CURLY)
 
 
 def grade_path(outcome: Outcome, rule: dict[str, Any]) -> str:
