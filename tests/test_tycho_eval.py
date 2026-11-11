@@ -106,6 +106,8 @@ def test_a_reply_that_explains_itself_fails(say: str) -> None:
         "There's no action bound for that.",
         "In 4.10 the player can claim a ship at any terminal.",
         "You're welcome, Commander.",
+        "That's not a command I know.",
+        "It's 2 Gm, so a short hop.",
         "Glad you're enjoying it, Commander. Take a moment and soak it in.",
     ],
 )
