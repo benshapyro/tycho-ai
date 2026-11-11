@@ -48,6 +48,11 @@ LAST_CALL = (
     "use show_card. If something wasn't found, say so briefly."
 )
 """Added to the results before the last call, so a third look-up isn't the end."""
+CUT_SHORT = "That answer ran too long for me. Ask me for part of it."
+"""Said when the model's reply hit the output limit before it was whole: a how-to or a
+plan on a card can (#266). Better than the error sound, and true whichever part was cut."""
+CUT_OFF = frozenset({"max_tokens", "length"})
+"""How each provider says a reply stopped at the output limit (Anthropic, OpenAI's shape)."""
 TOOL_AS_TEXT = re.compile(r"\b[a-z_]{3,}\s*\(\s*\{", re.IGNORECASE)
 """A tool call written as text: never said out loud."""
 _MARKUP = re.compile(r"[*`#]+")
@@ -186,9 +191,21 @@ class Round:
             turn.unbound, turn.refused = e, True
             self.looking.append((use_id, answered(unbound(e, self._actions))))
             return None
-        # Ending the request here means only the first act in a reply is ever pressed.
-        # A look-up started with it is no longer needed; a fleet or settings note is
-        # ("I'm in my Pitbull, power off", #156): it's local and quick, so it finishes first.
+        await self._end()
+        return decided
+
+    async def cut_short(self, name: str) -> Reply:
+        """A tool call the output limit cut off (#266): its arguments aren't all there,
+        so nothing of it is used. It ends the request with ``CUT_SHORT``."""
+        log.warning("The brain's %s was cut off at the output limit; not used", name)
+        await self._end()
+        return Reply(CUT_SHORT)
+
+    async def _end(self) -> None:
+        """The request ends in this reply. Ending it here means only the first act in a
+        reply is ever pressed. A look-up started with it is no longer needed; a fleet or
+        settings note is ("I'm in my Pitbull, power off", #156): it's local and quick, so
+        it finishes first."""
         for _, task in self.looking:
             if task not in self._instant:
                 task.cancel()
@@ -199,7 +216,6 @@ class Round:
                     "Pressing before %d fleet or settings note(s) finished; they carry on",
                     len(pending),
                 )
-        return decided
 
     def finished(self) -> None:
         """The reply ended without an act. Not beside a refused act, the next call may
@@ -280,6 +296,9 @@ def final_reply(text: str, credits: Sequence[str], stopped: str) -> Reply:
     to say. A tool call written as text ('show_card({"say": ...') is gibberish read
     out: what came before it can be said; with nothing before, it fails."""
     reply = spoken(text)
+    if not reply and stopped in CUT_OFF:
+        log.warning("The brain's reply stopped at the output limit with nothing to say")
+        return Reply(CUT_SHORT)
     if not reply:
         raise BrainError(f"no answer (stopped: {stopped})")
     if found_call := TOOL_AS_TEXT.search(reply):
