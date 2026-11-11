@@ -86,6 +86,13 @@ def test_an_invented_or_odd_tool_call_is_dropped(
         parse_tool_call(name, arguments, ACTIONS, SEQUENCES)
 
 
+def test_no_actions_with_a_line_to_say_is_a_reply() -> None:
+    """The #192 eval after #276: for "good fight everyone, o7" Haiku called run_actions
+    with no actions and "o7", and the player got an error instead of the line."""
+    picked = parse_tool_call("run_actions", {"actions": [], "say": " o7. "}, ACTIONS, ())
+    assert picked == Reply("o7.")
+
+
 def test_a_long_say_line_is_cut() -> None:
     picked = parse_tool_call(
         "run_actions", {"actions": ["v_lights"], "say": "x" * 500}, ACTIONS, ()
@@ -831,7 +838,7 @@ def test_the_briefing_says_what_not_to_guess() -> None:
     the eval's cases, so the eval still measures what a model makes of new ones."""
     text = " ".join(briefing(KEYBINDS, MATCHER).split())
     assert "Never guess a sequence, a boost or the throttle" in text
-    assert "press nothing, not even shields or targeting" in text
+    assert "call no tool, not even for shields or targeting" in text
     assert "A request for something you can press is still for you" in text
     assert "the destination is set in the star map" in text
     assert "never engage quantum for a named place" in text

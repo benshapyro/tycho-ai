@@ -9,7 +9,10 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ## [Unreleased]
 
 ### Changed
-- Tycho guesses less. A request it can't place ("faster", "same as before") or one that could mean something drastic ("kill it") now gets a one-line question instead of a press. What you say to your squad on the same push-to-talk ("break right", "form up on me") presses nothing, not even shields or targeting, while "look behind" still turns your view. "Take us to Crusader" opens the star map (if it has a key) and tells you to set the destination there, since Tycho can't choose where quantum goes, and "open fire" says the trigger is yours instead of powering weapons. ([#271](https://github.com/benshapyro/tycho-ai/issues/271))
+- Tycho guesses less. A request it can't place ("faster", "same as before") or one that could mean something drastic ("kill it") now gets a one-line question instead of a press. What you say to your squad on the same push-to-talk ("break right", "form up on me") presses nothing, not even shields or targeting, and gets a plain "Copy.", while "look behind" still turns your view. "Take us to Crusader" opens the star map (if it has a key) and tells you to set the destination there, since Tycho can't choose where quantum goes, and "open fire" says the trigger is yours instead of powering weapons. ([#271](https://github.com/benshapyro/tycho-ai/issues/271))
+
+### Fixed
+- Chat that isn't a request ("good fight everyone, o7") sometimes got an error instead of Tycho's reply. Now you hear the reply.
 
 ## [0.5.0] - 2026-11-09
 
