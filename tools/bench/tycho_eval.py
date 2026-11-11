@@ -97,8 +97,9 @@ DODGE = re.compile(
     re.IGNORECASE,
 )
 NARRATED = re.compile(
-    r"\bnot (a|an) (request|command|question) for me\b|\bsquad callout\b|\bthe player\b|"
-    r"\bjust acknowledg|\bno action\b|\bpress(ing)? nothing\b|\bcall(ing)? no tool\b",
+    r"\bnot (a|an) (request|command|question) for me\b|\bsquad callout\b|"
+    r"\bthe player (is|was|said|asked|wants|trailed|didn't)\b|\bjust acknowledg|"
+    r"\bso (there's )?no action\b|\bpress(ing)? nothing\b|\bcall(ing)? no tool\b",
     re.IGNORECASE,
 )
 """A reply that explains itself or talks about the player, which the player hears: "This

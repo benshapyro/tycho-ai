@@ -840,6 +840,7 @@ def test_the_briefing_says_what_not_to_guess() -> None:
     assert "Never guess a sequence, a boost or the throttle" in text
     assert "call no tool, not even for shields or targeting" in text
     assert 'reply with exactly "Copy." and nothing else' in text
+    assert "Chat to you, such as thanks, still gets a short friendly reply" in text
     assert 'never "the player", and never explain why you replied' in text
     assert "A request for something you can press is still for you" in text
     assert "the destination is set in the star map" in text

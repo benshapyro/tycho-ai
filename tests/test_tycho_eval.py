@@ -86,6 +86,7 @@ def test_a_curly_apostrophe_still_dodges() -> None:
         "This is a squad callout, not a command for me. Press nothing. Copy.",
         "This is chat for the squad, not a request for me, so I'm just acknowledging it. Copy.",
         "The player trailed off mid-request, so there's nothing to act on yet.",
+        "This is chat aimed at the squad or the room, not for me, so no action. Copy.",
     ],
 )
 def test_a_reply_that_explains_itself_fails(say: str) -> None:
@@ -95,7 +96,14 @@ def test_a_reply_that_explains_itself_fails(say: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "say", ["Copy.", "Acknowledged.", "Go ahead, Commander. What do you need?"]
+    "say",
+    [
+        "Copy.",
+        "Acknowledged.",
+        "Go ahead, Commander. What do you need?",
+        "There's no action bound for that.",
+        "In 4.10 the player can claim a ship at any terminal.",
+    ],
 )
 def test_a_plain_reply_is_not_narrated(say: str) -> None:
     e = _eval()
