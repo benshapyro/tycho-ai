@@ -22,6 +22,7 @@ from tycho.brain.openrouter import (
     OpenRouterClient,
     Prices,
     chunks,
+    route,
 )
 from tycho.brain.rounds import LAST_CALL, MAX_CALLS, NO_PRESS_AFTER_SEARCH
 from tycho.commands import CommandMatcher
@@ -104,6 +105,55 @@ def test_an_effort_is_asked_for_only_when_given() -> None:
     client = FakeChat(text("Hi."))
     asyncio.run(_brain(client, effort="low").decide(BrainRequest("hi", KEYBINDS)))
     assert client.requests[0]["reasoning"] == {"effort": "low", "exclude": True}
+
+
+def test_no_host_is_pinned_unless_asked() -> None:
+    # OpenRouter then picks the host as it always does (mostly on price).
+    client = FakeChat(text("Hi."))
+    asyncio.run(_brain(client).decide(BrainRequest("hi", KEYBINDS)))
+    assert "provider" not in client.requests[0]
+
+
+def test_pinned_hosts_are_sent_in_order_with_no_fallback() -> None:
+    # #267: a fast host is measured only if every call goes to it.
+    client = FakeChat(text("Hi."), text("Hi."))
+    brain = _brain(client, hosts=["Cerebras", " groq "])
+    asyncio.run(brain.decide(BrainRequest("hi", KEYBINDS)))
+    asyncio.run(brain.decide(BrainRequest("hello", KEYBINDS)))
+    pinned = {"order": ["cerebras", "groq"], "allow_fallbacks": False}
+    assert [r["provider"] for r in client.requests] == [pinned, pinned]
+
+
+def test_the_warm_up_goes_to_the_pinned_host_too() -> None:
+    # Otherwise it would warm a cache on a host the run never uses.
+    client = FakeChat(text("Hi."))
+    asyncio.run(_brain(client, hosts=["groq"]).warm(KEYBINDS))
+    assert client.requests[0]["provider"] == {"order": ["groq"], "allow_fallbacks": False}
+
+
+def test_a_host_can_be_picked_by_latency() -> None:
+    assert route(sort="latency") == {"sort": "latency"}
+    assert route(["cerebras"], "latency") == {
+        "order": ["cerebras"],
+        "allow_fallbacks": False,
+        "sort": "latency",
+    }
+    with pytest.raises(ValueError, match="sort"):
+        _brain(FakeChat(), sort="fastest")
+
+
+def test_each_call_logs_the_host_that_served_it(caplog: pytest.LogCaptureFixture) -> None:
+    # #267: a latency means little without who served it.
+    served = [{**c, "provider": "Cerebras"} for c in tool_call("run_actions", GEAR)]
+    reply = [{**c, "provider": "Groq"} for c in text("Hi.")]
+    caplog.set_level(logging.DEBUG, "tycho.brain")
+    assert _ask(FakeChat(served)) == RunActions(("v_toggle_landing_system",), "Gear.")
+    assert _ask(FakeChat(reply)) == Reply("Hi.")
+    said = [r.getMessage() for r in caplog.records]
+    lines = [m for m in said if m.startswith(("Brain acted", "Brain replied"))]
+    assert len(lines) == 2
+    assert lines[0].endswith("generation gen-1 [host: Cerebras]")
+    assert lines[1].endswith("(reported) [host: Groq]")
 
 
 def test_cards_are_offered_only_while_the_tile_is_on() -> None:

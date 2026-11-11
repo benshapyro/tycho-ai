@@ -28,6 +28,9 @@ neither, to measure the two designs ADR 15 compares.
 Other models go through OpenRouter (#192): ``--provider openrouter --model <id>``,
 with the OpenRouter key. ``--adapter-check`` runs Haiku directly and through OpenRouter
 and compares them. The summary gives the cost a brain request and an hour of play.
+``--host cerebras`` (repeatable, tried in order, no fallback) pins who serves the model,
+and ``--sort latency`` lets OpenRouter pick the fastest (#267). Each result says which
+host answered each call (``hosts``), and the summary counts them.
 
 Uses the keys in Windows Credential Manager. About $0.0002 a request on Haiku.
 
@@ -38,7 +41,8 @@ the eval: Tycho never reads keys from the environment) takes ANTHROPIC_API_KEY a
 OPENROUTER_API_KEY from the environment. Keys are never printed.
 
 Usage: uv run python tools/bench/tycho_eval.py [cases.toml] [--tag ships] [--ships table]
-       [--provider openrouter --model <id>] [--adapter-check] [--per-hour 30]
+       [--provider openrouter --model <id>] [--host cerebras] [--sort latency]
+       [--adapter-check] [--per-hour 30]
        [--keybinds <file>] [--export-keybinds <file>]
 """
 
@@ -53,10 +57,11 @@ import sys
 import tempfile
 import time
 import tomllib
+from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import anthropic
 import httpx2
@@ -68,7 +73,7 @@ from tycho.app import anthropic_key, find_install, load_commands, openrouter_key
 from tycho.brain import BrainError, BrainRequest, Exchange, Reply, commands_for
 from tycho.brain.claude import MODEL, ClaudeBrain
 from tycho.brain.lookups import Lookup, LookupResult
-from tycho.brain.openrouter import OpenRouterBrain, Prices
+from tycho.brain.openrouter import SORTS, OpenRouterBrain, Prices, route
 from tycho.brain.rounds import NO_PRESS_AFTER_SEARCH
 from tycho.commands import Command, CommandMatcher, Defer, resolve
 from tycho.game.keybinds import Action, ActivationMode, Keybinds, KeyInput
@@ -96,6 +101,8 @@ SAY_WORDS = 8
 COST_GUESS = 0.0002
 CALL_LOGGED = re.compile(r"(Brain (replied|acted|warmed up)|Web search)\b")
 """The debug lines each call to a model logs, with its cost when it's known."""
+HOST = re.compile(r"\[host: ([^\]]+)\]$")
+"""Who served a call through OpenRouter, at the end of its line (#267)."""
 UNASKED = frozenset({"v_unlock_all_doors", "v_toggle_all_doorlocks"})
 """Presses that are wrong whenever the case didn't ask for them: unlocking the
 doors when the player said something else leaves the ship open."""
@@ -126,6 +133,8 @@ class Outcome:
     card: str = ""
     """The kind of card it showed on the Tile, if any."""
     card_rows: list[str] = field(default_factory=list[str])
+    hosts: list[str] = field(default_factory=list[str])
+    """Who served each call through OpenRouter, in order ("Cerebras"), where it said (#267)."""
     verdict: str = ""
     notes: list[str] = field(default_factory=list[str])
 
@@ -148,6 +157,8 @@ class _Costs(logging.Handler):
         self.unreported = 0
         """Calls that said nothing of their cost (no usage, no price, no generation id):
         the total is too low by these, and the summary says so (#261)."""
+        self.hosts: list[str] = []
+        """Who served each call that said so, in order (#267)."""
 
     def emit(self, record: logging.LogRecord) -> None:
         message = record.getMessage()
@@ -160,6 +171,8 @@ class _Costs(logging.Handler):
             self.unreported += 1
         if message.startswith("Brain replied"):
             self.replies += 1
+        if CALL_LOGGED.match(message) and (host := HOST.search(message)):
+            self.hosts.append(host.group(1))
 
     @property
     def missing(self) -> int:
@@ -330,6 +343,7 @@ async def run_case(
     journal = journal if journal is not None else []
     journal.clear()
     replies = costs.replies if costs else 0
+    hosts = len(costs.hosts) if costs else 0
     try:
 
         def searching() -> None:
@@ -347,6 +361,7 @@ async def run_case(
         outcome.errors = [f"{name}: {error}" for name, error in journal if error]
         outcome.looked_up = max((counted.calls if counted else 0) - before, len(journal))
         outcome.calls = (costs.replies if costs else 0) - replies
+        outcome.hosts = costs.hosts[hosts:] if costs else []
     if isinstance(decision, Reply):
         outcome.kind, outcome.say = "reply", decision.text
         if decision.card is not None or decision.text == NO_PRESS_AFTER_SEARCH:
@@ -398,6 +413,8 @@ class Run:
     model: str
     outcomes: list[Outcome]
     costs: _Costs
+    route: dict[str, object] = field(default_factory=dict[str, object])
+    """OpenRouter's ``provider`` field the run sent: the pinned hosts or sort (#267)."""
 
 
 ENVIRONMENT = {"anthropic": "ANTHROPIC_API_KEY", "openrouter": "OPENROUTER_API_KEY"}
@@ -533,6 +550,19 @@ def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
         "as its provider runs it)",
     )
     parser.add_argument(
+        "--host",
+        action="append",
+        default=[],
+        metavar="SLUG",
+        help="through OpenRouter only: pin who serves the model, by OpenRouter's slug "
+        "(cerebras, groq); repeatable, tried in order, never falling back (#267)",
+    )
+    parser.add_argument(
+        "--sort",
+        choices=SORTS,
+        help="through OpenRouter only: let it pick the host by this (latency: the fastest)",
+    )
+    parser.add_argument(
         "--adapter-check",
         action="store_true",
         help="run Haiku directly, then through OpenRouter (--model overrides "
@@ -543,6 +573,8 @@ def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
         args.no_web = True  # the OpenRouter brain has none, so neither side gets it
     elif args.provider == "openrouter" and not args.model:
         parser.error("--provider openrouter needs --model, e.g. " + OPENROUTER_HAIKU)
+    elif args.provider != "openrouter" and (args.host or args.sort):
+        parser.error("--host and --sort pick who serves a model through OpenRouter")
     return args
 
 
@@ -575,7 +607,8 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     rules: list[dict[str, Any]] = data["case"]
     if args.tag:
         rules = [r for r in rules if r.get("tag") in args.tag]
-    print(f"\nBrain: {model} through {provider}")
+    pinned = route(args.host, args.sort) if provider == "openrouter" else {}
+    print(f"\nBrain: {model} through {provider}{_pinned(pinned)}")
     needs_anthropic = provider == "anthropic" or not args.no_web
     key = eval_key("anthropic", anthropic_key) if needs_anthropic else None
     routed = eval_key("openrouter", openrouter_key) if provider == "openrouter" else None
@@ -657,6 +690,8 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
             cards=cards,
             prices=prices,
             effort=args.effort,
+            hosts=args.host,
+            sort=args.sort,
         )
     else:
         brain = ClaudeBrain(
@@ -699,17 +734,29 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
 
     if routed is not None and costs.generations:
         await generation_costs(costs, routed)
-    done = Run(provider, model, outcomes, costs)
+    done = Run(provider, model, outcomes, costs, pinned)
     summary = metrics(done, args.per_hour)
     RESULTS.parent.mkdir(exist_ok=True)
     with RESULTS.open("a", encoding="utf-8") as f:
         meta = {"type": "meta", "time": time.strftime("%Y-%m-%dT%H:%M:%S")}
-        f.write(json.dumps({**meta, "provider": provider, "model": model}) + "\n")
+        meta |= {"provider": provider, "model": model, "route": pinned}
+        f.write(json.dumps(meta) + "\n")
         for outcome in outcomes:
             f.write(json.dumps({**asdict(outcome), "provider": provider, "model": model}) + "\n")
         f.write(json.dumps({"type": "summary", **summary}) + "\n")
     _summary(outcomes, costs, summary)
     return done
+
+
+def _pinned(pinned: Mapping[str, object]) -> str:
+    """The route in words, for the run's first line."""
+    words: list[str] = []
+    if isinstance(order := pinned.get("order"), list):
+        hosts = cast("list[object]", order)
+        words.append(f"on {' then '.join(str(h) for h in hosts)} only")
+    if sort := pinned.get("sort"):
+        words.append(f"by {sort}")
+    return f" ({', '.join(words)})" if words else ""
 
 
 def _print(outcome: Outcome) -> None:
@@ -719,6 +766,7 @@ def _print(outcome: Outcome) -> None:
     what += f" after {', '.join(outcome.tools)}" if outcome.tools else ""
     what += f" ({outcome.calls} calls)" if outcome.route == "brain" else ""
     what += " after a web search" if outcome.searched else ""
+    what += f" on {', '.join(dict.fromkeys(outcome.hosts))}" if outcome.hosts else ""
     print(f"{mark} {outcome.route:5} {outcome.ms:5.0f} ms  {outcome.heard!r} -> {what}")
     if outcome.say:
         print(f"{'':16}says ({len(outcome.say.split())} words): {outcome.say}")
@@ -814,6 +862,8 @@ def metrics(run: Run, per_hour: float = PER_HOUR) -> dict[str, Any]:
     return {
         "provider": run.provider,
         "model": run.model,
+        "route": dict(run.route),
+        "hosts": dict(Counter(h for o in brain for h in o.hosts).most_common()),
         "cases": len(outcomes),
         "passed": sum(o.verdict == "pass" for o in outcomes),
         "wrong_presses": sum(o.verdict.startswith("WRONG PRESS") for o in outcomes),
@@ -871,6 +921,8 @@ def _summary(outcomes: list[Outcome], costs: _Costs, summary: dict[str, Any]) ->
             f"Calls to the model: mean {statistics.mean(calls):.2f} a request, "
             f"most {max(calls)}; {retried} request(s) hit a look-up error"
         )
+    if hosts := summary["hosts"]:
+        print("Served by: " + ", ".join(f"{host} ({n} calls)" for host, n in hosts.items()))
     sources = ", ".join(f"{n} {source}" for source, n in summary["cost_sources"].items())
     print(f"Cost: about ${summary['cost']:.3f} ({sources or 'none counted'})")
     print(
