@@ -824,6 +824,21 @@ def test_the_briefing_says_when_the_eye_beats_the_ear() -> None:
     assert "Never a card for a one-line answer" in " ".join(text.split())
 
 
+def test_the_briefing_says_what_not_to_guess() -> None:
+    """The #192 eval (#271): most models pressed for vague or drastic requests, squad
+    callouts (shields, targeting), "jump to Hurston" (quantum to wherever was set) and
+    "fire everything" (weapon power). The briefing's examples are other wordings than
+    the eval's cases, so the eval still measures what a model makes of new ones."""
+    text = " ".join(briefing(KEYBINDS, MATCHER).split())
+    assert "Never guess a sequence, a boost or the throttle" in text
+    assert "press nothing, not even shields or targeting" in text
+    assert "the destination is set in the star map" in text
+    assert "never engage quantum for a named place" in text
+    assert "Tycho doesn't fire them" in text
+    for case in ("the usual", "hurry up", "watch your six", "jump to Hurston", "fire everything"):
+        assert f'"{case}"' not in text
+
+
 def _reply(*stops: Any) -> tuple[list[Any], Any]:
     """One reply in which Claude calls several tools, in this order."""
     return list(stops), SimpleNamespace(
