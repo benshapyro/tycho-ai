@@ -72,6 +72,44 @@ def test_a_curly_apostrophe_still_mentions_it() -> None:
     assert e.grade(said, rule, set()) == "pass"
 
 
+def test_a_curly_apostrophe_still_dodges() -> None:
+    """#277: the dodge check read the raw line, so a curly "can't say" slipped through."""
+    e = _eval()
+    rule = {"expect": ["reply"], "answer": True}
+    said = _outcome(say="I can\u2019t say when it comes out.")
+    assert e.grade(said, rule, set()) == "dodged the question"
+
+
+@pytest.mark.parametrize(
+    "say",
+    [
+        "This is a squad callout, not a command for me. Press nothing. Copy.",
+        "This is chat for the squad, not a request for me, so I'm just acknowledging it. Copy.",
+        "The player trailed off mid-request, so there's nothing to act on yet.",
+        "This is chat aimed at the squad or the room, not for me, so no action. Copy.",
+    ],
+)
+def test_a_reply_that_explains_itself_fails(say: str) -> None:
+    """The #192 eval after #278: Haiku read its reasoning aloud, and these passed."""
+    e = _eval()
+    assert e.grade(_outcome(say=say), {"expect": ["reply"]}, set()).startswith("narrated")
+
+
+@pytest.mark.parametrize(
+    "say",
+    [
+        "Copy.",
+        "Acknowledged.",
+        "Go ahead, Commander. What do you need?",
+        "There's no action bound for that.",
+        "In 4.10 the player can claim a ship at any terminal.",
+    ],
+)
+def test_a_plain_reply_is_not_narrated(say: str) -> None:
+    e = _eval()
+    assert e.grade(_outcome(say=say), {"expect": ["reply"]}, set()) == "pass"
+
+
 class _Failing:
     """A look-up that answers with an error, as the real ones do (they never raise)."""
 
