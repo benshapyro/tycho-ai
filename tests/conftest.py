@@ -9,6 +9,10 @@ import pytest
 from tests.fakes.fake_keyring import MemoryKeyring
 from tycho import paths
 
+REAL_MODELS = paths.models_dir()
+"""The developer's real speech model folder, worked out before any test changes the
+environment. Only the replay tests (``-m replay``) are given it."""
+
 
 @pytest.fixture(autouse=True)
 def _no_real_keys() -> Iterator[None]:
@@ -21,10 +25,17 @@ def _no_real_keys() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
-def _no_real_folders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every test gets its own empty settings and data folders, never the player's real
-    settings.toml, fleet.toml or logs (audit, 2026-11-03). The speech model stays where
-    it is, for the replay tests; nothing else reads it without a folder of its own."""
-    monkeypatch.setenv("TYCHO_MODELS", str(paths.models_dir()))
+def _no_real_folders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
+    """Every test gets its own empty settings, data, logs and models folders, never the
+    player's real settings.toml, fleet.toml, logs or downloads (audit, 2026-11-03; #61).
+    APPDATA and LOCALAPPDATA move too, so code that builds a path from them directly
+    lands in the test's folder as well. The replay tests keep the real speech model."""
+    home = tmp_path / "home"
+    monkeypatch.setenv("APPDATA", str(home / "Roaming"))
+    monkeypatch.setenv("LOCALAPPDATA", str(home / "Local"))
     monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path / "config"))
     monkeypatch.setenv("TYCHO_DATA_DIR", str(tmp_path / "data"))
+    replay = request.node.get_closest_marker("replay") is not None
+    monkeypatch.setenv("TYCHO_MODELS", str(REAL_MODELS if replay else tmp_path / "models"))

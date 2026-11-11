@@ -37,6 +37,7 @@ dev = [
     "pre-commit>=4",
     "pyright>=1.1.414",
     "pytest>=8",
+    "pytest-cov>=7",
     "ruff>=0.17",
 ]
 # Only the measurement tools in tools/ use these.
@@ -88,3 +89,14 @@ pythonVersion = "3.14"
 testpaths = ["tests"]
 addopts = ["--strict-markers", "--strict-config", "-m", "not replay"]
 markers = ["replay: real recordings through the real speech model; run with -m replay"]
+filterwarnings = ["error"]  # a new warning fails the run, so it's dealt with (#61)
+
+# Coverage of the product code, shown in CI (#61): `uv run pytest --cov`. The floor sits
+# just below what CI measured when it was set; raise it as tests are added, never lower it.
+[tool.coverage.run]
+source = ["tycho"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 84

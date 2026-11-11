@@ -21,11 +21,15 @@ uv run pytest
 
 CI runs the same checks on Windows, plus the large-file and private-key checks.
 
-Every change goes through a pull request: branch from `main`, push, and open a PR. `main` is protected; a PR merges once CI and the automated Claude review pass. Pin any GitHub Action to a full commit SHA, with the version in a comment.
+Every change goes through a pull request: branch from `main`, push, and open a PR. `main` is protected; a PR merges once CI and the automated Claude review pass. The Claude review can't run on a PR from a fork (GitHub keeps the repository's secrets from fork runs), so it skips them: the maintainer reviews those by hand, or opens a copy of the branch here to get the automated review. Pin any GitHub Action to a full commit SHA, with the version in a comment.
 
 If players will notice your change, add a line under **Unreleased** in [CHANGELOG.md](CHANGELOG.md), in plain words, with the PR or issue.
 
+CI also measures test coverage of `src/tycho` (`uv run pytest --cov`) and fails below the floor in `pyproject.toml`. Raise the floor when your tests lift it; never lower it to get a PR through.
+
 ## Tests CI can't run
+
+These adapters talk to Windows or the hardware directly, so only the self-test or a person checks them, and coverage counts them as missed: `input/windows.py` (SendInput and the focus check; the self-test), `ptt/windows.py` (button polling; the self-test), `ptt/joystick.py` (SDL joysticks), `audio/microphone.py` (the microphone), `feedback.py`'s `SoundDevicePlayer` and `voice/playback.py` (the speakers), `tile/window.py` (the Tile's window; `tools/spike/tile/`), and `desktop/tray.py` and `desktop/window.py` (the tray icon and the app window). Keep them thin: logic belongs in the tested code they call.
 
 Before a release, on a Windows PC with the game installed and nobody using it:
 - `uv run pytest -m replay -s`: the recorded test set, through the real speech model.

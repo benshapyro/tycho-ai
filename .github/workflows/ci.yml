@@ -27,7 +27,7 @@ jobs:
       - run: uv run ruff format --check
       - run: uv run ruff check
       - run: uv run pyright
-      - run: uv run pytest
+      - run: uv run pytest --cov --cov-report=term-missing # fails under the floor in pyproject.toml
       # The same checks as the pre-commit hook, for contributors who never installed it.
       - run: uv run pre-commit run check-added-large-files --all-files
       - run: uv run pre-commit run detect-private-key --all-files

@@ -444,4 +444,5 @@ def test_chunks_stop_at_done() -> None:
 
 def test_the_openrouter_key_is_one_tycho_stores() -> None:
     assert "openrouter" in credentials.KNOWN
+    assert "openrouter" in credentials.BENCH  # a player's key only once #112 lands
     assert credentials.masked("sk-or-v1-" + "a" * 60) == "sk-or-v1-...aaaa"

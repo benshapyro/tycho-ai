@@ -82,6 +82,8 @@ class Rig:
     transcriber: FakeTranscriber
     results: list[Result] = field(default_factory=list[Result])
     actions: FakeActionLog = field(default_factory=FakeActionLog)
+    waits: list[float] = field(default_factory=list[float])
+    """The waits between a sequence's steps, recorded instead of slept (#61)."""
 
     def say(self) -> None:
         """Hold push-to-talk, speak, let go."""
@@ -117,6 +119,12 @@ def rig(
     actions = FakeActionLog()
     transcriber = FakeTranscriber(*lines, hold=hold)
     results: list[Result] = []
+    waits: list[float] = []
+
+    async def sleep(seconds: float) -> None:
+        waits.append(seconds)
+        await asyncio.sleep(0)
+
     session = Session(
         audio=audio,
         push_to_talk=PushToTalk(PTT, sources or []),
@@ -141,8 +149,9 @@ def rig(
         clock=clock,
         address=address,
         display=display,
+        sleep=sleep,
     )
-    return Rig(session, audio, keys, feedback, transcriber, results, actions)
+    return Rig(session, audio, keys, feedback, transcriber, results, actions, waits)
 
 
 def run[T](test: Callable[[], Coroutine[Any, Any, T]]) -> T:
@@ -874,7 +883,6 @@ def _engage(game_state: FakeGameState | None, keybinds: Keybinds = KEYBINDS) -> 
 
 def test_quantum_engage_sets_nav_and_quantum_mode_then_engages() -> None:
     assert not safety.is_confirm_grade("v_toggle_qdrive_engagement")
-    started = time.monotonic()
     r = _engage(FakeGameState(QUANTUM_ROUTE))
     assert r.results[0].status == "done"
     assert r.results[0].pressed == (
@@ -883,7 +891,7 @@ def test_quantum_engage_sets_nav_and_quantum_mode_then_engages() -> None:
         "v_toggle_qdrive_engagement",
     )
     assert r.pressed()[-2:] == _down_up("b")
-    assert time.monotonic() - started >= 1.2  # waited for the switch to NAV
+    assert max(r.waits) >= 1.2  # waited for the switch to NAV
 
 
 def test_jumps_are_routine_not_confirm_grade() -> None:

@@ -109,7 +109,7 @@ def build_parser() -> argparse.ArgumentParser:
     gpu.add_argument("action", choices=["install", "status", "remove"])
     key = commands.add_parser("key", help="store, check or remove an API key")
     key.add_argument("action", choices=["set", "check", "delete"])
-    key.add_argument("name", choices=credentials.KNOWN)
+    key.add_argument("name", choices=credentials.PRODUCT)
     return parser
 
 
@@ -781,7 +781,9 @@ def anthropic_key() -> str | None:
 
 def openrouter_key() -> str | None:
     """For the brain eval across models (#192); players can't pick a model yet (#112)."""
-    return _stored_key("openrouter", "OpenRouter", f"{TYCHO} key set openrouter")
+    return _stored_key(
+        "openrouter", "OpenRouter", "uv run python -m tycho.credentials set openrouter"
+    )
 
 
 def load_brain(
