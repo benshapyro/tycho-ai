@@ -96,6 +96,14 @@ DODGE = re.compile(
     r"rankings|forums?|reddit|spectrum)\b|\bcan'?t (say|tell you|give you)\b",
     re.IGNORECASE,
 )
+NARRATED = re.compile(
+    r"\bnot (a|an) (request|command|question) for me\b|\bsquad callout\b|\bthe player\b|"
+    r"\bjust acknowledg|\bno action\b|\bpress(ing)? nothing\b|\bcall(ing)? no tool\b",
+    re.IGNORECASE,
+)
+"""A reply that explains itself or talks about the player, which the player hears: "This
+is chat for the squad, not a request for me, so I'm just acknowledging it. Copy." (the
+#192 eval after #278, four replies graded as passes)."""
 SAY_WORDS = 8
 """What Tycho says after acting should be a few words: the press already happened."""
 COST_GUESS = 0.0002
@@ -219,10 +227,12 @@ def grade(outcome: Outcome, rule: dict[str, Any], valid: set[str]) -> str:
         for group in rule.get("must", []):
             if not set(group).intersection(outcome.actions):
                 return f"missing {'/'.join(group)}"
-    if outcome.kind == "reply" and rule.get("answer") and DODGE.search(outcome.say):
+    said = plain(outcome.say)
+    if NARRATED.search(said):
+        return f"narrated its reply: {outcome.say!r}"
+    if outcome.kind == "reply" and rule.get("answer") and DODGE.search(said):
         return "dodged the question"
     if outcome.kind == "reply":
-        said = plain(outcome.say)
         for group in rule.get("mentions", []):
             if not any(re.search(p, said, re.IGNORECASE) for p in group):
                 return f"missing {'/'.join(group)}"
