@@ -102,6 +102,11 @@ def parse_tool_call(
     say = say[:MAX_SAY].strip() if isinstance(say, str) else ""
     if name == "run_actions":
         picked = args.get("actions")
+        if isinstance(picked, list) and not picked and say:
+            # Nothing to press, but a line to say: a reply in the wrong tool, as for
+            # "good fight everyone, o7" in the #192 eval after #276. The player
+            # hears the line, not an error.
+            return Reply(say)
         if not isinstance(picked, list) or not picked:
             raise BrainError("run_actions: no actions")
         names = tuple(str(a) for a in picked)  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
