@@ -13,6 +13,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ### Fixed
 - Chat that isn't a request ("good fight everyone, o7") sometimes got an error instead of Tycho's reply. Now you hear the reply, without Tycho explaining why it pressed nothing ("not a request for me, so…"). ([#278](https://github.com/benshapyro/tycho-ai/pull/278))
+- Asking for a long how-to or plan ("teach me how to salvage") could end in the error sound, because the card ran past the length Claude may answer in. Tycho now has twice the room, asks Claude to keep cards to what the Tile shows, and if an answer still runs too long it says so ("Ask me for part of it") instead of showing half a card. ([#266](https://github.com/benshapyro/tycho-ai/issues/266))
 
 ## [0.5.0] - 2026-11-09
 

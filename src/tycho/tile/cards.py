@@ -243,4 +243,5 @@ can't do the job.
 - headlines: news (headline | | date).
 - warning: no rows; text holds the exact words ("Keybindings, search lock all doors, \
 give it a key").
-Empty strings for what a kind doesn't use. Keep every field short."""
+Empty strings for what a kind doesn't use. Keep every field short: at most 6 rows \
+(8 steps) of a few words each; more isn't shown, and a long card can be cut off."""

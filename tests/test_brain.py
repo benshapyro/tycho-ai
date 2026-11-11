@@ -31,7 +31,14 @@ from tycho.brain.briefing import (
 )
 from tycho.brain.claude import ClaudeBrain, history
 from tycho.brain.lookups import LOOKUP_SECONDS, run_lookup
-from tycho.brain.rounds import LAST_CALL, LAST_PICK, MAX_CALLS, NO_PRESS_AFTER_SEARCH, spoken
+from tycho.brain.rounds import (
+    CUT_SHORT,
+    LAST_CALL,
+    LAST_PICK,
+    MAX_CALLS,
+    NO_PRESS_AFTER_SEARCH,
+    spoken,
+)
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Action, Keybinds, KeyInput
 
@@ -381,11 +388,66 @@ def test_a_text_answer_is_a_reply() -> None:
 
 @pytest.mark.parametrize(
     ("final", "problem"),
-    [(_final("", "refusal"), "declined"), (_final("", "max_tokens"), "no answer")],
+    [(_final("", "refusal"), "declined"), (_final("", "end_turn"), "no answer")],
 )
 def test_no_usable_answer_is_a_brain_error(final: Any, problem: str) -> None:
     with pytest.raises(BrainError, match=problem):
         _decide(_Client([], final))
+
+
+def test_a_reply_that_ran_out_of_room_says_so_instead_of_failing() -> None:
+    # #266: nothing to say at the output limit was the error sound.
+    assert _decide(_Client([], _final("", "max_tokens"))) == Reply(CUT_SHORT)
+
+
+def _card(**fields: Any) -> dict[str, Any]:
+    card: dict[str, Any] = {
+        "say": "Eight steps on the Tile.",
+        "kind": "steps",
+        "label": "",
+        "title": "Salvage",
+        "source": "",
+        "rows": [{"text": f"Step {n}", "detail": "", "value": "", "dim": False} for n in range(8)],
+        "hero_label": "",
+        "hero_value": "",
+        "text": "",
+    }
+    return card | fields
+
+
+def test_a_whole_card_is_shown() -> None:
+    brain = ClaudeBrain(
+        MATCHER, client=cast(Any, _Client([_tool_stop("show_card", _card())])), cards=lambda: True
+    )
+    decided = asyncio.run(brain.decide(BrainRequest("teach me how to salvage", KEYBINDS)))
+    assert isinstance(decided, Reply)
+    assert decided.text == "Eight steps on the Tile."
+    assert decided.card is not None
+    assert len(decided.card.rows) == 8
+
+
+@pytest.mark.parametrize(
+    ("name", "arguments"),
+    [
+        # #266: a long card cut off mid-way, read by the SDK as far as it got.
+        (
+            "show_card",
+            {
+                k: v
+                for k, v in _card(rows=_card()["rows"][:3]).items()
+                if k in ("say", "kind", "label", "title", "source", "rows")
+            },
+        ),
+        ("show_card", {"say": "Eight steps on the Tile."}),
+        # A cut run_actions must never press the actions it got to.
+        ("run_actions", {"actions": ["v_toggle_landing_system"]}),
+    ],
+)
+def test_an_act_cut_off_at_the_output_limit_is_not_used(name: str, arguments: Any) -> None:
+    stop = _tool_stop(name, arguments)
+    brain = ClaudeBrain(MATCHER, client=cast(Any, _Client([stop])), cards=lambda: True)
+    decided = asyncio.run(brain.decide(BrainRequest("teach me how to salvage", KEYBINDS)))
+    assert decided == Reply(CUT_SHORT)
 
 
 def test_a_bare_action_an_announced_command_uses_counts_as_announced() -> None:
@@ -1118,3 +1180,51 @@ def test_closing_the_brain_closes_its_look_ups() -> None:
     brain = ClaudeBrain(MATCHER, client=cast(Any, lent), lookups=(Closing(), FakeLookup("plain")))
     asyncio.run(brain.close())
     assert Closing.closed == 1
+
+
+def test_an_empty_run_actions_with_a_line_is_a_reply_through_the_adapter() -> None:
+    """#279 (review of #278): run_actions with no actions and a say line is a Reply, not
+    an error, all the way through ClaudeBrain; and a look-up started in the same reply
+    is cancelled, not left running."""
+    cancelled: list[str] = []
+
+    class Hanging(FakeLookup):
+        async def run(self, arguments: Any) -> Any:
+            try:
+                return await super().run(arguments)
+            except asyncio.CancelledError:
+                cancelled.append("ship_lookup")
+                raise
+
+    class Streaming(_Stream):
+        """Events arrive over time, as from the network, so the look-up gets going."""
+
+        def __aiter__(self) -> AsyncIterator[Any]:
+            async def events() -> AsyncIterator[Any]:
+                for event in self._events:  # pyright: ignore[reportPrivateUsage]
+                    await asyncio.sleep(0.01)
+                    yield event
+
+            return events()
+
+    lookup = _tool_stop("ship_lookup", {"name": "Cutlass"}, "toolu_1")
+    chat = _tool_stop("run_actions", {"actions": [], "say": "Copy."}, "toolu_2")
+    events, final = _reply(lookup, chat)
+    requests: list[dict[str, Any]] = []
+
+    @asynccontextmanager
+    async def stream(**request: Any) -> AsyncGenerator[_Stream]:
+        requests.append(request)
+        yield Streaming(events, final)
+
+    client = SimpleNamespace(messages=SimpleNamespace(stream=stream))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=(Hanging(hang=True),))
+
+    async def scenario() -> Any:
+        decided = await brain.decide(BrainRequest("nice shot, squad", KEYBINDS))
+        await asyncio.sleep(0)  # let the cancelled look-up see its cancellation
+        return decided
+
+    assert asyncio.run(scenario()) == Reply("Copy.")
+    assert cancelled == ["ship_lookup"]
+    assert len(requests) == 1  # answered in one call: nothing waited for the look-up
