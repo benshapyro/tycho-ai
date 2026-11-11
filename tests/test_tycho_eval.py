@@ -329,6 +329,61 @@ def test_the_eval_takes_a_provider_and_a_model() -> None:
     assert e._arguments(["--adapter-check"]).no_web  # neither side searches the web
 
 
+def test_the_eval_pins_a_host_only_through_openrouter() -> None:
+    # #267: --host and --sort go to OpenRouter's provider routing.
+    e = _eval()
+    pinned = ["--host", "cerebras", "--host", "groq", "--sort", "latency"]
+    args = e._arguments(["--provider", "openrouter", "--model", "openai/gpt-oss-120b", *pinned])
+    assert (args.host, args.sort) == (["cerebras", "groq"], "latency")
+    assert e._arguments([]).host == []
+    with pytest.raises(SystemExit):
+        e._arguments(["--host", "cerebras"])  # Claude directly has no hosts to pick
+    with pytest.raises(SystemExit):
+        e._arguments(["--provider", "openrouter", "--model", "x/y", "--sort", "fastest"])
+
+
+def test_each_result_says_which_host_served_it() -> None:
+    # #267: the host is read from each call's log line, case by case, and counted.
+    import logging
+
+    from tycho.brain import RunActions
+    from tycho.lexicon import Lexicon
+
+    class _Served:
+        def __init__(self, *hosts: str) -> None:
+            self.hosts = hosts
+
+        async def decide(self, request: object) -> object:
+            log = logging.getLogger("tycho.brain.openrouter")
+            for host in self.hosts:
+                log.debug("Brain replied in 1 ms: 1 in, 1 out, 0 cached [host: %s]", host)
+            log.debug("Brain acted in 2 ms, generation gen-1 [host: Cerebras]")
+            return RunActions(("v_toggle_landing_system",), "Gear.")
+
+    e = _eval()
+    costs = e._Costs()  # pyright: ignore[reportPrivateUsage]
+    logger = logging.getLogger("tycho.brain")
+    level = logger.level
+    logger.addHandler(costs)
+    logger.setLevel(logging.DEBUG)
+    rule = {"heard": "xyzzy plugh frobnicate", "expect": ["actions"]}
+    try:
+        logger.debug("Brain warmed up in 300 ms: no usage reported [host: Groq]")
+        outcomes = [
+            asyncio.run(e.run_case(rule, Lexicon.default(), brain, _keybinds(), None, [], costs))
+            for brain in (_Served("Cerebras"), _Served())
+        ]
+    finally:
+        logger.removeHandler(costs)
+        logger.setLevel(level)
+    assert [o.hosts for o in outcomes] == [["Cerebras", "Cerebras"], ["Cerebras"]]
+    pinned = {"order": ["cerebras"], "allow_fallbacks": False}
+    summary = e.metrics(e.Run("openrouter", "openai/gpt-oss-120b", outcomes, costs, pinned))
+    assert summary["hosts"] == {"Cerebras": 3}  # the warm-up isn't a case
+    assert summary["route"] == pinned
+    assert e._pinned(pinned) == " (on cerebras only)"  # pyright: ignore[reportPrivateUsage]
+
+
 def test_costs_say_where_they_came_from() -> None:
     e = _eval()
     costs = e._Costs()

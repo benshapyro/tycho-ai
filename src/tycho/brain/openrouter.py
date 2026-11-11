@@ -12,6 +12,11 @@ so a tool call arrives as pieces of JSON: it's complete when its arguments parse
 a whole object, when the next tool call starts, or when the stream ends.
 
 It has no web search: that is Anthropic's own server tool (``knowledge.web``).
+
+By default OpenRouter picks the host that serves a model (mostly on price). The eval can
+pin it (#267): ``hosts`` are tried in order with no fallback, and ``sort`` asks for the
+fastest one. Each call logs the host that answered (``[host: Cerebras]``), so a latency
+is traceable to who served it.
 """
 
 import asyncio
@@ -57,6 +62,8 @@ REASONING_TOKENS = 2048
 """Room for a model that reasons before it answers (#268): its reasoning counts against
 ``max_tokens``, and GLM, Qwen and Kimi ran out at 1024 with no answer. It's a cap, so a
 model that doesn't reason pays nothing for it."""
+SORTS = ("latency", "throughput", "price")
+"""What OpenRouter can pick a host by (its ``provider.sort``)."""
 READ_SECONDS = 30.0
 """How long to wait for the next byte. Some models take over 8 s to their first token
 (Gemini, #268); the session's own deadline still gives up first in play."""
@@ -210,6 +217,8 @@ class _Message:
     """The complete tool calls, in order."""
     finish: str = ""
     usage: Mapping[str, Any] | None = None
+    host: str = ""
+    """Who served the call (OpenRouter's ``provider``: "Cerebras", "Groq")."""
     generation: str = ""
     """OpenRouter's id for the call, to look its cost up by."""
     _partials: dict[int, _Partial] = field(default_factory=dict[int, _Partial])
@@ -219,6 +228,7 @@ class _Message:
         if (error := chunk.get("error")) is not None:
             raise BrainError(f"OpenRouter: {_error_text(error)}")
         self.generation = self.generation or str(chunk.get("id") or "")
+        self.host = self.host or str(chunk.get("provider") or "")
         self.usage = chunk.get("usage") or self.usage
         complete: list[_Partial] = []
         choices: Sequence[Mapping[str, Any]] = chunk.get("choices") or ()
@@ -272,11 +282,16 @@ class OpenRouterBrain:
         cards: Callable[[], bool] = lambda: False,
         effort: str | None = None,
         prices: Prices | None = None,
+        hosts: Sequence[str] = (),
+        sort: str | None = None,
     ) -> None:
         """``model`` is OpenRouter's id ("anthropic/claude-haiku-5.5"). ``effort`` asks a
         model that reasons to reason that hard ("low"); by default nothing is asked, so
         each model runs as its provider sets it. ``prices`` is for replies that don't
-        report their cost. The rest is as ``ClaudeBrain``."""
+        report their cost. ``hosts`` pins who serves the model, by OpenRouter's slugs
+        ("cerebras", "groq"), tried in order and never falling back to another; ``sort``
+        picks the host by "latency", "throughput" or "price" (#267). The rest is as
+        ``ClaudeBrain``."""
         if client is None and not api_key:
             raise ValueError("an OpenRouter key or a client is needed")
         self._owns_client = client is None
@@ -286,6 +301,9 @@ class OpenRouterBrain:
         self._today = today
         self._effort = effort
         self._prices = prices
+        if sort is not None and sort not in SORTS:
+            raise ValueError(f"OpenRouter can't sort hosts by {sort!r}")
+        self._route = route(hosts, sort)
         self._sequences = sorted(c.id for c in matcher.commands if c.is_sequence)
         self._lookups = {lookup.name: lookup for lookup in lookups}
         if clash := ACTS & self._lookups.keys():
@@ -324,13 +342,14 @@ class OpenRouterBrain:
         body = self._body([{"role": "user", "content": "ready"}], max_tokens=WARM_TOKENS)
         try:
             async with self._client.stream(body) as stream:
-                usage = None
+                usage, host = None, ""
                 async for chunk in stream:
                     usage = chunk.get("usage") or usage
+                    host = host or str(chunk.get("provider") or "")
         except BrainError as e:
             log.warning("Couldn't warm up the brain: %s", e)
             return
-        self._log_usage(usage, started, "Brain warmed up")
+        self._log_usage(usage, started, "Brain warmed up", host)
 
     async def decide(self, request: BrainRequest) -> Decision:
         self._brief(request.keybinds)
@@ -347,7 +366,7 @@ class OpenRouterBrain:
                 if isinstance(decided, Reply):
                     return credited(decided, turn.credits)
                 return decided
-            self._log_usage(message.usage, started)
+            self._log_usage(message.usage, started, host=message.host)
             if message.finish == "content_filter":
                 raise BrainError("the model declined")
             if not round_.looking:
@@ -409,7 +428,10 @@ class OpenRouterBrain:
             # The call ends here, so its usage never arrives: the eval looks its cost
             # up by the generation's id.
             log.debug(
-                "Brain acted in %.0f ms, generation %s", ms(started), message.generation or "?"
+                "Brain acted in %.0f ms, generation %s%s",
+                ms(started),
+                message.generation or "?",
+                _served(message.host),
             )
         return decided
 
@@ -429,6 +451,8 @@ class OpenRouterBrain:
             "stream": True,
             "usage": {"include": True},
         }
+        if self._route:
+            body["provider"] = self._route
         if self._effort is not None:
             body["reasoning"] = {"effort": self._effort, "exclude": True}
         return body
@@ -448,10 +472,14 @@ class OpenRouterBrain:
         self._system = {"role": "system", "content": [part]}
 
     def _log_usage(
-        self, usage: Mapping[str, Any] | None, started: float, what: str = "Brain replied"
+        self,
+        usage: Mapping[str, Any] | None,
+        started: float,
+        what: str = "Brain replied",
+        host: str = "",
     ) -> None:
         if not usage:
-            log.debug("%s in %.0f ms: no usage reported", what, ms(started))
+            log.debug("%s in %.0f ms: no usage reported%s", what, ms(started), _served(host))
             return
         prompt, completion = (
             int(usage.get("prompt_tokens") or 0),
@@ -467,14 +495,32 @@ class OpenRouterBrain:
             source = "price list"
         priced = f", about ${cost:.5f} ({source})" if isinstance(cost, int | float) else ""
         log.debug(
-            "%s in %.0f ms: %d in, %d out, %d cached%s",
+            "%s in %.0f ms: %d in, %d out, %d cached%s%s",
             what,
             ms(started),
             prompt,
             completion,
             cached,
             priced,
+            _served(host),
         )
+
+
+def route(hosts: Sequence[str] = (), sort: str | None = None) -> dict[str, object]:
+    """OpenRouter's ``provider`` field for pinned ``hosts`` and a ``sort``; empty when
+    neither is asked, so OpenRouter picks as it always does. Pinned hosts never fall back
+    to another: a run measures the host it names, or fails."""
+    pinned: dict[str, object] = {}
+    if names := [h.strip().lower() for h in hosts if h.strip()]:
+        pinned |= {"order": names, "allow_fallbacks": False}
+    if sort is not None:
+        pinned["sort"] = sort
+    return pinned
+
+
+def _served(host: str) -> str:
+    """The end of a call's log line: who served it, for the eval to read (#267)."""
+    return f" [host: {host}]" if host else ""
 
 
 _SHOW_CARD: dict[str, object] = {
