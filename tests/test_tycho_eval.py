@@ -392,10 +392,10 @@ def test_only_a_pack_s_cases_are_named_after_their_pack(tmp_path: Path) -> None:
     _eval()  # puts tools/bench on the path
     from brain_report import results_name  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
 
-    pack = tmp_path / "some-game"
+    pack = tmp_path / "some-folder"
     (pack / "eval").mkdir(parents=True)
-    (pack / "pack.toml").write_text("", "utf-8")
-    assert results_name(pack / "eval" / "cases.toml") == "some-game.cases"
+    (pack / "pack.toml").write_text('id = "some-game"\n', "utf-8")
+    assert results_name(pack / "eval" / "cases.toml") == "some-game.cases"  # its id (#342)
     assert results_name(tmp_path / "brain_cases.toml") == "brain_cases"
     (tmp_path / "eval").mkdir()
     assert results_name(tmp_path / "eval" / "cases.toml") == "cases"  # no pack.toml above

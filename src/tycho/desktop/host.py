@@ -49,6 +49,8 @@ class Host:
         self.focus_window: Callable[[], None] = lambda: None
         self.restarting = False
         """The voice loop stopped to start again, with the settings as saved (#295)."""
+        self._quitting = False
+        """The player asked to quit: no restart after that (#330)."""
 
     # From any thread: the tray, or tests.
 
@@ -57,6 +59,10 @@ class Host:
         if request == "open" and self.window_open():
             self.focus_window()  # already open: bring it forward, don't queue another
             return
+        if request == "quit":
+            # A quit wins over a restart asked for just before it (#330).
+            self._quitting = True
+            self.restarting = False
         self._requests.put(request)
         if request == "quit":
             self.on_quit()  # the main thread may be inside the window: close it
@@ -65,7 +71,7 @@ class Host:
         """Stop the voice loop so Tycho starts it again, as after a new game is picked
         (#295). It stops as quitting does, letting go of any key; the window closes, and
         opens again once the new loop is listening. False if nothing is running."""
-        if not self._thread.is_alive():
+        if not self._thread.is_alive() or self._quitting:
             return False
         self.restarting = True
         self._requests.put("restart")
@@ -118,6 +124,7 @@ class Host:
                         self.windows += 1
                         open_window()  # runs until the player closes the window
         except KeyboardInterrupt:
+            self._quitting, self.restarting = True, False
             self.stop()
             raise
         finally:
