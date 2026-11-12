@@ -188,3 +188,24 @@ def test_tycho_key_set_refuses_a_key_with_a_hidden_character(
     assert app.main(["key", "set", name]) == 1
     assert memory.store == {}
     assert "invisible" in capsys.readouterr().err
+
+
+# --- Product keys and bench keys (#61) ------------------------------------------------
+
+
+def test_players_are_offered_only_the_keys_tycho_uses() -> None:
+    from tycho import app
+
+    parser = app.build_parser()
+    assert parser.parse_args(["key", "set", "anthropic"]).name == "anthropic"
+    assert parser.parse_args(["key", "check", "elevenlabs"]).name == "elevenlabs"
+    for bench in ("cerebras", "typesafe", "openrouter"):
+        with pytest.raises(SystemExit):
+            parser.parse_args(["key", "set", bench])
+
+
+def test_developers_can_still_store_the_benchmarks_keys(memory: MemoryKeyring) -> None:
+    assert set(credentials.BENCH) == {"cerebras", "typesafe", "openrouter"}
+    assert not set(credentials.BENCH) & set(credentials.PRODUCT)
+    assert credentials.KNOWN == credentials.PRODUCT + credentials.BENCH
+    assert credentials.main(["delete", "cerebras"]) == 0  # accepted, nothing stored

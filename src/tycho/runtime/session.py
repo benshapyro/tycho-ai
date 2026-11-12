@@ -28,7 +28,7 @@ import itertools
 import logging
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 
@@ -208,6 +208,7 @@ class Session:
         clock: Callable[[], float] = time.monotonic,
         address: Callable[[], str] = lambda: "",
         display: Display | None = None,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         self._tail_seconds = tail_seconds
         self._tail_pending = False
@@ -250,6 +251,8 @@ class Session:
         """The last line for the player, for "say that again" (#222, #226)."""
         self._poll_interval = poll_interval
         self._clock = clock
+        self._sleep = sleep
+        """The wait between a sequence's steps; tests pass one that only records it (#61)."""
         self._ids = itertools.count(1)
         self._listening = False
         self._current: asyncio.Task[Result] | None = None
@@ -614,7 +617,7 @@ class Session:
 
         for wait, press in steps:
             if wait:
-                await asyncio.sleep(wait)
+                await self._sleep(wait)
             running = loop.run_in_executor(
                 self._keys, self._presser.press, press, cancel, first_key_down
             )

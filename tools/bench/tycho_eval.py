@@ -648,8 +648,8 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     routed = eval_key("openrouter", openrouter_key) if provider == "openrouter" else None
     if provider == "openrouter" and routed is None:
         raise SystemExit(
-            "No OpenRouter key. Run: uv run tycho key set openrouter (or, off the PC, set "
-            "OPENROUTER_API_KEY)"
+            "No OpenRouter key. Run: uv run python -m tycho.credentials set openrouter "
+            "(or, off the PC, set OPENROUTER_API_KEY)"
         )
     if needs_anthropic and key is None:
         raise SystemExit(

@@ -30,7 +30,7 @@ A change a player can notice also adds a line under **Unreleased** in `CHANGELOG
 - Never copy or port code from GPL-licensed projects, including Wingman AI. Tycho is Apache-2.0.
 - Never read or write game memory, inject into the game process, or hook DirectX.
 - Every action must go through the safety gate, be started by the user and have a fixed end. No loops or timers acting alone.
-- Never write API keys to files or logs. Use `tycho.credentials` (src/tycho/credentials.py), which stores them in Windows Credential Manager; add new provider names to `KNOWN`.
+- Never write API keys to files or logs. Use `tycho.credentials` (src/tycho/credentials.py), which stores them in Windows Credential Manager; add new provider names to `PRODUCT` (keys Tycho uses, offered by `tycho key`) or `BENCH` (keys only `tools/bench` uses).
 - The safety gate is independent of every model: no router or brain output may skip a confirm-grade action's confirmation (architecture 4.7, ADR 10).
 - Any local server binds to `127.0.0.1` and requires a token.
 

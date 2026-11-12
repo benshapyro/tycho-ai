@@ -5,6 +5,9 @@ Never in files, environment files or logs. To store or remove a key, run one of:
     uv run tycho key set anthropic
     uv run tycho key delete anthropic
     uv run tycho key check anthropic
+
+The benchmarks' own keys (``BENCH``) aren't offered to players; developers store them
+with ``uv run python -m tycho.credentials set cerebras``.
 """
 
 import argparse
@@ -18,7 +21,13 @@ import keyring.errors
 from tycho import logs
 
 SERVICE = "tycho"
-KNOWN = ("anthropic", "cerebras", "typesafe", "elevenlabs", "openrouter")
+PRODUCT = ("anthropic", "elevenlabs")
+"""Keys Tycho itself uses, offered to players by ``tycho key``."""
+BENCH = ("cerebras", "typesafe", "openrouter")
+"""Keys only the benchmarks in tools/bench use (#61), stored with
+``uv run python -m tycho.credentials set <name>``. OpenRouter moves to PRODUCT when a
+player can pick it as the brain's provider (#112)."""
+KNOWN = PRODUCT + BENCH
 # Public prefixes that say which provider a key is for, and are safe to show.
 _PUBLIC_PREFIXES = ("sk-ant-", "sk-or-v1-", "csk-", "sk_")
 
