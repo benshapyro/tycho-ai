@@ -181,6 +181,7 @@ def test_a_key_the_provider_refuses_isnt_stored(path: Path, vault: dict[str, str
         ("elevenlabs", "sk_" + "a" * 30 + "\u200b", "invisible one"),  # #246
         ("anthropic", "sk-ant-api03-" + "a" * 30 + "\u200b", "invisible one"),  # #248
         ("anthropic", "sk-ant-short", "cut short"),
+        ("openrouter", GOOD, "starts with sk-or-"),  # #112
         ("openai", GOOD, "isn't a key"),
         ("anthropic", 42, "starts with sk-ant-"),
     ],
@@ -216,6 +217,31 @@ def test_a_stored_key_with_a_hidden_character_shows_as_unusable(
     assert "\u200b" not in repr(shown)
 
 
+def test_an_openrouter_key_is_checked_and_stored_from_the_window(
+    path: Path, vault: dict[str, str]
+) -> None:
+    # The brain's other provider (#112).
+    check = FakeKeyCheck()
+    bridge, _ = _bridge(path, key_check=check)
+    key = "sk-or-v1-" + "c" * 60
+    assert bridge.store_key("openrouter", key)["ok"] is True
+    assert vault["openrouter"] == key
+    assert check.checked == ["openrouter"]
+    assert bridge.keys()["openrouter"]["label"] == "OpenRouter"
+
+
+def test_the_brain_settings_are_on_their_own_tab(path: Path) -> None:
+    bridge, _ = _bridge(path)
+    assert GROUPS["Brain"] == ("brain_provider", "brain_model", "brain_seconds")
+    rows = {r["name"]: r for g in bridge.settings()["groups"] for r in g["rows"]}  # type: ignore[union-attr]
+    assert rows["brain_provider"]["choices"] == ["anthropic", "openrouter"]
+    assert rows["brain_model"]["choices"] == ["Claude Haiku 5.5"]
+    assert rows["brain_seconds"]["kind"] == "number"
+    for name in GROUPS["Brain"]:
+        assert rows[name]["voice"] == "no"
+    assert bridge.set("brain_provider", "openrouter")["applies"] == "restart"
+
+
 def test_the_keys_page_marks_an_unusable_key() -> None:
     page = (Path(__file__).parents[1] / "src/tycho/desktop/app/app.js").read_text("utf-8")
     assert "k.unusable" in page
@@ -244,6 +270,8 @@ class _Response:
         ("elevenlabs", 401, '{"detail":{"status":"missing_permissions"}}', ""),
         ("elevenlabs", 401, '{"detail":{"status":"invalid_api_key"}}', "refused that key"),
         ("anthropic", 529, "overloaded", "error (529)"),
+        ("openrouter", 200, "", ""),  # #112
+        ("openrouter", 401, "No auth credentials found", "OpenRouter refused that key"),
     ],
 )
 def test_checking_a_key_with_its_provider(name: str, status: int, text: str, problem: str) -> None:

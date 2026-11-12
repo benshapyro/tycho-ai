@@ -20,9 +20,10 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal, cast
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from tycho import paths
+from tycho.brain.providers import BrainModel, Provider, choose
 from tycho.game.install import Channel
 from tycho.ptt.binding import Binding
 from tycho.tile.cards import ALL_KINDS
@@ -144,6 +145,29 @@ class Settings(BaseModel):
         description="Let Tycho search Star Citizen sites for news, upcoming patches and new "
         "ships. Each search costs about 1 cent of your Anthropic credit.",
         json_schema_extra=_rule("lower_only", how=FILE_OR_APP),
+    )
+    brain_provider: Provider = Field(
+        default="anthropic",
+        description="Who runs Tycho's brain, for anything the built-in phrasings don't cover: "
+        "anthropic (Claude direct, with your Anthropic key) or openrouter (the same Claude "
+        "through OpenRouter, with your OpenRouter key). Web search needs an Anthropic key "
+        "either way.",
+        # It decides who receives what you say: never by a misheard sentence (ADR 5).
+        json_schema_extra=_rule("no", how=FILE_OR_APP),
+    )
+    brain_model: BrainModel = Field(
+        default="Claude Haiku 5.5",
+        description="The brain's model. Only models that passed Tycho's safety test (no wrong "
+        "key presses) can be picked.",
+        json_schema_extra=_rule("no", how=FILE_OR_APP),
+    )
+    brain_seconds: float = Field(
+        default=8.0,
+        ge=4.0,
+        le=15.0,
+        description="How long Tycho waits for the brain before saying it couldn't answer, in "
+        "seconds. Look-ups and web searches get longer.",
+        json_schema_extra=_rule("no", how=FILE_OR_APP),
     )
     call_me: str = Field(
         default="Commander",
@@ -292,6 +316,11 @@ class Settings(BaseModel):
                 f"made by a newer Tycho (version {value}); this Tycho reads up to {CURRENT_VERSION}"
             )
         return value
+
+    @model_validator(mode="after")
+    def _offered_model(self) -> Settings:
+        choose(self.brain_provider, self.brain_model)  # raises ValueError if not offered
+        return self
 
     @property
     def push_to_talk_binding(self) -> Binding | None:

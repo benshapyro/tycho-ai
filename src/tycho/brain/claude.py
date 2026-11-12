@@ -33,6 +33,7 @@ from anthropic.types import MessageParam, TextBlockParam, ToolParam, ToolResultB
 from tycho.brain.briefing import briefing, offered_actions
 from tycho.brain.decisions import BrainError, BrainRequest, Decision, Exchange, Reply
 from tycho.brain.lookups import Lookup, LookupResult
+from tycho.brain.providers import ANTHROPIC_HAIKU
 from tycho.brain.rounds import (
     ACTS,
     MAX_CALLS,
@@ -53,7 +54,7 @@ from tycho.tile.cards import TOOL_DESCRIPTION, TOOL_SCHEMA
 
 log = logging.getLogger(__name__)
 
-MODEL = "claude-haiku-5-5"
+MODEL = ANTHROPIC_HAIKU
 EFFORT = "low"
 """97% on the 82-case eval at about 1.2 s; medium scored the same, slower (ADR 6)."""
 MAX_TOKENS = 2048

@@ -7,7 +7,7 @@ from typing import Literal
 import numpy as np
 import pytest
 
-from tycho import app, logs, settings
+from tycho import app, brain_choice, logs, settings
 from tycho.game.keybinds import Action, Keybinds, KeyInput
 from tycho.input import code_for
 from tycho.ptt.binding import Binding, DeviceKind
@@ -543,7 +543,7 @@ def test_a_stored_anthropic_key_with_a_hidden_character_is_no_key(
 
     monkeypatch.setattr(app.credentials, "get", stored)
     with caplog.at_level(logging.WARNING, logger="tycho"):
-        assert app.anthropic_key() is None
+        assert brain_choice.anthropic_key() is None
     assert "Anthropic key has a character keys don't have" in caplog.text
     assert "tycho key set anthropic" in caplog.text
     monkeypatch.setattr(app, "find_install", _no_game)

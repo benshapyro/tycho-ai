@@ -60,6 +60,54 @@ Leave out leaks and fan estimates unless the query asks for rumours. If the \
 search finds nothing relevant, say only that, in a few words. Never suggest \
 checking a website, channel or source: the player can't, they're flying."""
 
+NAME = "web_search"
+SCHEMA: Mapping[str, object] = {
+    "type": "object",
+    "properties": {
+        "query": {
+            "type": "string",
+            "description": 'A short search query, e.g. "Star Citizen 4.11 patch".',
+        }
+    },
+    "required": ["query"],
+    "additionalProperties": False,
+}
+NEEDS_ANTHROPIC = (
+    "Web search needs an Anthropic key, and the player has only an OpenRouter key. Tell "
+    "them in one short sentence that you can't search the web without one, then answer from "
+    "what you know if you can, saying it may be out of date."
+)
+
+
+class SearchNeedsAnthropic:
+    """``web_search`` for a brain through OpenRouter when the player has no Anthropic
+    key (#112). Search is Anthropic's own tool, so the brain is told plainly why it can't
+    search, and says so, rather than the question failing quietly. The same name,
+    description and schema as ``WebSearch``, so the tools don't change.
+    Satisfies ``brain.lookups.Lookup``."""
+
+    instant = True
+    """It answers at once: no "Checking." first."""
+
+    @property
+    def name(self) -> str:
+        return NAME
+
+    @property
+    def description(self) -> str:
+        return DESCRIPTION
+
+    @property
+    def input_schema(self) -> Mapping[str, object]:
+        return SCHEMA
+
+    async def prepare(self) -> None:
+        return None
+
+    async def run(self, arguments: Mapping[str, object]) -> LookupResult:
+        # Not an error result: an error makes the model try again (brain/AGENTS.md).
+        return LookupResult(json.dumps({"not_available": NEEDS_ANTHROPIC}))
+
 
 class WebSearch:
     """Satisfies ``brain.lookups.Lookup``."""
@@ -85,7 +133,7 @@ class WebSearch:
 
     @property
     def name(self) -> str:
-        return "web_search"
+        return NAME
 
     @property
     def description(self) -> str:
@@ -93,17 +141,7 @@ class WebSearch:
 
     @property
     def input_schema(self) -> Mapping[str, object]:
-        return {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": 'A short search query, e.g. "Star Citizen 4.11 patch".',
-                }
-            },
-            "required": ["query"],
-            "additionalProperties": False,
-        }
+        return SCHEMA
 
     async def prepare(self) -> None:
         return None

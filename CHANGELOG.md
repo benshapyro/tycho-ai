@@ -8,6 +8,10 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ## [Unreleased]
 
+### Added
+- Run Tycho's brain through OpenRouter instead of Anthropic, with one OpenRouter key: set `brain_provider = "openrouter"` in Tycho's window (Settings, Brain) or in `settings.toml`, and store the key with `tycho key set openrouter` or on the Keys page. It's the same Claude Haiku as before; only models that passed Tycho's test with no wrong key presses can be picked, and confirm-grade actions still ask first. Web search still needs an Anthropic key: without one, Tycho tells you it can't search instead of failing quietly. `tycho check` names the provider and asks it (free) whether your key works. Claude direct stays the default, so nothing changes unless you pick it. ([#112](https://github.com/benshapyro/tycho-ai/issues/112))
+- `brain_seconds` sets how long Tycho waits for the brain before saying it couldn't answer (8 seconds, as before). ([#112](https://github.com/benshapyro/tycho-ai/issues/112))
+
 ## [0.6.0] - 2026-11-12
 
 ### Changed

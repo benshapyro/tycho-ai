@@ -152,12 +152,12 @@ def test_without_traces_nothing_is_written() -> None:
 
 
 def test_the_app_traces_only_when_tycho_trace_is_on(monkeypatch: pytest.MonkeyPatch) -> None:
-    from tycho import app
+    from tycho import brain_choice
 
     monkeypatch.delenv(ENV, raising=False)
-    assert app._traces() is None
+    assert brain_choice._traces() is None  # pyright: ignore[reportPrivateUsage]
     monkeypatch.setenv(ENV, "1")
-    traces = app._traces()
+    traces = brain_choice._traces()  # pyright: ignore[reportPrivateUsage]
     assert traces is not None
     assert traces.source == "play"
 

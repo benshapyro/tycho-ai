@@ -287,9 +287,9 @@
   async function keysView() {
     const keys = await api.keys();
     return `<p class="note">Keys are stored in Windows Credential Manager, never in a file or a log, and never by voice. This window never shows one again.</p>
-      <form class="card frame" id="keysForm" autocomplete="off">${Object.entries(keys).map(([id, k]) => `<div class="field"><label for="k-${id}">${esc(k.label)} key${id === "elevenlabs" ? " (optional)" : ""}</label>
+      <form class="card frame" id="keysForm" autocomplete="off">${Object.entries(keys).map(([id, k]) => `<div class="field"><label for="k-${id}">${esc(k.label)} key${id === "elevenlabs" ? " (optional)" : id === "openrouter" ? " (only if OpenRouter runs the brain)" : ""}</label>
         ${k.stored ? `<div class="keyrow"><span class="input num" style="flex:1 1 260px">•••• •••• ${esc(k.ends)}</span>${k.unusable ? `<span class="chip bad">Unusable</span>` : `<span class="chip good">Stored</span>`}<button class="btn frame" type="button" data-remove="${id}">Remove</button></div>`
-          : `<div class="keyrow"><input class="input" id="k-${id}" type="password" spellcheck="false" placeholder="${id === "anthropic" ? "sk-ant-…" : "sk_…"}"><button class="btn primary frame" type="button" data-store="${id}">Check and store</button></div>`}
+          : `<div class="keyrow"><input class="input" id="k-${id}" type="password" spellcheck="false" placeholder="${{ anthropic: "sk-ant-…", openrouter: "sk-or-v1-…" }[id] || "sk_…"}"><button class="btn primary frame" type="button" data-store="${id}">Check and store</button></div>`}
         <span class="err" id="e-${id}">${esc(k.problem || "")}</span></div>`).join("")}</form>`;
   }
   function bindKeys() {

@@ -1,8 +1,9 @@
 """The brain on any model OpenRouter offers (#192). Satisfies ``runtime.Brain``.
 
-Not a player setting yet: the brain eval uses it (``tools/bench/tycho_eval.py
---provider openrouter --model <id>``) to measure other models on Tycho's real path,
-and #112 adds the setting once a model passes with zero wrong presses.
+Players pick it with ``brain_provider = "openrouter"`` (#112), on a model from the
+allowlist in ``providers``. The brain eval uses it (``tools/bench/tycho_eval.py
+--provider openrouter --model <id>``) to measure any model on Tycho's real path; one
+joins the allowlist only after it passes with zero wrong presses.
 
 It works as ``ClaudeBrain`` does, through the same ``rounds``: the same briefing and
 tools, an act taken as soon as its tool call is complete (the stream is left there),
@@ -11,7 +12,8 @@ look-ups in a loop of up to ``MAX_CALLS`` calls, and every pick checked by
 so a tool call arrives as pieces of JSON: it's complete when its arguments parse as
 a whole object, when the next tool call starts, or when the stream ends.
 
-It has no web search: that is Anthropic's own server tool (``knowledge.web``).
+It has no web search of its own: that is Anthropic's server tool, run with the player's
+Anthropic key if they have one (``knowledge.web``); without one, the brain says so.
 
 By default OpenRouter picks the host that serves a model (mostly on price). The eval can
 pin it (#267): ``hosts`` are tried in order with no fallback, and ``sort`` asks for the
