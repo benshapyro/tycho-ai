@@ -15,6 +15,7 @@ import httpx2
 import pytest
 
 from tycho.knowledge.web import (
+    FALLBACK_ASK,
     FALLBACK_BRIEF,
     MAX_ANSWER,
     OPEN_BRIEF,
@@ -236,7 +237,8 @@ def _read_page(*texts: str, paused: bool = False) -> Any:
 
 
 class _Turns(_Client):
-    """Answers each search request with the next message."""
+    """Answers each search request with the next message; an exception is raised, and
+    ``SLOW`` takes longer than any test waits."""
 
     def __init__(self, *messages: Any) -> None:
         super().__init__()
@@ -244,7 +246,12 @@ class _Turns(_Client):
 
         async def create(**request: Any) -> Any:
             self.requests.append(request)
-            return left.pop(0)
+            message = left.pop(0)
+            if message is SLOW:
+                await asyncio.sleep(30)
+            if isinstance(message, Exception):
+                raise message
+            return message
 
         self.messages = SimpleNamespace(create=create)
 
@@ -298,10 +305,14 @@ def test_without_the_trial_a_paused_turn_is_not_continued() -> None:
 # --- Sites first, then the open web (#354) ------------------------------------------------------
 
 
-def _fallback(*messages: Any) -> tuple[_Turns, bool, Any]:
+SLOW = object()
+
+
+def _fallback(*messages: Any, seconds: float = OPEN_SECONDS) -> tuple[_Turns, bool, Any]:
     client = _Turns(*messages)
     search = WebSearch(cast(Any, client), fallback=True)
     assert search.seconds == OPEN_SECONDS
+    search.seconds = seconds
     result = asyncio.run(search.run({"query": "Levski pay fines"}))
     return client, result.is_error, json.loads(result.content)
 
@@ -327,7 +338,12 @@ def test_without_a_clear_answer_it_reads_the_open_web(verdict: str) -> None:
     assert not error
     first, wider = client.requests
     assert "allowed_domains" in first["tools"][0]
-    assert wider["system"] == FALLBACK_BRIEF
+    assert wider["system"] == FALLBACK_BRIEF + FALLBACK_ASK
+    # The open web is told what the sites said, to keep what's right and add to it.
+    told = wider["messages"][0]["content"].endswith(
+        "What the game's sites said: Fines are paid at admin offices."
+    )
+    assert told is (verdict == "PARTIAL")
     assert [t["name"] for t in wider["tools"]] == ["web_search", "web_fetch"]
     assert "allowed_domains" not in wider["tools"][0]
     assert result["answer"] == "Players report the fines terminal is by Levski's hangars."
@@ -353,3 +369,53 @@ def test_only_a_fallback_reads_a_found_partial_or_none_tag(answer: str) -> None:
     assert result["answer"] == answer
     _, _, result = _fallback(_found(f"PARTIAL: {answer}"), _read_page())
     assert result["answer"] == answer
+
+
+def test_the_sites_answer_stands_when_the_open_web_does_worse() -> None:
+    # #372 benchmark: a PARTIAL from the sites became "I couldn't find it".
+    _, error, result = _fallback(
+        _found("PARTIAL: Fines are paid at admin offices."),
+        _read_page("NONE: I couldn't find where in Levski."),
+    )
+    assert not error
+    assert result["answer"] == "Fines are paid at admin offices."
+    assert result["source"] == "web search of Star Citizen sites"
+    _, _, result = _fallback(
+        _found("PARTIAL: Fines are paid at admin offices."),
+        _read_page("PARTIAL: Players report it's near the hangars."),
+    )
+    assert result["answer"] == "Players report it's near the hangars."
+
+
+@pytest.mark.parametrize(
+    "failing",
+    [
+        SLOW,
+        anthropic.APIConnectionError(request=httpx2.Request("POST", "https://api.anthropic.com")),
+    ],
+)
+def test_a_failed_or_slow_open_web_keeps_the_sites_answer(failing: object) -> None:
+    # #373: the look-up's own time limit would otherwise throw the answer away.
+    _, error, result = _fallback(
+        _found("PARTIAL: Fines are paid at admin offices."), failing, seconds=1.2
+    )
+    assert not error
+    assert result["answer"] == "Fines are paid at admin offices."
+
+
+@pytest.mark.parametrize(
+    ("reply", "verdict_wider"),
+    [
+        ("Fines are paid at admin offices. PARTIAL", True),
+        ("Fines are paid at admin offices. (NONE)", True),
+        ("Fines are paid at admin offices. FOUND.", False),
+        ("Fines are paid at admin offices.", True),  # no tag: not a clear answer
+    ],
+)
+def test_a_tag_put_last_is_read_and_never_spoken(reply: str, verdict_wider: bool) -> None:
+    client, _, result = _fallback(_found(reply), _read_page("NONE: Nothing more."))
+    assert len(client.requests) == (2 if verdict_wider else 1)
+    if "NONE" in reply:
+        assert "nothing usable" in result["error"]
+    else:
+        assert result["answer"] == "Fines are paid at admin offices."

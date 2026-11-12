@@ -14,6 +14,7 @@ may use the whole web, and it may read up to two of the pages it finds (Anthropi
 web fetch), for "where is" and "how do I" answers that live in community guides.
 """
 
+import asyncio
 import dataclasses
 import datetime
 import json
@@ -97,8 +98,17 @@ relevant, say only that, in a few words. Never suggest checking a website, chann
 or source: the player can't, they're flying."""
 
 FALLBACK_TAG = re.compile(r"^\W*(FOUND|PARTIAL|NONE)\b\W*")
-"""How the first search of a fallback says how well it did: a whole word in capitals,
-read only from the request that asked for it ("None of RSI's posts…" is an answer)."""
+"""How each search of a fallback says how well it did: a whole word in capitals, read
+only from a request that asked for it ("None of RSI's posts…" is an answer)."""
+FALLBACK_TAG_LAST = re.compile(r"\s*[(\[]?\b(FOUND|PARTIAL|NONE)\b[)\]]?[.!]?\s*$")
+"""The same tag put last instead ("… at Levski. PARTIAL"): never read aloud (#373)."""
+RANK = {"NONE": 0, "PARTIAL": 1, "FOUND": 2}
+"""How the two answers of a fallback compare: the open web's replaces the sites' only
+when it did at least as well by its own tag (#372 benchmark: a PARTIAL from the sites
+became "I couldn't find it")."""
+WIDER_MARGIN = 1.0
+"""Seconds kept back from ``OPEN_SECONDS`` so a slow open-web step gives up in time to
+return the sites' answer, not a timeout (#373)."""
 FALLBACK_ASK = """
 
 Start your reply with one word in capitals, then your answer: FOUND if the results \
@@ -111,17 +121,23 @@ You search the web for a voice co-pilot in Star Citizen, who will read your answ
 aloud to a player who is flying. The game's own sites (RSI, the community wiki, the \
 community tools) didn't answer this clearly, so look further: community guides, \
 forum and Reddit threads, blogs and videos often have where things are, how to do \
-things and what players think. Search, then read the most useful page before you \
-answer, unless the snippets already answer it fully. Prefer the most recent sources \
-and say how old they are when that matters. Then answer in one to three short plain \
-sentences, in your own words: no quotes, links, lists or markdown. When the answer \
-comes from players rather than RSI, say so in a few words ("players report"). If \
-sources disagree, give the most recent and say they disagree. Leave out leaks and fan \
-estimates unless the query asks for rumours. If you find nothing relevant, say only \
-that, in a few words. Never suggest checking a website, channel or source: the player \
-can't, they're flying."""
+things and what players think. What the game's sites said, if anything, follows the \
+question: keep what's right in it and add what's missing. Search, then read the most \
+useful page before you answer, unless the snippets already answer it fully. Use only \
+sources about Star Citizen, and ignore anything else the search returns. Guides go out \
+of date with each patch: when a guide or forum post disagrees with RSI's patch notes \
+or the community wiki, trust the patch notes and the wiki, and prefer sources from the \
+last six months (today's date starts the question). Say only names, numbers and \
+places you saw in a source. Then answer in one to three short plain sentences, in \
+your own words: no quotes, links, lists or markdown. When the answer comes from \
+players rather than RSI, say so in a few words ("players report"). Leave out leaks \
+and fan estimates unless the query asks for rumours. If you find nothing relevant, \
+say only that, in a few words. Never suggest checking a website, channel or source: \
+the player can't, they're flying."""
 """The open-web step of a fallback: it only runs when the game's sites fell short, so
-it's told to read a page (unprompted, it read none in the 12 Nov benchmark)."""
+it's told to read a page (unprompted, it read none in the 12 Nov benchmark), and to
+trust the wiki and patch notes over guides (the same benchmark: old guides' claims,
+said with confidence, were most of its wrong answers)."""
 
 NO_PAGE_READS = ("reddit.com",)
 """Sites whose pages are never read, only their search snippets: Reddit's terms restrict
@@ -253,6 +269,7 @@ class WebSearch:
             return failure("pass query: a short search query")
         today = self._today()
         asked = f"[{today.day} {today:%B %Y}] {query}"
+        started = time.perf_counter()
         try:
             if not self._fallback:
                 found = await self._search(
@@ -262,16 +279,33 @@ class WebSearch:
             first = await self._search(
                 query, asked, open_web=False, brief=BRIEF + FALLBACK_ASK, tagged=True
             )
-            if first.verdict == "FOUND" and first.answer:
-                return self._result(query, today, first, False)
-            log.debug("Web search: the game's sites said %s; trying the open web", first.verdict)
-            wider = await self._search(query, asked, open_web=True, brief=FALLBACK_BRIEF)
         except anthropic.APIError as e:
             log.warning("Web search failed: %s", e)
             return failure(f"the web search failed ({type(e).__name__}); answer without it")
-        if not wider.answer and first.answer:
+        if first.verdict == "FOUND" and first.answer:
+            return self._result(query, today, first, False)
+        wider = await self._wider(query, asked, first, started)
+        if wider is None or not wider.answer or RANK[wider.verdict] < RANK[first.verdict]:
             return self._result(query, today, first, False)
         return self._result(query, today, wider, True)
+
+    async def _wider(self, query: str, asked: str, first: _Found, started: float) -> _Found | None:
+        """The open-web step of a fallback, given what the sites said; ``None`` if it
+        failed or ran out of time, so the sites' answer, if any, still stands (#373)."""
+        left = self.seconds - WIDER_MARGIN - (time.perf_counter() - started)
+        log.debug("Web search: the game's sites said %s; trying the open web", first.verdict)
+        if first.answer:
+            asked = f"{asked}\n\nWhat the game's sites said: {first.answer}"
+        try:
+            return await asyncio.wait_for(
+                self._search(
+                    query, asked, open_web=True, brief=FALLBACK_BRIEF + FALLBACK_ASK, tagged=True
+                ),
+                max(left, 0.0),
+            )
+        except (TimeoutError, anthropic.APIError) as e:
+            log.warning("Web search of the open web failed: %s", type(e).__name__)
+            return None
 
     def _result(
         self, query: str, today: datetime.date, found: _Found, open_web: bool
@@ -314,10 +348,8 @@ class WebSearch:
             messages = [*messages, {"role": "assistant", "content": message.content}]
         answer = _answer(content, cut=stopped == "max_tokens")
         verdict = "FOUND"
-        if tagged and (tag := FALLBACK_TAG.match(answer)):
-            verdict, answer = tag[1].upper(), answer[tag.end() :]
-            if verdict == "NONE":
-                answer = ""
+        if tagged:
+            verdict, answer = _verdict(answer)
         sites = _sites(content)
         searches, pages = _uses(content)
         cost = (spent[0] * PRICES[0] + spent[1] * PRICES[1]) / 1_000_000
@@ -372,6 +404,18 @@ def _answer(content: Sequence[Any], *, cut: bool) -> str:
     if len(text) > MAX_ANSWER:
         text = _whole_sentences(text[: MAX_ANSWER + 1]) or text[:MAX_ANSWER].rsplit(" ", 1)[0]
     return text
+
+
+def _verdict(answer: str) -> tuple[str, str]:
+    """A tagged answer's FOUND, PARTIAL or NONE, first or last, and the answer without
+    it. With no tag, PARTIAL: it didn't say it found a clear answer."""
+    if tag := FALLBACK_TAG.match(answer):
+        verdict, answer = tag[1], answer[tag.end() :]
+    elif tag := FALLBACK_TAG_LAST.search(answer):
+        verdict, answer = tag[1], answer[: tag.start()]
+    else:
+        return "PARTIAL", answer
+    return verdict, "" if verdict == "NONE" else answer
 
 
 def _whole_sentences(text: str) -> str:
