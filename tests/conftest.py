@@ -37,5 +37,10 @@ def _no_real_folders(
     monkeypatch.setenv("LOCALAPPDATA", str(home / "Local"))
     monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path / "config"))
     monkeypatch.setenv("TYCHO_DATA_DIR", str(tmp_path / "data"))
-    replay = request.node.get_closest_marker("replay") is not None
-    monkeypatch.setenv("TYCHO_MODELS", str(REAL_MODELS if replay else tmp_path / "models"))
+    monkeypatch.setenv("TYCHO_MODELS", str(models_folder(request.node, tmp_path)))
+
+
+def models_folder(node: pytest.Item, tmp_path: Path) -> Path:
+    """The speech model folder a test gets: the real one for a replay test, so it can
+    load the model, and its own empty one for every other test (#302)."""
+    return REAL_MODELS if node.get_closest_marker("replay") is not None else tmp_path / "models"

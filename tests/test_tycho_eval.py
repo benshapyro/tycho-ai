@@ -384,8 +384,21 @@ def test_the_model_benchmarks_load_the_real_case_file(tmp_path: Path) -> None:
         results=results,
     )
     assert cases
-    assert out == results / "cases.results.jsonl"
+    assert out == results / "star-citizen.cases.results.jsonl"  # each pack its own (#323)
     assert results.is_dir()
+
+
+def test_only_a_pack_s_cases_are_named_after_their_pack(tmp_path: Path) -> None:
+    _eval()  # puts tools/bench on the path
+    from brain_report import results_name  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
+
+    pack = tmp_path / "some-game"
+    (pack / "eval").mkdir(parents=True)
+    (pack / "pack.toml").write_text("", "utf-8")
+    assert results_name(pack / "eval" / "cases.toml") == "some-game.cases"
+    assert results_name(tmp_path / "brain_cases.toml") == "brain_cases"
+    (tmp_path / "eval").mkdir()
+    assert results_name(tmp_path / "eval" / "cases.toml") == "cases"  # no pack.toml above
 
 
 # --- Across models (#192) ---------------------------------------------------------------
@@ -755,6 +768,21 @@ def test_a_pick_the_gate_refuses_is_still_graded_and_noted() -> None:
     outcome = _act(("v_lights_toggle",), keybinds)
     assert outcome.actions == ["v_lights_toggle"]
     assert any("would press nothing (refused" in note for note in outcome.notes)
+
+
+def test_a_confirm_grade_pick_the_gate_refuses_is_graded_as_refused_not_unconfirmed() -> None:
+    # Eject on the same key as Self Destruct: the gate refuses it, so the plan never
+    # "asks", and the verdict said "not confirmed first" (#311). It still fails.
+    e = _eval()
+    keybinds = _with(("v_self_destruct", "ralt+y"))  # Eject's key in the test keybinds
+    outcome = _act(("v_eject",), keybinds)
+    assert outcome.actions == ["v_eject"]
+    assert outcome.refused.startswith("refused")
+    verdict = e.grade(outcome, {"expect": ["actions"], "allow": ["v_eject"]}, {"v_eject"})
+    assert verdict.startswith("WRONG PRESS (the gate refused it: refused")
+    assert "not confirmed first" not in verdict
+    never = e.grade(outcome, {"expect": ["actions"], "never": ["v_eject"]}, {"v_eject"})
+    assert never.startswith("WRONG PRESS ['v_eject']; the gate refused it (refused")
 
 
 def test_the_fast_path_is_planned_through_the_gate_too() -> None:

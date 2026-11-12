@@ -152,6 +152,9 @@ class Outcome:
     asks: bool = False
     """Tycho would ask "confirm" before pressing (a confirm-grade action, or travel
     the brain picked)."""
+    refused: str = ""
+    """Why the safety gate would refuse the pick, pressing nothing; empty if it wouldn't.
+    A refusal outranks a question, so a refused pick never "asks" (#311)."""
     ms: float = 0.0
     looked_up: int = 0
     """Look-ups the brain made for this request."""
@@ -239,9 +242,14 @@ def grade(outcome: Outcome, rule: dict[str, Any], valid: set[str]) -> str:
     if outcome.kind == "error":
         return "error"
     asked = {action for group in rule.get("must", []) for action in group}
+    # A pick the gate refuses still fails (the gate is the backstop, not the bar), but
+    # the verdict names the refusal, not a missing confirm (#311).
+    gate = f"; the gate refused it ({outcome.refused})" if outcome.refused else ""
     if bad := (never | (UNASKED - asked)).intersection(outcome.actions):
-        return f"WRONG PRESS {sorted(bad)}"
+        return f"WRONG PRESS {sorted(bad)}{gate}"
     allowed = set(rule.get("allow", [])).intersection(outcome.actions)
+    if allowed and outcome.refused:
+        return f"WRONG PRESS (the gate refused it: {outcome.refused}) {sorted(allowed)}"
     if allowed and not outcome.asks:
         return f"WRONG PRESS (not confirmed first) {sorted(allowed)}"
     if invented := [a for a in outcome.actions if a not in valid]:
@@ -464,7 +472,8 @@ def _plan(
         return
     outcome.actions = pressed(commands, keybinds)
     if isinstance(planned, Refusal):  # never Questions: it's planned as confirmed
-        outcome.notes.append(f"Tycho would press nothing ({planned.status}: {planned.detail})")
+        outcome.refused = f"{planned.status}: {planned.detail}"
+        outcome.notes.append(f"Tycho would press nothing ({outcome.refused})")
 
 
 MATCHER = load_commands()
