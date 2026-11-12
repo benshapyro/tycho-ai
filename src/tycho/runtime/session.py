@@ -20,6 +20,11 @@ exactly like the fast path's.
 Who speaks when (ADR 14): the fast path keeps its sounds. The brain's replies
 are spoken, and so is its line about what it did, unless the game announces
 that itself. Pressing push-to-talk stops Tycho talking at once.
+
+The session keeps the threads, cancellation and barge-in, and the confirm question.
+Where words go is ``routing``, what gets pressed is ``planning`` (both pure, so the
+brain eval grades the same code), the log is the ``Reporter``, and what was said
+lately is the ``Conversation`` (#55).
 """
 
 import asyncio
@@ -32,22 +37,35 @@ from collections.abc import Awaitable, Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 
-from tycho import logs, safety
 from tycho.audio.clip import Samples, trim_silence
 from tycho.audio.source import AudioError, AudioSource
-from tycho.brain import BrainError, BrainRequest, Exchange, Reply, commands_for
-from tycho.commands import Command, CommandMatcher, Defer, resolve
+from tycho.brain import BrainError, BrainRequest, Reply
+from tycho.commands import Command, CommandMatcher
 from tycho.commands.reserved import (
     CANCEL_WORDS,
     CONFIRM_WORDS,
     SAY_AGAIN_WORDS,
     TILE_WORDS,
 )
-from tycho.game.keybinds import Action, Keybinds
-from tycho.input import NotPressable, Press, Presser, UnsupportedKey, plan
+from tycho.game.keybinds import Keybinds
+from tycho.input import Presser
 from tycho.lexicon import Lexicon
 from tycho.ptt.monitor import Edge, PushToTalk
+from tycho.runtime.conversation import (
+    FOLLOW_UP_LIMIT,
+    FOLLOW_UP_SECONDS,
+    Conversation,
+    would_speak,
+)
 from tycho.runtime.messages import Result, Status, Trace
+from tycho.runtime.planning import (
+    CHAIN_BEAT_SECONDS,
+    Questions,
+    Refusal,
+    announced,
+    needs_facts,
+    plan_request,
+)
 from tycho.runtime.ports import (
     ActionLog,
     Brain,
@@ -58,17 +76,39 @@ from tycho.runtime.ports import (
     Speaker,
     Transcriber,
 )
-from tycho.text import normalize
+from tycho.runtime.reporter import Reporter
+from tycho.runtime.routing import (
+    NotUnderstood,
+    Picked,
+    Reserved,
+    from_brain,
+    is_say_again,
+    reply_to_question,
+    route,
+    tile_command,
+)
 from tycho.tile import Card
 from tycho.tile.cards import long_answer
 from tycho.voice import SpeechError
 
 log = logging.getLogger(__name__)
 
+__all__ = [  # the word checks and timings tests and tools import from here
+    "CANCEL_WORDS",
+    "CHAIN_BEAT_SECONDS",
+    "CONFIRM_WORDS",
+    "FOLLOW_UP_LIMIT",
+    "FOLLOW_UP_SECONDS",
+    "SAY_AGAIN_WORDS",
+    "TILE_WORDS",
+    "Session",
+    "is_say_again",
+    "reply_to_question",
+    "tile_command",
+]
+
 MIN_CLIP_SECONDS = 0.25
 """Shorter than this is a slip of the finger, not a command."""
-CHAIN_BEAT_SECONDS = 0.15
-"""A pause between the actions of a chain, so the game registers each one."""
 TAIL_SECONDS = 0.15
 """The most audio kept after release: people let go as they finish the last word, and
 the microphone delivers audio in blocks. The benchmark recordings were made this way."""
@@ -105,9 +145,6 @@ CHECKING = ("Checking.", "Looking that up.", "One moment.")
 """Said when any other look-up starts (prices, routes, a ship): Claude takes 1-4 s
 to choose one, and the answer can take as long again. Kept as audio, like FILLERS,
 so they cost the voice service once."""
-FOLLOW_UP_SECONDS = 30.0
-"""Exchanges this recent go to the brain with the next request (ADR 10, ADR 14)."""
-FOLLOW_UP_LIMIT = 4
 
 _RECEIPT_STATUS: dict[str, Status] = {
     "cancelled": "cancelled",
@@ -127,16 +164,6 @@ class _Question:
     say: str = ""
 
 
-@dataclass(frozen=True, slots=True)
-class _Line:
-    """The last line for the player (#226): spoken, or shown in the console without a
-    voice. Kept whether or not the voice managed to say it."""
-
-    text: str = ""
-    question: int | None = None
-    """For the safety gate's confirm question: the request it asked about."""
-
-
 @dataclass(slots=True)
 class _Progress:
     """How far one request got, so even a cancelled one is logged with what it pressed."""
@@ -150,27 +177,6 @@ class _Progress:
     question: str = ""
     keydown_ms: float | None = None
     card: Card | None = None
-
-
-def tile_command(text: str) -> str | None:
-    """``"pin"``, ``"clear"``, ``"again"`` or ``"show"`` if the whole utterance is one."""
-    said = " ".join(normalize(text))
-    return next((what for what, words in TILE_WORDS.items() if said in words), None)
-
-
-def is_say_again(text: str) -> bool:
-    """Whether the whole utterance asks to hear the last answer again."""
-    return " ".join(normalize(text)) in SAY_AGAIN_WORDS
-
-
-def reply_to_question(text: str) -> str | None:
-    """``"confirm"`` or ``"cancel"`` if the whole utterance is one of those replies."""
-    said = " ".join(normalize(text))
-    if said in CONFIRM_WORDS:
-        return "confirm"
-    if said in CANCEL_WORDS:
-        return "cancel"
-    return None
 
 
 def _log_failure(task: asyncio.Task[None]) -> None:
@@ -221,7 +227,7 @@ class Session:
         self._presser = presser
         self._feedback = feedback
         self._game_state = game_state
-        self._action_log = action_log
+        self._reporter = Reporter(log_transcripts=log_transcripts, action_log=action_log)
         self._brain = brain
         self._brain_seconds = brain_seconds
         self._search_seconds = search_seconds
@@ -235,20 +241,14 @@ class Session:
         self._checking = itertools.cycle(CHECKING)
         self._speech_warming: asyncio.Task[None] | None = None
         self._brain_warming: asyncio.Task[None] | None = None
-        self._recent: list[Exchange] = []
-        self._recent_at = 0.0
+        self._conversation = Conversation(clock)
         self._confirm_seconds = confirm_seconds
         self._question: _Question | None = None
         self._samplerate = samplerate
-        self._log_transcripts = log_transcripts
         self._on_result = on_result
         self._address = address
         """What to call the player, at the end of a confirm question (#15)."""
         self._display = display
-        self._last_reply: tuple[str, Card | None] = ("", None)
-        """The brain's last answer, for "show me that" (ADR 16)."""
-        self._last_line = _Line()
-        """The last line for the player, for "say that again" (#222, #226)."""
         self._poll_interval = poll_interval
         self._clock = clock
         self._sleep = sleep
@@ -475,79 +475,50 @@ class Session:
         question, self._question = self._question, None
         if question is not None and self._display is not None:
             self._display.answered()
-        tile = tile_command(text) if self._display is not None and self._display.on else None
-        if tile is not None:
-            trace.mark("match")
-            return self._tile(request, tile, trace, heard, text)
-        if is_say_again(text):
-            trace.mark("match")
-            return self._say_again(request, trace, heard, text, question)
-        if (reply := reply_to_question(text)) is not None:
-            trace.mark("match")
-            if question is None or self._clock() > question.deadline:
-                detail = f"nothing to {reply}" if question is None else "the question expired"
-                return self._result(request, "not_understood", trace, heard, text, detail)
-            if reply == "cancel":
-                progress.commands = ("cancel",)  # never logged as the cancelled command itself
-                asked = "+".join(command.id for command in question.commands)
-                detail = f"cancelled #{question.request} ({asked})"
-                return self._result(request, "done", trace, heard, text, detail, progress=progress)
-            commands, confirmed = question.commands, True
-            progress.by_brain, progress.say = question.by_brain, question.say
-        else:
-            match = self._matcher.match(text)
-            trace.mark("match")
-            confirmed = False
-            if not isinstance(match, Defer):
-                commands = match.commands
-            elif self._brain is None:
-                return self._result(request, "not_understood", trace, heard, text, match.reason)
-            else:
-                progress.by_brain = True
-                self._warm_speaker()  # while the brain thinks, so speech starts sooner
-                try:
-                    async with asyncio.timeout(self._brain_seconds) as budget:
-                        asked = loop.time()
-
-                        def searching() -> None:
-                            # Capped too (#169): after look-ups, a search can't run past it.
-                            budget.reschedule(
-                                min(loop.time() + self._search_seconds, asked + SEARCH_LIMIT)
-                            )
-                            self._fill()
-
-                        def looking() -> None:
-                            # Only ever later, and never past the limit: an early look-up
-                            # keeps the usual deadline, and each one after moves it on.
-                            later = min(
-                                loop.time() + self._looking_seconds, asked + self._looking_limit
-                            )
-                            if (when := budget.when()) is None or later > when:
-                                budget.reschedule(later)
-
-                        decision = await self._brain.decide(
-                            BrainRequest(
-                                text,
-                                self._keybinds(),
-                                tuple(self._follow_ups()),
-                                waiting=searching,
-                                looking=looking,
-                                checking=lambda: self._fill(self._checking),
-                            )
-                        )
-                    trace.mark("brain")
-                    if isinstance(decision, Reply):
-                        progress.say, progress.card = decision.text, decision.card
-                        return self._result(
-                            request, "replied", trace, heard, text, progress=progress
-                        )
-                    commands, progress.say = commands_for(decision, self._matcher), decision.say
-                except (BrainError, TimeoutError) as e:
-                    trace.mark("brain")
-                    detail = f"the brain couldn't answer: {str(e) or 'it took too long'}"
+        routed = route(
+            text,
+            self._matcher,
+            tile=self._display is not None and self._display.on,
+            brain=self._brain is not None,
+        )
+        trace.mark("match")
+        if isinstance(routed, Reserved):
+            word = routed.word
+            if word == "say_again":
+                return self._say_again(request, trace, heard, text, question)
+            if word == "confirm" or word == "cancel":
+                if question is None or self._clock() > question.deadline:
+                    detail = f"nothing to {word}" if question is None else "the question expired"
+                    return self._result(request, "not_understood", trace, heard, text, detail)
+                if word == "cancel":
+                    progress.commands = ("cancel",)  # never logged as the cancelled command
+                    asked = "+".join(command.id for command in question.commands)
+                    detail = f"cancelled #{question.request} ({asked})"
                     return self._result(
-                        request, "failed", trace, heard, text, detail, progress=progress
+                        request, "done", trace, heard, text, detail, progress=progress
                     )
+                commands, confirmed = question.commands, True
+                progress.by_brain, progress.say = question.by_brain, question.say
+            else:
+                return self._tile(request, word, trace, heard, text)
+        elif isinstance(routed, NotUnderstood):
+            return self._result(request, "not_understood", trace, heard, text, routed.reason)
+        elif isinstance(routed, Picked):
+            commands, confirmed = routed.commands, False
+        else:
+            confirmed = False
+            progress.by_brain = True
+            picked = await self._ask_brain(text)
+            trace.mark("brain")
+            if isinstance(picked, Reply):
+                progress.say, progress.card = picked.text, picked.card
+                return self._result(request, "replied", trace, heard, text, progress=progress)
+            if isinstance(picked, str):
+                detail = f"the brain couldn't answer: {picked}"
+                return self._result(
+                    request, "failed", trace, heard, text, detail, progress=progress
+                )
+            commands, progress.say = picked.commands, picked.say
 
         progress.commands = tuple(command.id for command in commands)
         progress.confirmed = confirmed
@@ -555,67 +526,30 @@ class Session:
         def end(status: Status, detail: str = "") -> Result:
             return self._result(request, status, trace, heard, text, detail, progress=progress)
 
-        # Plan the whole chain before pressing anything: if any part can't be done,
-        # none of it is, so the ship is never left half-way through a request. A
-        # confirmation plans again from scratch, with the keybinds as they are now.
+        # Plan the whole chain before pressing anything (planning.py). A confirmation
+        # plans again from scratch, with the keybinds as they are now.
         keybinds = self._keybinds()
-        parts = [step for command in commands for step in command.expand()]
-        progress.announced = all(part.command.announced for part in parts)
+        progress.announced = announced(commands)
         facts: frozenset[str] = frozenset()
-        if self._game_state is not None and any(s.command.requires for s in parts):
+        if self._game_state is not None and needs_facts(commands):
             facts = await asyncio.to_thread(self._game_state.facts)
-        steps: list[tuple[float, Press]] = []  # each press, and how long to wait before it
-        questions: list[str] = []
-        asking_about: list[str] = []
-        for part in parts:  # a sequence is planned step by step, like a chain
-            command = part.command
-            resolved = resolve(command, keybinds)
-            if resolved.action is None:
-                return end(
-                    "no_key", f"{command.id}: none of {', '.join(command.actions)} has a key"
-                )
-            setup: list[Action] = []
-            for name in command.setup:
-                action = keybinds.get(name)
-                if action is None or not action.bound:
-                    return end("no_key", f"{command.id}: {name} needs a key of its own first")
-                setup.append(action)
-            for position, action in enumerate((*setup, resolved.action)):
-                verdict = safety.check(
-                    command, action, keybinds, facts, confirmed=confirmed, setup_done=position
-                )
-                if verdict.ask:
-                    questions.append(verdict.reason)
-                    asking_about.append(safety.spoken_name(action))
-                elif not verdict.allowed:
-                    return end("refused", verdict.reason)  # a refusal outranks any question
-            try:
-                for position, action in enumerate((*setup, resolved.action)):
-                    settle = command.settle_seconds if setup and position == len(setup) else 0.0
-                    if position == 0:
-                        settle = max(settle, part.wait_seconds)
-                    beat = max(settle, CHAIN_BEAT_SECONDS) if steps else 0.0
-                    steps.append((beat, plan(action, keybinds.modes)))
-            except (NotPressable, UnsupportedKey) as e:
-                return end("no_key", str(e))
+        planned = plan_request(commands, keybinds, facts, confirmed=confirmed)
+        if isinstance(planned, Refusal):
+            return end(planned.status, planned.detail)
         trace.mark("gate")
-        if questions:
-            # Spoken from the gate's own words, never the brain's: the player must hear
-            # what they'd be confirming, not what the brain says it is.
-            name = self._address()
-            ending = f"Say confirm, {name}." if name else "Say confirm."
-            progress.question = f"{', '.join(dict.fromkeys(asking_about))}? {ending}"
+        if isinstance(planned, Questions):
+            progress.question = planned.question(self._address())
             deadline = self._clock() + self._confirm_seconds
             self._question = _Question(
                 request, tuple(commands), deadline, progress.by_brain, progress.say
             )
-            return end("asking", f'{"; ".join(questions)}: hold push-to-talk and say "confirm"')
+            return end("asking", planned.detail)
 
         def first_key_down() -> None:  # on the key thread, as the key goes down
             if progress.keydown_ms is None:
                 progress.keydown_ms = trace.elapsed_ms()
 
-        for wait, press in steps:
+        for wait, press in planned.presses:
             if wait:
                 await self._sleep(wait)
             running = loop.run_in_executor(
@@ -638,6 +572,42 @@ class Session:
         trace.mark("press")
         return end("done")
 
+    async def _ask_brain(self, text: str) -> Picked | Reply | str:
+        """What the brain decides, within its time (ADR 14, #150, #169): commands, a
+        reply, or why it couldn't answer."""
+        assert self._brain is not None  # noqa: S101 - only routed here with a brain
+        loop = asyncio.get_running_loop()
+        self._warm_speaker()  # while the brain thinks, so speech starts sooner
+        try:
+            async with asyncio.timeout(self._brain_seconds) as budget:
+                asked = loop.time()
+
+                def searching() -> None:
+                    # Capped too (#169): after look-ups, a search can't run past it.
+                    budget.reschedule(min(loop.time() + self._search_seconds, asked + SEARCH_LIMIT))
+                    self._fill()
+
+                def looking() -> None:
+                    # Only ever later, and never past the limit: an early look-up
+                    # keeps the usual deadline, and each one after moves it on.
+                    later = min(loop.time() + self._looking_seconds, asked + self._looking_limit)
+                    if (when := budget.when()) is None or later > when:
+                        budget.reschedule(later)
+
+                decision = await self._brain.decide(
+                    BrainRequest(
+                        text,
+                        self._keybinds(),
+                        self._conversation.follow_ups(),
+                        waiting=searching,
+                        looking=looking,
+                        checking=lambda: self._fill(self._checking),
+                    )
+                )
+            return from_brain(decision, self._matcher)
+        except (BrainError, TimeoutError) as e:
+            return str(e) or "it took too long"
+
     def _tile(self, request: int, what: str, trace: Trace, heard: str, text: str) -> Result:
         """Keep, clear or bring back a card, or show the last answer to read."""
         display = self._display
@@ -650,7 +620,7 @@ class Session:
             display.clear()
             done = True
         else:
-            said, card = self._last_reply
+            said, card = self._conversation.last_reply
             if card is not None:
                 done = display.show(card, pinned=True)
             else:
@@ -673,7 +643,7 @@ class Session:
         A confirm question still open is asked again, and waits afresh for "confirm"
         (ADR 13, amended for #226). One that expired or was answered isn't: "Say
         confirm." would then ask for something that does nothing."""
-        line = self._last_line
+        line = self._conversation.last_line
         if line.question is not None:
             progress = _Progress(commands=("say_again",))
             if question is None or question.request != line.question:
@@ -737,49 +707,10 @@ class Session:
         )
 
     def _report(self, result: Result) -> None:
-        stages = ", ".join(f"{name} {ms:.0f}" for name, ms in result.timings.items())
-        said = ""
-        if self._log_transcripts and result.text:
-            said = f' "{result.text}"'
-            if result.heard and result.heard != result.text:  # the lexicon corrected it
-                said += f' (heard "{result.heard}")'
-        keydown = "" if result.keydown_ms is None else f"key down at {result.keydown_ms:.0f}, "
-        log.info(
-            "#%d%s: %s%s%s%s in %.0f ms (%s%s)",
-            result.request,
-            said,
-            "+".join(result.commands) + " " if result.commands else "",
-            "confirmed, " if result.confirmed else "",
-            result.status,
-            f" ({result.detail})" if result.detail else "",
-            result.total_ms,
-            keydown,
-            stages or "no stages",
-        )
-        speak = self._speaker is not None and self._should_speak(result)
-        # What Tycho says often echoes what the player said, so it's kept like a transcript.
-        if result.say and self._log_transcripts:
-            log.info(
-                "Tycho%s: %s", "" if speak else f" (not spoken: {self._quiet(result)})", result.say
-            )
-        elif self._speaker is None:
-            # No voice: the console is the only place the player can read the answer
-            # (audit, 2026-11-03). Not the log file, unless they keep transcripts.
-            if result.say and self._would_speak(result):
-                log.info("Tycho: %s", result.say, extra=logs.CONSOLE_ONLY)
-            elif result.status == "asking" and result.question:
-                log.info("Tycho asks: %s", result.question, extra=logs.CONSOLE_ONLY)
-        self._remember(result)
-        if result.status == "replied":
-            self._last_reply = (result.say, result.card)
-        if result.commands != ("say_again",):  # a replay leaves the line it replayed
-            if result.status == "asking" and result.question:
-                self._last_line = _Line(result.question, question=result.request)
-            elif self._would_speak(result):
-                self._last_line = _Line(result.say)
+        speak = self._speaker is not None and would_speak(result)
+        self._reporter.report(result, voice=self._speaker is not None, speak=speak)
+        self._conversation.heard(result)
         self._to_tile(result)
-        if result.commands and self._action_log is not None:
-            self._record(self._action_log, result, spoken=speak)
         if self._speaker is not None and speak:
             self._start_speaking(self._speaker, result.say, self._feedback.done)
         elif result.status == "asking" and self._speaker is not None and result.question:
@@ -805,18 +736,6 @@ class Session:
                 display.show(result.card)
         elif result.status == "asking" and result.question:
             display.ask(result.question, self._confirm_seconds)
-
-    def _should_speak(self, result: Result) -> bool:
-        return self._speaker is not None and self._would_speak(result)
-
-    @staticmethod
-    def _would_speak(result: Result) -> bool:
-        """Whether this result has a line for the player, given a voice to say it."""
-        if result.commands == ("say_again",):
-            return result.done and bool(result.say)
-        if not result.by_brain or not result.say.strip():
-            return False
-        return result.status == "replied" or (result.done and not result.announced)
 
     def _start_speaking(self, speaker: Speaker, text: str, instead: Callable[[], None]) -> None:
         """Say ``text``, after the filler line if one is playing; if nothing can be
@@ -876,59 +795,3 @@ class Session:
         if self._speech_warming is None or self._speech_warming.done():
             self._speech_warming = asyncio.create_task(self._speaker.warm())
             self._speech_warming.add_done_callback(_log_failure)
-
-    def _quiet(self, result: Result) -> str:
-        """Why a line wasn't spoken, for the log."""
-        if self._speaker is None:
-            return "no voice"
-        if result.done and result.announced:
-            return "the game announces it"
-        return result.status
-
-    def _record(self, action_log: ActionLog, result: Result, *, spoken: bool = False) -> None:
-        entry: dict[str, object] = {
-            "request": result.request,
-            "commands": list(result.commands),
-            "status": result.status,
-            "pressed": list(result.pressed),
-            "confirmed": result.confirmed,
-        }
-        if result.keydown_ms is not None:
-            entry["keydown_ms"] = round(result.keydown_ms)
-        if result.detail:
-            entry["detail"] = result.detail
-        if result.by_brain:
-            entry["by"] = "brain"
-        if result.say and self._log_transcripts:
-            entry["tycho_said"] = result.say
-            entry["spoken"] = spoken
-        if self._log_transcripts and result.text:
-            entry["said"] = result.text
-            if result.heard and result.heard != result.text:
-                entry["heard"] = result.heard
-        try:
-            action_log.record(entry)
-        except OSError as e:  # a full disk mustn't stop the loop
-            log.warning("Couldn't write the action log: %s", e)
-
-    def _follow_ups(self) -> list[Exchange]:
-        """The last few exchanges, if the latest was recent; otherwise a fresh start."""
-        if self._clock() - self._recent_at > FOLLOW_UP_SECONDS:
-            self._recent.clear()
-        return list(self._recent)
-
-    def _remember(self, result: Result) -> None:
-        if not result.text or result.status in ("empty", "cancelled"):
-            return
-        if result.commands == ("say_again",):  # the answer it repeats is already there
-            return
-        if result.status == "replied":
-            outcome = f"said: {result.say}"
-        elif result.status == "asking":
-            outcome = f"asked the player to confirm {', '.join(result.commands)}"
-        elif result.done and result.pressed:
-            outcome = f"did {', '.join(result.commands)} (pressed {', '.join(result.pressed)})"
-        else:
-            outcome = f"couldn't: {result.status}" + (f", {result.detail}" if result.detail else "")
-        self._recent = [*self._recent, Exchange(result.text, outcome)][-FOLLOW_UP_LIMIT:]
-        self._recent_at = self._clock()
