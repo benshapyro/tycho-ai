@@ -48,7 +48,20 @@ def smoke_imports() -> int:
     for name in LAZY_IMPORTS:
         importlib.import_module(name)
     print(f"imported {len(LAZY_IMPORTS)} modules")
+    packs = smoke_packs()
+    if not packs:
+        print("no game packs in the build")
+        return 1
+    print(f"loaded {len(packs)} game packs: {', '.join(packs)}")
     return 0
+
+
+def smoke_packs() -> list[str]:
+    """Every game pack that ships with Tycho, loaded as the frozen app reads them (with
+    ``importlib.resources``), so a pack file left out of the build fails CI (#320)."""
+    from tycho.packs import built_in, installed
+
+    return [f"{pack.id} {pack.version}" for pack in map(built_in, installed())]
 
 
 class _Tail:

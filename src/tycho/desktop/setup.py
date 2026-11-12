@@ -15,6 +15,7 @@ from typing import Protocol
 
 import numpy as np
 
+from tycho.packs import GamePack, PackError, built_in
 from tycho.settings import Settings
 
 CAPTURE_SECONDS = 15.0
@@ -161,20 +162,24 @@ def verdict(clip: np.ndarray[tuple[int], np.dtype[np.float32]]) -> dict[str, obj
     return {"peak": round(peak, 4), "verdict": how}
 
 
-def game(current: Settings, pc: SetupPC) -> Game:
+def game(current: Settings, pc: SetupPC, pack: GamePack | None = None) -> Game:
     """The chosen game as setup sees it: found by ``pc``, or not needed at all when its
-    pack reads nothing from the game (no install part, #300)."""
-    from tycho.packs import PackError, built_in
-
-    try:
-        pack = built_in(current.game)
-    except PackError:  # tycho check says why; setup asks for Star Citizen as before
-        return pc.game(current)
+    pack reads nothing from the game (no install part, #300, #344). ``pack`` is the
+    chosen game's (the settings' when None)."""
+    if pack is None:
+        try:
+            pack = built_in(current.game)
+        except PackError:  # tycho check says why; setup asks for Star Citizen as before
+            return pc.game(current)
     if pack.parts.install is None:
         return Game(True, current.game_channel, needed=False, name=pack.name)
     return replace(pc.game(current), name=pack.name)
 
 
-def needs_setup(current: Settings, pc: SetupPC | None = None) -> bool:
-    """Whether Tycho can't start without the player: no push-to-talk, or no game."""
-    return current.push_to_talk is None or not game(current, pc or WindowsPC()).found
+def needs_setup(current: Settings, pc: SetupPC | None = None, pack: GamePack | None = None) -> bool:
+    """Whether Tycho can't start without the player: no push-to-talk, or no game folder
+    for a game that has one. A pack with no install part (an advisor, #191) needs no
+    folder, so Star Citizen missing never sends its player to setup (#344)."""
+    if current.push_to_talk is None:
+        return True
+    return not game(current, pc or WindowsPC(), pack).found

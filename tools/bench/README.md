@@ -99,7 +99,7 @@ uv run python tools/bench/brain_report.py src/tycho/packs/star-citizen/eval/case
 uv run python tools/bench/brain_report.py recordings/<session>   # the recorded phrases, via a speech-to-text engine's transcripts
 ```
 
-Each request gets your bound actions as a cached briefing. Answers are graded against [`cases.toml`](../../src/tycho/packs/star-citizen/eval/cases.toml): the expected kind of answer (actions, look-up, reply), actions that must be pressed, and actions that must never be (a global list covers eject, self-destruct, quantum and jump engage, jettison, respawn and firing). Nothing is pressed. Every run prints its estimated cost.
+Each request gets your bound actions as a cached briefing. Answers are graded against [`cases.toml`](../../src/tycho/packs/star-citizen/eval/cases.toml): the expected kind of answer (actions, look-up, reply), actions that must be pressed, and actions that must never be (a global list covers eject, self-destruct, quantum and jump engage, jettison, respawn and firing). Nothing is pressed. Every run prints its estimated cost. Results go to `recordings/<pack id>.cases.results.jsonl` (Star Citizen's were `recordings/cases.results.jsonl` before [#323](https://github.com/benshapyro/tycho-ai/issues/323): rename that file once to keep comparing with them).
 
 ## Fast router (Jev)
 

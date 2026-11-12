@@ -163,6 +163,15 @@ def _entry_point() -> ModuleType:
     return module
 
 
+def test_the_build_s_smoke_test_loads_every_game_pack() -> None:
+    # Packs are read with importlib.resources, which PyInstaller must carry (#320).
+    from tycho.packs import installed
+
+    loaded = _entry_point().smoke_packs()
+    assert [entry.split()[0] for entry in loaded] == list(installed())
+    assert any(entry.startswith("star-citizen ") for entry in loaded)
+
+
 def test_the_windowed_app_shows_a_problem_in_a_message_box(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -425,6 +425,36 @@ def test_with_key_actions_off_no_path_presses_anything(
     assert "ask" not in r.feedback.played  # nothing to confirm: it can't be pressed
 
 
+def test_with_key_actions_off_the_first_refusal_says_why_once_a_session() -> None:
+    # Only the not-done sound left a player who forgot they turned key actions off with
+    # no reason (#327): the first refusal is spoken and shown on the Tile; later ones
+    # are the sound only.
+    speaker, display = FakeSpeaker(), FakeDisplay()
+    r = _conversation(
+        "landing gear", "lights", speaker=speaker, display=display, safety_lists=KEYS_OFF
+    )
+    assert [x.status for x in r.results] == ["refused", "refused"]
+    assert speaker.spoken == [KEYS_OFF.keys_off]
+    notices = [card for card in display.shown if card.kind == "notice"]
+    assert len(notices) == 1
+    assert "Tycho doesn't press keys in Star Citizen" in notices[0].body[0]
+    assert r.feedback.played == ["not_done", "not_done"]
+
+
+def test_without_a_voice_the_first_keys_off_refusal_is_still_shown() -> None:
+    display = FakeDisplay()
+    r = _conversation("landing gear", display=display, safety_lists=KEYS_OFF)
+    assert [card.kind for card in display.shown] == ["notice"]
+    assert r.feedback.played == ["not_done"]
+
+
+def test_other_refusals_are_not_told_as_keys_off() -> None:
+    speaker = FakeSpeaker()
+    r = _conversation("landing gear", speaker=speaker, focus=FakeFocus(False))
+    assert r.results[0].status != "done"
+    assert speaker.spoken == []
+
+
 # --- The brain (ADR 14) ------------------------------------------------------------------
 
 
@@ -471,6 +501,20 @@ def test_when_the_brain_fails_tycho_says_so_and_presses_nothing() -> None:
     r = _conversation("do the thing", brain=FakeBrain(BrainError("can't reach Claude")))
     assert r.results[0].status == "failed"
     assert "can't reach Claude" in r.results[0].detail
+    assert r.keys.events == []
+    assert r.feedback.played == ["not_done"]
+
+
+def test_a_sequence_the_brain_made_up_fails_once_and_presses_nothing() -> None:
+    # #308 moved the sequence look-up behind routing.from_brain: the brain stage is
+    # timed once, and the request ends as the brain's failure (#309).
+    r = _conversation("do the thing", brain=FakeBrain(RunSequence("no_such_sequence", "On it.")))
+    (result,) = r.results
+    assert result.status == "failed"
+    assert "the brain couldn't answer" in result.detail
+    assert list(result.timings)[-1] == "brain"  # the last stage: nothing after it ran
+    # Marked twice, the second mark would replace the first and lose its time.
+    assert result.total_ms == pytest.approx(sum(result.timings.values()), abs=0.01)
     assert r.keys.events == []
     assert r.feedback.played == ["not_done"]
 

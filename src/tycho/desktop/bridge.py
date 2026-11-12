@@ -469,7 +469,7 @@ class Bridge:
         return cast(setup.Game, self._cached("game", key, lambda: setup.game(current, self._pc)))
 
     def _conflicts(self, ptt: str, current: Settings) -> list[str]:
-        key = (ptt, current.game_channel, str(current.game_root))
+        key = (ptt, current.game, current.game_channel, str(current.game_root))
         found = self._cached("conflicts", key, lambda: self._pc.conflicts(ptt, current))
         return list(cast(list[str], found))
 
@@ -479,7 +479,14 @@ class Bridge:
         current = settings.load(self._path)
         if self._game_pack(current).parts.keybinds is None:
             return None  # a game Tycho never presses keys in has none to read (#191)
-        key = (current.game_channel, str(current.game_root), time.monotonic() // KEYBINDS_SECONDS)
+        # The game too: once two packs read keybinds, a switch mustn't show the last
+        # game's keys until the cache runs out (#331).
+        key = (
+            current.game,
+            current.game_channel,
+            str(current.game_root),
+            time.monotonic() // KEYBINDS_SECONDS,
+        )
 
         def read() -> Keybinds | None:
             from tycho.app import find_install

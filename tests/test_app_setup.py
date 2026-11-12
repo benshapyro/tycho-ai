@@ -47,6 +47,18 @@ def test_a_game_that_reads_nothing_from_its_folder_needs_none(path: Path) -> Non
     assert bridge.finish_setup() == {"ok": True, "first_run": False}
 
 
+def test_a_game_with_no_folder_to_find_never_needs_one() -> None:
+    # An advisor pack has no install part: Star Citizen missing isn't a reason to stop
+    # in setup (#344). Push-to-talk is still needed.
+    from tests.fakes.fake_pack import advisor_pack
+
+    pc = FakeSetupPC()  # no Star Citizen here
+    ready = Settings(push_to_talk="mouse:0x06")
+    assert not setup.needs_setup(ready, pc, advisor_pack())
+    assert setup.needs_setup(Settings(), pc, advisor_pack())
+    assert setup.needs_setup(ready, pc)  # Star Citizen does need its folder
+
+
 def test_setup_shows_what_is_chosen_and_what_is_missing(path: Path) -> None:
     state = _bridge(path).setup_state()
     assert state["game"] == {

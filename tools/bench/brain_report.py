@@ -363,6 +363,17 @@ class Case:
 RESULTS = Path(__file__).resolve().parents[2] / "recordings"  # gitignored
 
 
+def results_name(source: Path) -> str:
+    """What a case file's results are named after: a pack's ``eval/cases.toml`` by its
+    pack, so each game has its own history (#323); any other file by its own name."""
+    toml = source.parent.parent / "pack.toml"
+    if source.parent.name == "eval" and toml.is_file():
+        pack_id = tomllib.loads(toml.read_text("utf-8")).get("id")
+        if isinstance(pack_id, str) and pack_id:
+            return f"{pack_id}.{source.stem}"  # by its id, whatever its folder (#342)
+    return source.stem
+
+
 def load_cases(source: Path, engine: str, results: Path = RESULTS) -> tuple[list[Case], Path]:
     """Cases from a typed case file, or from a recording session's transcripts.
 
@@ -380,7 +391,7 @@ def load_cases(source: Path, engine: str, results: Path = RESULTS) -> tuple[list
         if duplicates := sorted({h for h in heard if heard.count(h) > 1}):
             raise SystemExit(f"Duplicate cases in {source}: {duplicates}")
         results.mkdir(exist_ok=True)
-        return cases, results / f"{source.stem}.results.jsonl"
+        return cases, results / f"{results_name(source)}.results.jsonl"
     expected: dict[str, dict[str, Any]] = tomllib.loads(EXPECTED.read_text("utf-8"))
     transcripts: dict[str, str] = {}
     for path in (source / "results").glob("*.jsonl"):
