@@ -14,7 +14,7 @@ import anthropic
 import httpx2
 import pytest
 
-from tycho.knowledge.web import SECONDS, SITES, WEB_SEARCH, WebSearch
+from tycho.knowledge.web import MAX_ANSWER, SECONDS, SITES, WEB_SEARCH, WebSearch
 
 # --- The search request -------------------------------------------------------------------------
 
@@ -122,6 +122,29 @@ def test_an_answer_cut_off_keeps_only_whole_sentences() -> None:
     )
     assert error
     assert "nothing usable" in result["error"]
+
+
+def test_a_lead_in_before_the_search_stays_apart_from_the_answer() -> None:
+    message = _found("RSI has 4.11 for Q4.")
+    message.content.insert(0, SimpleNamespace(type="text", text="I'll search for that."))
+    _, result = _search(_Client(message))
+    assert result["answer"] == "I'll search for that. RSI has 4.11 for Q4."
+
+
+def test_a_cut_answer_does_not_stop_at_an_abbreviation() -> None:
+    cut = _found("Patch 4.11 is due. It lands Dec. 12 and adds the Kra", stop_reason="max_tokens")
+    _, result = _search(_Client(cut))
+    assert result["answer"] == "Patch 4.11 is due."
+
+
+def test_a_long_answer_ends_on_a_whole_sentence() -> None:
+    sentence = "Quantum fuel is sold at Megumi Refueling and both Pyro gateways. "
+    _, result = _search(_Client(_found(sentence * 12)))
+    assert len(result["answer"]) <= MAX_ANSWER
+    assert result["answer"].endswith("gateways.")
+    _, result = _search(_Client(_found("word " * 200)))
+    assert len(result["answer"]) <= MAX_ANSWER
+    assert result["answer"].endswith("word")
 
 
 def test_why_the_reply_stopped_reaches_the_log(caplog: pytest.LogCaptureFixture) -> None:
