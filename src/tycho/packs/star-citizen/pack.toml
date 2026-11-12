@@ -1,0 +1,41 @@
+# Star Citizen, Tycho's first game pack (ADR 18). A pack is data: Tycho validates it on
+# load and never runs anything from it. Code a pack needs is built into Tycho and named
+# here by id ([parts]).
+
+id = "star-citizen"
+name = "Star Citizen"
+version = "1.0.0"          # the pack's own version, shown by tycho check and in traces
+format = 1                 # the folder format; Tycho refuses a format it doesn't know
+mode = "keys"              # Tycho may press keys, through the safety gate
+window = "StarCitizen.exe" # the program whose window must be in front to press
+
+[parts]                     # built-in code, by id
+install = "star-citizen"    # find the game folder and its channels
+keybinds = "star-citizen"   # Data.p4k defaults plus actionmaps.xml
+game_state = "star-citizen" # Game.log
+lookups = ["ships", "fleet", "items", "mining", "trade", "settings", "web"]
+
+[web]
+# The only sites web search may read (2026-11-02): RSI's own (patch notes, roadmap,
+# Comm-Links, Spectrum, support), the community wiki and the community tools. The open
+# web brought fan sites and leaked dates.
+sites = [
+    "robertsspaceindustries.com",
+    "starcitizen.tools",
+    "uexcorp.space",
+    "erkul.games",
+    "sc-craft.tools",
+    "scmdb.net",
+]
+
+[briefing]
+# Action maps of actions nobody asks a co-pilot for (#59).
+unbriefed_actionmaps = [
+    "view_director_mode",            # camera director moves
+    "spectator",
+    "player_emotes",
+    "player_input_optical_tracking", # head tracking, VR, VOIP
+    "prone",
+]
+# Steering and movement held down for as long as it should last: one press means nothing.
+continuous = '''v_(pitch|yaw|roll)_\w+|v_strafe_(up|down|left|right|forward|back)|v_move_\w+|eva_(strafe|roll)_\w+|zgt_roll_\w+|move(forward|back|left|right)|lean(left|right)'''

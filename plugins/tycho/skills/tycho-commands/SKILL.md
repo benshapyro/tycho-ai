@@ -8,7 +8,7 @@ description: Add or change the player's own voice commands for Tycho, the unoffi
 Tycho matches common phrases on the player's PC and presses the game action for them instantly. Anything it can't match goes to Claude, if the player has an Anthropic key, which takes about 1.3 s. The player's own file adds to the built-in commands, or replaces them:
 
 - **Where:** `%APPDATA%\tycho\commands.toml`. Create it if it isn't there.
-- **The built-in list:** https://github.com/benshapyro/tycho-ai/blob/main/src/tycho/commands/commands.toml. Read it to see the format, and to see what already exists.
+- **The built-in list:** https://github.com/benshapyro/tycho-ai/blob/main/src/tycho/packs/star-citizen/commands.toml. Read it to see the format, and to see what already exists.
 - **Taking a phrase:** a phrase in the player's file is taken away from the built-in command that had it.
 - **More ways to say a built-in:** use a `[[phrases]]` entry (below), not a copy of the command. A copy replaces the built-in and stops getting Tycho's fixes to it.
 - **Replacing a built-in:** an entry with a built-in's `id` replaces that command. Do this only to change what it presses.

@@ -1,0 +1,16 @@
+# The fake game's fast-path commands, in the same format as Star Citizen's.
+
+[[command]]
+id = "raise_shield"
+actions = ["shield_raise"]
+say = ["raise the shield", "shield up"]
+
+[[command]]
+id = "open_hatch"
+actions = ["hatch_open"]
+say = ["open the hatch", "hatch open"]
+
+[[sequence]]
+id = "get_ready"
+steps = ["raise_shield", "open_hatch"]
+say = ["get ready"]

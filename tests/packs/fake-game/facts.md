@@ -1,0 +1,1 @@
+- Fake Game 2.0: the hatch opens from inside only.
