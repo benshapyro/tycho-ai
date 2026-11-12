@@ -694,3 +694,59 @@ def test_the_runtime_imports_without_windows() -> None:
         [sys.executable, "-c", code], capture_output=True, text=True, timeout=60, check=False
     )
     assert done.returncode == 0, done.stderr
+
+
+def _act(actions: tuple[str, ...], keybinds: object, heard: str = "xyzzy plugh frobnicate") -> Any:
+    from tycho.brain import RunActions
+    from tycho.lexicon import Lexicon
+
+    e = _eval()
+    rule = {"heard": heard, "expect": ["actions"]}
+    brain = _ScriptedBrain(0, RunActions(actions, "Done."))
+    return asyncio.run(e.run_case(rule, Lexicon.default(), brain, keybinds))
+
+
+def _with(*actions: tuple[str, str]) -> object:
+    from tests.test_runtime import KEYBINDS, MODES, _action  # pyright: ignore[reportPrivateUsage]
+    from tycho.game.keybinds import Keybinds
+
+    return Keybinds([*KEYBINDS, *(_action(n, k) for n, k in actions)], MODES)
+
+
+def test_the_eval_asks_first_wherever_the_safety_gate_does() -> None:
+    """#55: the eval plans through the session's own gate. A dangerous action the
+    confirm-grade list doesn't name yet is still asked about (the danger-word backstop),
+    so allowing it isn't graded a wrong press."""
+    e = _eval()
+    keybinds = _with(("v_jettison_all_cargo", "j"))
+    outcome = _act(("v_jettison_all_cargo",), keybinds)
+    assert outcome.actions == ["v_jettison_all_cargo"]
+    assert outcome.asks
+    rule = {"expect": ["actions"], "allow": ["v_jettison_all_cargo"]}
+    assert e.grade(outcome, rule, {"v_jettison_all_cargo"}) == "pass"
+
+
+def test_a_pick_the_gate_refuses_is_still_graded_and_noted() -> None:
+    """A key it shares with Eject: Tycho presses nothing, but the eval grades the pick."""
+    keybinds = _with(("v_lights_toggle", "ralt+y"))  # Eject's key in the test keybinds
+    outcome = _act(("v_lights_toggle",), keybinds)
+    assert outcome.actions == ["v_lights_toggle"]
+    assert any("would press nothing (refused" in note for note in outcome.notes)
+
+
+def test_the_fast_path_is_planned_through_the_gate_too() -> None:
+    from tycho.lexicon import Lexicon
+
+    e = _eval()
+    rule = {"heard": "eject", "expect": ["actions"]}
+    outcome = asyncio.run(e.run_case(rule, Lexicon.default(), _NoBrain(), _keybinds()))
+    assert (outcome.route, outcome.actions, outcome.asks) == ("fast", ["v_eject"], True)
+
+
+def test_the_tiles_words_never_reach_the_brain_while_it_is_on() -> None:
+    from tycho.lexicon import Lexicon
+
+    e = _eval()
+    rule = {"heard": "keep that up", "expect": ["reply"]}
+    outcome = asyncio.run(e.run_case(rule, Lexicon.default(), _NoBrain(), _keybinds()))
+    assert (outcome.route, outcome.kind) == ("session", "pin")

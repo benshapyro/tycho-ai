@@ -4,7 +4,9 @@ Each request goes through the game lexicon and the fast path first, exactly as
 in the game; only what the fast path can't match goes to Claude, through
 ``tycho.brain.claude.ClaudeBrain`` and ``commands_for``. Nothing is pressed: the
 grade is on the actions Tycho would press (after "confirm", for confirm-grade
-ones), from the player's real keybinds.
+ones), from the player's real keybinds. Routing and planning are the session's own
+(``tycho.runtime.routing`` and ``planning``, #55), so the eval can't grade stale logic:
+whether Tycho asks first is the safety gate's answer.
 
 The bar (ADR 14): zero wrong presses, and Claude's picks at p50 <= 1.5 s.
 Answers to questions must answer: a reply that only points the player elsewhere
@@ -70,13 +72,13 @@ from brain_report import GLOBAL_NEVER  # pyright: ignore[reportMissingImports, r
 from tycho import credentials, logs, paths, safety, settings
 from tycho.address import Address
 from tycho.app import anthropic_key, find_install, load_commands, openrouter_key
-from tycho.brain import BrainError, BrainRequest, Exchange, Reply, commands_for
+from tycho.brain import BrainError, BrainRequest, Exchange, Reply
 from tycho.brain.claude import MODEL, ClaudeBrain
 from tycho.brain.lookups import Lookup, LookupResult
 from tycho.brain.openrouter import SORTS, OpenRouterBrain, Prices, route
 from tycho.brain.rounds import NO_PRESS_AFTER_SEARCH
 from tycho.brain.traces import TraceFile
-from tycho.commands import Command, CommandMatcher, Defer, resolve
+from tycho.commands import Command, CommandMatcher, resolve
 from tycho.game.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.game.store import KeybindStore
 from tycho.knowledge import ShipLookup, UexApi, WikiApi
@@ -87,7 +89,9 @@ from tycho.knowledge.store import ensure
 from tycho.knowledge.trade_lookup import trade_lookups
 from tycho.knowledge.web import WebSearch
 from tycho.lexicon import Lexicon
-from tycho.runtime.session import is_say_again
+from tycho.runtime import routing
+from tycho.runtime.planning import Questions, Refusal, Steps, plan_request
+from tycho.runtime.routing import NotUnderstood, Picked, Reserved, from_brain
 from tycho.spoken_settings import SettingsTool
 
 CASES = Path(__file__).resolve().parents[1] / "spike" / "brain_cases.toml"
@@ -203,7 +207,8 @@ class _Costs(logging.Handler):
 
 
 def pressed(commands: tuple[Command, ...], keybinds: Keybinds) -> list[str]:
-    """The game actions Tycho would press for these commands, setup included."""
+    """The game actions picked for these commands, setup included, whether or not the
+    gate would let them be pressed."""
     names: list[str] = []
     for command in commands:
         for step in command.expand():
@@ -352,18 +357,23 @@ async def run_case(
     journal: list[tuple[str, str]] | None = None,
     costs: _Costs | None = None,
     matcher: CommandMatcher | None = None,
+    *,
+    tile: bool = True,
 ) -> Outcome:
     outcome = Outcome(rule["heard"], str(rule.get("tag", "")))
     text = lexicon.correct(rule["heard"]).text
-    if is_say_again(text):  # the session replays the last answer itself (#222)
-        outcome.route, outcome.kind = "session", "say_again"
-        return outcome
     matcher = matcher or MATCHER
-    match = matcher.match(text)
-    if not isinstance(match, Defer):
-        outcome.route, outcome.kind = "fast", "actions"
-        outcome.actions = pressed(match.commands, keybinds)
-        outcome.asks = _asks(match.commands, outcome.actions)
+    # The session's own routing (#55), so the eval grades the path the words really take.
+    routed = routing.route(text, matcher, tile=tile)
+    if isinstance(routed, Reserved):  # the session answers these itself ("say that again", #222)
+        outcome.route, outcome.kind = "session", routed.word
+        return outcome
+    if isinstance(routed, NotUnderstood):  # only without a brain, which the eval always has
+        outcome.kind, outcome.notes = "error", [routed.reason]
+        return outcome
+    if isinstance(routed, Picked):
+        outcome.route = "fast"
+        _plan(outcome, routed.commands, keybinds)
         return outcome
     outcome.route = "brain"
     recent = [Exchange(said, did) for said, did in rule.get("recent", [])]
@@ -401,22 +411,38 @@ async def run_case(
                 " | ".join(p for p in (r.text, r.detail, r.value) if p) for r in decision.card.rows
             ] + list(decision.card.body)
         return outcome
-    outcome.kind, outcome.say = "actions", decision.say
+    outcome.say = decision.say
     outcome.calls += 1  # the call that chose the act ended early, so it logged no reply
     try:
-        commands = commands_for(decision, matcher)
-        outcome.actions = pressed(commands, keybinds)
-        outcome.asks = _asks(commands, outcome.actions)
+        picked = from_brain(decision, matcher)
     except BrainError as e:
         outcome.kind, outcome.notes = "error", [str(e)]
+    else:
+        assert isinstance(picked, Picked)  # noqa: S101 - a Reply returned above
+        _plan(outcome, picked.commands, keybinds)
     if len(decision.say.split()) > SAY_WORDS:
         outcome.notes.append(f"say line is {len(decision.say.split())} words")
     return outcome
 
 
-def _asks(commands: tuple[Command, ...], actions: list[str]) -> bool:
-    confirm = any(step.command.confirm for command in commands for step in command.expand())
-    return confirm or bool(safety.CONFIRM_GRADE.intersection(actions))
+def _plan(outcome: Outcome, commands: tuple[Command, ...], keybinds: Keybinds) -> None:
+    """What Tycho would press for these commands, through the session's own planning and
+    safety gate (#55): after "confirm" if the gate asks first, with every fact the game
+    state can report present (the most it could ever press).
+
+    A request the gate refuses presses nothing in the game, but the eval still grades
+    what was picked: a pick the gate had to stop is a wrong pick, and the gate is the
+    backstop, not the bar. The refusal is noted."""
+    outcome.kind = "actions"
+    facts = safety.known_facts()
+    outcome.asks = isinstance(plan_request(commands, keybinds, facts), Questions)
+    planned = plan_request(commands, keybinds, facts, confirmed=True)
+    if isinstance(planned, Steps):
+        outcome.actions = list(planned.actions)
+        return
+    outcome.actions = pressed(commands, keybinds)
+    if isinstance(planned, Refusal):  # never Questions: it's planned as confirmed
+        outcome.notes.append(f"Tycho would press nothing ({planned.status}: {planned.detail})")
 
 
 MATCHER = load_commands()
@@ -760,7 +786,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
                 start = settings.load(settings_file)
             traces.case = rule["heard"]
             outcome = await run_case(
-                rule, lexicon, brain, keybinds, counted, journal, costs, matcher
+                rule, lexicon, brain, keybinds, counted, journal, costs, matcher, tile=cards()
             )
             outcome.verdict = grade(outcome, rule, valid)
             if outcome.verdict == "pass":
