@@ -9,7 +9,7 @@ terminal: the window is the only one asking.
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
@@ -28,6 +28,11 @@ class Game:
     channel: str
     folder: str = ""
     problem: str = ""
+    needed: bool = True
+    """Whether the chosen game needs its folder found. An advisor pack with no install
+    part (World of Warcraft, #300) reads nothing from the game, so setup skips it."""
+    name: str = "Star Citizen"
+    """The chosen game's name, for setup's first step."""
 
 
 class SetupPC(Protocol):
@@ -157,18 +162,24 @@ def verdict(clip: np.ndarray[tuple[int], np.dtype[np.float32]]) -> dict[str, obj
     return {"peak": round(peak, 4), "verdict": how}
 
 
-def needs_setup(current: Settings, pc: SetupPC | None = None, pack: GamePack | None = None) -> bool:
-    """Whether Tycho can't start without the player: no push-to-talk, or no game folder
-    for a game that has one. A pack with no install part (an advisor, #191) needs no
-    folder, so Star Citizen missing never sends its player to setup (#344). ``pack`` is
-    the chosen game's (the settings' when None)."""
-    if current.push_to_talk is None:
-        return True
+def game(current: Settings, pc: SetupPC, pack: GamePack | None = None) -> Game:
+    """The chosen game as setup sees it: found by ``pc``, or not needed at all when its
+    pack reads nothing from the game (no install part, #300, #344). ``pack`` is the
+    chosen game's (the settings' when None)."""
     if pack is None:
         try:
             pack = built_in(current.game)
-        except PackError:  # tycho check says why; the folder check is as before
-            pack = None
-    if pack is not None and pack.parts.install is None:
-        return False
-    return not (pc or WindowsPC()).game(current).found
+        except PackError:  # tycho check says why; setup asks for Star Citizen as before
+            return pc.game(current)
+    if pack.parts.install is None:
+        return Game(True, current.game_channel, needed=False, name=pack.name)
+    return replace(pc.game(current), name=pack.name)
+
+
+def needs_setup(current: Settings, pc: SetupPC | None = None, pack: GamePack | None = None) -> bool:
+    """Whether Tycho can't start without the player: no push-to-talk, or no game folder
+    for a game that has one. A pack with no install part (an advisor, #191) needs no
+    folder, so Star Citizen missing never sends its player to setup (#344)."""
+    if current.push_to_talk is None:
+        return True
+    return not game(current, pc or WindowsPC(), pack).found

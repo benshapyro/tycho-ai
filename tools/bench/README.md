@@ -63,6 +63,7 @@ Results are written next to the clips, in `recordings/<session>/results/`, and s
 uv run python tools/bench/tycho_eval.py                 # every case in src/tycho/packs/star-citizen/eval/cases.toml
 uv run python tools/bench/tycho_eval.py --tag log       # only the cases from play logs
 uv run python tools/bench/tycho_eval.py --pack star-citizen  # a game pack's own cases (ADR 18)
+uv run python tools/bench/tycho_eval.py --pack world-of-warcraft  # an advisor pack: no keybinds, only its own look-ups (#326)
 uv run python tools/bench/tycho_eval.py --provider openrouter --model deepseek/deepseek-v4
 uv run python tools/bench/tycho_eval.py --adapter-check  # Haiku directly, then through OpenRouter
 uv run python tools/bench/tycho_eval.py --provider openrouter --model openai/gpt-oss-120b --host cerebras  # one host only

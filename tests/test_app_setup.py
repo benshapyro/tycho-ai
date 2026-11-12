@@ -31,6 +31,22 @@ def test_a_fresh_install_needs_setup() -> None:
     assert MISSING.found is False
 
 
+def test_a_game_that_reads_nothing_from_its_folder_needs_none(path: Path) -> None:
+    # World of Warcraft (#300): an advisor pack with no install part. A PC without
+    # Star Citizen must still get through setup and start (the review of #335).
+    pc = FakeSetupPC()  # no game found
+    wow = Settings(game="world-of-warcraft", push_to_talk="mouse:0x06")
+    assert not setup.needs_setup(wow, pc)
+    assert setup.needs_setup(Settings(push_to_talk="mouse:0x06"), pc)  # Star Citizen still is
+    settings.save(wow, path)
+    bridge = _bridge(path, pc)
+    state = bridge.setup_state()
+    assert state["game"]["needed"] is False  # type: ignore[index]
+    assert state["game"]["name"] == "World of Warcraft"  # type: ignore[index]
+    assert state["ready"] is True
+    assert bridge.finish_setup() == {"ok": True, "first_run": False}
+
+
 def test_a_game_with_no_folder_to_find_never_needs_one() -> None:
     # An advisor pack has no install part: Star Citizen missing isn't a reason to stop
     # in setup (#344). Push-to-talk is still needed.
@@ -50,6 +66,8 @@ def test_setup_shows_what_is_chosen_and_what_is_missing(path: Path) -> None:
         "channel": "LIVE",
         "folder": "",
         "problem": "Star Citizen LIVE wasn't found",
+        "needed": True,
+        "name": "Star Citizen",
     }
     assert "PTU" in state["channels"]  # type: ignore[operator]
     assert state["push_to_talk"] == {"set": False, "name": "", "conflicts": []}
@@ -66,6 +84,8 @@ def test_choosing_the_game_folder(path: Path) -> None:
         "channel": "LIVE",
         "folder": FOUND.folder,
         "problem": "",
+        "needed": True,
+        "name": "Star Citizen",
     }
     assert str(settings.load(path).game_root) == "D:\\Games\\StarCitizen"
 

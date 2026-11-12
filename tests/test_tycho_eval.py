@@ -801,3 +801,59 @@ def test_the_tiles_words_never_reach_the_brain_while_it_is_on() -> None:
     rule = {"heard": "keep that up", "expect": ["reply"]}
     outcome = asyncio.run(e.run_case(rule, Lexicon.default(), _NoBrain(), _keybinds()))
     assert (outcome.route, outcome.kind) == ("session", "pin")
+
+
+# --- Advisor packs: Tycho presses nothing, and never says it did (#326) -----------------
+
+
+@pytest.mark.parametrize(
+    "say",
+    [
+        "Mounting up.",
+        "Done.",
+        "On it!",
+        "Hearthing.",
+        "Casting now.",
+        "I've opened your map.",
+        "I cast it.",
+    ],
+)
+def test_a_reply_that_claims_a_press_fails_with_keys_off(say: str) -> None:
+    e = _eval()
+    outcome = _outcome(say=say)
+    verdict = e.grade(outcome, {"expect": ["reply"]}, set(), keys_off=True)
+    assert verdict.startswith("claimed a press with keys off")
+    # With keys on, the same words aren't a claim the eval checks here.
+    assert e.grade(outcome, {"expect": ["reply"]}, set()) == "pass"
+
+
+@pytest.mark.parametrize(
+    "say",
+    [
+        "I don't press keys in this game. Your mount key summons it.",
+        "Opening the map is M by default, and the zone map is shift M.",
+        "Casting while moving only works for instant spells.",
+        "Okay, back soon.",
+        "Casting is faster with more haste.",
+        "Jumping puzzles reward a toy.",
+        "Not unless I cast it, and I can't.",
+    ],
+)
+def test_a_reply_that_says_how_passes_with_keys_off(say: str) -> None:
+    e = _eval()
+    assert e.grade(_outcome(say=say), {"expect": ["reply"]}, set(), keys_off=True) == "pass"
+
+
+def test_an_advisor_pack_is_offered_only_the_look_ups_it_names() -> None:
+    from tycho.packs import built_in
+
+    e = _eval()
+    pack = built_in("world-of-warcraft")
+    wanted = {*pack.parts.lookups, "settings"}
+    tools = {name: FakeLookup(name=name) for name in ("ships", "trade", "settings", "web")}
+    offered = e.pack_lookups(wanted, [*tools.items(), ("items", None)])
+    assert offered == [tools["settings"]]
+    assert e.pack_lookups({"ships", "settings"}, list(tools.items())) == [
+        tools["ships"],
+        tools["settings"],
+    ]

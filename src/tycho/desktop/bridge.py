@@ -465,8 +465,8 @@ class Bridge:
     # Slow look-ups, kept while their inputs are the same.
 
     def _game(self, current: Settings) -> setup.Game:
-        key = (current.game_channel, str(current.game_root))
-        return cast(setup.Game, self._cached("game", key, lambda: self._pc.game(current)))
+        key = (current.game, current.game_channel, str(current.game_root))
+        return cast(setup.Game, self._cached("game", key, lambda: setup.game(current, self._pc)))
 
     def _conflicts(self, ptt: str, current: Settings) -> list[str]:
         key = (ptt, current.game, current.game_channel, str(current.game_root))

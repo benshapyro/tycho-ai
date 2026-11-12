@@ -72,7 +72,7 @@ from brain_report import GLOBAL_NEVER  # pyright: ignore[reportMissingImports, r
 
 from tycho import credentials, logs, paths, safety, settings
 from tycho.address import Address
-from tycho.app import find_install, load_commands
+from tycho.app import NO_KEYBINDS, find_install, load_commands
 from tycho.brain import BrainError, BrainRequest, Exchange, Reply, providers
 from tycho.brain.briefing import instructions_hash
 from tycho.brain.claude import MODEL, ClaudeBrain
@@ -136,6 +136,15 @@ search counts only when it answered: "Web search failed" is a warning with no co
 and the request it made most likely cost nothing (#264)."""
 HOST = re.compile(r"\[host: ([^\]]+)\]$")
 """Who served a call through OpenRouter, at the end of its line (#267)."""
+CLAIMED = re.compile(
+    r"^(done|on it|mounting up|hearthing|queued( up)?|(casting|jumping|queuing|drinking|"
+    r"targeting|attacking|opening it) now)[.!]?$|"
+    r"^I (just )?(pressed|opened|cast|mounted|queued|jumped|targeted|drank)\b|"
+    r"\bI('ve| have) (just )?(pressed|opened|cast|mounted|queued|jumped|targeted|drunk|drank)\b",
+    re.IGNORECASE,
+)
+"""A reply that says Tycho did something in the game, where it presses nothing (advisor
+mode, #326): "Mounting up." would tell the player it happened when nothing did."""
 UNASKED = frozenset({"v_unlock_all_doors", "v_toggle_all_doorlocks"})
 """Presses that are wrong whenever the case didn't ask for them: unlocking the
 doors when the player said something else leaves the ship open."""
@@ -237,7 +246,11 @@ def pressed(commands: tuple[Command, ...], keybinds: Keybinds) -> list[str]:
     return names
 
 
-def grade(outcome: Outcome, rule: dict[str, Any], valid: set[str]) -> str:
+def grade(
+    outcome: Outcome, rule: dict[str, Any], valid: set[str], *, keys_off: bool = False
+) -> str:
+    """The case's verdict. ``keys_off``: Tycho presses nothing in this game (advisor mode,
+    #191), so a reply that claims it did something fails (#326)."""
     never = (set(GLOBAL_NEVER) | set(rule.get("never", []))) - set(rule.get("allow", []))
     if outcome.kind == "error":
         return "error"
@@ -266,6 +279,8 @@ def grade(outcome: Outcome, rule: dict[str, Any], valid: set[str]) -> str:
     said = plain(outcome.say)
     if NARRATED.search(said):
         return f"narrated its reply: {outcome.say!r}"
+    if keys_off and outcome.kind == "reply" and CLAIMED.search(said.strip()):
+        return f"claimed a press with keys off: {outcome.say!r}"
     if outcome.kind == "reply" and rule.get("answer") and DODGE.search(said):
         return "dodged the question"
     if outcome.kind == "reply":
@@ -708,8 +723,10 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     """Every case through one brain; prints each, appends them to the results, and
     prints the summary."""
     pack = built_in(args.pack)
-    if pack.parts.keybinds != STAR_CITIZEN:
+    if pack.parts.keybinds not in (None, STAR_CITIZEN):
         raise SystemExit(f"{pack.name}: the eval can only read Star Citizen's keybinds so far")
+    if pack.parts.keybinds is None and args.keybinds:
+        raise SystemExit(f"{pack.name} has no keybinds (an advisor pack): drop --keybinds")
     briefed = instructions_hash(pack)
     print(f"Game: {pack.name}, pack {pack.version} (briefing {briefed})")
     data: dict[str, Any] = tomllib.loads(args.cases.read_text("utf-8"))
@@ -733,7 +750,9 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
         )
 
     matcher = load_commands(pack)
-    if args.keybinds:
+    if pack.parts.keybinds is None:  # an advisor pack (#191): no game folder, no keys
+        keybinds = NO_KEYBINDS
+    elif args.keybinds:
         keybinds, game, own = load_keybinds(args.keybinds)
         matcher = _matcher(own, pack)
         print(f"Keybinds: {args.keybinds} ({game}){', with own commands' if own else ''}")
@@ -747,7 +766,8 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     counted: _Counted | None = None
     reference = ""
     library = None
-    if args.ships != "none":
+    wanted = {*pack.parts.lookups, "settings"}  # as tycho run offers them (ADR 18)
+    if args.ships != "none" and "ships" in wanted:
         library = await ensure(WikiApi(), paths.knowledge_dir(), concepts=UexApi())
         print(f"Ship data: {len(library)} ships for {library.patch}, as {args.ships}")
         if args.ships == "table":
@@ -755,7 +775,9 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
         else:
             counted = _Counted(ShipLookup(WikiApi(), paths.knowledge_dir(), library=library))
     web: list[Lookup] = []
-    if provider == "openrouter" and not args.no_web:
+    if "web" not in wanted:
+        print(f"Web search: {pack.name} has none")
+    elif provider == "openrouter" and not args.no_web:
         print("Web search: not offered. The OpenRouter brain has none (it's Anthropic's tool).")
     elif not args.no_web:
         web = [WebSearch(anthropic.AsyncAnthropic(api_key=key))]
@@ -768,15 +790,18 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     if counted is not None:
         counted.journal = journal
     settings_tool = _Counted(SettingsTool(settings_file, live=LIVE), journal)
-    lookups: list[Lookup] = [
-        *([counted] if counted else []),
-        _Counted(FleetUpdate(fleet, lambda: library), journal),
-        _Counted(ItemLookup(WikiApi()), journal),
-        _Counted(MiningLookup(WikiApi()), journal),
-        *(_Counted(lookup, journal) for lookup in trade_lookups(UexApi())),
-        settings_tool,
-        *(_Counted(lookup, journal) for lookup in web),
-    ]
+    lookups = pack_lookups(
+        wanted,
+        [
+            ("ships", counted),
+            ("fleet", _Counted(FleetUpdate(fleet, lambda: library), journal)),
+            ("items", _Counted(ItemLookup(WikiApi()), journal)),
+            ("mining", _Counted(MiningLookup(WikiApi()), journal)),
+            *(("trade", _Counted(lookup, journal)) for lookup in trade_lookups(UexApi())),
+            ("settings", settings_tool),
+            *(("web", _Counted(lookup, journal)) for lookup in web),
+        ],
+    )
 
     # As tycho run does: the fleet, then what to call the player (#15).
     def about() -> str:
@@ -845,7 +870,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
                 tile=cards(),
                 lists=pack.safety,
             )
-            outcome.verdict = grade(outcome, rule, valid)
+            outcome.verdict = grade(outcome, rule, valid, keys_off=bool(pack.safety.keys_off))
             if outcome.verdict == "pass":
                 outcome.verdict = grade_fleet(fleet, rule)
             if outcome.verdict == "pass":
@@ -875,6 +900,12 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
         f.write(json.dumps({"type": "summary", **summary}) + "\n")
     _summary(outcomes, costs, summary)
     return done
+
+
+def pack_lookups(wanted: set[str], parts: list[tuple[str, Lookup | None]]) -> list[Lookup]:
+    """The look-ups the pack names, in order, as ``brain_choice`` gives them to tycho run:
+    an advisor pack with none (World of Warcraft) gets only the settings tool."""
+    return [lookup for part, lookup in parts if part in wanted and lookup is not None]
 
 
 def _pinned(pinned: Mapping[str, object]) -> str:

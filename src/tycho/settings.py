@@ -31,7 +31,7 @@ from tycho.voice import voices
 
 CURRENT_VERSION = 1
 
-type Game = Literal["star-citizen"]
+type Game = Literal["star-citizen", "world-of-warcraft"]
 """The game packs that ship inside Tycho (ADR 18); a test keeps it the same as
 ``packs.installed()``."""
 type Device = Literal["auto", "gpu", "cpu"]

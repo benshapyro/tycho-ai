@@ -69,11 +69,15 @@
       : "Change anything you chose the first time. Changes apply when Tycho restarts.";
     let body = "";
     let ok = true;
-    if (step === 0) {
+    if (step === 0 && !s.game.needed) {
+      body = `<div class="card frame"><h3>Which game?</h3>
+        <p class="ok-line">✓ ${esc(s.game.name)}: Tycho needs nothing from the game's folder.</p>
+        <p class="note">Change the game under Settings, Game and controls.</p></div>`;
+    } else if (step === 0) {
       ok = s.game.found;
       body = `<div class="card frame"><h3>Which game?</h3>
         <div class="seg" role="group" aria-label="Game channel">${s.channels.map((c) => `<button type="button" aria-pressed="${c === s.game.channel}" data-channel="${esc(c)}">${esc(c)}</button>`).join("")}</div>
-        ${s.game.found ? `<p class="ok-line">✓ Found Star Citizen ${esc(s.game.channel)} in <span class="num">${esc(s.game.folder)}</span></p>`
+        ${s.game.found ? `<p class="ok-line">✓ Found ${esc(s.game.name)} ${esc(s.game.channel)} in <span class="num">${esc(s.game.folder)}</span></p>`
           : `<p class="err">${esc(s.game.problem)}. Choose the folder it's in (the RSI Launcher shows it under Settings, Games, Library Folder).</p>`}
         <div class="keyrow"><button class="btn frame" type="button" id="folder">Choose the folder…</button><span class="err" id="folderErr"></span></div>
         <p class="note">Tycho reads your keybinds from the game's files and never changes them.</p></div>`;
