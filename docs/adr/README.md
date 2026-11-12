@@ -11,7 +11,7 @@ Each record explains one decision: the context, what was decided, and what follo
 | [5](0005-settings-one-schema-three-ways-in.md) | Settings: one schema, three ways in | Accepted |
 | [6](0006-cloud-brain-local-ears.md) | Cloud brain, local ears | Accepted; amended by 9 |
 | [7](0007-name-tycho.md) | The name: Tycho | Accepted |
-| [8](0008-packs-and-connections.md) | Packs and connections | Proposed |
+| [8](0008-packs-and-connections.md) | Packs and connections | Proposed; game packs settled by 18 |
 | [9](0009-voice.md) | Tycho's voice | Accepted; defaults amended 8 Nov 2026 |
 | [10](0010-interaction-modes-and-routing.md) | Interaction modes and routing | Accepted |
 | [11](0011-runtime-architecture.md) | Runtime architecture | Accepted; roadmap amended by 14 |
@@ -21,4 +21,4 @@ Each record explains one decision: the context, what was decided, and what follo
 | [15](0015-knowledge.md) | Knowledge: look-ups, sources and the player's fleet | Accepted; amended after the source checks |
 | [16](0016-the-tile.md) | The Tile: a panel over the game, drawn by Tycho | Accepted; in-game checks to do |
 | [17](0017-the-app.md) | The app: one Tycho, a tray icon and a window | Accepted |
-| [18](0018-game-packs.md) | Game packs: data folders, built-in readers, and a hardened Windows app | Proposed |
+| [18](0018-game-packs.md) | Game packs: data folders, built-in readers, and a hardened Windows app | Accepted |

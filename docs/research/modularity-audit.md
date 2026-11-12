@@ -1,6 +1,6 @@
 # Modularity audit: game packs and the Windows app
 
-Audited 2026-11-11, on `main` at eb46443, for [#190](https://github.com/benshapyro/tycho-ai/issues/190) (game packs) and [#197](https://github.com/benshapyro/tycho-ai/issues/197) (a production-grade Windows app). The decisions it leads to are in [ADR 18](../adr/0018-game-packs.md) (proposed).
+Audited 2026-11-11, on `main` at eb46443, for [#190](https://github.com/benshapyro/tycho-ai/issues/190) (game packs) and [#197](https://github.com/benshapyro/tycho-ai/issues/197) (a production-grade Windows app). The decisions it leads to are in [ADR 18](../adr/0018-game-packs.md) (accepted 12 November 2026).
 
 This is a reference doc, not a spec. Everything here was read from the code. The field numbers #197 asks for (download sizes, start-up time, memory and CPU with the game running, antivirus) come from a run on the maintainer's PC and are added in the section left for them.
 
@@ -116,4 +116,4 @@ By lines: `game/` and `knowledge/` are about 4,700 of the 19,300 lines in `src/t
 
 ## Part 3: the follow-up issues
 
-ADR 18 lists the issues this audit leads to, and which brief each feeds. They aren't filed until the maintainer approves the ADR.
+ADR 18 lists the issues this audit leads to, and which brief each feeds. They are filed now that the maintainer has approved it.

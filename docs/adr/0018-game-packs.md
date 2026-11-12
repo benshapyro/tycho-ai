@@ -1,6 +1,6 @@
 # 18. Game packs: data folders, built-in readers, and a hardened Windows app
 
-Date: 2026-11-11 · Status: proposed. Pending: the maintainer's sign-off. Settles the game-pack part of [ADR 8](0008-packs-and-connections.md), and answers [#190](https://github.com/benshapyro/tycho-ai/issues/190) and [#197](https://github.com/benshapyro/tycho-ai/issues/197).
+Date: 2026-11-11 · Status: accepted (the maintainer, 12 November 2026). Settles the game-pack part of [ADR 8](0008-packs-and-connections.md), and answers [#190](https://github.com/benshapyro/tycho-ai/issues/190) and [#197](https://github.com/benshapyro/tycho-ai/issues/197).
 
 ## Context
 
@@ -122,7 +122,7 @@ A native shell (WinUI, C# or Tauri) around the Python core as a local service is
 
 ### How this changes ADR 8
 
-ADR 8's game-pack layer is settled here: data only, with built-in parts named by id. "How to find and read keybinds" and "data sources", which ADR 8 lists as pack contents, are the pack naming a built-in part, not the pack holding code. "Which actions count as dangerous" is a pack list that can only add. On acceptance, ADR 8's status line notes that its pack layer is settled by this ADR. Personas, the player layer and connections are unchanged and still proposed.
+ADR 8's game-pack layer is settled here: data only, with built-in parts named by id. "How to find and read keybinds" and "data sources", which ADR 8 lists as pack contents, are the pack naming a built-in part, not the pack holding code. "Which actions count as dangerous" is a pack list that can only add. ADR 8's status line notes that its pack layer is settled by this ADR. Personas, the player layer and connections are unchanged and still proposed.
 
 ## Consequences
 
@@ -132,7 +132,7 @@ ADR 8's game-pack layer is settled here: data only, with built-in parts named by
 - **Builds on #55.** Routing and planning become pure functions first (brief C3), so the pack's lists reach one place, and the eval grades the same code.
 - **Starts the Mac groundwork without promising it.** The pack's `window`, the key sender and the focus check are already boundaries; the Mac needs its own versions (#198).
 
-### Follow-up issues (to file after this ADR is approved)
+### Follow-up issues
 
 | # | Issue | Feeds |
 |---|---|---|
