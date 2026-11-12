@@ -14,6 +14,7 @@ may use the whole web, and it may read up to two of the pages it finds (Anthropi
 web fetch), for "where is" and "how do I" answers that live in community guides.
 """
 
+import dataclasses
 import datetime
 import json
 import logging
@@ -95,6 +96,36 @@ leaks and fan estimates unless the query asks for rumours. If you find nothing \
 relevant, say only that, in a few words. Never suggest checking a website, channel \
 or source: the player can't, they're flying."""
 
+FALLBACK_TAG = re.compile(r"^\W*(FOUND|PARTIAL|NONE)\W*", re.IGNORECASE)
+"""How the first search of a fallback says how well it did."""
+FALLBACK_ASK = """
+
+Start your reply with one word in capitals, then your answer: FOUND if the results \
+answer the question clearly, PARTIAL if they only answer part of it or are unsure, \
+NONE if they don't answer it."""
+"""Added to ``BRIEF`` for the first search of a fallback (#354)."""
+
+FALLBACK_BRIEF = """\
+You search the web for a voice co-pilot in Star Citizen, who will read your answer \
+aloud to a player who is flying. The game's own sites (RSI, the community wiki, the \
+community tools) didn't answer this clearly, so look further: community guides, \
+forum and Reddit threads, blogs and videos often have where things are, how to do \
+things and what players think. Search, then read the most useful page before you \
+answer, unless the snippets already answer it fully. Prefer the most recent sources \
+and say how old they are when that matters. Then answer in one to three short plain \
+sentences, in your own words: no quotes, links, lists or markdown. When the answer \
+comes from players rather than RSI, say so in a few words ("players report"). If \
+sources disagree, give the most recent and say they disagree. Leave out leaks and fan \
+estimates unless the query asks for rumours. If you find nothing relevant, say only \
+that, in a few words. Never suggest checking a website, channel or source: the player \
+can't, they're flying."""
+"""The open-web step of a fallback: it only runs when the game's sites fell short, so
+it's told to read a page (unprompted, it read none in the 12 Nov benchmark)."""
+
+NO_PAGE_READS = ("reddit.com",)
+"""Sites whose pages are never read, only their search snippets: Reddit's terms restrict
+automated access (knowledge/AGENTS.md: never scrape a site whose terms forbid it)."""
+
 NAME = "web_search"
 SCHEMA: Mapping[str, object] = {
     "type": "object",
@@ -150,6 +181,7 @@ class WebSearch:
     from_the_web = True
     """Its results can't be checked: nothing may be pressed after it (ADR 15)."""
     _open = False
+    _fallback = False
     seconds = SECONDS
 
     def __init__(
@@ -161,10 +193,13 @@ class WebSearch:
         log_queries: bool = False,
         sites: Sequence[str] = SITES,
         open_web: bool = False,
+        fallback: bool = False,
     ) -> None:
         """``log_queries``: put the query (the player's question, reworded) in the log
-        file. Only with ``keep_transcripts`` (audit, 2026-11-03). ``open_web``: the
-        #354 trial, any site and page reads (``web_search_open``)."""
+        file. Only with ``keep_transcripts`` (audit, 2026-11-03). ``open_web``: any site
+        and page reads, every time (the benchmark's "open"). ``fallback``: the game's
+        sites first, then the open web only when they had no clear answer
+        (``web_search_open``, #354)."""
         self._client = client
         self._model = model
         self._today = today
@@ -172,7 +207,8 @@ class WebSearch:
         self._sites = tuple(sites)
         """The game pack's sites: the only ones a search may read, unless ``open_web``."""
         self._open = open_web
-        self.seconds = OPEN_SECONDS if open_web else SECONDS
+        self._fallback = fallback and not open_web
+        self.seconds = OPEN_SECONDS if open_web or self._fallback else SECONDS
 
     @property
     def name(self) -> str:
@@ -180,7 +216,7 @@ class WebSearch:
 
     @property
     def description(self) -> str:
-        return OPEN_DESCRIPTION if self._open else DESCRIPTION
+        return OPEN_DESCRIPTION if self._open or self._fallback else DESCRIPTION
 
     @property
     def input_schema(self) -> Mapping[str, object]:
@@ -189,8 +225,8 @@ class WebSearch:
     async def prepare(self) -> None:
         return None
 
-    def _tools(self) -> list[dict[str, object]]:
-        if not self._open:
+    def _tools(self, open_web: bool) -> list[dict[str, object]]:
+        if not open_web:
             return [
                 {
                     "type": WEB_SEARCH,
@@ -206,6 +242,7 @@ class WebSearch:
                 "name": "web_fetch",
                 "max_uses": OPEN_USES,
                 "max_content_tokens": OPEN_PAGE_TOKENS,
+                "blocked_domains": list(NO_PAGE_READS),
             },
         ]
 
@@ -213,43 +250,76 @@ class WebSearch:
         query = str(arguments.get("query") or "").strip()
         if not query:
             return failure("pass query: a short search query")
-        started = time.perf_counter()
         today = self._today()
-        messages: list[dict[str, Any]] = [
-            {"role": "user", "content": f"[{today.day} {today:%B %Y}] {query}"}
-        ]
-        content: list[Any] = []
-        spent = [0, 0]
-        stopped = ""
+        asked = f"[{today.day} {today:%B %Y}] {query}"
         try:
-            # A long run of server tools can pause the turn; the open web may go on once.
-            for _ in range(2 if self._open else 1):
-                message = await self._client.messages.create(
-                    model=self._model,
-                    max_tokens=MAX_TOKENS,
-                    system=OPEN_BRIEF if self._open else BRIEF,
-                    tools=self._tools(),  # pyright: ignore[reportArgumentType]
-                    output_config={"effort": "low"},
-                    messages=messages,  # pyright: ignore[reportArgumentType]
+            if not self._fallback:
+                found = await self._search(
+                    query, asked, open_web=self._open, brief=OPEN_BRIEF if self._open else BRIEF
                 )
-                content += message.content
-                spent[0] += message.usage.input_tokens
-                spent[1] += message.usage.output_tokens
-                stopped = str(getattr(message, "stop_reason", "") or "")
-                if stopped != "pause_turn":
-                    break
-                messages = [*messages, {"role": "assistant", "content": message.content}]
+                return self._result(query, today, found, self._open)
+            first = await self._search(query, asked, open_web=False, brief=BRIEF + FALLBACK_ASK)
+            if first.verdict == "FOUND" and first.answer:
+                return self._result(query, today, first, False)
+            log.debug("Web search: the game's sites said %s; trying the open web", first.verdict)
+            wider = await self._search(query, asked, open_web=True, brief=FALLBACK_BRIEF)
         except anthropic.APIError as e:
             log.warning("Web search failed: %s", e)
             return failure(f"the web search failed ({type(e).__name__}); answer without it")
+        if not wider.answer and first.answer:
+            return self._result(query, today, first, False)
+        return self._result(query, today, wider, True)
+
+    def _result(
+        self, query: str, today: datetime.date, found: _Found, open_web: bool
+    ) -> LookupResult:
+        if not found.answer:
+            return failure("the search found nothing usable; answer without it")
+        result = {
+            "source": "web search, any site" if open_web else "web search of Star Citizen sites",
+            "searched": query,
+            "date": today.isoformat(),
+            "answer": found.answer,
+            "sites": found.sites[:3],
+        }
+        return LookupResult(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+
+    async def _search(self, query: str, asked: str, *, open_web: bool, brief: str) -> _Found:
+        started = time.perf_counter()
+        messages: list[dict[str, Any]] = [{"role": "user", "content": asked}]
+        content: list[Any] = []
+        spent = [0, 0]
+        stopped = ""
+        # A long run of server tools can pause the turn; the open web may go on once.
+        for _ in range(2 if open_web else 1):
+            message = await self._client.messages.create(
+                model=self._model,
+                max_tokens=MAX_TOKENS,
+                system=brief,
+                tools=self._tools(open_web),  # pyright: ignore[reportArgumentType]
+                output_config={"effort": "low"},
+                messages=messages,  # pyright: ignore[reportArgumentType]
+            )
+            content += message.content
+            spent[0] += message.usage.input_tokens
+            spent[1] += message.usage.output_tokens
+            stopped = str(getattr(message, "stop_reason", "") or "")
+            if stopped != "pause_turn":
+                break
+            messages = [*messages, {"role": "assistant", "content": message.content}]
         answer = _answer(content, cut=stopped == "max_tokens")
+        verdict = "FOUND"
+        if tag := FALLBACK_TAG.match(answer):
+            verdict, answer = tag[1].upper(), answer[tag.end() :]
+            if verdict == "NONE":
+                answer = ""
         sites = _sites(content)
         searches, pages = _uses(content)
         cost = (spent[0] * PRICES[0] + spent[1] * PRICES[1]) / 1_000_000
         log.debug(
             "Web search%s%s in %.0f ms: %d in, %d out, %d searches, %d pages read, %d sites, "
             "about $%.5f, stopped: %s",
-            " (open web)" if self._open else "",
+            " (open web)" if open_web else "",
             f" {query!r}" if self._log_queries else "",
             (time.perf_counter() - started) * 1000,
             spent[0],
@@ -260,18 +330,17 @@ class WebSearch:
             cost + SEARCH_PRICE * max(searches, 1),
             stopped,
         )
-        if not answer:
-            return failure("the search found nothing usable; answer without it")
-        result = {
-            "source": "web search, any site (trial)"
-            if self._open
-            else "web search of Star Citizen sites",
-            "searched": query,
-            "date": today.isoformat(),
-            "answer": answer,
-            "sites": sites[:3],
-        }
-        return LookupResult(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+        return _Found(answer, sites, verdict)
+
+
+@dataclasses.dataclass(frozen=True)
+class _Found:
+    """One search request's answer, its sites, and (in a fallback's first search) how
+    well it did: FOUND, PARTIAL or NONE."""
+
+    answer: str
+    sites: list[str]
+    verdict: str
 
 
 _SPACE_BEFORE = re.compile(r"\s+([,.;:!?])")

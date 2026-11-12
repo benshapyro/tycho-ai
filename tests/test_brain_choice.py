@@ -162,6 +162,7 @@ def test_the_open_web_trial_reaches_the_search_only_when_set(trial: bool) -> Non
     search = brain._lookups["web_search"]  # pyright: ignore[reportPrivateUsage]
     assert isinstance(search, WebSearch)
     assert ("where something is" in search.description) is trial
+    assert search._fallback is trial  # pyright: ignore[reportPrivateUsage]
     _close(brain)
 
 

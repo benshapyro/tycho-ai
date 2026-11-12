@@ -166,10 +166,11 @@ class Settings(BaseModel):
     )
     web_search_open: bool = Field(
         default=False,
-        description="Trial: let web search use any website, not only Star Citizen ones, "
-        "and read pages it finds, for where things are and how to do things. Answers may "
-        "come from players' posts and be out of date. A search takes longer (up to about "
-        "25 s) and costs about 1 to 3 cents. Off by default.",
+        description="Trial: when the Star Citizen sites have no clear answer, let web search "
+        "look on any website (guides, forums, Reddit) and read a page, for where things are "
+        "and how to do things. Answers may come from players' posts and be out of date. "
+        "That search takes longer (up to about 25 s) and costs about 2 to 4 cents. Off by "
+        "default.",
         json_schema_extra=_rule("lower_only", how=FILE_OR_APP),
     )
     brain_provider: Provider = Field(
