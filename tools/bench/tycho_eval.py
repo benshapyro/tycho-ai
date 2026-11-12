@@ -67,6 +67,7 @@ from typing import Any, cast
 
 import anthropic
 import httpx2
+import traces as trace_reader  # pyright: ignore[reportMissingImports]
 from brain_report import GLOBAL_NEVER  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
 
 from tycho import credentials, logs, paths, safety, settings
@@ -186,6 +187,8 @@ class _Costs(logging.Handler):
         self.generations: list[str] = []
         """OpenRouter calls that ended early at an act: their cost is looked up after.
         Those still here after ``generation_costs`` had no cost reported."""
+        self.looked_up: dict[str, float] = {}
+        """Each generation's cost ``generation_costs`` found, by its id, for the traces."""
         self.unreported = 0
         """Calls that said nothing of their cost (no usage, no price, no generation id):
         the total is too low by these, and the summary says so (#261)."""
@@ -848,6 +851,8 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
 
     if routed is not None and costs.generations:
         await generation_costs(costs, routed)
+        # Their lines were written as each case ended, with no cost (#317).
+        trace_reader.add_costs(TRACES, traces.run, costs.looked_up)
     done = Run(provider, model, outcomes, costs, pinned)
     summary = metrics(done, args.per_hour)
     RESULTS.parent.mkdir(exist_ok=True)
@@ -951,6 +956,7 @@ async def generation_costs(
                         cost = data.get("total_cost")
                         if isinstance(cost, int | float):
                             costs.add(float(cost), "reported")
+                            costs.looked_up[generation] = float(cost)
                             break
                 except httpx2.HTTPError, ValueError:
                     pass

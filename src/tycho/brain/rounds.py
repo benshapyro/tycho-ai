@@ -156,6 +156,8 @@ class Round:
         self._checking = False
         self._instant: list[asyncio.Task[LookupResult]] = []
         """A fleet or settings note in the same reply as an act: it runs too (#156)."""
+        self._looks: dict[asyncio.Task[LookupResult], Look] = {}
+        """Each traced look-up's line entry, by its task."""
         turn.refused = False
         if turn.trace is not None:
             turn.trace.call()
@@ -167,11 +169,17 @@ class Round:
             self.turn.trace.streaming()
 
     def used(
-        self, tokens: Mapping[str, int], cost: float | None, stop: str, host: str = ""
+        self,
+        tokens: Mapping[str, int],
+        cost: float | None,
+        stop: str,
+        host: str = "",
+        priced: str = "",
     ) -> None:
-        """This call ended with a whole reply: its tokens, cost and why it stopped."""
+        """This call ended with a whole reply: its tokens, cost (and where the cost came
+        from) and why it stopped."""
         if self.turn.trace is not None:
-            self.turn.trace.used(tokens, cost, stop, host)
+            self.turn.trace.used(tokens, cost, stop, host, priced)
 
     async def tool_call(self, use_id: str, name: str, arguments: object) -> Decision | None:
         """A complete tool call. Returns the act to take, which ends the request (the
@@ -202,7 +210,7 @@ class Round:
             turn.sources[use_id] = str(getattr(chosen, "credit", ""))
             task = asyncio.create_task(lookup)
             if turn.trace is not None:
-                _trace_lookup(turn.trace, name, task)
+                self._looks[task] = _trace_lookup(turn.trace, name, task)
             self.looking.append((use_id, task))
             if getattr(chosen, "instant", False):
                 self._instant.append(task)
@@ -238,7 +246,7 @@ class Round:
         it finishes first."""
         for _, task in self.looking:
             if task not in self._instant:
-                task.cancel()
+                self._stop(task)
         if self._instant:
             _, pending = await asyncio.wait(self._instant, timeout=INSTANT_SECONDS)
             if pending:
@@ -259,7 +267,13 @@ class Round:
     def cancel(self) -> None:
         """The call failed or was cancelled: stop every look-up it started."""
         for _, task in self.looking:
-            task.cancel()
+            self._stop(task)
+
+    def _stop(self, task: asyncio.Task[LookupResult]) -> None:
+        """Stop a look-up, and say so in its trace now: the task's done callback only
+        runs after the line has been written (#305)."""
+        if task.cancel() and (look := self._looks.get(task)) is not None:
+            look.cancelled = True
 
     async def results(self) -> list[LookupResult]:
         """Every look-up's result, in the order the model asked, noting each source
@@ -296,7 +310,7 @@ async def traced(traces: TraceFile | None, turn: Turn, deciding: Awaitable[Decis
     return decided
 
 
-def _trace_lookup(trace: Trace, name: str, task: asyncio.Task[LookupResult]) -> None:
+def _trace_lookup(trace: Trace, name: str, task: asyncio.Task[LookupResult]) -> Look:
     """Note the look-up's time and result size in the trace when it's done."""
     started = time.perf_counter()
     look = Look(name, trace.elapsed())
@@ -315,6 +329,7 @@ def _trace_lookup(trace: Trace, name: str, task: asyncio.Task[LookupResult]) -> 
             look.chars, look.error, look.found = len(result.content), result.is_error, found(result)
 
     task.add_done_callback(done)
+    return look
 
 
 def last_note(call: int, turn: Turn) -> str | None:
