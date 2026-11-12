@@ -15,6 +15,7 @@ import httpx2
 import pytest
 
 from tycho.knowledge.web import (
+    FALLBACK_BRIEF,
     MAX_ANSWER,
     OPEN_BRIEF,
     OPEN_PAGE_TOKENS,
@@ -261,11 +262,12 @@ def test_the_open_web_trial_searches_any_site_and_reads_pages() -> None:
             "name": "web_fetch",
             "max_uses": 2,
             "max_content_tokens": OPEN_PAGE_TOKENS,
+            "blocked_domains": ["reddit.com"],
         },
     ]
     assert result["answer"] == "Players report the fines terminal is in the admin office."
     assert result["sites"] == ["https://starcitizen.tools/Levski"]
-    assert "trial" in result["source"]
+    assert "any site" in result["source"]
     assert search.seconds == OPEN_SECONDS > SECONDS
     assert "how to do something" in search.description
 
@@ -291,3 +293,63 @@ def test_without_the_trial_a_paused_turn_is_not_continued() -> None:
     assert len(client.requests) == 1
     assert error
     assert "nothing usable" in result["error"]
+
+
+# --- Sites first, then the open web (#354) ------------------------------------------------------
+
+
+def _fallback(*messages: Any) -> tuple[_Turns, bool, Any]:
+    client = _Turns(*messages)
+    search = WebSearch(cast(Any, client), fallback=True)
+    assert search.seconds == OPEN_SECONDS
+    result = asyncio.run(search.run({"query": "Levski pay fines"}))
+    return client, result.is_error, json.loads(result.content)
+
+
+def test_a_clear_answer_from_the_game_sites_needs_no_open_web() -> None:
+    client, error, result = _fallback(
+        _found("FOUND: The fines terminal is in Levski's admin office.")
+    )
+    assert not error
+    (request,) = client.requests
+    assert request["tools"][0]["allowed_domains"] == list(SITES)
+    assert "FOUND" in request["system"]
+    assert result["answer"] == "The fines terminal is in Levski's admin office."
+    assert result["source"] == "web search of Star Citizen sites"
+
+
+@pytest.mark.parametrize("verdict", ["PARTIAL", "NONE"])
+def test_without_a_clear_answer_it_reads_the_open_web(verdict: str) -> None:
+    client, error, result = _fallback(
+        _found(f"{verdict}: Fines are paid at admin offices."),
+        _read_page("Players report the fines terminal is by Levski's hangars."),
+    )
+    assert not error
+    first, wider = client.requests
+    assert "allowed_domains" in first["tools"][0]
+    assert wider["system"] == FALLBACK_BRIEF
+    assert [t["name"] for t in wider["tools"]] == ["web_search", "web_fetch"]
+    assert "allowed_domains" not in wider["tools"][0]
+    assert result["answer"] == "Players report the fines terminal is by Levski's hangars."
+    assert result["source"] == "web search, any site"
+
+
+def test_a_partial_answer_stands_when_the_open_web_finds_nothing() -> None:
+    _, error, result = _fallback(_found("PARTIAL: Fines are paid at admin offices."), _read_page())
+    assert not error
+    assert result["answer"] == "Fines are paid at admin offices."
+    _, error, result = _fallback(_found("NONE: Nothing about Levski."), _read_page())
+    assert error
+    assert "nothing usable" in result["error"]
+
+
+@pytest.mark.parametrize(
+    "answer",
+    ["None of RSI's posts give a date, but the roadmap says Q1 2027.", "Foundry 42 said so."],
+)
+def test_only_a_fallback_reads_a_found_partial_or_none_tag(answer: str) -> None:
+    # An answer that merely starts with "None" or "Found" is an answer (#372 review).
+    _, result = _search(_Client(_found(answer)))
+    assert result["answer"] == answer
+    _, _, result = _fallback(_found(f"PARTIAL: {answer}"), _read_page())
+    assert result["answer"] == answer

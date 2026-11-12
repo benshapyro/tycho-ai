@@ -122,11 +122,12 @@ uv run python tools/bench/tts/design_voices.py recordings/voices/designs        
 
 Lines come from [`voice_lines.txt`](../spike/voice_lines.txt) and [`voice_lines_character.txt`](../spike/voice_lines_character.txt). ElevenLabs costs about half a credit per character on Flash and v4 Turbo; lines already generated are skipped, so a re-run never pays twice.
 
-## Web search: the open-web trial (#354, #360)
+## Web search: sites first, then the open web (#354, #360)
 
 ```powershell
-uv run python tools/bench/web_trial.py              # all three: Star Citizen sites, the open web, the open web told to read a page
-uv run python tools/bench/web_trial.py --only open  # only the trial as players would have it
+uv run python tools/bench/web_trial.py                          # sites vs the fallback, 40 questions, 2 rounds, judged
+uv run python tools/bench/web_trial.py --modes sites,fallback,open,read --rounds 1
+uv run python tools/bench/web_trial.py --limit 5 --no-judge     # a quick look
 ```
 
-Thirteen questions: mostly "where is" and "how do I" from a play session, one news question, and three whose answers live in a page's body (a table, a loadout, a guide's steps). Each goes through `WebSearch` as players have it, with `web_search_open`, and in `read` mode (the open web told to always read a page first, to measure what a page read costs and adds: the first run read none). It prints the time, searches, pages read, cost, why the reply stopped (`max_tokens` means it was cut off), sites and answer for each, then a summary per mode, and appends every answer to `recordings/web_trial.jsonl` for grading. "Concrete" only means the answer didn't say it found nothing; whether it's right needs reading. About 50 to 80 cents a full run, on the Anthropic key Tycho stores or `ANTHROPIC_API_KEY`.
+Forty questions: the "where is" and "how do I" requests from a play session, news, answers that live in a page's body, and the "what do players think" kind that live in Reddit threads and blogs. Each goes through `WebSearch` in each mode: `sites` (as players have it), `fallback` (`web_search_open`: the sites first, then the open web and a page read when they have no clear answer), `open` (the open web every time) and `read` (the open web told to read a page). A stronger Claude (`JUDGE`, with its own web search) grades each question's answers side by side, shuffled so it can't tell the modes apart: right, partial, wrong or none. It prints each answer with its time, searches, pages read, cost, stop reason and grade, then a summary per mode and how often a question got the same grade in every round, and appends every row to `recordings/web_trial.jsonl`. Spot-check the judge by reading some answers yourself. It stops starting new work at `--budget` dollars (5 by default); a full default run is about 4 to 5 dollars, on the Anthropic key Tycho stores or `ANTHROPIC_API_KEY`.
