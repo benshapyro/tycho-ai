@@ -44,7 +44,9 @@ from tycho.brain.rounds import (
     last_note,
     ms,
     tool_specs,
+    traced,
 )
+from tycho.brain.traces import TraceFile, briefing_hash
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Keybinds
 from tycho.tile.cards import TOOL_DESCRIPTION, TOOL_SCHEMA
@@ -110,11 +112,13 @@ class ClaudeBrain:
         reference: str = "",
         about: Callable[[], str] = lambda: "",
         cards: Callable[[], bool] = lambda: False,
+        traces: TraceFile | None = None,
     ) -> None:
         """``reference`` is extra text for the end of the cached briefing, such as
         the ship table being measured against the ship look-up (ADR 15). ``about``
         says what Tycho knows about the player, for each request's header. ``cards``
-        says whether the Tile is on, so whether Claude may show a card (#2)."""
+        says whether the Tile is on, so whether Claude may show a card (#2).
+        ``traces`` gets a line for each request when tracing is on (#282)."""
         # The session gives up after its own deadline; one quick retry fits inside it.
         self._owns_client = client is None
         self._client = client or anthropic.AsyncAnthropic(
@@ -131,6 +135,9 @@ class ClaudeBrain:
         self._reference = reference
         self._about = about
         self._cards = cards
+        self._traces = traces
+        self._briefed = ""
+        """The briefing's hash, for the traces."""
         self._for: Keybinds | None = None
         self._system: list[TextBlockParam] = []
         self._actions: frozenset[str] = frozenset()
@@ -184,11 +191,18 @@ class ClaudeBrain:
 
     async def decide(self, request: BrainRequest) -> Decision:
         self._brief(request.keybinds)
+        turn = Turn(waiting=request.waiting, looking=request.looking, checking=request.checking)
+        if self._traces is not None:
+            turn.trace = self._traces.start(
+                "anthropic", self._model, self._briefed, request.text, len(request.recent)
+            )
+        return await traced(self._traces, turn, self._decide(request, turn))
+
+    async def _decide(self, request: BrainRequest, turn: Turn) -> Decision:
         started = time.perf_counter()
         # The fleet line matches ship names, which is too slow for the event loop.
         about = await asyncio.to_thread(self._about)
         messages = history(request.recent, request.text, self._today(), about)
-        turn = Turn(waiting=request.waiting, looking=request.looking, checking=request.checking)
         try:
             for call in range(MAX_CALLS):
                 decided, message, round_ = await self._call(messages, started, turn)
@@ -199,7 +213,8 @@ class ClaudeBrain:
                     if isinstance(decided, Reply):
                         return credited(decided, turn.credits)
                     return decided
-                _log_usage(message.usage, started)
+                tokens, cost = _log_usage(message.usage, started)
+                round_.used(tokens, cost, str(message.stop_reason))
                 if message.stop_reason == "refusal":
                     raise BrainError("Claude declined")
                 if not round_.looking:
@@ -239,6 +254,7 @@ class ClaudeBrain:
                 messages=messages,
             ) as stream:
                 async for event in stream:
+                    round_.streaming()
                     if (
                         event.type == "content_block_stop"
                         and event.content_block.type == "tool_use"
@@ -275,6 +291,7 @@ class ClaudeBrain:
         self._system = [
             {"type": "text", "text": text, "cache_control": {"type": "ephemeral", "ttl": "1h"}}
         ]
+        self._briefed = briefing_hash(text)
 
 
 def _results(
@@ -311,7 +328,10 @@ after another, and a fleet or settings note alongside an act. Only the first act
 a reply is pressed (the stream is left there), and every act is still checked."""
 
 
-def _log_usage(usage: Any, started: float, what: str = "Brain replied") -> None:
+def _log_usage(
+    usage: Any, started: float, what: str = "Brain replied"
+) -> tuple[dict[str, int], float]:
+    """Log a call's tokens and cost; returns them, for the trace."""
     tokens = (
         usage.input_tokens,
         usage.output_tokens,
@@ -326,3 +346,5 @@ def _log_usage(usage: Any, started: float, what: str = "Brain replied") -> None:
         *tokens,
         cost,
     )
+    names = ("input", "output", "cache_read", "cache_write")
+    return dict(zip(names, tokens, strict=True)), round(cost, 7)

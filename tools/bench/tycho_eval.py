@@ -75,6 +75,7 @@ from tycho.brain.claude import MODEL, ClaudeBrain
 from tycho.brain.lookups import Lookup, LookupResult
 from tycho.brain.openrouter import SORTS, OpenRouterBrain, Prices, route
 from tycho.brain.rounds import NO_PRESS_AFTER_SEARCH
+from tycho.brain.traces import TraceFile
 from tycho.commands import Command, CommandMatcher, Defer, resolve
 from tycho.game.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.game.store import KeybindStore
@@ -91,6 +92,9 @@ from tycho.spoken_settings import SettingsTool
 
 CASES = Path(__file__).resolve().parents[1] / "spike" / "brain_cases.toml"
 RESULTS = Path(__file__).resolve().parents[2] / "recordings" / "tycho_eval.results.jsonl"
+TRACES = RESULTS.with_name("tycho_eval.traces.jsonl")
+"""One line per brain request, the same as play writes with TYCHO_TRACE=1, each with its
+case (#282): read them with tools/bench/traces.py."""
 DODGE = re.compile(
     r"\b(check|consult|look at|see)\b[^.]{0,40}\b(wiki|guide|guides|community|patch notes|"
     r"rankings|forums?|reddit|spectrum)\b|\bcan'?t (say|tell you|give you)\b",
@@ -710,6 +714,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     def cards() -> bool:
         return not args.no_tile
 
+    traces = TraceFile(TRACES, source="eval", run=f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {model}")
     brain: ClaudeBrain | OpenRouterBrain
     if provider == "openrouter":
         prices = await price_list(model)
@@ -726,6 +731,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
             effort=args.effort,
             hosts=args.host,
             sort=args.sort,
+            traces=traces,
         )
     else:
         brain = ClaudeBrain(
@@ -736,6 +742,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
             reference=reference,
             about=about,
             cards=cards,
+            traces=traces,
         )
     await brain.warm(keybinds)
     lexicon = Lexicon.default()
@@ -751,6 +758,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
                 changes = [{"name": n, "value": v} for n, v in before]
                 await settings_tool.inner.run({"action": "set", "changes": changes})
                 start = settings.load(settings_file)
+            traces.case = rule["heard"]
             outcome = await run_case(
                 rule, lexicon, brain, keybinds, counted, journal, costs, matcher
             )
@@ -763,6 +771,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
             _print(outcome)
     finally:
         await brain.close()
+        traces.close()
         for name in ("tycho.brain", "tycho.knowledge.web"):
             logging.getLogger(name).removeHandler(costs)
 
@@ -773,7 +782,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     RESULTS.parent.mkdir(exist_ok=True)
     with RESULTS.open("a", encoding="utf-8") as f:
         meta = {"type": "meta", "time": time.strftime("%Y-%m-%dT%H:%M:%S")}
-        meta |= {"provider": provider, "model": model, "route": pinned}
+        meta |= {"provider": provider, "model": model, "route": pinned, "traces": traces.run}
         f.write(json.dumps(meta) + "\n")
         for outcome in outcomes:
             f.write(json.dumps({**asdict(outcome), "provider": provider, "model": model}) + "\n")

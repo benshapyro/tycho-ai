@@ -11,6 +11,9 @@ when a tool call is complete, so the rules live here once:
   for up to ``INSTANT_SECONDS``;
 - nothing presses after a web search (``NO_PRESS_AFTER_SEARCH``);
 - "Checking." is said only once a reply with look-ups is known not to end in a press.
+
+When tracing is on (``traces``, #282), the round records each call, tool call and
+look-up on the turn's trace, and ``traced`` writes the request's line once it ends.
 """
 
 import asyncio
@@ -19,11 +22,12 @@ import difflib
 import logging
 import re
 import time
-from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from tycho.brain.decisions import BrainError, Decision, Reply, UnboundAction, parse_tool_call
 from tycho.brain.lookups import LOOKUP_SECONDS, Lookup, LookupResult, failure, run_lookup
+from tycho.brain.traces import Look, Trace, TraceFile
 
 log = logging.getLogger(__name__)
 
@@ -120,6 +124,8 @@ class Turn:
     """The last act refused for naming unbound actions, for the final error (#167)."""
     refused: bool = False
     """This call's reply held a refused act: its result asks for another pick."""
+    trace: Trace | None = None
+    """What the request did, when tracing is on (#282)."""
 
 
 class Round:
@@ -146,6 +152,21 @@ class Round:
         self._instant: list[asyncio.Task[LookupResult]] = []
         """A fleet or settings note in the same reply as an act: it runs too (#156)."""
         turn.refused = False
+        if turn.trace is not None:
+            turn.trace.call()
+
+    def streaming(self) -> None:
+        """A piece of this call's stream arrived: the first one is the time to first
+        token in the trace."""
+        if self.turn.trace is not None:
+            self.turn.trace.streaming()
+
+    def used(
+        self, tokens: Mapping[str, int], cost: float | None, stop: str, host: str = ""
+    ) -> None:
+        """This call ended with a whole reply: its tokens, cost and why it stopped."""
+        if self.turn.trace is not None:
+            self.turn.trace.used(tokens, cost, stop, host)
 
     async def tool_call(self, use_id: str, name: str, arguments: object) -> Decision | None:
         """A complete tool call. Returns the act to take, which ends the request (the
@@ -153,6 +174,8 @@ class Round:
         or None to read on. Raises ``BrainError`` for an act that can't be used."""
         turn = self.turn
         log.debug("Brain chose %s in %.0f ms", name, ms(self._started))
+        if turn.trace is not None:
+            turn.trace.tool(name, arguments)
         if name in self._lookups:
             # Start now; the model's message may still be finishing.
             chosen = self._lookups[name]
@@ -173,6 +196,8 @@ class Round:
             lookup = run_lookup(chosen, arguments, seconds)
             turn.sources[use_id] = str(getattr(chosen, "credit", ""))
             task = asyncio.create_task(lookup)
+            if turn.trace is not None:
+                _trace_lookup(turn.trace, name, task)
             self.looking.append((use_id, task))
             if getattr(chosen, "instant", False):
                 self._instant.append(task)
@@ -241,6 +266,50 @@ class Round:
             if credit and found(result) and credit not in self.turn.credits:
                 self.turn.credits.append(credit)
         return results
+
+
+async def traced(traces: TraceFile | None, turn: Turn, deciding: Awaitable[Decision]) -> Decision:
+    """The request's decision, with its trace line written once it ends, however it
+    ends (#282). Without ``traces`` (players, unless ``TYCHO_TRACE`` is on), only the
+    decision."""
+    trace = turn.trace
+    if traces is None or trace is None:
+        return await deciding
+    try:
+        decided = await deciding
+    except BaseException as e:
+        trace.failed(e)
+        traces.write(trace)
+        raise
+    stopped = ""
+    if isinstance(decided, Reply) and decided.text == NO_PRESS_AFTER_SEARCH:
+        stopped = "act after a web search; not pressed"
+    elif isinstance(decided, Reply) and decided.text == CUT_SHORT:
+        stopped = "cut off at the output limit"
+    trace.ended(decided, stopped)
+    traces.write(trace)
+    return decided
+
+
+def _trace_lookup(trace: Trace, name: str, task: asyncio.Task[LookupResult]) -> None:
+    """Note the look-up's time and result size in the trace when it's done."""
+    started = time.perf_counter()
+    look = Look(name, trace.elapsed())
+    trace.looked(look)  # now, so one still running when the request ends is there too
+
+    def done(finished: asyncio.Task[LookupResult]) -> None:
+        look.ms = trace.elapsed()
+        look.took_ms = round((time.perf_counter() - started) * 1000, 1)
+        if finished.cancelled():
+            look.cancelled = True
+        elif (error := finished.exception()) is not None:
+            look.error = True
+            log.debug("Look-up %s raised %s", name, type(error).__name__)
+        else:
+            result = finished.result()
+            look.chars, look.error, look.found = len(result.content), result.is_error, found(result)
+
+    task.add_done_callback(done)
 
 
 def last_note(call: int, turn: Turn) -> str | None:

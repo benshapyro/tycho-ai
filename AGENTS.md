@@ -61,6 +61,15 @@ A change a player can notice also adds a line under **Unreleased** in `CHANGELOG
 
 The project folder may still be named `ultimo` locally; the project is Tycho ([ADR 7](docs/adr/0007-name-tycho.md)).
 
+## Brain traces: what the brain did, and why
+
+Start here when asked why Tycho pressed, answered or failed something (#282). Each brain request can write one JSON line: the words, each call to the model (its tool calls with their arguments, time to the first token, tokens and cost), each look-up (time and size, not its result), what it decided, and why it stopped. The briefing is a hash; keys and absolute paths never appear.
+
+- **Play:** off for players. Run with `TYCHO_TRACE=1` and the lines go to `traces.jsonl` in the logs folder (`%LOCALAPPDATA%\tycho\logs`), one `run` per session.
+- **The eval** always writes them, each with its `case` (the words heard), to `recordings/tycho_eval.traces.jsonl`; the results file's `meta` line names the run.
+- **Read them** with `uv run python tools/bench/traces.py`: `runs` lists the runs in a file, `summary` gives a run's outcomes, times, look-ups, errors, cost and slowest requests (with `--results recordings/tycho_eval.results.jsonl`, its wrong presses too), and `diff` compares two runs case by case. For one request, `jq` or `grep` the line.
+- **Where it's written:** `src/tycho/brain/traces.py` (the line), recorded through `brain/rounds.py`, so both brains write the same lines.
+
 ## Skills for agents working here
 
 - `add-voice-command`: a new built-in command or sequence, with its tests and eval cases.

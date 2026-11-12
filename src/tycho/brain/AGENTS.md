@@ -10,6 +10,7 @@ Claude decides what to do with anything the fast path doesn't match. Its output 
 - `decisions.py`: what Claude can decide (`RunActions`, `RunSequence`, `Reply`), `parse_tool_call`, and the errors.
 - `briefing.py`: the cached system prompt. It lists the player's bound actions.
 - `lookups.py`: the `Lookup` Protocol and `run_lookup`, which never raises.
+- `traces.py`: one JSON line per request for Claude sessions to read (#282; root AGENTS.md, "Brain traces"). `rounds` records the calls, tool calls and look-ups on `Turn.trace`, and `traced` writes the line; an adapter only reports its stream (`Round.streaming`, `Round.used`). A new adapter passes `traces` through and does the same.
 
 ## Rules
 
