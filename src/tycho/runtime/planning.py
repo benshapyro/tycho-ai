@@ -9,8 +9,8 @@ The whole request is planned before anything is pressed: if any part can't be
 done, none of it is, so the ship is never left half-way through a request. A
 confirmation plans again from scratch, with the keybinds as they are then.
 
-This is where a game pack's safety lists will reach the gate (ADR 18, C5): every
-press of every request passes through ``plan_request``.
+This is where a game pack's safety lists reach the gate (ADR 18): every press of
+every request passes through ``plan_request``.
 """
 
 from dataclasses import dataclass
@@ -20,6 +20,7 @@ from tycho import safety
 from tycho.commands import Command, resolve
 from tycho.game.keybinds import Action, Keybinds
 from tycho.input import NotPressable, Press, UnsupportedKey, plan
+from tycho.packs import Safety
 
 CHAIN_BEAT_SECONDS = 0.15
 """A pause between the actions of a chain, so the game registers each one."""
@@ -84,12 +85,15 @@ def plan_request(
     facts: frozenset[str] = frozenset(),
     *,
     confirmed: bool = False,
+    lists: Safety | None = None,
 ) -> Planned:
     """The presses for ``commands``, or why there are none.
 
     A sequence is planned step by step, like a chain. A refusal outranks any
     question: if one part is refused, nothing is asked. ``confirmed`` means the
     player has said "confirm" to this request; every other check still applies.
+    ``lists`` are the game pack's safety lists (Star Citizen's when None): the one place
+    a pack's lists reach the gate (ADR 18).
     """
     steps: list[tuple[float, Press]] = []
     reasons: list[str] = []
@@ -109,7 +113,13 @@ def plan_request(
             setup.append(action)
         for position, action in enumerate((*setup, resolved.action)):
             verdict = safety.check(
-                command, action, keybinds, facts, confirmed=confirmed, setup_done=position
+                command,
+                action,
+                keybinds,
+                facts,
+                confirmed=confirmed,
+                setup_done=position,
+                lists=lists,
             )
             if verdict.ask:
                 reasons.append(verdict.reason)

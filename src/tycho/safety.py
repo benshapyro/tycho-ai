@@ -11,65 +11,36 @@ the guns in guns mode, and a handgun on foot. "Engage quantum" may click it
 because it first sets NAV (ship weapons offline) and quantum mode (no guns,
 missiles, mining or salvage). That leaves on foot, a risk the author accepted
 for that command, since Tycho only hears what the player says to it on purpose.
+
+The rules are here; the lists they use (which actions ask first, which modes switch a
+control context off) are the game pack's ``safety.toml`` (ADR 18). Each function takes
+``lists``, Star Citizen's when None.
 """
 
 import re
 from dataclasses import dataclass
+from typing import Final
 
 from tycho.commands.matcher import Command
-from tycho.game.gamelog import QUANTUM_ROUTE
 from tycho.game.keybinds import MODIFIERS, Action, Keybinds, KeyInput
 from tycho.input.plan import pressable_input
-
-CONFIRM_GRADE = frozenset(
-    {
-        *("v_eject", "v_emergency_exit", "v_self_destruct", "v_jettison_volatile_cargo"),
-        *("v_weapon_preset_attack", "v_weapon_toggle_launch_missile", "v_weapon_launch_missile"),
-        *("attack1", "respawn", "force_respawn", "incapacitatedRespawn"),
-    }
-)
-"""Actions that are hard to undo: losing the ship, leaving it, or firing.
-
-Quantum engage and jump-point jumps aren't here: they're routine travel, and the
-author decided they shouldn't need confirming (2026-10-30 and 2026-10-31)."""
-
-TRAVEL = frozenset({"v_toggle_qdrive_engagement", "v_toggle_jump_request"})
-"""Quantum and jump engage. Not confirm-grade when the player says it in the fast
-path's words, but the brain's reading of looser words asks first (ADR 14)."""
+from tycho.packs import Safety, built_in
 
 _DANGER_WORDS = (
     *("eject", "self_destruct", "emergency_exit", "jettison", "respawn"),
     *("launch_missile", "attack", "fire"),
 )
-"""A backstop for actions a game patch adds or renames before the list above is updated."""
+"""The backstop: an action whose name holds one of these asks first, whatever the game
+pack's lists say, so a pack can add danger but never remove it (ADR 18). It also
+catches actions a game patch adds or renames before the pack's list is updated. Only a
+pack that ships inside Tycho may name harmless exceptions (``not_danger``)."""
 
-_NOT_DANGER = ("fire_mode", "firemode", "staggered_fire", "cinematic", "cycle_attacker")
-"""Harmless actions the words above would catch: choosing a fire mode, the missile
-camera, or cycling targets to whoever is attacking you."""
+STAR_CITIZEN: Final = built_in().safety
+"""Star Citizen's lists (its pack's safety.toml): the gate's lists when none are given."""
 
-
-_MODE_GUARDS: dict[str, frozenset[str]] = {
-    # NAV takes the ship's weapons offline.
-    "v_master_mode_set_nav": frozenset({"spaceship_weapons", "spaceship_missiles"}),
-    # Operator modes are exclusive: in quantum mode the trigger engages the drive.
-    "v_set_quantum_mode": frozenset(
-        {"spaceship_weapons", "spaceship_missiles", "spaceship_mining", "spaceship_salvage"}
-    ),
-}
-"""Setup actions, and the control contexts (actionmaps) they switch off."""
-
-_STATE_GUARDS: dict[str, frozenset[str]] = {
-    # Plotting a route takes the pilot seat, and leaving it clears the fact: not on foot.
-    QUANTUM_ROUTE: frozenset({"player"}),
-}
-"""Required facts, and the control contexts they rule out."""
-
-ACCEPTABLE_RISKS = frozenset({"player"})
-"""Contexts a command may accept the risk of. Ship contexts aren't: a mode switches those off."""
-
-_REQUIREMENTS = {
-    QUANTUM_ROUTE: "no quantum route is plotted (from Game.log)",
-}
+CONFIRM_GRADE = STAR_CITIZEN.confirm
+TRAVEL = STAR_CITIZEN.travel
+ACCEPTABLE_RISKS = STAR_CITIZEN.accepted_risks
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +59,7 @@ def check(
     *,
     confirmed: bool = False,
     setup_done: int | None = None,
+    lists: Safety | None = None,
 ) -> Verdict:
     """Whether ``action`` may be pressed for ``command`` now.
 
@@ -97,10 +69,11 @@ def check(
     will have been pressed before this one (None: all of them). A setup key is
     checked in the mode the game is in before it, not after.
     """
+    lists = lists or STAR_CITIZEN
     name = action.label or action.name
     if missing := [fact for fact in command.requires if fact not in facts]:
-        return Verdict(False, "; ".join(_REQUIREMENTS.get(fact, fact) for fact in missing))
-    if keybinds is not None and (clash := key_clash(action, keybinds, command, setup_done)):
+        return Verdict(False, "; ".join(lists.facts.get(fact, fact) for fact in missing))
+    if keybinds is not None and (clash := key_clash(action, keybinds, command, setup_done, lists)):
         risky, bound = clash
         key = pressable_input(action)
         danger = risky.label or risky.name
@@ -114,7 +87,7 @@ def check(
             False,
             f"{name} is on {key}, {also}. Give it a key of its own (the recommended keybinds do).",
         )
-    if not confirmed and (command.confirm or is_confirm_grade(action.name)):
+    if not confirmed and (command.confirm or is_confirm_grade(action.name, lists)):
         return Verdict(False, f"{name} needs your confirmation", ask=True)
     return Verdict(True)
 
@@ -125,15 +98,17 @@ def spoken_name(action: Action) -> str:
     return re.sub(r"\s*\([^)]*\)", "", action.label).strip() or action.name
 
 
-def is_travel(command: Command) -> bool:
-    return any(name in TRAVEL for name in command.actions)
+def is_travel(command: Command, lists: Safety | None = None) -> bool:
+    travel = (lists or STAR_CITIZEN).travel
+    return any(name in travel for name in command.actions)
 
 
-def is_confirm_grade(action_name: str) -> bool:
+def is_confirm_grade(action_name: str, lists: Safety | None = None) -> bool:
+    lists = lists or STAR_CITIZEN
     name = action_name.lower()
-    if action_name in CONFIRM_GRADE:
+    if action_name in lists.confirm:
         return True
-    if any(word in name for word in _NOT_DANGER):
+    if any(word in name for word in lists.not_danger):
         return False
     return any(word in name for word in _DANGER_WORDS)
 
@@ -143,6 +118,7 @@ def shares_key_with_danger(
     keybinds: Keybinds,
     command: Command | None = None,
     setup_done: int | None = None,
+    lists: Safety | None = None,
 ) -> Action | None:
     """A confirm-grade action bound to the very key Tycho would press for ``action``, or
     to modifiers alone that the press holds down on the way ("ralt" for "ralt+x").
@@ -150,7 +126,7 @@ def shares_key_with_danger(
     Ones in a control context that ``command``'s setup or requirements switch off
     don't count.
     """
-    clash = key_clash(action, keybinds, command, setup_done)
+    clash = key_clash(action, keybinds, command, setup_done, lists)
     return clash[0] if clash is not None else None
 
 
@@ -159,15 +135,16 @@ def key_clash(
     keybinds: Keybinds,
     command: Command | None = None,
     setup_done: int | None = None,
+    lists: Safety | None = None,
 ) -> tuple[Action, KeyInput] | None:
     """As ``shares_key_with_danger``, with the confirm-grade action's binding that the
     press would also press: the same key, or the modifiers it holds (#208)."""
     key = pressable_input(action)
     if key is None:
         return None
-    off = switched_off(command, setup_done) if command is not None else frozenset[str]()
+    off = switched_off(command, setup_done, lists) if command is not None else frozenset[str]()
     for other in keybinds:
-        if other.name == action.name or not is_confirm_grade(other.name):
+        if other.name == action.name or not is_confirm_grade(other.name, lists):
             continue
         if other.actionmap in off:
             continue
@@ -185,19 +162,22 @@ def _pressed_by(press: KeyInput, bound: KeyInput) -> bool:
     return held <= MODIFIERS and held <= set(press.modifiers)
 
 
-def switched_off(command: Command, setup_done: int | None = None) -> frozenset[str]:
+def switched_off(
+    command: Command, setup_done: int | None = None, lists: Safety | None = None
+) -> frozenset[str]:
     """Control contexts that can't act once ``command``'s requirements hold and the first
     ``setup_done`` of its setup actions (all of them, if None) have been pressed."""
+    lists = lists or STAR_CITIZEN
     off: set[str] = set()
     setup = command.setup if setup_done is None else command.setup[:setup_done]
     for name in setup:
-        off |= _MODE_GUARDS.get(name, frozenset())
+        off |= lists.mode_guards.get(name, frozenset())
     for fact in command.requires:
-        off |= _STATE_GUARDS.get(fact, frozenset())
-    off |= ACCEPTABLE_RISKS & set(command.accepted_risks)
+        off |= lists.state_guards.get(fact, frozenset())
+    off |= lists.accepted_risks & set(command.accepted_risks)
     return frozenset(off)
 
 
-def known_facts() -> frozenset[str]:
+def known_facts(lists: Safety | None = None) -> frozenset[str]:
     """Facts a command may require: the ones the gate knows how to explain and rely on."""
-    return frozenset(_REQUIREMENTS)
+    return frozenset((lists or STAR_CITIZEN).facts)

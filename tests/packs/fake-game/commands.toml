@@ -14,3 +14,9 @@ say = ["open the hatch", "hatch open"]
 id = "get_ready"
 steps = ["raise_shield", "open_hatch"]
 say = ["get ready"]
+
+# Left out of safety.toml's confirm on purpose: the danger-word backstop still asks.
+[[command]]
+id = "blow_up"
+actions = ["self_destruct"]
+say = ["blow it up"]

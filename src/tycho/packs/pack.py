@@ -9,6 +9,7 @@ plain message (``PackError``). What a pack may hold:
     terms.txt      game words for the speech corrector
     commands.toml  fast-path commands and sequences (only in a pack with key actions)
     tile.toml      the Tile's accents, by maker
+    safety.toml    the safety gate's lists: what asks first, and what a mode switches off
 
 Packs load only from inside Tycho for now (``built_in``): a folder a player adds isn't
 loaded until ADR 8's trust questions are answered. ``built_in`` on the pack records
@@ -49,6 +50,7 @@ _COLOUR = re.compile(r"#[0-9a-f]{6}")
 _SITE = re.compile(r"[a-z0-9-]+(\.[a-z0-9-]+)+")
 _FILES = frozenset(
     {"pack.toml", "briefing.md", "facts.md", "terms.txt", "commands.toml", "tile.toml"}
+    | {"safety.toml"}
 )
 _TOP = frozenset({"id", "name", "version", "format", "mode", "window", "parts", "web", "briefing"})
 _PARTS = frozenset({"install", "keybinds", "game_state", "lookups"})
@@ -76,6 +78,33 @@ class Tile:
     """A maker's name, by its first word, to its prefix (``drake`` to ``DRAK``)."""
 
 
+LOOSENING = ("not_danger", "mode_guards", "state_guards", "accepted_risks")
+"""The safety lists that make a check let something through. Only a pack that ships
+inside Tycho, reviewed like code, may set them (ADR 18)."""
+_SAFETY = frozenset({"confirm", "travel", "facts", *LOOSENING})
+
+
+@dataclass(frozen=True, slots=True)
+class Safety:
+    """A game's lists for the safety gate (``safety.toml``). The rules that use them, and
+    the danger-word backstop on top of them, stay in ``safety.py``."""
+
+    confirm: frozenset[str] = frozenset()
+    """Actions that always ask first."""
+    travel: frozenset[str] = frozenset()
+    """Actions that ask when the brain chose them from looser words (ADR 14)."""
+    facts: Mapping[str, str] = field(default_factory=dict[str, str])
+    """Facts the game state can report, with what the gate says when one is missing."""
+    not_danger: tuple[str, ...] = ()
+    """Words in harmless action names the backstop would catch (built-in packs only)."""
+    mode_guards: Mapping[str, frozenset[str]] = field(default_factory=dict[str, frozenset[str]])
+    """Setup actions, and the control contexts they switch off (built-in packs only)."""
+    state_guards: Mapping[str, frozenset[str]] = field(default_factory=dict[str, frozenset[str]])
+    """Facts, and the control contexts they rule out (built-in packs only)."""
+    accepted_risks: frozenset[str] = frozenset()
+    """Contexts a command may accept the risk of (built-in packs only)."""
+
+
 @dataclass(frozen=True, slots=True)
 class GamePack:
     id: str
@@ -93,6 +122,7 @@ class GamePack:
     commands: str | None
     """The built-in commands file's text, or None for a pack without key actions."""
     tile: Tile
+    safety: Safety
     web_sites: tuple[str, ...]
     """The only sites web search may read for this game."""
     unbriefed_actionmaps: frozenset[str]
@@ -163,6 +193,11 @@ def load_pack(folder: Traversable, *, built_in: bool, registry: Registry = BUILT
         terms=_terms(_read(folder, "terms.txt")) if "terms.txt" in names else (),
         commands=commands,
         tile=_tile(_toml(folder, "tile.toml") if "tile.toml" in names else {}, folder.name),
+        safety=_safety(
+            _toml(folder, "safety.toml") if "safety.toml" in names else {},
+            f"{folder.name}/safety.toml",
+            built_in=built_in,
+        ),
         web_sites=_sites(_table(manifest, "web", where), where),
         unbriefed_actionmaps=frozenset(_strings(filters, "unbriefed_actionmaps", where)),
         continuous=_pattern(filters.get("continuous"), where),
@@ -299,3 +334,34 @@ def _check_briefing(text: str, where: str) -> None:
         )
     if twice := sorted({name for name in placed if placed.count(name) > 1}):
         raise PackError(f"{where}: core sections placed more than once: {', '.join(twice)}")
+
+
+def _safety(table: Mapping[str, object], where: str, *, built_in: bool) -> Safety:
+    if extra := sorted(table.keys() - _SAFETY):
+        raise PackError(f"{where}: unknown lists: {', '.join(extra)}")
+    if not built_in and (loosening := [name for name in LOOSENING if table.get(name)]):
+        # "Eject without asking" from a pack Tycho didn't ship: refused, never trusted.
+        raise PackError(
+            f"{where}: only a pack that ships inside Tycho may set {', '.join(loosening)}: "
+            "they let the safety gate allow something it would otherwise stop"
+        )
+    facts = _table(table, "facts", where)
+    if bad := [k for k, v in facts.items() if not isinstance(v, str) or not v.strip()]:
+        raise PackError(f"{where}: each fact needs the sentence to say when it's missing: {bad}")
+    state_guards = _guards(table, "state_guards", where)
+    if unknown := sorted(state_guards.keys() - facts.keys()):
+        raise PackError(f"{where}: state_guards for facts it doesn't list: {', '.join(unknown)}")
+    return Safety(
+        confirm=frozenset(_strings(table, "confirm", where)),
+        travel=frozenset(_strings(table, "travel", where)),
+        facts=cast(dict[str, str], facts),
+        not_danger=_strings(table, "not_danger", where),
+        mode_guards=_guards(table, "mode_guards", where),
+        state_guards=state_guards,
+        accepted_risks=frozenset(_strings(table, "accepted_risks", where)),
+    )
+
+
+def _guards(table: Mapping[str, object], key: str, where: str) -> dict[str, frozenset[str]]:
+    guards = _table(table, key, where)
+    return {name: frozenset(_strings(guards, name, f"{where} [{key}]")) for name in guards}
