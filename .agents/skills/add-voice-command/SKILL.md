@@ -1,6 +1,6 @@
 ---
 name: add-voice-command
-description: Add or change a built-in Tycho voice command or sequence in src/tycho/commands/commands.toml, with its tests and eval cases. Use when working in the Tycho repository and asked to support a new phrase, a new game action, or a new multi-step sequence for every player. A single player's own phrases go in their %APPDATA%\tycho\commands.toml instead, which the tycho-commands skill covers.
+description: Add or change a built-in Tycho voice command or sequence in src/tycho/packs/star-citizen/commands.toml, with its tests and eval cases. Use when working in the Tycho repository and asked to support a new phrase, a new game action, or a new multi-step sequence for every player. A single player's own phrases go in their %APPDATA%\tycho\commands.toml instead, which the tycho-commands skill covers.
 ---
 
 # Add a built-in voice command
@@ -20,7 +20,7 @@ Built-in commands are Tycho's fast path: phrases matched on the player's PC, wit
 
 ## 2. Write the entry
 
-In `src/tycho/commands/commands.toml`, next to its neighbours (the file is grouped by system):
+In `src/tycho/packs/star-citizen/commands.toml`, next to its neighbours (the file is grouped by system):
 
 ```toml
 [[command]]

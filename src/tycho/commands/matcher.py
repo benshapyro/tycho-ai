@@ -15,11 +15,11 @@ command made of other commands, with waits between them.
 import tomllib
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
-from importlib import resources
 from pathlib import Path
 from typing import Any, cast
 
 from tycho.commands.reserved import USES, reserved_for
+from tycho.packs import GamePack, built_in
 from tycho.text import normalize, similarity
 
 _LEADING_FILLER = (
@@ -130,6 +130,12 @@ class Defer:
     """"empty", "negation", "no_match" or "ambiguous"."""
 
 
+def built_in_commands(pack: GamePack | None = None) -> str:
+    """The text of a game pack's own commands.toml (Star Citizen's when none is given);
+    empty for a pack with no key actions."""
+    return (pack or built_in()).commands or ""
+
+
 class CommandMatcher:
     def __init__(
         self,
@@ -159,13 +165,14 @@ class CommandMatcher:
         self._joined = ["".join(words) for words, _ in self._phrases]
 
     @classmethod
-    def default(cls, user_file: Path | None = None) -> CommandMatcher:
-        """The built-in commands, plus the player's own file if there is one.
+    def default(cls, user_file: Path | None = None, pack: GamePack | None = None) -> CommandMatcher:
+        """The game pack's commands (Star Citizen's when none is given), plus the
+        player's own file if there is one.
 
         Raises ``CommandFileError`` if the player's file can't be used; the
         built-in commands alone always load.
         """
-        text = resources.files("tycho.commands").joinpath("commands.toml").read_text("utf-8")
+        text = built_in_commands(pack)
         entries = _entries(tomllib.loads(text), "the built-in commands")
         source = "the built-in commands"
         warnings: tuple[str, ...] = ()

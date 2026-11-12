@@ -5,13 +5,17 @@ that follows the ship the player is flying. Warnings keep their own colours, so 
 question still reads as red in a red cockpit. No fankit fonts or logos: the fonts are
 free ones, and the Tile shows no manufacturer marks.
 
-The manufacturer accents are estimates (docs/research/manufacturer-ui.md), to confirm
-in game. Keyed by the prefix the game's own files and Game.log give a ship
-(``DRAK_Cutlass_Black``), so no lookup table of ship names is needed.
+The manufacturer accents (the game pack's tile.toml) are estimates
+(docs/research/manufacturer-ui.md), to confirm in game. Keyed by the prefix the game's
+own files and Game.log give a ship (``DRAK_Cutlass_Black``), so no lookup table of ship
+names is needed.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final
+
+from tycho.packs import built_in
 
 TYCHO_ACCENT: Final = "#9fd8ff"
 """Tycho's own accent: when no ship is known, or the player picks it."""
@@ -34,26 +38,9 @@ class Core:
 
 CORE: Final = Core()
 
-MAKER_ACCENTS: Final[dict[str, str]] = {
-    "AEGS": "#cfe6ff",  # Aegis Dynamics: cool white on dark
-    "ANVL": "#7fd1b9",  # Anvil Aerospace
-    "ARGO": "#4fb3ff",  # Argo: the shared default style
-    "XIAN": "#b6ed68",  # Aopoa
-    "BANU": "#e8c27a",
-    "CNOU": "#4fb3ff",  # Consolidated Outland: default style
-    "CRUS": "#8cc8ff",  # Crusader Industries
-    "DRAK": "#f5901e",  # Drake Interplanetary: orange
-    "ESPR": "#4fb3ff",  # Esperia: default style
-    "GAMA": "#6de6f2",  # Gatac
-    "GRIN": "#f4d35e",  # Greycat Industrial
-    "KRIG": "#4fb3ff",  # Kruger: default style
-    "MISC": "#58ddd1",
-    "MRAI": "#ff647c",  # Mirai
-    "ORIG": "#f2f4f7",  # Origin Jumpworks: pale
-    "RSI": "#4fb3ff",  # Roberts Space Industries: blue
-    "TMBL": "#ddb582",  # Tumbril
-}
-"""Estimated HUD colour by the manufacturer prefix of a ship's game name."""
+MAKER_ACCENTS: Final[Mapping[str, str]] = built_in().tile.accents
+"""Estimated HUD colour by the manufacturer prefix of a ship's game name (the game
+pack's tile.toml)."""
 
 
 PICKS: Final[dict[str, str]] = {
@@ -68,27 +55,7 @@ PICKS: Final[dict[str, str]] = {
 }
 """Colours the player can pick for the Tile ("keep the Tile orange")."""
 
-MAKER_NAMES: Final[dict[str, str]] = {
-    "aegis": "AEGS",
-    "anvil": "ANVL",
-    "argo": "ARGO",
-    "aopoa": "XIAN",
-    "banu": "BANU",
-    "consolidated": "CNOU",
-    "crusader": "CRUS",
-    "drake": "DRAK",
-    "esperia": "ESPR",
-    "gatac": "GAMA",
-    "greycat": "GRIN",
-    "kruger": "KRIG",
-    "misc": "MISC",
-    "musashi": "MISC",
-    "mirai": "MRAI",
-    "origin": "ORIG",
-    "roberts": "RSI",
-    "rsi": "RSI",
-    "tumbril": "TMBL",
-}
+MAKER_NAMES: Final[Mapping[str, str]] = built_in().tile.makers
 """A maker's name, by its first word, to its prefix: for ships still in concept,
 which have no game name yet."""
 

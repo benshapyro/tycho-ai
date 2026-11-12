@@ -20,22 +20,16 @@ from typing import Any
 import anthropic
 
 from tycho.brain.lookups import LookupResult, failure
+from tycho.packs import built_in
 
 log = logging.getLogger(__name__)
 
 MODEL = "claude-haiku-5-5"
 WEB_SEARCH = "web_search_20250305"
 """Haiku 5.5 has the version without dynamic filtering."""
-SITES = (
-    "robertsspaceindustries.com",
-    "starcitizen.tools",
-    "uexcorp.space",
-    "erkul.games",
-    "sc-craft.tools",
-    "scmdb.net",
-)
-"""The only sites a search may read (2026-11-02): RSI's own (patch notes, roadmap,
-Comm-Links, Spectrum, support), the community wiki and the community tools. The
+SITES = built_in().web_sites
+"""The only sites a search may read: the game pack's (``[web]`` in its pack.toml). For
+Star Citizen, RSI's own, the community wiki and the community tools (2026-11-02): the
 open web brought fan sites and leaked dates."""
 PRICES = (0.10, 0.50)
 """Haiku 5.5 per million tokens, input and output."""

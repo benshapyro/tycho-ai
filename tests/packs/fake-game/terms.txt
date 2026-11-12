@@ -1,0 +1,3 @@
+# Fake Game's words, for the speech corrector.
+Glimmerhold
+Quillback

@@ -22,7 +22,6 @@ import tempfile
 import tomllib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from importlib import resources
 from pathlib import Path
 from typing import Any, cast
 
@@ -31,6 +30,7 @@ import tomlkit.exceptions
 from tomlkit.items import AoT, Array, Table
 
 from tycho.commands import Command, CommandFileError, CommandMatcher, resolve
+from tycho.commands.matcher import built_in_commands
 from tycho.commands.reserved import USES, reserved_for
 from tycho.game.keybinds import Keybinds, KeyInput
 from tycho.safety import is_confirm_grade
@@ -386,7 +386,7 @@ def _tables(doc: Any, command_id: str) -> list[Table]:
 
 
 def _built_in() -> dict[str, dict[str, Any]]:
-    text = resources.files("tycho.commands").joinpath("commands.toml").read_text("utf-8")
+    text = built_in_commands()
     return _by_id(tomllib.loads(text))
 
 

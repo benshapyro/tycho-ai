@@ -1,0 +1,20 @@
+# A fake second game, to prove the pack seam presses keys for a game that isn't
+# Star Citizen (ADR 18). Its keybinds part, "fake-game", exists only in tests.
+
+id = "fake-game"
+name = "Fake Game"
+version = "0.1.0"
+format = 1
+mode = "keys"
+window = "FakeGame.exe"
+
+[parts]
+keybinds = "fake-game"
+lookups = ["settings"]
+
+[web]
+sites = ["fakegame.example"]
+
+[briefing]
+unbriefed_actionmaps = ["photo_mode"]
+continuous = '''walk_\w+'''

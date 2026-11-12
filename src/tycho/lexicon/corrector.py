@@ -13,8 +13,8 @@ context can tell, so those come back as hints for the language model instead.
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
-from importlib import resources
 
+from tycho.packs import GamePack, built_in
 from tycho.text import similarity
 
 _WORD = re.compile(r"[A-Za-z0-9']+")
@@ -112,10 +112,9 @@ class Lexicon:
         self._max_words = max_words
 
     @classmethod
-    def default(cls) -> Lexicon:
-        text = resources.files("tycho.lexicon").joinpath("terms.txt").read_text(encoding="utf-8")
-        lines = (line.strip() for line in text.splitlines())
-        return cls(line for line in lines if line and not line.startswith("#"))
+    def default(cls, pack: GamePack | None = None) -> Lexicon:
+        """The game pack's words (Star Citizen's when none is given)."""
+        return cls((pack or built_in()).terms)
 
     def __len__(self) -> int:
         return len(self._terms)

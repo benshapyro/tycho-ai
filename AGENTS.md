@@ -39,8 +39,9 @@ A change a player can notice also adds a line under **Unreleased** in `CHANGELOG
 - `src/tycho/ptt/`: push-to-talk on keyboard, mouse and joystick buttons.
 - `src/tycho/audio/`: microphone capture and push-to-talk clips.
 - `src/tycho/game/`: the game install, `Data.p4k` and CryXmlB readers, keybinds, the keybind store, profile building, and the `Game.log` reader.
-- `src/tycho/lexicon/`: the game-term corrector and its term list.
-- `src/tycho/commands/`: the fast-path command matcher, its command list and sequences, and merging in the player's own `commands.toml` (ADR 14).
+- `src/tycho/packs/`: game packs (ADR 18). A pack is a folder of data Tycho validates and never runs: `pack.toml` (id, version, format, mode, the built-in parts it names by id), the game part of the brain's briefing (`briefing.md`, which places the core sections from `brain/core.md` once each), `facts.md`, `terms.txt`, `commands.toml` and `tile.toml`. `pack` loads and checks one; `parts` is the registry of built-in parts (install, keybinds, game state, look-ups). Star Citizen is `packs/star-citizen/`; its code stays in `game/` and `knowledge/`. A fake second game is in `tests/packs/`. Star Citizen's briefing is pinned byte for byte (`tests/test_packs.py`): if you change its text on purpose, update the hash there.
+- `src/tycho/lexicon/`: the game-term corrector (the words are the pack's `terms.txt`).
+- `src/tycho/commands/`: the fast-path command matcher, the pack's command list and sequences, and merging in the player's own `commands.toml` (ADR 14).
 - `src/tycho/input/`: the hands. Key codes, press planning from the game's activation modes, the presser (focus-guarded, cancellable, always releases), and the Windows sender.
 - `src/tycho/stt/`: speech to text. Pinned, checksummed model downloads (`ModelStore`), choosing the GPU or CPU, and the Parakeet transcriber.
 - `src/tycho/knowledge/`: look-ups (ADR 15). The Star Citizen Wiki API and UEX clients, the ship data (concept ships from UEX) and name matching, the per-patch SQLite copy built on the player's PC, the ship look-up tool, the trade look-ups (UEX prices and routes), the player's fleet (`update_fleet`, `fleet.toml`), items and crafting (live from the Wiki API), and web search (a separate Claude request with Anthropic's search, on Star Citizen sites only).
