@@ -1,6 +1,6 @@
 # 8. Packs and connections
 
-Date: 2026-10-30 · Status: proposed. Pending: the author's sign-off, and a first game-pack interface extracted from the Star Citizen code.
+Date: 2026-10-30 · Status: proposed. Pending: the author's sign-off. The game-pack layer is settled by [ADR 18](0018-game-packs.md) (accepted 12 November 2026): data folders that name built-in parts by id.
 
 ## Context
 

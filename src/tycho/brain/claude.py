@@ -24,7 +24,7 @@ import contextlib
 import datetime
 import logging
 import time
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any, cast
 
 import anthropic
@@ -54,8 +54,9 @@ log = logging.getLogger(__name__)
 MODEL = "claude-haiku-5-5"
 EFFORT = "low"
 """97% on the 82-case eval at about 1.2 s; medium scored the same, slower (ADR 6)."""
-MAX_TOKENS = 1024
-"""Replies are a sentence or two and tool calls a few dozen tokens; this is headroom."""
+MAX_TOKENS = 2048
+"""Replies are a sentence or two and tool calls a few dozen tokens, but a how-to or a
+plan on a card ran past 1024 (#266). It's a cap: a short reply pays nothing for it."""
 # Haiku 5.5 per million tokens: input, output, cache read, cache write (1 hour).
 _PRICES = (0.10, 0.50, 0.01, 0.20)
 
@@ -226,11 +227,12 @@ class ClaudeBrain:
         """One call to Claude: an act if it picked one (the stream is left there),
         otherwise the whole message and the round, with the look-ups it started."""
         round_ = Round(turn, self._lookups, self._actions, self._sequences, started)
+        tools = self._offered()
         try:
             async with self._client.messages.stream(
                 model=self._model,
                 system=self._system,
-                tools=self._offered(),
+                tools=tools,
                 tool_choice=TOOL_CHOICE,
                 output_config={"effort": EFFORT},
                 max_tokens=MAX_TOKENS,
@@ -242,6 +244,8 @@ class ClaudeBrain:
                         and event.content_block.type == "tool_use"
                     ):
                         block = event.content_block
+                        if _cut_off(block.name, block.input, tools):
+                            return await round_.cut_short(block.name), None, round_
                         decided = await round_.tool_call(block.id, block.name, block.input)
                         if decided is not None:
                             return decided, None, round_
@@ -281,6 +285,24 @@ def _results(
         {"type": "tool_result", "tool_use_id": use_id, "content": r.content, "is_error": r.is_error}
         for (use_id, _), r in zip(looking, results, strict=True)
     ]
+
+
+def _cut_off(name: str, arguments: object, tools: Sequence[ToolParam]) -> bool:
+    """Whether an act was cut off at the output limit (#266). The SDK reads a cut
+    call's arguments as far as they go, so a card arrives with its last rows and fields
+    missing, and a cut run_actions would press only the actions it got to. Every tool
+    is strict, so a whole call always has every required field. (A look-up's arguments
+    are short, and checked by the look-up itself.)"""
+    if name not in ACTS:
+        return False
+    if not isinstance(arguments, dict):
+        return True
+    for tool in tools:
+        if tool["name"] == name:
+            schema = cast(Mapping[str, Any], tool.get("input_schema", {}))
+            required: Sequence[str] = schema.get("required", ())
+            return any(key not in arguments for key in required)
+    return False
 
 
 TOOL_CHOICE: Any = {"type": "auto"}

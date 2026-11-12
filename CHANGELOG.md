@@ -8,11 +8,14 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-12
+
 ### Changed
 - Tycho guesses less. A request it can't place ("faster", "same as before") or one that could mean something drastic ("kill it") now gets a one-line question instead of a press. What you say to your squad on the same push-to-talk ("break right", "form up on me") presses nothing, not even shields or targeting, and gets a plain "Copy.", while "look behind" still turns your view. "Take us to Crusader" opens the star map (if it has a key) and tells you to set the destination there, since Tycho can't choose where quantum goes, and "open fire" says the trigger is yours instead of powering weapons. ([#271](https://github.com/benshapyro/tycho-ai/issues/271))
 
 ### Fixed
 - Chat that isn't a request ("good fight everyone, o7") sometimes got an error instead of Tycho's reply. Now you hear the reply, without Tycho explaining why it pressed nothing ("not a request for me, so…"). ([#278](https://github.com/benshapyro/tycho-ai/pull/278))
+- Asking for a long how-to or plan ("teach me how to salvage") could end in the error sound, because the card ran past the length Claude may answer in. Tycho now has twice the room, asks Claude to keep cards to what the Tile shows, and if an answer still runs too long it says so ("Ask me for part of it") instead of showing half a card. ([#266](https://github.com/benshapyro/tycho-ai/issues/266))
 
 ## [0.5.0] - 2026-11-09
 
@@ -99,7 +102,8 @@ The first release with an installer, as a preview. Earlier versions weren't rele
 - A fleet Tycho remembers, and speech recognition on your PC.
 - A check for a newer version when Tycho starts (it never updates itself).
 
-[Unreleased]: https://github.com/benshapyro/tycho-ai/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/benshapyro/tycho-ai/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.6.0
 [0.5.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.5.0
 [0.4.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.4.0
 [0.3.3]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.3.3

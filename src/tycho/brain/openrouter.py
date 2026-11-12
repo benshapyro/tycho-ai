@@ -57,7 +57,8 @@ log = logging.getLogger(__name__)
 URL = "https://openrouter.ai/api/v1"
 WARM_TOKENS = 16
 """The warm-up's reply: some providers refuse fewer."""
-MAX_TOKENS = 1024
+MAX_TOKENS = 2048
+"""A how-to or a plan on a card ran past 1024 with Haiku (#266)."""
 REASONING_TOKENS = 2048
 """Room for a model that reasons before it answers (#268): its reasoning counts against
 ``max_tokens``, and GLM, Qwen and Kimi ran out at 1024 with no answer. It's a cap, so a
@@ -119,7 +120,9 @@ class OpenRouterClient:
                 if response.status_code != 200:
                     raise BrainError(_explain(response.status_code, await response.aread()))
                 yield chunks(response.aiter_lines())
-        except httpx2.TimeoutException as e:
+        except (httpx2.ReadTimeout, httpx2.WriteTimeout) as e:
+            # Only a model that's slow to answer: a connect or pool timeout is a network
+            # that drops packets, which is "can't reach" below (#270).
             raise BrainError(f"OpenRouter was too slow to answer ({e.__class__.__name__})") from e
         except httpx2.HTTPError as e:
             raise BrainError("can't reach OpenRouter (offline?)") from e
@@ -410,6 +413,11 @@ class OpenRouterBrain:
                         ) is not None:
                             return decided, message, round_
                 for call in message.rest():
+                    if message.finish == "length" and not call.whole():
+                        # Cut off at the output limit (#266): its arguments end mid-way.
+                        message.calls.remove(call)
+                        self._log_usage(message.usage, started, host=message.host)
+                        return await round_.cut_short(call.name), message, round_
                     if (
                         decided := await self._tool_call(round_, call, message, started)
                     ) is not None:

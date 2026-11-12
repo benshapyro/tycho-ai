@@ -6,9 +6,10 @@ import importlib.util
 import logging
 import sys
 import tomllib
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, cast
 
 import httpx2
 import pytest
@@ -392,9 +393,13 @@ def test_the_eval_takes_a_provider_and_a_model() -> None:
 def test_the_eval_pins_a_host_only_through_openrouter() -> None:
     # #267: --host and --sort go to OpenRouter's provider routing.
     e = _eval()
-    pinned = ["--host", "cerebras", "--host", "groq", "--sort", "latency"]
-    args = e._arguments(["--provider", "openrouter", "--model", "openai/gpt-oss-120b", *pinned])
-    assert (args.host, args.sort) == (["cerebras", "groq"], "latency")
+    model = ["--provider", "openrouter", "--model", "openai/gpt-oss-120b"]
+    args = e._arguments([*model, "--host", "cerebras", "--host", "groq"])
+    assert (args.host, args.sort) == (["cerebras", "groq"], None)
+    assert e._arguments([*model, "--sort", "latency"]).sort == "latency"
+    with pytest.raises(SystemExit):
+        # #275: whether a sort reorders pinned hosts isn't documented, so not both.
+        e._arguments([*model, "--host", "cerebras", "--sort", "latency"])
     assert e._arguments([]).host == []
     with pytest.raises(SystemExit):
         e._arguments(["--host", "cerebras"])  # Claude directly has no hosts to pick
@@ -404,22 +409,22 @@ def test_the_eval_pins_a_host_only_through_openrouter() -> None:
 
 def test_each_result_says_which_host_served_it() -> None:
     # #267: the host is read from each call's log line, case by case, and counted.
-    import logging
-
-    from tycho.brain import RunActions
+    # #275: the lines are the ones a real OpenRouterBrain logs, so a change to their
+    # format fails here instead of leaving the hosts quietly empty.
+    from tests.fakes.fake_chat import FakeChat, text, tool_call
+    from tycho.brain.openrouter import OpenRouterBrain
+    from tycho.commands import CommandMatcher
+    from tycho.game.keybinds import Keybinds
     from tycho.lexicon import Lexicon
 
-    class _Served:
-        def __init__(self, *hosts: str) -> None:
-            self.hosts = hosts
+    def served(host: str, chunks: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+        return [{**c, "provider": host} for c in chunks]
 
-        async def decide(self, request: object) -> object:
-            log = logging.getLogger("tycho.brain.openrouter")
-            for host in self.hosts:
-                log.debug("Brain replied in 1 ms: 1 in, 1 out, 0 cached [host: %s]", host)
-            log.debug("Brain acted in 2 ms, generation gen-1 [host: Cerebras]")
-            return RunActions(("v_toggle_landing_system",), "Gear.")
+    def brain(*calls: Sequence[Mapping[str, Any]]) -> OpenRouterBrain:
+        model = "openai/gpt-oss-120b"
+        return OpenRouterBrain(CommandMatcher.default(), model=model, client=FakeChat(*calls))
 
+    act = {"actions": ["v_toggle_landing_system"], "say": "Gear."}
     e = _eval()
     costs = e._Costs()  # pyright: ignore[reportPrivateUsage]
     logger = logging.getLogger("tycho.brain")
@@ -428,18 +433,22 @@ def test_each_result_says_which_host_served_it() -> None:
     logger.setLevel(logging.DEBUG)
     rule = {"heard": "xyzzy plugh frobnicate", "expect": ["actions"]}
     try:
-        logger.debug("Brain warmed up in 300 ms: no usage reported [host: Groq]")
+        asyncio.run(brain(served("Groq", text("Ready."))).warm(cast(Keybinds, _keybinds())))
         outcomes = [
-            asyncio.run(e.run_case(rule, Lexicon.default(), brain, _keybinds(), None, [], costs))
-            for brain in (_Served("Cerebras"), _Served())
+            asyncio.run(e.run_case(rule, Lexicon.default(), b, _keybinds(), None, [], costs))
+            for b in (
+                brain(served("Cerebras", text("Copy."))),
+                brain(served("Cerebras", tool_call("run_actions", act))),
+            )
         ]
     finally:
         logger.removeHandler(costs)
         logger.setLevel(level)
-    assert [o.hosts for o in outcomes] == [["Cerebras", "Cerebras"], ["Cerebras"]]
+    assert [o.hosts for o in outcomes] == [["Cerebras"], ["Cerebras"]]
+    assert costs.hosts == ["Groq", "Cerebras", "Cerebras"]
     pinned = {"order": ["cerebras"], "allow_fallbacks": False}
     summary = e.metrics(e.Run("openrouter", "openai/gpt-oss-120b", outcomes, costs, pinned))
-    assert summary["hosts"] == {"Cerebras": 3}  # the warm-up isn't a case
+    assert summary["hosts"] == {"Cerebras": 2}  # the warm-up isn't a case
     assert summary["route"] == pinned
     assert e._pinned(pinned) == " (on cerebras only)"  # pyright: ignore[reportPrivateUsage]
 
@@ -473,6 +482,19 @@ def test_a_call_with_no_cost_is_counted_not_dropped() -> None:
     ):
         costs.emit(logging.makeLogRecord({"msg": message}))
     assert (costs.unreported, costs.counted) == (3, 0)
+
+
+def test_a_failed_web_search_isnt_a_call_with_no_cost() -> None:
+    # #264: "Web search failed" carries no cost, and the request most likely cost nothing.
+    e = _eval()
+    costs = e._Costs()
+    for message in (
+        "Web search failed: Overloaded",
+        "Web search in 2100 ms: 900 in, 80 out, 3 sites",  # answered, no price: counted
+        "Web search 'kraken price' in 2100 ms: 900 in, 80 out, 3 sites, about $0.01100",
+    ):
+        costs.emit(logging.makeLogRecord({"msg": message}))
+    assert (costs.unreported, costs.counted) == (1, 1)
 
 
 def test_generation_costs_that_cant_be_found_are_kept_and_reported(
@@ -596,6 +618,25 @@ def test_keybinds_go_through_a_file_unchanged(tmp_path: Path) -> None:
 def test_a_keybinds_file_from_another_format_is_refused(tmp_path: Path) -> None:
     path = tmp_path / "keybinds.json"
     path.write_text('{"format": 99, "actions": []}', "utf-8")
+    with pytest.raises(SystemExit, match="export it again"):
+        _eval().load_keybinds(path)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "{not json",
+        '{"format": 1, "modes": {}}',  # no actions
+        '{"format": 1, "actions": []}',  # no modes
+        '{"format": 1, "actions": [{"name": "v_eject"}], "modes": {}}',  # no inputs
+        '{"format": 1, "actions": [{"inputs": [], "colour": "red"}], "modes": {}}',
+        "[1, 2]",
+    ],
+)
+def test_a_broken_keybinds_file_says_export_it_again(tmp_path: Path, text: str) -> None:
+    # #265: no raw JSONDecodeError or KeyError traceback.
+    path = tmp_path / "keybinds.json"
+    path.write_text(text, "utf-8")
     with pytest.raises(SystemExit, match="export it again"):
         _eval().load_keybinds(path)
 

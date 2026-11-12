@@ -18,13 +18,14 @@ from tycho.brain.decisions import UnboundAction
 from tycho.brain.openrouter import (
     MAX_TOKENS,
     REASONING_TOKENS,
+    SAID_CHARACTERS,
     OpenRouterBrain,
     OpenRouterClient,
     Prices,
     chunks,
     route,
 )
-from tycho.brain.rounds import LAST_CALL, MAX_CALLS, NO_PRESS_AFTER_SEARCH
+from tycho.brain.rounds import CUT_SHORT, LAST_CALL, MAX_CALLS, NO_PRESS_AFTER_SEARCH
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Action, Keybinds, KeyInput
 
@@ -404,11 +405,24 @@ def test_the_client_says_why_openrouter_refused() -> None:
 
 def test_a_long_error_is_cut_short() -> None:
     def refuse(_: httpx2.Request) -> httpx2.Response:
-        return httpx2.Response(400, json={"error": {"message": "x" * 1000}})
+        return httpx2.Response(400, json={"error": {"message": "y" + "x" * 1000}})
 
     with pytest.raises(BrainError) as raised:
         asyncio.run(_read(_client(refuse)))
-    assert len(str(raised.value)) < 260
+    said = str(raised.value).split(": ", 1)[1]
+    assert said == "y" + "x" * (SAID_CHARACTERS - 1)  # exactly the first SAID_CHARACTERS (#270)
+
+
+@pytest.mark.parametrize("timeout", [httpx2.ConnectTimeout, httpx2.PoolTimeout])
+def test_a_network_that_drops_packets_isnt_called_slow(
+    timeout: type[httpx2.TimeoutException],
+) -> None:
+    # #270: a connect or pool timeout means OpenRouter can't be reached, not a slow model.
+    def dropped(request: httpx2.Request) -> httpx2.Response:
+        raise timeout("timed out", request=request)
+
+    with pytest.raises(BrainError, match="can't reach OpenRouter"):
+        asyncio.run(_read(_client(dropped)))
 
 
 def test_a_slow_model_is_not_called_offline() -> None:
@@ -446,3 +460,35 @@ def test_the_openrouter_key_is_one_tycho_stores() -> None:
     assert "openrouter" in credentials.KNOWN
     assert "openrouter" in credentials.BENCH  # a player's key only once #112 lands
     assert credentials.masked("sk-or-v1-" + "a" * 60) == "sk-or-v1-...aaaa"
+
+
+def test_a_card_cut_off_at_the_output_limit_says_so(caplog: pytest.LogCaptureFixture) -> None:
+    # #266: Haiku's "help me plan a bounty hunting session" through OpenRouter ran past
+    # max_tokens mid card and failed with "show_card: the arguments aren't an object".
+    card = '{"say": "Plan on the Tile.", "kind": "steps", "rows": [{"text": "Get a lic'
+    client = FakeChat([*tool_call("show_card", card), *finished("length")])
+    brain = _brain(client, cards=lambda: True)
+    caplog.set_level(logging.DEBUG, "tycho.brain")
+    decided = asyncio.run(brain.decide(BrainRequest("plan a bounty run", KEYBINDS)))
+    assert decided == Reply(CUT_SHORT)
+    assert any(r.getMessage().startswith("Brain replied") for r in caplog.records)  # cost
+
+
+def test_a_whole_card_at_the_output_limit_is_still_shown() -> None:
+    card = {
+        "say": "Plan on the Tile.",
+        "kind": "steps",
+        "label": "",
+        "title": "Bounty run",
+        "source": "",
+        "rows": [{"text": "Get a licence", "detail": "", "value": "", "dim": False}],
+        "hero_label": "",
+        "hero_value": "",
+        "text": "",
+    }
+    client = FakeChat([*tool_call("show_card", card), *finished("length")])
+    decided = asyncio.run(
+        _brain(client, cards=lambda: True).decide(BrainRequest("plan a bounty run", KEYBINDS))
+    )
+    assert isinstance(decided, Reply)
+    assert decided.card is not None

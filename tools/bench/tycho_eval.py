@@ -29,7 +29,7 @@ Other models go through OpenRouter (#192): ``--provider openrouter --model <id>`
 with the OpenRouter key. ``--adapter-check`` runs Haiku directly and through OpenRouter
 and compares them. The summary gives the cost a brain request and an hour of play.
 ``--host cerebras`` (repeatable, tried in order, no fallback) pins who serves the model,
-and ``--sort latency`` lets OpenRouter pick the fastest (#267). Each result says which
+or ``--sort latency`` lets OpenRouter pick the fastest (#267); not both. Each result says which
 host answered each call (``hosts``), and the summary counts them.
 
 Uses the keys in Windows Credential Manager. About $0.0002 a request on Haiku.
@@ -110,8 +110,10 @@ is chat for the squad, not a request for me, so I'm just acknowledging it. Copy.
 SAY_WORDS = 8
 """What Tycho says after acting should be a few words: the press already happened."""
 COST_GUESS = 0.0002
-CALL_LOGGED = re.compile(r"(Brain (replied|acted|warmed up)|Web search)\b")
-"""The debug lines each call to a model logs, with its cost when it's known."""
+CALL_LOGGED = re.compile(r"Brain (replied|acted|warmed up)\b|Web search\b.* in \d+ ms\b")
+"""The debug lines each call to a model logs, with its cost when it's known. A web
+search counts only when it answered: "Web search failed" is a warning with no cost,
+and the request it made most likely cost nothing (#264)."""
 HOST = re.compile(r"\[host: ([^\]]+)\]$")
 """Who served a call through OpenRouter, at the end of its line (#267)."""
 UNASKED = frozenset({"v_unlock_all_doors", "v_toggle_all_doorlocks"})
@@ -486,17 +488,22 @@ def export_keybinds(keybinds: Keybinds, path: Path, game: str = "", commands: st
 def load_keybinds(path: Path) -> tuple[Keybinds, str, str]:
     """Keybinds written by ``export_keybinds``, the game build they came from, and the
     player's own commands (empty if they have none)."""
-    data: dict[str, Any] = json.loads(path.read_text("utf-8"))
-    if data.get("format") != KEYBINDS_FORMAT:
-        raise SystemExit(f"{path} isn't a keybinds file this eval reads; export it again.")
-    actions = [
-        Action(
-            **{k: v for k, v in entry.items() if k != "inputs"},
-            inputs=tuple(KeyInput(key, tuple(mods)) for key, *mods in entry["inputs"]),
-        )
-        for entry in data["actions"]
-    ]
-    modes = {name: ActivationMode(**mode) for name, mode in data["modes"].items()}
+    refused = f"{path} isn't a keybinds file this eval reads; export it again."
+    try:
+        data: dict[str, Any] = json.loads(path.read_text("utf-8"))
+        if not isinstance(data, dict) or data.get("format") != KEYBINDS_FORMAT:  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise SystemExit(refused)
+        actions = [
+            Action(
+                **{k: v for k, v in entry.items() if k != "inputs"},
+                inputs=tuple(KeyInput(key, tuple(mods)) for key, *mods in entry["inputs"]),
+            )
+            for entry in data["actions"]
+        ]
+        modes = {name: ActivationMode(**mode) for name, mode in data["modes"].items()}
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
+        # Broken JSON, a missing key or an entry of the wrong shape (#265).
+        raise SystemExit(f"{refused} ({type(e).__name__}: {e})") from None
     game = f"{data.get('game') or 'an unknown build'}, exported {data.get('exported', '?')}"
     return Keybinds(actions, modes), game, str(data.get("commands") or "")
 
@@ -598,6 +605,10 @@ def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--provider openrouter needs --model, e.g. " + OPENROUTER_HAIKU)
     elif args.provider != "openrouter" and (args.host or args.sort):
         parser.error("--host and --sort pick who serves a model through OpenRouter")
+    elif args.host and args.sort:
+        # OpenRouter doesn't say whether a sort reorders pinned hosts, so a run would
+        # measure an order nobody can be sure of (#275).
+        parser.error("--host and --sort don't go together: pin the hosts or let it sort")
     return args
 
 
