@@ -475,6 +475,20 @@ def test_when_the_brain_fails_tycho_says_so_and_presses_nothing() -> None:
     assert r.feedback.played == ["not_done"]
 
 
+def test_a_sequence_the_brain_made_up_fails_once_and_presses_nothing() -> None:
+    # #308 moved the sequence look-up behind routing.from_brain: the brain stage is
+    # timed once, and the request ends as the brain's failure (#309).
+    r = _conversation("do the thing", brain=FakeBrain(RunSequence("no_such_sequence", "On it.")))
+    (result,) = r.results
+    assert result.status == "failed"
+    assert "the brain couldn't answer" in result.detail
+    assert list(result.timings)[-1] == "brain"  # the last stage: nothing after it ran
+    # Marked twice, the second mark would replace the first and lose its time.
+    assert result.total_ms == pytest.approx(sum(result.timings.values()), abs=0.01)
+    assert r.keys.events == []
+    assert r.feedback.played == ["not_done"]
+
+
 def test_a_brain_that_takes_too_long_is_given_up_on() -> None:
     r = _conversation("do the thing", brain=FakeBrain(hang=True), brain_seconds=0.05)
     assert r.results[0].status == "failed"
