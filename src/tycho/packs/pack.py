@@ -43,6 +43,10 @@ CORE_SECTIONS = (
 places once each, by a line of its own: ``{{core:safety}}``."""
 
 MARKER = re.compile(r"^\{\{core:([a-z-]+)\}\}$", re.MULTILINE)
+KEYS = re.compile(r"\{\{keys:([^|{}\n]*)\|([^|{}\n]*)\}\}")
+"""``{{keys:with keys|without}}`` in a briefing: the first text when Tycho presses keys,
+the second in advisor mode (#325), so a line that tells the brain to press has its own
+words when it can't. Keys on, the briefing reads as if the marker were the first text."""
 
 type Mode = Literal["keys", "advisor"]
 
@@ -363,8 +367,11 @@ def _tile(table: Mapping[str, object], name: str) -> Tile:
     where = f"{name}/tile.toml"
     accents = _table(table, "accents", where)
     makers = _table(table, "makers", where)
-    if bad := [k for k, v in accents.items() if not _COLOUR.fullmatch(str(v))]:
+    # Each value's type first: a list as a maker's accent can't be looked up (#319).
+    if bad := [k for k, v in accents.items() if not (isinstance(v, str) and _COLOUR.fullmatch(v))]:
         raise PackError(f"{where}: accents must be colours like #4fb3ff: {', '.join(bad)}")
+    if bad := [k for k, v in makers.items() if not isinstance(v, str)]:
+        raise PackError(f"{where}: each maker must name an accent: {', '.join(bad)}")
     if bad := [k for k, v in makers.items() if v not in accents]:
         raise PackError(f"{where}: makers with no accent: {', '.join(bad)}")
     return Tile(
@@ -375,6 +382,8 @@ def _tile(table: Mapping[str, object], name: str) -> Tile:
 
 def _check_briefing(text: str, where: str) -> None:
     """Every core section once, and nothing else in braces that looks like one."""
+    if "{{keys:" in KEYS.sub("", text):
+        raise PackError(f"{where}: a keys marker is {{{{keys:with keys|without}}}}, on one line")
     if "{{core:" in MARKER.sub("", text):
         raise PackError(
             f"{where}: a core marker must be a line of its own, like {{{{core:safety}}}}"
