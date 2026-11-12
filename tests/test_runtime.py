@@ -109,6 +109,7 @@ def rig(
     brain: FakeBrain | None = None,
     brain_seconds: float = 8.0,
     search_seconds: float = 12.0,
+    search_limit: float = 20.0,
     looking_seconds: float = 7.0,
     looking_limit: float = 15.0,
     speaker: FakeSpeaker | None = None,
@@ -141,6 +142,7 @@ def rig(
         brain=brain,
         brain_seconds=brain_seconds,
         search_seconds=search_seconds,
+        search_limit=search_limit,
         looking_seconds=looking_seconds,
         looking_limit=looking_limit,
         speaker=speaker,
@@ -1535,18 +1537,14 @@ class _LookThenSearch(FakeBrain):
         return Reply("4.11 is on the roadmap.")
 
 
-def test_a_search_after_look_ups_still_stops_at_the_limit(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import tycho.runtime.session
-
-    monkeypatch.setattr(tycho.runtime.session, "SEARCH_LIMIT", 0.5)
+def test_a_search_after_look_ups_still_stops_at_the_limit() -> None:
     r = _conversation(
         "whats new and where do I sell gold",
         brain=_LookThenSearch(),
         speaker=FakeSpeaker(),
         brain_seconds=0.1,
         search_seconds=3.0,  # would run to about 3 s without the limit
+        search_limit=0.5,
     )
     assert r.results[0].status == "failed"
 

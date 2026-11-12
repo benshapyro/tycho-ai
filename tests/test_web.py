@@ -14,7 +14,17 @@ import anthropic
 import httpx2
 import pytest
 
-from tycho.knowledge.web import MAX_ANSWER, SECONDS, SITES, WEB_SEARCH, WebSearch
+from tycho.knowledge.web import (
+    MAX_ANSWER,
+    OPEN_BRIEF,
+    OPEN_PAGE_TOKENS,
+    OPEN_SECONDS,
+    SECONDS,
+    SITES,
+    WEB_FETCH,
+    WEB_SEARCH,
+    WebSearch,
+)
 
 # --- The search request -------------------------------------------------------------------------
 
@@ -124,11 +134,16 @@ def test_an_answer_cut_off_keeps_only_whole_sentences() -> None:
     assert "nothing usable" in result["error"]
 
 
-def test_a_lead_in_before_the_search_stays_apart_from_the_answer() -> None:
+def test_a_lead_in_before_the_search_is_left_out_of_the_answer() -> None:
     message = _found("RSI has 4.11 for Q4.")
     message.content.insert(0, SimpleNamespace(type="text", text="I'll search for that."))
     _, result = _search(_Client(message))
-    assert result["answer"] == "I'll search for that. RSI has 4.11 for Q4."
+    assert result["answer"] == "RSI has 4.11 for Q4."
+    # Not even as the only whole sentence of a cut answer (#370).
+    cut = _found("RSI has 4.11 for Q", stop_reason="max_tokens")
+    cut.content.insert(0, SimpleNamespace(type="text", text="I'll search for that."))
+    error, result = _search(_Client(cut))
+    assert error
 
 
 def test_a_cut_answer_does_not_stop_at_an_abbreviation() -> None:
@@ -186,3 +201,93 @@ def test_the_query_reaches_the_log_only_with_transcripts_kept(
     asyncio.run(search.run({"query": "is the Polaris getting nerfed"}))
     assert ("Polaris" in caplog.text) is kept
     assert "Web search" in caplog.text
+
+
+# --- The open-web trial (#354) ------------------------------------------------------------------
+
+
+def _read_page(*texts: str, paused: bool = False) -> Any:
+    """A search, a page read, then the answer; or, ``paused``, only the preamble."""
+    preamble = SimpleNamespace(type="text", text="Let me look that up.")
+    search = [
+        SimpleNamespace(type="server_tool_use", name="web_search"),
+        SimpleNamespace(
+            type="web_search_tool_result",
+            content=[SimpleNamespace(url="https://www.reddit.com/r/starcitizen/levski")],
+        ),
+    ]
+    read = [
+        SimpleNamespace(type="server_tool_use", name="web_fetch"),
+        SimpleNamespace(
+            type="web_fetch_tool_result",
+            content=SimpleNamespace(url="https://starcitizen.tools/Levski"),
+        ),
+    ]
+    content = (
+        [preamble, *search]
+        if paused
+        else [*read, *(SimpleNamespace(type="text", text=t) for t in texts)]
+    )
+    usage = SimpleNamespace(input_tokens=9000, output_tokens=80)
+    return SimpleNamespace(
+        content=content, usage=usage, stop_reason="pause_turn" if paused else "end_turn"
+    )
+
+
+class _Turns(_Client):
+    """Answers each search request with the next message."""
+
+    def __init__(self, *messages: Any) -> None:
+        super().__init__()
+        left = list(messages)
+
+        async def create(**request: Any) -> Any:
+            self.requests.append(request)
+            return left.pop(0)
+
+        self.messages = SimpleNamespace(create=create)
+
+
+def test_the_open_web_trial_searches_any_site_and_reads_pages() -> None:
+    client = _Client(_read_page("Players report the fines terminal is in the admin office."))
+    search = WebSearch(cast(Any, client), open_web=True)
+    result = json.loads(asyncio.run(search.run({"query": "Levski pay fines"})).content)
+    (request,) = client.requests
+    assert request["system"] == OPEN_BRIEF
+    assert request["tools"] == [
+        {"type": WEB_SEARCH, "name": "web_search", "max_uses": 2},
+        {
+            "type": WEB_FETCH,
+            "name": "web_fetch",
+            "max_uses": 2,
+            "max_content_tokens": OPEN_PAGE_TOKENS,
+        },
+    ]
+    assert result["answer"] == "Players report the fines terminal is in the admin office."
+    assert result["sites"] == ["https://starcitizen.tools/Levski"]
+    assert "trial" in result["source"]
+    assert search.seconds == OPEN_SECONDS > SECONDS
+    assert "how to do something" in search.description
+
+
+def test_the_open_web_goes_on_after_a_paused_turn_and_keeps_only_the_answer() -> None:
+    client = _Turns(_read_page(paused=True), _read_page("It's in the admin office."))
+    search = WebSearch(cast(Any, client), open_web=True)
+    result = json.loads(asyncio.run(search.run({"query": "Levski pay fines"})).content)
+    first, second = client.requests
+    assert second["messages"][-1]["role"] == "assistant"
+    assert len(second["messages"]) == len(first["messages"]) + 1
+    # "Let me look that up." came before the search: not part of the answer.
+    assert result["answer"] == "It's in the admin office."
+    assert result["sites"] == [
+        "https://starcitizen.tools/Levski",
+        "https://www.reddit.com/r/starcitizen/levski",
+    ]
+
+
+def test_without_the_trial_a_paused_turn_is_not_continued() -> None:
+    client = _Turns(_read_page(paused=True), _read_page("unused"))
+    error, result = _search(client)
+    assert len(client.requests) == 1
+    assert error
+    assert "nothing usable" in result["error"]

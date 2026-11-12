@@ -46,7 +46,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
     ),
     "Brain": ("brain_provider", "brain_model", "brain_seconds"),
     "Safety": ("key_actions", "confirm_seconds"),
-    "Privacy": ("keep_transcripts", "web_search", "check_for_updates"),
+    "Privacy": ("keep_transcripts", "web_search", "web_search_open", "check_for_updates"),
     "Game and controls": (
         "game",
         "game_channel",
