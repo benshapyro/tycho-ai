@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from tycho.commands.reserved import USES, reserved_for
-from tycho.packs import GamePack, built_in
+from tycho.packs import GamePack, Safety, built_in
 from tycho.text import normalize, similarity
 
 _LEADING_FILLER = (
@@ -173,7 +173,8 @@ class CommandMatcher:
         built-in commands alone always load.
         """
         text = built_in_commands(pack)
-        entries = _entries(tomllib.loads(text), "the built-in commands")
+        lists = (pack or built_in()).safety
+        entries = _entries(tomllib.loads(text), "the built-in commands", lists)
         source = "the built-in commands"
         warnings: tuple[str, ...] = ()
         if user_file is not None and user_file.exists():
@@ -183,7 +184,7 @@ class CommandMatcher:
                 user = tomllib.loads(user_file.read_text("utf-8-sig"))
             except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
                 raise CommandFileError(f"{source}: {e}") from e
-            mine = _entries(user, source)
+            mine = _entries(user, source, lists)
             extra = _phrase_entries(user, source)
             warnings = (*_warnings(mine), *_reserved_warnings(mine, extra))
             entries = _merge(entries, mine, extra, source)
@@ -289,7 +290,7 @@ def _split(words: tuple[str, ...]) -> list[tuple[str, ...]]:
 type _Entry = dict[str, Any]
 
 
-def _entries(data: dict[str, Any], source: str) -> dict[str, _Entry]:
+def _entries(data: dict[str, Any], source: str, lists: Safety | None = None) -> dict[str, _Entry]:
     entries: dict[str, _Entry] = {}
     for kind in ("command", "sequence"):
         raw_list: Any = data.get(kind, [])
@@ -299,7 +300,7 @@ def _entries(data: dict[str, Any], source: str) -> dict[str, _Entry]:
             if not isinstance(raw, dict) or "id" not in raw:
                 raise CommandFileError(f"{source}: every [[{kind}]] needs an id")
             entry: _Entry = {**raw, "_kind": kind}  # pyright: ignore[reportUnknownArgumentType]
-            if problem := _type_problem(entry):
+            if problem := _type_problem(entry, lists):
                 raise CommandFileError(f"{source}: {entry['id']!r}: {problem}")
             entry_id = str(entry["id"])
             if entry_id in entries:
@@ -312,7 +313,7 @@ _LISTS = ("say", "actions", "setup", "requires", "accepted_risks")
 _FLAGS = ("confirm", "announced")
 
 
-def _type_problem(entry: _Entry) -> str | None:
+def _type_problem(entry: _Entry, lists: Safety | None = None) -> str | None:
     """What's the wrong type in an entry, or None. Checked before anything uses it: a
     string where a list belongs would otherwise become one phrase per letter."""
     if not isinstance(entry["id"], str) or not entry["id"]:
@@ -331,18 +332,19 @@ def _type_problem(entry: _Entry) -> str | None:
         return f"settle_seconds must be 0 to {MAX_STEP_WAIT:g}"
     if not isinstance(entry.get("steps", []), list):
         return "steps must be a list"
-    return _unknown_to_the_gate(entry)
+    return _unknown_to_the_gate(entry, lists)
 
 
-def _unknown_to_the_gate(entry: _Entry) -> str | None:
-    """A ``requires`` or ``accepted_risks`` value the safety gate doesn't know, or None.
+def _unknown_to_the_gate(entry: _Entry, lists: Safety | None = None) -> str | None:
+    """A ``requires`` or ``accepted_risks`` value the safety gate doesn't know (from the
+    game pack's ``lists``, Star Citizen's when None), or None.
     A typo would otherwise pass silently: an unknown fact is never true, so the command
     is always refused, and an unknown risk is never accepted."""
     from tycho import safety  # here, not at the top: the gate imports this module
 
-    checks = [("requires", safety.known_facts())]
+    checks = [("requires", safety.known_facts(lists))]
     if entry["_kind"] == "command":  # a sequence's accepted_risks are ignored, with a warning
-        checks.append(("accepted_risks", safety.ACCEPTABLE_RISKS))
+        checks.append(("accepted_risks", (lists or safety.STAR_CITIZEN).accepted_risks))
     for name, allowed in checks:
         if unknown := [v for v in entry.get(name, []) if v not in allowed]:
             return (

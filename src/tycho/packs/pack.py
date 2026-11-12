@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from functools import cache
 from importlib import resources
 from importlib.resources.abc import Traversable
+from types import MappingProxyType
 from typing import Literal, cast
 
 from tycho.packs.parts import BUILT_IN, Registry
@@ -317,7 +318,10 @@ def _tile(table: Mapping[str, object], name: str) -> Tile:
         raise PackError(f"{where}: accents must be colours like #4fb3ff: {', '.join(bad)}")
     if bad := [k for k, v in makers.items() if v not in accents]:
         raise PackError(f"{where}: makers with no accent: {', '.join(bad)}")
-    return Tile(cast(dict[str, str], accents), cast(dict[str, str], makers))
+    return Tile(
+        MappingProxyType(cast(dict[str, str], accents)),
+        MappingProxyType(cast(dict[str, str], makers)),
+    )
 
 
 def _check_briefing(text: str, where: str) -> None:
@@ -355,10 +359,11 @@ def _safety(table: Mapping[str, object], where: str, *, built_in: bool) -> Safet
     return Safety(
         confirm=frozenset(_strings(table, "confirm", where)),
         travel=frozenset(_strings(table, "travel", where)),
-        facts=cast(dict[str, str], facts),
+        # Read-only: the built-in packs are cached and shared by the whole process.
+        facts=MappingProxyType(cast(dict[str, str], facts)),
         not_danger=_strings(table, "not_danger", where),
-        mode_guards=_guards(table, "mode_guards", where),
-        state_guards=state_guards,
+        mode_guards=MappingProxyType(_guards(table, "mode_guards", where)),
+        state_guards=MappingProxyType(state_guards),
         accepted_risks=frozenset(_strings(table, "accepted_risks", where)),
     )
 

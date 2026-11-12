@@ -253,9 +253,27 @@ def _plan(pack: GamePack, said: str, keybinds: Keybinds | None = None) -> Planne
     return plan_request(found.commands, keybinds or FakeGameKeybinds().keybinds, lists=pack.safety)
 
 
-def test_star_citizens_lists_come_from_its_pack() -> None:
+def test_star_citizens_lists_are_exactly_what_they_were_before_packs() -> None:
     lists = built_in().safety
     assert lists == safety.STAR_CITIZEN
+    # Every entry, so a deleted line can't pass unnoticed (the values on main at 6645025).
+    assert lists.confirm == {
+        *("v_eject", "v_emergency_exit", "v_self_destruct", "v_jettison_volatile_cargo"),
+        *("v_weapon_preset_attack", "v_weapon_toggle_launch_missile", "v_weapon_launch_missile"),
+        *("attack1", "respawn", "force_respawn", "incapacitatedRespawn"),
+    }
+    assert lists.not_danger == (
+        *("fire_mode", "firemode", "staggered_fire", "cinematic", "cycle_attacker"),
+    )
+    assert dict(lists.mode_guards) == {
+        "v_master_mode_set_nav": {"spaceship_weapons", "spaceship_missiles"},
+        "v_set_quantum_mode": {
+            *("spaceship_weapons", "spaceship_missiles", "spaceship_mining", "spaceship_salvage"),
+        },
+    }
+    assert dict(lists.state_guards) == {"quantum_route_set": {"player"}}
+    assert lists.accepted_risks == {"player"}
+    assert dict(lists.facts) == {"quantum_route_set": "no quantum route is plotted (from Game.log)"}
     assert {"v_eject", "v_self_destruct", "attack1"} <= lists.confirm
     assert lists.travel == {"v_toggle_qdrive_engagement", "v_toggle_jump_request"}
     assert lists.mode_guards["v_master_mode_set_nav"] == {"spaceship_weapons", "spaceship_missiles"}
@@ -270,7 +288,7 @@ def test_a_packs_confirm_list_adds_danger() -> None:
     assert isinstance(plan_request(planned_commands("open the hatch"), _keys()), Steps)
 
 
-def test_eject_without_asking_is_refused_by_the_backstop() -> None:
+def test_eject_left_off_the_confirm_list_still_asks_by_the_backstop() -> None:
     # Fake Game leaves self_destruct out of its confirm list; the backstop still asks.
     pack = fake_pack()
     assert "self_destruct" not in pack.safety.confirm
@@ -439,3 +457,22 @@ def test_star_citizens_eval_cases_live_in_its_pack() -> None:
     folder = Path(str(resources.files("tycho.packs").joinpath("star-citizen")))
     cases = tomllib.loads((folder / "eval" / "cases.toml").read_text("utf-8"))
     assert len(cases["case"]) > 100
+
+
+def test_a_packs_commands_are_checked_against_its_own_facts(tmp_path: Path) -> None:
+    folder = _copy(tmp_path)
+    _edit(
+        folder,
+        "commands.toml",
+        'actions = ["hatch_open"]',
+        'actions = ["hatch_open"]\nrequires = ["docked"]',
+    )
+    pack = load_pack(folder, built_in=False, registry=REGISTRY)
+    command = CommandMatcher.default(pack=pack).get("open_hatch")
+    assert command is not None
+    assert command.requires == ("docked",)
+
+
+def test_a_packs_lists_cant_be_changed_once_loaded() -> None:
+    with pytest.raises(TypeError):
+        built_in().safety.mode_guards["v_eject"] = frozenset()  # pyright: ignore[reportIndexIssue]
