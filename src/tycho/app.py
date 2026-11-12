@@ -983,6 +983,7 @@ def build_session(
         brain=make_brain(matcher) if make_brain is not None else None,
         speaker=speaker,
         brain_seconds=current.brain_seconds,
+        **_search_seconds(current.web_search_open),
         confirm_seconds=current.confirm_seconds,
         log_transcripts=current.keep_transcripts,
         on_result=on_result,
@@ -990,6 +991,18 @@ def build_session(
         display=display,
         safety_lists=pack.safety,
     )
+
+
+def _search_seconds(open_web: bool) -> dict[str, float]:
+    """The open-web trial (#354) searches twice and reads pages: give it longer."""
+    from tycho.runtime import session
+
+    if not open_web:
+        return {}
+    return {
+        "search_seconds": session.OPEN_SEARCH_SECONDS,
+        "search_limit": session.OPEN_SEARCH_LIMIT,
+    }
 
 
 NO_KEYBINDS = Keybinds([])

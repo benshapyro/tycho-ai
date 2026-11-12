@@ -8,6 +8,10 @@ with its own brief: short, in its own words, official word first.
 
 What comes back can't be checked, so the brain may not press anything after it
 (``from_the_web``), and it takes longer than other look-ups (``seconds``).
+
+``web_search_open`` (a trial for #354, off by default) lifts the site list: the search
+may use the whole web, and it may read up to two of the pages it finds (Anthropic's
+web fetch), for "where is" and "how do I" answers that live in community guides.
 """
 
 import datetime
@@ -38,6 +42,17 @@ SECONDS = 12.0
 """How long the search request may take; searches take 4 to 8 s."""
 MAX_ANSWER = 600
 
+WEB_FETCH = "web_fetch_20250910"
+"""The version Haiku 5.5 has, without dynamic filtering; no beta header."""
+OPEN_USES = 2
+"""With the open web: up to two searches and two page reads a request."""
+OPEN_PAGE_TOKENS = 6000
+"""How much of a page a read may bring back. At Haiku's price, two full pages cost
+about a tenth of a cent."""
+OPEN_SECONDS = 25.0
+"""Searching twice and reading pages takes longer: about 8 to 20 s (an estimate until
+the trial measures it)."""
+
 DESCRIPTION = """\
 Search Star Citizen websites (RSI's patch notes, roadmap, Comm-Links and forums, \
 the community wiki, UEX) for what changes: news, upcoming patches and what's in \
@@ -53,6 +68,27 @@ what RSI has officially said, with dates; if there's no official word, say so. \
 Leave out leaks and fan estimates unless the query asks for rumours. If the \
 search finds nothing relevant, say only that, in a few words. Never suggest \
 checking a website, channel or source: the player can't, they're flying."""
+
+OPEN_DESCRIPTION = """\
+Search the web for Star Citizen: news, upcoming patches, events, new ships, and also \
+where something is and how to do something in the game (locations, terminals, \
+missions, mechanics), from official sites and community guides, wikis and forums. Use \
+it on the first ask whenever another look-up can't answer and you don't know for sure: \
+never say you can't look something up. Slow (several seconds) and costs money. Pass \
+one short search query."""
+
+OPEN_BRIEF = """\
+You search the web for a voice co-pilot in Star Citizen, who will read your answer \
+aloud to a player who is flying. Search, and read a page from the results when the \
+snippets don't give the answer (community guides, wikis and forum posts often have \
+where things are and how to do things). Then answer in one to three short plain \
+sentences, in your own words: no quotes, links, lists or markdown. Lead with what \
+RSI has officially said, with dates, when there is official word. When the answer \
+comes from players rather than RSI, say so in a few words ("players report") and, \
+if the post is old or the game may have changed since, say that too. Leave out \
+leaks and fan estimates unless the query asks for rumours. If you find nothing \
+relevant, say only that, in a few words. Never suggest checking a website, channel \
+or source: the player can't, they're flying."""
 
 NAME = "web_search"
 SCHEMA: Mapping[str, object] = {
@@ -108,6 +144,7 @@ class WebSearch:
 
     from_the_web = True
     """Its results can't be checked: nothing may be pressed after it (ADR 15)."""
+    _open = False
     seconds = SECONDS
 
     def __init__(
@@ -118,15 +155,19 @@ class WebSearch:
         today: Callable[[], datetime.date] = datetime.date.today,
         log_queries: bool = False,
         sites: Sequence[str] = SITES,
+        open_web: bool = False,
     ) -> None:
         """``log_queries``: put the query (the player's question, reworded) in the log
-        file. Only with ``keep_transcripts`` (audit, 2026-11-03)."""
+        file. Only with ``keep_transcripts`` (audit, 2026-11-03). ``open_web``: the
+        #354 trial, any site and page reads (``web_search_open``)."""
         self._client = client
         self._model = model
         self._today = today
         self._log_queries = log_queries
         self._sites = tuple(sites)
-        """The game pack's sites: the only ones a search may read."""
+        """The game pack's sites: the only ones a search may read, unless ``open_web``."""
+        self._open = open_web
+        self.seconds = OPEN_SECONDS if open_web else SECONDS
 
     @property
     def name(self) -> str:
@@ -134,7 +175,7 @@ class WebSearch:
 
     @property
     def description(self) -> str:
-        return DESCRIPTION
+        return OPEN_DESCRIPTION if self._open else DESCRIPTION
 
     @property
     def input_schema(self) -> Mapping[str, object]:
@@ -143,48 +184,80 @@ class WebSearch:
     async def prepare(self) -> None:
         return None
 
+    def _tools(self) -> list[dict[str, object]]:
+        if not self._open:
+            return [
+                {
+                    "type": WEB_SEARCH,
+                    "name": "web_search",
+                    "max_uses": 1,
+                    "allowed_domains": list(self._sites),
+                }
+            ]
+        return [
+            {"type": WEB_SEARCH, "name": "web_search", "max_uses": OPEN_USES},
+            {
+                "type": WEB_FETCH,
+                "name": "web_fetch",
+                "max_uses": OPEN_USES,
+                "max_content_tokens": OPEN_PAGE_TOKENS,
+            },
+        ]
+
     async def run(self, arguments: Mapping[str, object]) -> LookupResult:
         query = str(arguments.get("query") or "").strip()
         if not query:
             return failure("pass query: a short search query")
         started = time.perf_counter()
         today = self._today()
+        messages: list[dict[str, Any]] = [
+            {"role": "user", "content": f"[{today.day} {today:%B %Y}] {query}"}
+        ]
+        content: list[Any] = []
+        spent = [0, 0]
         try:
-            message = await self._client.messages.create(
-                model=self._model,
-                max_tokens=400,
-                system=BRIEF,
-                tools=[
-                    {
-                        "type": WEB_SEARCH,
-                        "name": "web_search",
-                        "max_uses": 1,
-                        "allowed_domains": list(self._sites),
-                    }
-                ],
-                output_config={"effort": "low"},
-                messages=[{"role": "user", "content": f"[{today.day} {today:%B %Y}] {query}"}],
-            )
+            # A long run of server tools can pause the turn; the open web may go on once.
+            for _ in range(2 if self._open else 1):
+                message = await self._client.messages.create(
+                    model=self._model,
+                    max_tokens=400,
+                    system=OPEN_BRIEF if self._open else BRIEF,
+                    tools=self._tools(),  # pyright: ignore[reportArgumentType]
+                    output_config={"effort": "low"},
+                    messages=messages,  # pyright: ignore[reportArgumentType]
+                )
+                content += message.content
+                spent[0] += message.usage.input_tokens
+                spent[1] += message.usage.output_tokens
+                if getattr(message, "stop_reason", None) != "pause_turn":
+                    break
+                messages = [*messages, {"role": "assistant", "content": message.content}]
         except anthropic.APIError as e:
             log.warning("Web search failed: %s", e)
             return failure(f"the web search failed ({type(e).__name__}); answer without it")
-        answer = " ".join(" ".join(b.text for b in message.content if b.type == "text").split())
-        sites = _sites(message.content)
-        usage = message.usage
-        cost = (usage.input_tokens * PRICES[0] + usage.output_tokens * PRICES[1]) / 1_000_000
+        answer = _answer(content)
+        sites = _sites(content)
+        searches, pages = _uses(content)
+        cost = (spent[0] * PRICES[0] + spent[1] * PRICES[1]) / 1_000_000
         log.debug(
-            "Web search%s in %.0f ms: %d in, %d out, %d sites, about $%.5f",
+            "Web search%s%s in %.0f ms: %d in, %d out, %d searches, %d pages read, %d sites, "
+            "about $%.5f",
+            " (open web)" if self._open else "",
             f" {query!r}" if self._log_queries else "",
             (time.perf_counter() - started) * 1000,
-            usage.input_tokens,
-            usage.output_tokens,
+            spent[0],
+            spent[1],
+            searches,
+            pages,
             len(sites),
-            cost + SEARCH_PRICE,
+            cost + SEARCH_PRICE * max(searches, 1),
         )
         if not answer:
             return failure("the search found nothing usable; answer without it")
         result = {
-            "source": "web search of Star Citizen sites",
+            "source": "web search, any site (trial)"
+            if self._open
+            else "web search of Star Citizen sites",
             "searched": query,
             "date": today.isoformat(),
             "answer": answer[:MAX_ANSWER],
@@ -193,12 +266,33 @@ class WebSearch:
         return LookupResult(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
 
 
+def _answer(content: Sequence[Any]) -> str:
+    """The text after the last search or page read, on one line: anything before it
+    is the model saying what it will look up, not the answer."""
+    last = max(
+        (i for i, b in enumerate(content) if str(getattr(b, "type", "")).endswith("_tool_result")),
+        default=-1,
+    )
+    text = " ".join(b.text for b in content[last + 1 :] if getattr(b, "type", "") == "text")
+    return " ".join(text.split())
+
+
 def _sites(content: Any) -> list[str]:
-    """Where the results came from, by site and page, for the log and for Claude."""
-    sites: list[str] = []
+    """Where the results came from, by site and page, for the log and for Claude: pages
+    read first, then search results."""
+    read: list[str] = []
+    found: list[str] = []
     for block in content:
-        if getattr(block, "type", "") == "web_search_tool_result" and isinstance(
-            results := getattr(block, "content", None), list
-        ):
-            sites += [str(getattr(r, "url", "")) for r in results if getattr(r, "url", "")]  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
-    return sites
+        kind = getattr(block, "type", "")
+        results = getattr(block, "content", None)
+        if kind == "web_search_tool_result" and isinstance(results, list):
+            found += [str(getattr(r, "url", "")) for r in results if getattr(r, "url", "")]  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
+        elif kind == "web_fetch_tool_result" and getattr(results, "url", ""):
+            read.append(str(getattr(results, "url", "")))
+    return read + [url for url in found if url not in read]
+
+
+def _uses(content: Any) -> tuple[int, int]:
+    """How many searches ran and pages were read: a search costs 1 cent each."""
+    names = [getattr(b, "name", "") for b in content if getattr(b, "type", "") == "server_tool_use"]
+    return names.count("web_search"), names.count("web_fetch")

@@ -136,6 +136,10 @@ least this long from then: a look-up and Claude's answer to it take 3-5 s, and t
 a row ran past BRAIN_SECONDS in the play session (#150). Never less than
 BRAIN_SECONDS, and never past LOOKING_LIMIT."""
 SEARCH_LIMIT = 20.0
+OPEN_SEARCH_SECONDS = 27.0
+OPEN_SEARCH_LIMIT = 32.0
+"""With ``web_search_open`` (the #354 trial): two searches and page reads take longer,
+up to the search's own 25 s, so the brain gets more time once it starts."""
 """A request with a web search answers or fails this long after it was asked."""
 LOOKING_LIMIT = 15.0
 """However many look-ups, an answer comes or fails this long after the request."""
@@ -203,6 +207,7 @@ class Session:
         brain: Brain | None = None,
         brain_seconds: float = BRAIN_SECONDS,
         search_seconds: float = SEARCH_SECONDS,
+        search_limit: float = SEARCH_LIMIT,
         looking_seconds: float = LOOKING_SECONDS,
         looking_limit: float = LOOKING_LIMIT,
         speaker: Speaker | None = None,
@@ -236,6 +241,7 @@ class Session:
         self._brain = brain
         self._brain_seconds = brain_seconds
         self._search_seconds = search_seconds
+        self._search_limit = search_limit
         self._looking_seconds = looking_seconds
         self._looking_limit = looking_limit
         self._speaker = speaker
@@ -593,7 +599,9 @@ class Session:
 
                 def searching() -> None:
                     # Capped too (#169): after look-ups, a search can't run past it.
-                    budget.reschedule(min(loop.time() + self._search_seconds, asked + SEARCH_LIMIT))
+                    budget.reschedule(
+                        min(loop.time() + self._search_seconds, asked + self._search_limit)
+                    )
                     self._fill()
 
                 def looking() -> None:

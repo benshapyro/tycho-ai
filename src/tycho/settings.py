@@ -164,6 +164,14 @@ class Settings(BaseModel):
         "ships. Each search costs about 1 cent of your Anthropic credit.",
         json_schema_extra=_rule("lower_only", how=FILE_OR_APP),
     )
+    web_search_open: bool = Field(
+        default=False,
+        description="Trial: let web search use any website, not only Star Citizen ones, "
+        "and read pages it finds, for where things are and how to do things. Answers may "
+        "come from players' posts and be out of date. A search takes longer (up to about "
+        "25 s) and costs about 1 to 3 cents. Off by default.",
+        json_schema_extra=_rule("lower_only", how=FILE_OR_APP),
+    )
     brain_provider: Provider = Field(
         default="anthropic",
         description="Who runs Tycho's brain, for anything the built-in phrasings don't cover: "
