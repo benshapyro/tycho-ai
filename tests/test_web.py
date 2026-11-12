@@ -341,3 +341,15 @@ def test_a_partial_answer_stands_when_the_open_web_finds_nothing() -> None:
     _, error, result = _fallback(_found("NONE: Nothing about Levski."), _read_page())
     assert error
     assert "nothing usable" in result["error"]
+
+
+@pytest.mark.parametrize(
+    "answer",
+    ["None of RSI's posts give a date, but the roadmap says Q1 2027.", "Foundry 42 said so."],
+)
+def test_only_a_fallback_reads_a_found_partial_or_none_tag(answer: str) -> None:
+    # An answer that merely starts with "None" or "Found" is an answer (#372 review).
+    _, result = _search(_Client(_found(answer)))
+    assert result["answer"] == answer
+    _, _, result = _fallback(_found(f"PARTIAL: {answer}"), _read_page())
+    assert result["answer"] == answer

@@ -96,8 +96,9 @@ leaks and fan estimates unless the query asks for rumours. If you find nothing \
 relevant, say only that, in a few words. Never suggest checking a website, channel \
 or source: the player can't, they're flying."""
 
-FALLBACK_TAG = re.compile(r"^\W*(FOUND|PARTIAL|NONE)\W*", re.IGNORECASE)
-"""How the first search of a fallback says how well it did."""
+FALLBACK_TAG = re.compile(r"^\W*(FOUND|PARTIAL|NONE)\b\W*")
+"""How the first search of a fallback says how well it did: a whole word in capitals,
+read only from the request that asked for it ("None of RSI's posts…" is an answer)."""
 FALLBACK_ASK = """
 
 Start your reply with one word in capitals, then your answer: FOUND if the results \
@@ -258,7 +259,9 @@ class WebSearch:
                     query, asked, open_web=self._open, brief=OPEN_BRIEF if self._open else BRIEF
                 )
                 return self._result(query, today, found, self._open)
-            first = await self._search(query, asked, open_web=False, brief=BRIEF + FALLBACK_ASK)
+            first = await self._search(
+                query, asked, open_web=False, brief=BRIEF + FALLBACK_ASK, tagged=True
+            )
             if first.verdict == "FOUND" and first.answer:
                 return self._result(query, today, first, False)
             log.debug("Web search: the game's sites said %s; trying the open web", first.verdict)
@@ -284,7 +287,9 @@ class WebSearch:
         }
         return LookupResult(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
 
-    async def _search(self, query: str, asked: str, *, open_web: bool, brief: str) -> _Found:
+    async def _search(
+        self, query: str, asked: str, *, open_web: bool, brief: str, tagged: bool = False
+    ) -> _Found:
         started = time.perf_counter()
         messages: list[dict[str, Any]] = [{"role": "user", "content": asked}]
         content: list[Any] = []
@@ -309,7 +314,7 @@ class WebSearch:
             messages = [*messages, {"role": "assistant", "content": message.content}]
         answer = _answer(content, cut=stopped == "max_tokens")
         verdict = "FOUND"
-        if tag := FALLBACK_TAG.match(answer):
+        if tagged and (tag := FALLBACK_TAG.match(answer)):
             verdict, answer = tag[1].upper(), answer[tag.end() :]
             if verdict == "NONE":
                 answer = ""
