@@ -60,8 +60,9 @@ Results are written next to the clips, in `recordings/<session>/results/`, and s
 ## The product brain (#45)
 
 ```powershell
-uv run python tools/bench/tycho_eval.py                 # every case in tools/spike/brain_cases.toml
+uv run python tools/bench/tycho_eval.py                 # every case in src/tycho/packs/star-citizen/eval/cases.toml
 uv run python tools/bench/tycho_eval.py --tag log       # only the cases from play logs
+uv run python tools/bench/tycho_eval.py --pack star-citizen  # a game pack's own cases (ADR 18)
 uv run python tools/bench/tycho_eval.py --provider openrouter --model deepseek/deepseek-v4
 uv run python tools/bench/tycho_eval.py --adapter-check  # Haiku directly, then through OpenRouter
 uv run python tools/bench/tycho_eval.py --provider openrouter --model openai/gpt-oss-120b --host cerebras  # one host only
@@ -92,17 +93,17 @@ Where Credential Manager has no key, the eval takes `ANTHROPIC_API_KEY` and `OPE
 ## Language model
 
 ```powershell
-uv run python tools/bench/brain_report.py tools/spike/brain_cases.toml --runs 2 --effort low
-uv run python tools/bench/brain_report.py tools/spike/brain_cases.toml --models claude-haiku-5-5 cerebras:gpt-oss-120b
+uv run python tools/bench/brain_report.py src/tycho/packs/star-citizen/eval/cases.toml --runs 2 --effort low
+uv run python tools/bench/brain_report.py src/tycho/packs/star-citizen/eval/cases.toml --models claude-haiku-5-5 cerebras:gpt-oss-120b
 uv run python tools/bench/brain_report.py recordings/<session>   # the recorded phrases, via a speech-to-text engine's transcripts
 ```
 
-Each request gets your bound actions as a cached briefing. Answers are graded against [`brain_cases.toml`](../spike/brain_cases.toml): the expected kind of answer (actions, look-up, reply), actions that must be pressed, and actions that must never be (a global list covers eject, self-destruct, quantum and jump engage, jettison, respawn and firing). Nothing is pressed. Every run prints its estimated cost.
+Each request gets your bound actions as a cached briefing. Answers are graded against [`cases.toml`](../../src/tycho/packs/star-citizen/eval/cases.toml): the expected kind of answer (actions, look-up, reply), actions that must be pressed, and actions that must never be (a global list covers eject, self-destruct, quantum and jump engage, jettison, respawn and firing). Nothing is pressed. Every run prints its estimated cost.
 
 ## Fast router (Jev)
 
 ```powershell
-uv run python tools/bench/jev_report.py tools/spike/brain_cases.toml --runs 2
+uv run python tools/bench/jev_report.py src/tycho/packs/star-citizen/eval/cases.toml --runs 2
 ```
 
 Asks Jev, in one request per case, for the mode, the control category, the action in each category, whether the request has several parts, and explicit-danger checks. It logs the raw answers and prints how many requests Jev would handle, and how many it gets wrong, at each confidence threshold.

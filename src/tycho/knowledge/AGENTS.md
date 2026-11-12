@@ -22,4 +22,4 @@ What the brain can look up: ships, items and crafting, mining, trade prices and 
 ## Testing
 
 - `tests/fakes/fake_uex.py` and `fake_wiki.py` script the APIs, so tests need no network.
-- Check a change against the live API too (free): run the look-up directly with `uv run python -c ...`, using the questions from `tools/spike/brain_cases.toml`.
+- Check a change against the live API too (free): run the look-up directly with `uv run python -c ...`, using the questions from `src/tycho/packs/star-citizen/eval/cases.toml`.

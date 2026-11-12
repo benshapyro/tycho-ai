@@ -14,7 +14,7 @@ import datetime
 import json
 import logging
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 import anthropic
@@ -117,6 +117,7 @@ class WebSearch:
         model: str = MODEL,
         today: Callable[[], datetime.date] = datetime.date.today,
         log_queries: bool = False,
+        sites: Sequence[str] = SITES,
     ) -> None:
         """``log_queries``: put the query (the player's question, reworded) in the log
         file. Only with ``keep_transcripts`` (audit, 2026-11-03)."""
@@ -124,6 +125,8 @@ class WebSearch:
         self._model = model
         self._today = today
         self._log_queries = log_queries
+        self._sites = tuple(sites)
+        """The game pack's sites: the only ones a search may read."""
 
     @property
     def name(self) -> str:
@@ -156,7 +159,7 @@ class WebSearch:
                         "type": WEB_SEARCH,
                         "name": "web_search",
                         "max_uses": 1,
-                        "allowed_domains": list(SITES),
+                        "allowed_domains": list(self._sites),
                     }
                 ],
                 output_config={"effort": "low"},

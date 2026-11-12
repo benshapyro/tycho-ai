@@ -17,7 +17,8 @@ Raw answers are logged, so the report can be re-graded without new requests
 (``--replay``). The API key comes from Windows Credential Manager:
     uv run python -m tycho.credentials set typesafe
 
-Usage: uv run python tools/bench/jev_report.py tools/spike/brain_cases.toml [--runs 2] [--seed 1]
+Usage: uv run python tools/bench/jev_report.py src/tycho/packs/star-citizen/eval/cases.toml
+       [--runs 2] [--seed 1]
 Again, from the log: add --replay recordings/jev.results.jsonl
 """
 

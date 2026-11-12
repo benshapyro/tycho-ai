@@ -15,7 +15,7 @@ import pytest
 from tycho.game.keybinds import Action
 
 ROOT = Path(__file__).resolve().parent.parent
-CASES = ROOT / "tools" / "spike" / "brain_cases.toml"
+CASES = ROOT / "src" / "tycho" / "packs" / "star-citizen" / "eval" / "cases.toml"
 
 
 def _jev() -> ModuleType:

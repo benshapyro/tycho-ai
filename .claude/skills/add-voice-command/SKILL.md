@@ -43,7 +43,7 @@ actions = ["v_lights_on", "v_lights"]
 
   `test_no_two_commands_are_confusable` and `test_every_command_action_name_is_plausible` run on every entry by themselves.
 - **The fast-path eval:** add each new phrase to `tools/spike/phrases.txt`, and its expected result to `tools/spike/expected.toml`. Write the expected result before running anything.
-- **The brain eval:** if players will say it loosely, add a case or two to `tools/spike/brain_cases.toml` (`heard`, `mode = "command"`, `expect = ["actions"]`, `must`, `never`). Every case needs a `mode` (ADR 10); the eval refuses the file without one.
+- **The brain eval:** if players will say it loosely, add a case or two to `src/tycho/packs/star-citizen/eval/cases.toml` (`heard`, `mode = "command"`, `expect = ["actions"]`, `must`, `never`). Every case needs a `mode` (ADR 10); the eval refuses the file without one.
   - `uv run python tools/bench/tycho_eval.py --tag <tag>` runs them.
   - It calls the Anthropic API and costs money, so ask before running it.
 - **Done means:** `uv run ruff format --check`, `uv run ruff check`, `uv run pyright` and `uv run pytest` all pass.

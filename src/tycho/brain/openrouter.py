@@ -54,6 +54,7 @@ from tycho.brain.rounds import (
 from tycho.brain.traces import TraceFile, briefing_hash
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Keybinds
+from tycho.packs import GamePack
 from tycho.tile.cards import TOOL_DESCRIPTION, TOOL_SCHEMA
 
 log = logging.getLogger(__name__)
@@ -292,6 +293,7 @@ class OpenRouterBrain:
         hosts: Sequence[str] = (),
         sort: str | None = None,
         traces: TraceFile | None = None,
+        pack: GamePack | None = None,
     ) -> None:
         """``model`` is OpenRouter's id ("anthropic/claude-haiku-5.5"). ``effort`` asks a
         model that reasons to reason that hard ("low"); by default nothing is asked, so
@@ -305,6 +307,8 @@ class OpenRouterBrain:
         self._owns_client = client is None
         self._client: ChatClient = client or OpenRouterClient(api_key or "")
         self._matcher = matcher
+        self._pack = pack
+        """The game the briefing is for (Star Citizen when None, ADR 18)."""
         self._model = model
         self._today = today
         self._effort = effort
@@ -489,8 +493,8 @@ class OpenRouterBrain:
         if keybinds is self._for:
             return
         self._for = keybinds
-        self._actions = frozenset(offered_actions(keybinds, self._matcher))
-        text = briefing(keybinds, self._matcher)
+        self._actions = frozenset(offered_actions(keybinds, self._matcher, self._pack))
+        text = briefing(keybinds, self._matcher, self._pack)
         if self._reference:
             text += f"\n{self._reference.strip()}\n"
         # cache_control is for the models that need it marked (Anthropic's, Gemini's);

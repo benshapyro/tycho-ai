@@ -120,7 +120,11 @@ def test_a_plain_reply_is_not_narrated(say: str) -> None:
 def test_the_kraken_case_takes_a_right_answer_worded_another_way() -> None:
     """The #192 eval after #280: "I don't have an official release date" failed."""
     e = _eval()
-    data = tomllib.loads((ROOT / "tools" / "spike" / "brain_cases.toml").read_text("utf-8"))
+    data = tomllib.loads(
+        (ROOT / "src" / "tycho" / "packs" / "star-citizen" / "eval" / "cases.toml").read_text(
+            "utf-8"
+        )
+    )
     rule = next(c for c in data["case"] if c["heard"] == "when is the Kraken coming out")
     said = _outcome(say="The Kraken is in concept. I don't have an official release date for it.")
     assert e.grade(said, rule, set()) == "pass"
@@ -186,7 +190,11 @@ KNOWN = {
 
 def test_every_case_uses_only_keys_the_eval_reads() -> None:
     """A misspelt key ("max_call") would be ignored, and its check silently skipped."""
-    data = tomllib.loads((ROOT / "tools" / "spike" / "brain_cases.toml").read_text("utf-8"))
+    data = tomllib.loads(
+        (ROOT / "src" / "tycho" / "packs" / "star-citizen" / "eval" / "cases.toml").read_text(
+            "utf-8"
+        )
+    )
     unknown = {(c["heard"], k) for c in data["case"] for k in c if k not in KNOWN}
     assert not unknown
 
@@ -196,14 +204,22 @@ def test_every_case_says_what_the_player_wants() -> None:
     _eval()  # puts tools/bench on the path
     from brain_report import MODES  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
 
-    data = tomllib.loads((ROOT / "tools" / "spike" / "brain_cases.toml").read_text("utf-8"))
+    data = tomllib.loads(
+        (ROOT / "src" / "tycho" / "packs" / "star-citizen" / "eval" / "cases.toml").read_text(
+            "utf-8"
+        )
+    )
     assert not [c["heard"] for c in data["case"] if c.get("mode") not in MODES]
 
 
 def test_planning_cases_accept_a_look_up() -> None:
     """#257: brain_report and jev_report grade look_up apart from reply, and a trade
     plan rightly starts with one."""
-    data = tomllib.loads((ROOT / "tools" / "spike" / "brain_cases.toml").read_text("utf-8"))
+    data = tomllib.loads(
+        (ROOT / "src" / "tycho" / "packs" / "star-citizen" / "eval" / "cases.toml").read_text(
+            "utf-8"
+        )
+    )
     planning = [c for c in data["case"] if c["mode"] == "planning"]
     assert planning
     assert all("look_up" in c["expect"] for c in planning)
@@ -326,7 +342,11 @@ def test_say_that_again_never_reaches_the_brain() -> None:
 
 
 def test_the_say_that_again_cases_are_in_the_eval() -> None:
-    data = tomllib.loads((ROOT / "tools" / "spike" / "brain_cases.toml").read_text("utf-8"))
+    data = tomllib.loads(
+        (ROOT / "src" / "tycho" / "packs" / "star-citizen" / "eval" / "cases.toml").read_text(
+            "utf-8"
+        )
+    )
     assert any(c["expect"] == ["say_again"] for c in data["case"])
 
 
@@ -359,10 +379,12 @@ def test_the_model_benchmarks_load_the_real_case_file(tmp_path: Path) -> None:
 
     results = tmp_path / "recordings"
     cases, out = load_cases(  # pyright: ignore[reportUnknownVariableType]
-        ROOT / "tools" / "spike" / "brain_cases.toml", engine="", results=results
+        ROOT / "src" / "tycho" / "packs" / "star-citizen" / "eval" / "cases.toml",
+        engine="",
+        results=results,
     )
     assert cases
-    assert out == results / "brain_cases.results.jsonl"
+    assert out == results / "cases.results.jsonl"
     assert results.is_dir()
 
 
