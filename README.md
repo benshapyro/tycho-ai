@@ -6,14 +6,14 @@
 
 Tycho turns natural speech into in-game actions, using your own keybinds. Hold push-to-talk and say what you want, the way you'd say it to a crewmate. Tycho presses the right keys, tells you what it did, and asks before doing anything you can't undo. It can also answer Star Citizen questions.
 
-**Status: pre-alpha (0.5).** Common commands run instantly on your PC. Claude handles everything said differently, plus questions, and Tycho answers aloud with an ElevenLabs voice. Anything you can't undo (ejecting, firing) waits for you to say "confirm". Install it with the installer from [Releases](https://github.com/benshapyro/tycho-ai/releases/latest), or from source with a terminal and about 15 minutes.
+**Status: pre-alpha (0.6).** Common commands run instantly on your PC. Claude handles everything said differently, plus questions, and Tycho answers aloud with an ElevenLabs voice. Anything you can't undo (ejecting, firing) waits for you to say "confirm". Install it with the installer from [Releases](https://github.com/benshapyro/tycho-ai/releases/latest), or from source with a terminal and about 15 minutes.
 
 ## Works today
 
 - **Instant built-in commands**, almost 90 of them, through your own keybinds. Add your own phrases and sequences.
 - **Claude for anything said differently,** for multi-step requests, and for questions.
 - **Spoken replies** in an ElevenLabs voice you choose (George, Sarah, Lily, Brian, or one of your own), plus sounds that tell you whether the keys went in. "Say that again" repeats the last thing it said.
-- **Asks before anything you can't undo,** and waits for you to say "confirm". Push-to-talk stops it at any point.
+- **Asks before anything you can't undo,** and waits for you to say "confirm". Push-to-talk stops it at any point. When a request is vague ("faster") it asks a quick question instead of guessing, and what you say to your squad on the same button ("break right") presses nothing.
 - **Answers about the game:**
   - ships, from the current patch's game files;
   - trade prices and routes, live from UEX;
