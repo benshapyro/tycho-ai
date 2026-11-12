@@ -1,7 +1,7 @@
 """Compare ways of searching the web for a player's question (#354, #360).
 
     uv run python tools/bench/web_trial.py [--modes sites,fallback] [--rounds 2]
-        [--budget 5] [--no-judge] [--out FILE]
+        [--budget 5] [--judge reference|search|none] [--compare OLD.jsonl] [--out FILE]
 
 Asks each question below through ``WebSearch`` in each mode:
 
@@ -11,15 +11,20 @@ Asks each question below through ``WebSearch`` in each mode:
 - ``open``: the open web every time (any site, two searches, two page reads).
 - ``read``: ``open``, told to always read a page first.
 
-Then a stronger Claude (``JUDGE``, with its own web search) grades each round's answers
-to a question side by side, without knowing which mode gave which: right, partial,
-wrong, or none (no answer). It prints each answer with its time, searches, pages read,
-cost and stop reason, then a summary per mode with the judge's grades, and appends
-every row to ``recordings/web_trial.jsonl``.
+Then a stronger Claude (``JUDGE``) grades each round's answers to a question side by
+side, without knowing which mode gave which: right, partial, wrong, or none (no
+answer). By default it grades against the question's reference answer in
+``web_references.toml`` (about 1 cent a question); ``--judge search`` has it search the
+web itself instead (about 8 cents, and its grades vary more), and a question with no
+reference is left ungraded. ``--compare`` grades an earlier run's answers (its JSONL)
+beside the new ones, as "<mode> (before)", so a change is measured without paying for
+its old answers again. It prints each answer with its time, searches, pages read, cost
+and stop reason, then a summary per mode with the judge's grades, and appends every row
+to ``recordings/web_trial.jsonl``.
 
-Costs money: about 1 to 3 cents a search and 2 to 5 cents a judged question. The run
-stops starting new work once ``--budget`` dollars are spent (5 by default). Uses the
-Anthropic key Tycho stores (``tycho key set anthropic``), or ``ANTHROPIC_API_KEY``.
+Costs money: about 1 to 3 cents a search, and the judging. The run stops starting new
+work once ``--budget`` dollars are spent (5 by default). Uses the Anthropic key Tycho
+stores (``tycho key set anthropic``), or ``ANTHROPIC_API_KEY``.
 """
 
 import argparse
@@ -32,6 +37,7 @@ import re
 import statistics
 import sys
 import time
+import tomllib
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -52,6 +58,13 @@ NAMES = {
     "read": "Open web, page read",
 }
 GRADES = ("right", "partial", "wrong", "none")
+REFERENCES: dict[str, dict[str, str]] = {
+    r["question"]: r
+    for r in tomllib.loads((Path(__file__).with_name("web_references.toml")).read_text("utf-8"))[
+        "reference"
+    ]
+}
+"""What a right answer says, by question, and what counts against one."""
 
 QUESTIONS = (
     # From the 11 Nov play session (#353, #354): five requests, no usable answer.
@@ -122,6 +135,18 @@ then grade each answer:
 - none: no answer, or only says it couldn't find one.
 Reply with JSON only, no other text: {{"A": {{"grade": "...", "why": "..."}}, ...}}, \
 "why" in at most 20 words."""
+REFERENCE_BRIEF = """\
+You grade answers a voice co-pilot gave a Star Citizen player. Today is {today}; the \
+live game is patch 4.10.x. For one question you get a reference answer, checked \
+earlier, and several answers labelled A, B and so on. Grade each against the \
+reference, not your own memory of the game:
+- right: gives what the reference says that answers the question, and nothing that \
+contradicts it (extra true-sounding detail is fine);
+- partial: useful but leaves out what matters, or hedges where the reference is clear;
+- wrong: contradicts the reference, or says something out of date that would mislead;
+- none: no answer, or only says it couldn't find one.
+Follow the reference's notes where it has them. Reply with JSON only, no other text: \
+{{"A": {{"grade": "...", "why": "..."}}, ...}}, "why" in at most 20 words."""
 
 LOGGED = re.compile(
     r"(\d+) searches, (\d+) pages read, \d+ sites, about \$([\d.]+), stopped: (\w*)"
@@ -163,10 +188,14 @@ async def _ask(search: WebSearch, calls: _Calls, question: str) -> dict[str, Any
 
 
 async def _judge(
-    client: anthropic.AsyncAnthropic, question: str, rows: list[dict[str, Any]]
+    client: anthropic.AsyncAnthropic, question: str, rows: list[dict[str, Any]], how: str
 ) -> tuple[dict[str, dict[str, str]], float]:
     """Each row's grade, by mode, and what the judging cost. The answers are shuffled
-    and labelled so the judge can't tell which mode gave which."""
+    and labelled so the judge can't tell which mode gave which. ``how``: against the
+    reference answer, or by searching."""
+    reference = REFERENCES.get(question)
+    if how == "reference" and reference is None:
+        return {}, 0.0
     shuffled = random.sample(rows, len(rows))
     labels = [chr(ord("A") + i) for i in range(len(shuffled))]
     answers = "\n\n".join(
@@ -174,14 +203,29 @@ async def _judge(
         f"Sites: {', '.join(row['sites'][:3]) or 'none'}"
         for label, row in zip(labels, shuffled, strict=True)
     )
-    message = await client.messages.create(
-        model=JUDGE,
-        max_tokens=4000,
-        system=JUDGE_BRIEF.format(today=time.strftime("%d %B %Y")),
-        tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 3}],  # pyright: ignore[reportArgumentType]
-        output_config={"effort": "medium"},
-        messages=[{"role": "user", "content": f"Question: {question}\n\n{answers}"}],
-    )
+    today = time.strftime("%d %B %Y")
+    searching = how != "reference"
+    if reference is None or searching:
+        searching = True
+        asked = f"Question: {question}\n\n{answers}"
+    else:
+        notes = f"\nNotes: {reference['notes']}" if reference.get("notes") else ""
+        asked = f"Question: {question}\n\nReference: {reference['answer']}{notes}\n\n{answers}"
+    try:
+        message = await client.messages.create(
+            model=JUDGE,
+            max_tokens=4000,
+            system=(JUDGE_BRIEF if searching else REFERENCE_BRIEF).format(today=today),
+            tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 3}]  # pyright: ignore[reportArgumentType]
+            if searching
+            else anthropic.omit,
+            output_config={"effort": "medium" if searching else "low"},
+            messages=[{"role": "user", "content": asked}],
+        )
+    except anthropic.APIError as e:
+        # One failed grading mustn't end a paid run (#373): that question stays ungraded.
+        print(f"The judge failed on {question!r}: {type(e).__name__}", file=sys.stderr)
+        return {}, 0.0
     usage = message.usage
     cost = (usage.input_tokens * JUDGE_PRICES[0] + usage.output_tokens * JUDGE_PRICES[1]) / 1e6
     searches = sum(1 for b in message.content if getattr(b, "type", "") == "server_tool_use")
@@ -222,7 +266,10 @@ async def main() -> int:
     parser.add_argument("--modes", default="sites,fallback")
     parser.add_argument("--rounds", type=int, default=2)
     parser.add_argument("--budget", type=float, default=5.0)
-    parser.add_argument("--no-judge", action="store_true")
+    parser.add_argument("--judge", choices=("reference", "search", "none"), default="reference")
+    parser.add_argument(
+        "--compare", type=Path, help="an earlier run's JSONL, graded beside the new answers"
+    )
     parser.add_argument("--limit", type=int, default=len(QUESTIONS), help="first N questions")
     parser.add_argument("--out", type=Path, default=OUT)
     args = parser.parse_args()
@@ -238,9 +285,19 @@ async def main() -> int:
     web_log.setLevel(logging.DEBUG)
     web_log.addHandler(calls)
     client = anthropic.AsyncAnthropic(api_key=key, max_retries=2)
+    before: dict[tuple[int, str], list[dict[str, Any]]] = {}
+    if args.compare:
+        for line in args.compare.read_text("utf-8").splitlines():
+            old = json.loads(line)
+            old = {k: v for k, v in old.items() if k not in ("grade", "why")}
+            old["mode"] = f"{old['mode']} (before)"
+            before.setdefault((int(old["round"]), old["question"]), []).append(old)
     plain_brief = web.OPEN_BRIEF
     spent = 0.0
     results: dict[str, list[dict[str, Any]]] = {m: [] for m in modes}
+    for rows in before.values():
+        for row in rows:
+            results.setdefault(row["mode"], [])
     agree = [0, 0]
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("a", encoding="utf-8") as out:
@@ -258,14 +315,16 @@ async def main() -> int:
                     row = {"round": round_, "mode": mode, **await _ask(search, calls, question)}
                     spent += float(row["cost"])
                     rows.append(row)
-                if not args.no_judge:
-                    grades, cost = await _judge(client, question, rows)
+                rows += before.get((round_, question), [])
+                if args.judge != "none":
+                    grades, cost = await _judge(client, question, rows, args.judge)
                     spent += cost
                     for row in rows:
                         row.update(grades.get(row["mode"], {"grade": "ungraded", "why": ""}))
                 for row in rows:
                     results[row["mode"]].append(row)
-                    out.write(json.dumps(row, ensure_ascii=False) + "\n")
+                    if not row["mode"].endswith("(before)"):
+                        out.write(json.dumps(row, ensure_ascii=False) + "\n")
                     print(
                         f"[r{round_} {row['mode']}] {row['seconds']:>5.1f} s  "
                         f"{row['searches']}s/{row['pages']}p  ${row['cost']:.3f}  "
@@ -279,7 +338,7 @@ async def main() -> int:
             else:
                 continue
             break
-    if args.rounds > 1 and not args.no_judge:
+    if args.rounds > 1 and args.judge != "none":
         for rows in results.values():
             by_question: dict[str, list[str]] = {}
             for row in rows:
@@ -291,7 +350,8 @@ async def main() -> int:
     print()
     for mode, rows in results.items():
         if rows:
-            print(_summary(NAMES[mode], rows))
+            name = mode.removesuffix(" (before)")
+            print(_summary(NAMES[name] + (" (before)" if name != mode else ""), rows))
     if agree[1]:
         print(f"Same grade in every round: {agree[0]}/{agree[1]} question-modes")
     print(f"Spent about ${spent:.2f}. Answers: {args.out}")

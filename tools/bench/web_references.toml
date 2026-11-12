@@ -1,0 +1,190 @@
+# Reference answers for web_trial.py's questions, so a judge can grade an answer
+# against them without searching the web itself (about 1 cent a question instead of 8).
+#
+# Written 12 Nov 2026 (live game 4.10.x) from the #372 benchmark: the Sonnet 5.5 judge's
+# notes, which it checked with its own searches, and the answers it graded right. No one
+# has checked them in the game. Questions about news and opinions go out of date first:
+# update a reference when the game changes, and note what changed in its `notes`.
+#
+# `answer` is what a right answer says. `notes`, if any, tell the judge what counts as
+# wrong or only partial.
+
+[[reference]]
+question = "where do I pay off a crime stat at Levski"
+answer = "Levski has a terminal for paying fines. Low CrimeStats (level 1 or 2) can be paid off there, most likely at the Admin Desk on the first underground level. Higher CrimeStats can't be paid off at all."
+notes = "Saying Security Post Kareah is the only place is wrong: that's for hacking a CrimeStat away, not paying. A right answer names where in Levski; just saying Levski has one is partial."
+
+[[reference]]
+question = "where is the admin office in Area18"
+answer = "In the IO-North tower on ArcCorp Plaza. The Administration Front Desk is in the tower's ground-floor lobby."
+
+[[reference]]
+question = "how do I enter a remote turret on an Idris"
+answer = "You don't walk into a remote turret. You sit in a remote turret seat or station inside the Idris, which gives you control of the turret, and switch between remote turrets from there."
+notes = "Saying it can't be done or found is none. Saying it's run from a seat inside the ship, without how to take control, is partial."
+
+[[reference]]
+question = "how do I repair and refuel my ship at a station"
+answer = "Land on a pad or in a hangar, open your mobiGlas (F1) and use the Vehicle Maintenance Services app. Choose repair, restock or refuel, then confirm and pay in aUEC."
+notes = "Naming the app 'Landing Services' is out of date; with otherwise right steps that's partial."
+
+[[reference]]
+question = "where can I buy quantum fuel in Pyro"
+answer = "At Pyro's stations: Megumi Refueling, Orbituary, Checkmate, Gaslight, and the Stanton and Nyx Gateway stations on the Pyro side. It cost about 1,760 aUEC per SCU in the 4.10.2 data (October 2026). Ruin Station doesn't sell it."
+notes = "Most of the stations, right, is enough for right; leaving out one is fine."
+
+[[reference]]
+question = "how do I start salvage missions"
+answer = "Open the Contracts Manager on your mobiGlas and accept a salvage contract, which gives you a wreck's location. Fly there in a salvage ship such as the Drake Vulture or RSI Salvation (the Reclaimer for crews), switch to salvage mode and scrape the hull with its salvage heads."
+notes = "Made-up details stated as fact, such as exact contract pay tiers, make an otherwise right answer partial."
+
+[[reference]]
+question = "where is the refinery at ARC-L1"
+answer = "On ARC-L1 Wide Forest Station, the Rest and Relax station at ArcCorp's first Lagrange point, which has a refinery deck."
+
+[[reference]]
+question = "how do I switch to decoupled mode"
+answer = "Press Left Alt + C, the default key that toggles between coupled and decoupled flight."
+notes = "Saying C on its own is the default is wrong or out of date (C is cruise control): partial at best, even if Left Alt + C is mentioned as an alternative."
+
+[[reference]]
+question = "where can I sell RMC in Stanton"
+answer = "Terra Mills HydroFarm on Cellin pays best, about 8,000 aUEC per unit (late October 2026). The Trade and Development Division offices in Orison, Lorville, Area18 and New Babbage pay about 6,000 to 7,600, GrimHEX about 7,200 and Samson & Son's Salvage Center about 6,400."
+notes = "Two or three real buyers with roughly right prices is right."
+
+[[reference]]
+question = "what's in the next Star Citizen patch"
+answer = "Alpha 4.10.3 is the next small patch, going live around 12 November 2026, before IAE 2956. The next big one is Alpha 5.0, renamed from 4.11 on 4 November 2026: the first of the Genesis planet tech with Nyx I, plus Contract Boards. Nyx II and III moved to 5.1, and RSI hasn't given 5.0 a test or release date."
+notes = "Saying 5.0 had a PTU on 5 November is wrong: that PTU was 4.10.3. Covering 5.0 correctly without 4.10.3 is partial."
+
+[[reference]]
+question = "what are the refining methods and how do their yield and speed compare"
+answer = "There are eight refining methods, each trading speed, cost and yield. Cormack and XCR Reaction are fast with low yield. Dinyx Solventation and Pyrometric Chromalysis are slow with high yield (Pyrometric also costs a lot). The rest, such as Ferron Exchange, sit in between."
+notes = "Saying there are nine methods is wrong. A few examples, right, without the full set, is partial."
+
+[[reference]]
+question = "what weapons and components does a stock Cutlass Black come with"
+answer = "Four pilot-controlled guns: two Mantis GT-220 Gatlings and two CF-337 Panther repeaters. A manned turret with a CF-337 Panther. Six missile racks (four MSD-423 and two MSD-442). A SureGrip tractor beam on the turret. A STOP shield, DayBreak power plant, Odyssey quantum drive and Chernykh radar."
+notes = "Saying it has a pair of missile racks is wrong in that detail: partial."
+
+[[reference]]
+question = "what are the steps of a box delivery mission from accepting it to getting paid"
+answer = "Accept a delivery contract in the Contracts Manager on your mobiGlas (F1). Go to the pickup marker and pick up the box or boxes. Carry them on foot or in your ship's cargo hold to the drop-off point, and leave them there (a delivery box or terminal). You're paid into your wallet automatically when the contract completes."
+
+[[reference]]
+question = "where do I find hadanite"
+answer = "Hadanite is a gem found in small surface deposits on Stanton's moons, mined with a ROC or by hand. Aberdeen is the best-known spot, with Arial, Daymar and Magda also good."
+notes = "Saying the best spot is Pyro I, or that it's on asteroids, is wrong."
+
+[[reference]]
+question = "where is the best place to mine quantanium in Stanton"
+answer = "The Aaron Halo asteroid belt is the usual top spot. ArcCorp's moons Lyria and Wala are the other common choices."
+notes = "Placing Wala at microTech or Crusader is wrong."
+
+[[reference]]
+question = "where can I buy medpens in Lorville"
+answer = "At three shops: the Kel-To at Teasa Spaceport, the pharmacy at Maria Pure of Heart hospital, and Tammany and Sons in the Metro Center. They cost about 249 to 265 aUEC, cheapest at Tammany and Sons."
+
+[[reference]]
+question = "where is the cargo center at Seraphim Station"
+answer = "Seraphim Station's Cargo Center is on its Cargo Deck, with ship rental, a Covalex pickup point and the freight elevator and loading dock. The grader couldn't confirm a more exact spot."
+notes = "Naming the Cargo Deck and what's there is right. Only saying the station has one is none."
+
+[[reference]]
+question = "where can I buy a Pembroke suit"
+answer = "The Pembroke Exploration Suit is sold at Tammany and Sons in Lorville's Metro Center (about 14,200 aUEC), and at Skutters in GrimHEX and the Refinery Shop in Levski (about 15,000 aUEC)."
+
+[[reference]]
+question = "where do I sell gold ore"
+answer = "Raw gold ore can't be sold at ordinary commodity terminals. Sell it at the trade terminal on a station's refinery deck, or refine it there first and sell the refined gold at commodity terminals that buy it, such as the TDD in Area18."
+notes = "Only saying 'take it to a refinery', with no place, is partial."
+
+[[reference]]
+question = "how do I get my ship out of impound"
+answer = "Pay the impound fine at a ship terminal (ASOP), which RSI's October 2026 report says works again, or wait out the impound time for free."
+
+[[reference]]
+question = "how do I do bunker missions"
+answer = "Pick a bunker contract from the Mercenary or security contracts in your mobiGlas Contracts Manager. Land out of range of the bunker's surface turrets, go in on foot and clear the hostile (red-marked) enemies, leaving the security guards alone. Finish the objectives, then loot."
+notes = "Leaving out how to get the contract makes it partial."
+
+[[reference]]
+question = "how do the Hathor missions work"
+answer = "Hathor's 'Align and Mine' is a sandbox activity added in 4.1, not a contract from a mission giver. At a Hathor orbital laser site (Daymar or Aberdeen) you align the ground facilities, power them (moving batteries with a tractor beam), prime and fire the orbital laser, then mine the rare ores it exposes (carinite, jaclium, saldynium)."
+notes = "Giving the sites and steps but then sending the player to mission givers is partial."
+
+[[reference]]
+question = "how do I open the executive hangar in Pyro"
+answer = "Collect all seven compboards from Pyro's contested zones, then go to the asteroid base PYAM-EXHANG-0-1, south-west of the Pyro star. When the status lights by the door show at least one green and no red, put the seven compboards into the slots on the pipes, and the door opens."
+
+[[reference]]
+question = "how do I fix my ship not showing at the ASOP terminal"
+answer = "Try another ASOP terminal or another landing zone, relog, or store and then retrieve the ship; if it was destroyed, claim it. The old bug where rental ships didn't appear at ASOP terminals was fixed in 4.10.0."
+notes = "Saying the rental-ship bug is still open in 4.10.2 or 4.10.3 is out of date: partial if the rest is right, wrong if it's the whole answer."
+
+[[reference]]
+question = "how do I tractor beam boxes into my ship"
+answer = "Equip a tractor beam (a multitool with the tractor attachment, or your ship's own beam if it has one), aim it at the box to lift it, and move the box into your ship's cargo grid. When it lines up, a blue outline shows and it snaps into place."
+
+[[reference]]
+question = "how do I set my spawn location"
+answer = "Check in at a clinic or hospital in a landing zone and use one of its beds: that becomes where you wake up. Your ships and vehicles don't move with you."
+
+[[reference]]
+question = "how do I install a new quantum drive"
+answer = "Buy a quantum drive of the size your ship takes (check the size in the Vehicle Loadout Manager) at a component shop. Then, with the ship stored or landed at that location, open the Vehicle Loadout Manager on your mobiGlas or a terminal and swap it into the quantum drive slot."
+notes = "Only saying it must match the size, with no steps, is partial at best."
+
+[[reference]]
+question = "how do I share missions with my party"
+answer = "In a party, open the Contracts Manager, go to the Accepted tab, select the mission and press Share at the bottom right. Party members get a prompt to accept, and the reward is split between them."
+
+[[reference]]
+question = "how much does it cost to claim a ship after it blows up"
+answer = "Since Alpha 4.8 you can claim a destroyed ship for free with its stock loadout, after a longer wait, or pay aUEC (more for bigger ships and better parts) to claim it with your saved insured loadout, after a shorter wait. There's no fixed price, and paying to expedite was removed."
+notes = "Describing the old model (claims free, pay only to expedite) is wrong."
+
+[[reference]]
+question = "what's the best starter ship for making money"
+answer = "The Aegis Avenger Titan is the usual pick: 8 SCU of cargo for trading and boxes, and it can fight for bounties. The Drake Cutter and MISC Hull A are other cheap haulers, the Freelancer MAX is a better trader if you can spend more, and the Prospector is the solo mining choice."
+notes = "Naming a clear first pick is needed for right; a list with no pick is partial."
+
+[[reference]]
+question = "is the Drake Corsair worth it for solo players"
+answer = "For solo PvE, such as bounties and missions, yes: its forward guns hit very hard and it carries some cargo. But it's built for a crew of up to four, its turrets go unused alone, it handles heavily, and against skilled players solo it's at risk."
+notes = "A clear verdict is needed for right. Unsourced review scores count against an answer."
+
+[[reference]]
+question = "what do players think of the freight elevator changes"
+answer = "RSI's October 2026 report says freight elevators now name the items that failed to transfer and why, instead of one generic error. The grader found no clear summary of player opinion."
+notes = "An answer that describes the change and gives player views from a named community source is right; the change alone is partial; nothing is none."
+
+[[reference]]
+question = "how do I get rid of a crime stat without paying"
+answer = "Hack it away with a Cryptokey at the terminal in Security Post Kareah, in Crusader. Or let yourself be caught and serve the time in Klescher prison."
+notes = "Kareah with a Cryptokey alone is right."
+
+[[reference]]
+question = "what's the best mining laser for the Prospector"
+answer = "It takes a size 1 laser. Most players pick the Helix I for hard rocks (strong but short range) or the Hofstede-S1 as an all-rounder, over the stock Arbor MH1, with modules such as the Focus III."
+notes = "Calling it the 'Helix S1' is a wrong name: partial. Listing lasers without a pick is partial."
+
+[[reference]]
+question = "what armor is best for bunker missions"
+answer = "Medium armour is the usual choice for its balance of protection and mobility; community guides name the ORC-mkX. Heavy armour such as the Morozov-SH protects more and carries more magazines but is slower."
+notes = "Only 'medium or heavy', with no set named, is partial."
+
+[[reference]]
+question = "how do I avoid getting interdicted in Pyro"
+answer = "Pyro has pirates with interdiction ships and no security. Avoid busy routes and waypoints, set your route before you leave the hangar, and break long jumps up or jump toward one point then turn for another. If you're pulled out, boost away at full speed until you're out of the snare's range, then jump again."
+notes = "Advice about staying away from comm arrays is wrong: that's Stanton's fines, not Pyro's pirates."
+
+[[reference]]
+question = "what's the best way to make money with an Avenger Titan"
+answer = "Bounty hunting and bunker missions early on, and small cargo runs or box deliveries with its 8 SCU of cargo. Players rate bounty contracts the best earner for it."
+notes = "A clear method is needed for right; describing the ship with no method is partial."
+
+[[reference]]
+question = "what's the fastest way to gain reputation with Citizens for Prosperity"
+answer = "Do Citizens for Prosperity's own contracts in Pyro, over and over, at the highest tier you can take: each completed contract raises your standing and unlocks better ones. Working for them sets the Headhunters against you."
+notes = "Saying only that there's no known fastest way is none."
