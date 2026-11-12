@@ -13,6 +13,7 @@ What comes back can't be checked, so the brain may not press anything after it
 import datetime
 import json
 import logging
+import re
 import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
@@ -37,6 +38,10 @@ SEARCH_PRICE = 0.01
 SECONDS = 12.0
 """How long the search request may take; searches take 4 to 8 s."""
 MAX_ANSWER = 600
+MAX_TOKENS = 2000
+"""Room for the search request's whole reply. Haiku thinks before and after it
+searches, and that counts too: with 400, half the answers stopped mid-word (#366). A
+spoken answer is about 80 tokens, so the extra room costs nothing unless it's used."""
 
 DESCRIPTION = """\
 Search Star Citizen websites (RSI's patch notes, roadmap, Comm-Links and forums, \
@@ -152,7 +157,7 @@ class WebSearch:
         try:
             message = await self._client.messages.create(
                 model=self._model,
-                max_tokens=400,
+                max_tokens=MAX_TOKENS,
                 system=BRIEF,
                 tools=[
                     {
@@ -168,18 +173,20 @@ class WebSearch:
         except anthropic.APIError as e:
             log.warning("Web search failed: %s", e)
             return failure(f"the web search failed ({type(e).__name__}); answer without it")
-        answer = " ".join(" ".join(b.text for b in message.content if b.type == "text").split())
+        stopped = str(getattr(message, "stop_reason", "") or "")
+        answer = _answer(message.content, cut=stopped == "max_tokens")
         sites = _sites(message.content)
         usage = message.usage
         cost = (usage.input_tokens * PRICES[0] + usage.output_tokens * PRICES[1]) / 1_000_000
         log.debug(
-            "Web search%s in %.0f ms: %d in, %d out, %d sites, about $%.5f",
+            "Web search%s in %.0f ms: %d in, %d out, %d sites, about $%.5f, stopped: %s",
             f" {query!r}" if self._log_queries else "",
             (time.perf_counter() - started) * 1000,
             usage.input_tokens,
             usage.output_tokens,
             len(sites),
             cost + SEARCH_PRICE,
+            stopped,
         )
         if not answer:
             return failure("the search found nothing usable; answer without it")
@@ -191,6 +198,23 @@ class WebSearch:
             "sites": sites[:3],
         }
         return LookupResult(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+
+
+_SPACE_BEFORE = re.compile(r"\s+([,.;:!?])")
+_SENTENCE_END = re.compile(r"[.!?](?=\s|$)")
+
+
+def _answer(content: Sequence[Any], *, cut: bool) -> str:
+    """The text, on one line. Cited text comes in several blocks that split mid-sentence,
+    so they're joined as they are, not with spaces (#366: "enter , and"). ``cut``: the
+    reply hit ``MAX_TOKENS``, so keep only whole sentences: a word cut in half, read
+    aloud, sounds broken, and nothing whole means nothing usable."""
+    text = "".join(b.text for b in content if getattr(b, "type", "") == "text")
+    text = _SPACE_BEFORE.sub(r"\1", " ".join(text.split()))
+    if cut:
+        ends = [m.end() for m in _SENTENCE_END.finditer(text)]
+        text = text[: ends[-1]] if ends else ""
+    return text
 
 
 def _sites(content: Any) -> list[str]:
