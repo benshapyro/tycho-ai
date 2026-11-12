@@ -779,7 +779,15 @@ def test_the_tiles_words_never_reach_the_brain_while_it_is_on() -> None:
 
 @pytest.mark.parametrize(
     "say",
-    ["Mounting up.", "Done.", "On it!", "Hearthing now.", "I've opened your map.", "I cast it."],
+    [
+        "Mounting up.",
+        "Done.",
+        "On it!",
+        "Hearthing.",
+        "Casting now.",
+        "I've opened your map.",
+        "I cast it.",
+    ],
 )
 def test_a_reply_that_claims_a_press_fails_with_keys_off(say: str) -> None:
     e = _eval()
@@ -797,6 +805,9 @@ def test_a_reply_that_claims_a_press_fails_with_keys_off(say: str) -> None:
         "Opening the map is M by default, and the zone map is shift M.",
         "Casting while moving only works for instant spells.",
         "Okay, back soon.",
+        "Casting is faster with more haste.",
+        "Jumping puzzles reward a toy.",
+        "Not unless I cast it, and I can't.",
     ],
 )
 def test_a_reply_that_says_how_passes_with_keys_off(say: str) -> None:

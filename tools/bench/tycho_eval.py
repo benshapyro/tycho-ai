@@ -136,9 +136,10 @@ and the request it made most likely cost nothing (#264)."""
 HOST = re.compile(r"\[host: ([^\]]+)\]$")
 """Who served a call through OpenRouter, at the end of its line (#267)."""
 CLAIMED = re.compile(
-    r"^(done|on it|mounting|casting|opening|hearthing|jumping|queu(e|ing)d?|drinking|"
-    r"targeting|attacking)\b[\w ,']{0,30}[.!]?$|"
-    r"\bI('ve| have)? (just )?(pressed|opened|cast|mounted|queued|jumped|targeted|drank)\b",
+    r"^(done|on it|mounting up|hearthing|queued( up)?|(casting|jumping|queuing|drinking|"
+    r"targeting|attacking|opening it) now)[.!]?$|"
+    r"^I (just )?(pressed|opened|cast|mounted|queued|jumped|targeted|drank)\b|"
+    r"\bI('ve| have) (just )?(pressed|opened|cast|mounted|queued|jumped|targeted|drunk|drank)\b",
     re.IGNORECASE,
 )
 """A reply that says Tycho did something in the game, where it presses nothing (advisor

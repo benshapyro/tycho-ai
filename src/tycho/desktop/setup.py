@@ -9,7 +9,7 @@ terminal: the window is the only one asking.
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
@@ -27,6 +27,11 @@ class Game:
     channel: str
     folder: str = ""
     problem: str = ""
+    needed: bool = True
+    """Whether the chosen game needs its folder found. An advisor pack with no install
+    part (World of Warcraft, #300) reads nothing from the game, so setup skips it."""
+    name: str = "Star Citizen"
+    """The chosen game's name, for setup's first step."""
 
 
 class SetupPC(Protocol):
@@ -156,6 +161,20 @@ def verdict(clip: np.ndarray[tuple[int], np.dtype[np.float32]]) -> dict[str, obj
     return {"peak": round(peak, 4), "verdict": how}
 
 
+def game(current: Settings, pc: SetupPC) -> Game:
+    """The chosen game as setup sees it: found by ``pc``, or not needed at all when its
+    pack reads nothing from the game (no install part, #300)."""
+    from tycho.packs import PackError, built_in
+
+    try:
+        pack = built_in(current.game)
+    except PackError:  # tycho check says why; setup asks for Star Citizen as before
+        return pc.game(current)
+    if pack.parts.install is None:
+        return Game(True, current.game_channel, needed=False, name=pack.name)
+    return replace(pc.game(current), name=pack.name)
+
+
 def needs_setup(current: Settings, pc: SetupPC | None = None) -> bool:
     """Whether Tycho can't start without the player: no push-to-talk, or no game."""
-    return current.push_to_talk is None or not (pc or WindowsPC()).game(current).found
+    return current.push_to_talk is None or not game(current, pc or WindowsPC()).found
