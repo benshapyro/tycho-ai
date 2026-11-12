@@ -425,6 +425,36 @@ def test_with_key_actions_off_no_path_presses_anything(
     assert "ask" not in r.feedback.played  # nothing to confirm: it can't be pressed
 
 
+def test_with_key_actions_off_the_first_refusal_says_why_once_a_session() -> None:
+    # Only the not-done sound left a player who forgot they turned key actions off with
+    # no reason (#327): the first refusal is spoken and shown on the Tile; later ones
+    # are the sound only.
+    speaker, display = FakeSpeaker(), FakeDisplay()
+    r = _conversation(
+        "landing gear", "lights", speaker=speaker, display=display, safety_lists=KEYS_OFF
+    )
+    assert [x.status for x in r.results] == ["refused", "refused"]
+    assert speaker.spoken == [KEYS_OFF.keys_off]
+    notices = [card for card in display.shown if card.kind == "notice"]
+    assert len(notices) == 1
+    assert "Tycho doesn't press keys in Star Citizen" in notices[0].body[0]
+    assert r.feedback.played == ["not_done", "not_done"]
+
+
+def test_without_a_voice_the_first_keys_off_refusal_is_still_shown() -> None:
+    display = FakeDisplay()
+    r = _conversation("landing gear", display=display, safety_lists=KEYS_OFF)
+    assert [card.kind for card in display.shown] == ["notice"]
+    assert r.feedback.played == ["not_done"]
+
+
+def test_other_refusals_are_not_told_as_keys_off() -> None:
+    speaker = FakeSpeaker()
+    r = _conversation("landing gear", speaker=speaker, focus=FakeFocus(False))
+    assert r.results[0].status != "done"
+    assert speaker.spoken == []
+
+
 # --- The brain (ADR 14) ------------------------------------------------------------------
 
 

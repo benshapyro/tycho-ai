@@ -15,6 +15,7 @@ from typing import Protocol
 
 import numpy as np
 
+from tycho.packs import GamePack, PackError, built_in
 from tycho.settings import Settings
 
 CAPTURE_SECONDS = 15.0
@@ -156,6 +157,18 @@ def verdict(clip: np.ndarray[tuple[int], np.dtype[np.float32]]) -> dict[str, obj
     return {"peak": round(peak, 4), "verdict": how}
 
 
-def needs_setup(current: Settings, pc: SetupPC | None = None) -> bool:
-    """Whether Tycho can't start without the player: no push-to-talk, or no game."""
-    return current.push_to_talk is None or not (pc or WindowsPC()).game(current).found
+def needs_setup(current: Settings, pc: SetupPC | None = None, pack: GamePack | None = None) -> bool:
+    """Whether Tycho can't start without the player: no push-to-talk, or no game folder
+    for a game that has one. A pack with no install part (an advisor, #191) needs no
+    folder, so Star Citizen missing never sends its player to setup (#344). ``pack`` is
+    the chosen game's (the settings' when None)."""
+    if current.push_to_talk is None:
+        return True
+    if pack is None:
+        try:
+            pack = built_in(current.game)
+        except PackError:  # tycho check says why; the folder check is as before
+            pack = None
+    if pack is not None and pack.parts.install is None:
+        return False
+    return not (pc or WindowsPC()).game(current).found
