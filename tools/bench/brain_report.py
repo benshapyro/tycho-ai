@@ -366,9 +366,11 @@ RESULTS = Path(__file__).resolve().parents[2] / "recordings"  # gitignored
 def results_name(source: Path) -> str:
     """What a case file's results are named after: a pack's ``eval/cases.toml`` by its
     pack, so each game has its own history (#323); any other file by its own name."""
-    pack = source.parent.parent
-    if source.parent.name == "eval" and (pack / "pack.toml").is_file():
-        return f"{pack.name}.{source.stem}"
+    toml = source.parent.parent / "pack.toml"
+    if source.parent.name == "eval" and toml.is_file():
+        pack_id = tomllib.loads(toml.read_text("utf-8")).get("id")
+        if isinstance(pack_id, str) and pack_id:
+            return f"{pack_id}.{source.stem}"  # by its id, whatever its folder (#342)
     return source.stem
 
 
