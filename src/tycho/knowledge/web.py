@@ -194,27 +194,42 @@ class WebSearch:
             "source": "web search of Star Citizen sites",
             "searched": query,
             "date": today.isoformat(),
-            "answer": answer[:MAX_ANSWER],
+            "answer": answer,
             "sites": sites[:3],
         }
         return LookupResult(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
 
 
 _SPACE_BEFORE = re.compile(r"\s+([,.;:!?])")
-_SENTENCE_END = re.compile(r"[.!?](?=\s|$)")
+_SENTENCE_END = re.compile(r"[.!?](?=\s+[A-Z\"']|$)")
+"""A full stop that ends a sentence: the next word starts with a capital, or the text
+ends. Not "Dec. 12" (#368)."""
 
 
 def _answer(content: Sequence[Any], *, cut: bool) -> str:
-    """The text, on one line. Cited text comes in several blocks that split mid-sentence,
-    so they're joined as they are, not with spaces (#366: "enter , and"). ``cut``: the
-    reply hit ``MAX_TOKENS``, so keep only whole sentences: a word cut in half, read
+    """The text, on one line, at most ``MAX_ANSWER`` long. Cited text comes in several
+    blocks that split mid-sentence, so text blocks next to each other are joined as they
+    are (#366: "enter , and"), while a search between two keeps a space (#368). ``cut``:
+    the reply hit ``MAX_TOKENS``, so keep only whole sentences: a word cut in half, read
     aloud, sounds broken, and nothing whole means nothing usable."""
-    text = "".join(b.text for b in content if getattr(b, "type", "") == "text")
-    text = _SPACE_BEFORE.sub(r"\1", " ".join(text.split()))
+    parts: list[str] = []
+    for block in content:
+        if getattr(block, "type", "") == "text":
+            parts.append(str(block.text))
+        elif parts:
+            parts.append(" ")
+    text = _SPACE_BEFORE.sub(r"\1", " ".join("".join(parts).split()))
     if cut:
-        ends = [m.end() for m in _SENTENCE_END.finditer(text)]
-        text = text[: ends[-1]] if ends else ""
+        text = _whole_sentences(text)
+    if len(text) > MAX_ANSWER:
+        text = _whole_sentences(text[: MAX_ANSWER + 1]) or text[:MAX_ANSWER].rsplit(" ", 1)[0]
     return text
+
+
+def _whole_sentences(text: str) -> str:
+    """``text`` up to the end of its last whole sentence, or "" if none ends."""
+    ends = [m.end() for m in _SENTENCE_END.finditer(text)]
+    return text[: ends[-1]] if ends else ""
 
 
 def _sites(content: Any) -> list[str]:
