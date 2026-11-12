@@ -38,6 +38,11 @@ SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayName=Tycho
 UninstallDisplayIcon={app}\tycho.exe
+; The mutex a running Tycho holds (runtime/instance.py; a test keeps the two the same).
+; Setup and the uninstaller wait for the player to quit Tycho before touching a file:
+; a running Tycho locks _internal, and its tray icon has no window for Windows to
+; close, so an upgrade used to fail one locked file at a time (#333).
+AppMutex=Local\tycho-ai
 
 [InstallDelete]
 ; An upgrade starts from a clean _internal: otherwise the old version's package

@@ -15,6 +15,9 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - Tycho's window lists each game under Settings, Game and controls, with whether Tycho presses keys there and, if not, why. Picking another game restarts Tycho with it at once, and its window opens again. The Commands page shows the chosen game's commands, and says when key actions are off. Star Citizen is the only game for now. ([#295](https://github.com/benshapyro/tycho-ai/issues/295))
 - `brain_seconds` sets how long Tycho waits for the brain before saying it couldn't answer (8 seconds, as before). ([#112](https://github.com/benshapyro/tycho-ai/issues/112))
 
+### Fixed
+- Upgrading while Tycho was running ended in a string of file errors, and the old version stayed. The installer now tells you Tycho is running and waits for you to quit it (right-click its star by the clock, Quit Tycho) before it changes anything. Uninstalling does the same. ([#333](https://github.com/benshapyro/tycho-ai/issues/333))
+
 ## [0.6.0] - 2026-11-12
 
 ### Changed
