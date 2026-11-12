@@ -31,12 +31,26 @@ def core_sections() -> dict[str, str]:
     return {name: body.strip("\n") for name, body in zip(parts[::2], parts[1::2], strict=True)}
 
 
+def advisor_sections(keys_off: str) -> dict[str, str]:
+    """The sections that replace the core's in advisor mode (``advisor.md``, #191), with
+    the sentence that says why Tycho presses nothing."""
+    text = resources.files("tycho.brain").joinpath("advisor.md").read_text("utf-8")
+    parts = MARKER.split(text)[1:]
+    return {
+        name: body.strip("\n").replace("{keys_off}", keys_off)
+        for name, body in zip(parts[::2], parts[1::2], strict=True)
+    }
+
+
 def instructions(pack: GamePack | None = None) -> str:
     """The briefing's fixed text: the pack's part, with the core sections in their places.
     For Star Citizen it's byte for byte the text from before packs (a test pins it), so
-    the prompt cache and eval scores carry over."""
+    the prompt cache and eval scores carry over. In advisor mode, the tool rules say
+    Tycho presses nothing, and why (#191)."""
     pack = pack or built_in()
     core = core_sections()
+    if pack.safety.keys_off:
+        core |= advisor_sections(pack.safety.keys_off)
     return MARKER.sub(lambda found: core[found.group(1)], pack.briefing)
 
 
@@ -125,7 +139,11 @@ def game_facts(pack: GamePack | None = None) -> str:
 
 
 def briefing(keybinds: Keybinds, matcher: CommandMatcher, pack: GamePack | None = None) -> str:
-    """The whole briefing, for the pack's game (Star Citizen when none is given)."""
+    """The whole briefing, for the pack's game (Star Citizen when none is given). In
+    advisor mode (#191) it lists no commands, sequences or actions: there's nothing the
+    brain could press."""
+    if pack is not None and pack.safety.keys_off:
+        return instructions(pack) + "\nGame facts:\n" + game_facts(pack) + "\n"
     actions = offered_actions(keybinds, matcher, pack)
     sequences = sorted(
         f"{c.id} | {', then '.join(s.command.id for s in c.steps)} | {'; '.join(c.say)}"

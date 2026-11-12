@@ -74,8 +74,11 @@ SHOW_CARD: ToolParam = {
 """Offered only while the Tile is on, so Claude never says "on the Tile" without one."""
 
 
-def _tools(sequences: list[str], lookups: Iterable[Lookup] = ()) -> list[ToolParam]:
-    return [cast(ToolParam, {**spec, "strict": True}) for spec in tool_specs(sequences, lookups)]
+def _tools(
+    sequences: list[str], lookups: Iterable[Lookup] = (), *, keys: bool = True
+) -> list[ToolParam]:
+    specs = tool_specs(sequences, lookups, keys=keys)
+    return [cast(ToolParam, {**spec, "strict": True}) for spec in specs]
 
 
 def history(
@@ -132,11 +135,15 @@ class ClaudeBrain:
         """The game the briefing is for (Star Citizen when None, ADR 18)."""
         self._model = model
         self._today = today
-        self._sequences = sorted(c.id for c in matcher.commands if c.is_sequence)
+        self._keys = pack is None or pack.mode == "keys"
+        """Whether the brain may press: in advisor mode it has no tool to (#191)."""
+        self._sequences = (
+            sorted(c.id for c in matcher.commands if c.is_sequence) if self._keys else []
+        )
         self._lookups = {lookup.name: lookup for lookup in lookups}
         if clash := ACTS & self._lookups.keys():
             raise ValueError(f"a look-up can't be named {', '.join(sorted(clash))}")
-        self._tools = _tools(self._sequences, lookups)
+        self._tools = _tools(self._sequences, lookups, keys=self._keys)
         self._reference = reference
         self._about = about
         self._cards = cards
@@ -282,14 +289,17 @@ class ClaudeBrain:
         the Tile on or off changes the cached prefix, so it costs one cache write."""
         if not self._cards():
             return self._tools
-        return [*self._tools[:2], SHOW_CARD, *self._tools[2:]]
+        acts = 2 if self._keys else 0  # after run_sequence and run_actions, if offered
+        return [*self._tools[:acts], SHOW_CARD, *self._tools[acts:]]
 
     def _brief(self, keybinds: Keybinds) -> None:
         """Rebuild the briefing only when the keybinds change, so the cache holds."""
         if keybinds is self._for:
             return
         self._for = keybinds
-        self._actions = frozenset(offered_actions(keybinds, self._matcher, self._pack))
+        # In advisor mode nothing is offered, so a pick can only be refused (#191).
+        offered = offered_actions(keybinds, self._matcher, self._pack) if self._keys else {}
+        self._actions = frozenset(offered)
         text = briefing(keybinds, self._matcher, self._pack)
         if self._reference:
             text += f"\n{self._reference.strip()}\n"

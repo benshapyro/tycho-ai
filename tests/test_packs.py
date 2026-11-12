@@ -224,7 +224,7 @@ def test_a_tile_accent_must_be_a_colour(tmp_path: Path) -> None:
 def test_an_advisor_pack_has_no_keys_to_press(tmp_path: Path) -> None:
     folder = _copy(tmp_path)
     (folder / "commands.toml").unlink()
-    _edit(folder, "pack.toml", 'mode = "keys"', 'mode = "advisor"')
+    _edit(folder, "pack.toml", 'mode = "keys"', 'mode = "advisor"\nwhy = "No presses."')
     _edit(folder, "pack.toml", 'window = "FakeGame.exe"\n', "")
     _edit(folder, "pack.toml", 'keybinds = "fake-game"\n', "")
     pack = load_pack(folder, built_in=False, registry=REGISTRY)
@@ -447,7 +447,7 @@ def test_the_start_log_names_the_pack_and_its_briefing(caplog: pytest.LogCapture
     caplog.set_level(logging.INFO, "tycho")
     pack = game_pack(Settings())
     assert pack.id == "star-citizen"
-    assert f"pack 1.0.0 (briefing {STAR_CITIZEN_INSTRUCTIONS[:12]})" in caplog.text
+    assert f"pack 1.0.0, key actions on (briefing {STAR_CITIZEN_INSTRUCTIONS[:12]})" in caplog.text
 
 
 # --- The pack's own eval cases (#294) -----------------------------------------------------

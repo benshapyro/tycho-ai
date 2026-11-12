@@ -19,8 +19,9 @@ from tycho.brain_choice import brain_findings, load_brain
 from tycho.commands import CommandFileError, CommandMatcher, resolve
 from tycho.findings import TYCHO, Finding, key_finding, stored_key
 from tycho.game.install import GameInstall, root_from, search_roots
+from tycho.game.keybinds import Keybinds
 from tycho.game.store import GameDataError, KeybindStore
-from tycho.packs import GamePack, PackError, built_in
+from tycho.packs import YOU_TURNED_THEM_OFF, GamePack, PackError, as_run, built_in
 from tycho.ptt.binding import Binding, DeviceKind
 from tycho.ptt.monitor import InputSource
 from tycho.settings import Settings, SettingsError
@@ -264,7 +265,8 @@ def _start(
     pack = game_pack(current)
     if starting is not None:
         starting.doing("Reading your keybinds")
-    store = load_keybinds(current, binding)
+    # A pack with no keybinds part (an advisor, #191) has none to read, and no game folder.
+    store = load_keybinds(current, binding) if pack.parts.keybinds is not None else None
     transcriber = load_transcriber(current, starting.doing if starting is not None else None)
     action_log = FileActionLog()
     log.info("Action log: %s", action_log.path)
@@ -355,7 +357,7 @@ NO_TRAY = (
 
 def serve_with_tray(
     session: Session,
-    store: KeybindStore,
+    store: KeybindStore | None,
     live: Live,
     display: TileDisplay | None,
     requests: OpenRequests | None = None,
@@ -551,13 +553,34 @@ def _float(value: object) -> float:
 
 
 def game_pack(current: Settings) -> GamePack:
-    """The game the settings pick (ADR 18), named in the log with its version and the
-    hash of its briefing, so a bug report or a score says which pack it came from."""
+    """The game the settings pick (ADR 18), as the player's ``key_actions`` runs it (#191),
+    named in the log with its version, its mode and the hash of its briefing, so a bug
+    report or a score says which pack it came from."""
     from tycho.brain.briefing import instructions_hash
 
-    pack = built_in(current.game)
-    log.info("Game: %s, pack %s (briefing %s)", pack.name, pack.version, instructions_hash(pack))
+    pack = as_run(built_in(current.game), key_actions=current.key_actions)
+    log.info(
+        "Game: %s, pack %s, key actions %s (briefing %s)",
+        pack.name,
+        pack.version,
+        "off" if pack.safety.keys_off else "on",
+        instructions_hash(pack),
+    )
     return pack
+
+
+def key_actions_finding(pack: GamePack) -> Finding:
+    """What ``tycho check`` and the window's status say about the game's mode (#191)."""
+    if not pack.safety.keys_off:
+        return Finding("ok", "Key actions", f"on in {pack.name}: Tycho presses your keys")
+    fix = f"key_actions in {paths.settings_file()}" if pack.why == YOU_TURNED_THEM_OFF else ""
+    return Finding(
+        "ok",
+        "Key actions",
+        f"off in {pack.name}, so Tycho answers, looks things up and shows cards, and "
+        f"presses nothing. {pack.why}",
+        fix=fix,
+    )
 
 
 def load_keybinds(current: Settings, binding: Binding) -> KeybindStore:
@@ -841,7 +864,7 @@ def load_commands(pack: GamePack | None = None) -> CommandMatcher:
 def build_session(
     current: Settings,
     binding: Binding,
-    store: KeybindStore,
+    store: KeybindStore | None,
     transcriber: Transcriber,
     *,
     audio: AudioSource,
@@ -858,7 +881,8 @@ def build_session(
     pack: GamePack | None = None,
 ) -> Session:
     """The talking loop, wired the way ``tycho run`` wires it, for ``pack``'s game (Star
-    Citizen when None): its commands, words and safety lists."""
+    Citizen when None): its commands, words and safety lists, which say whether key
+    actions are off (#191). ``store`` is None for a pack with no keybinds part."""
     from tycho.game.gamelog import GameLog
     from tycho.input import Presser
     from tycho.lexicon import Lexicon
@@ -866,7 +890,7 @@ def build_session(
     from tycho.runtime import Session
 
     pack = pack or built_in()
-    if game_state is None and pack.parts.game_state is not None:
+    if game_state is None and store is not None and pack.parts.game_state is not None:
         # "star-citizen", the only game-state part built in: Game.log.
         game_log = GameLog(store.install.game_log)
         game_log.facts()  # read the session so far now, not on the first command
@@ -880,8 +904,8 @@ def build_session(
         transcriber=transcriber,
         lexicon=Lexicon.default(pack),
         matcher=matcher,
-        keybinds=lambda: store.keybinds,
-        presser=Presser(sender, focus),
+        keybinds=(lambda: store.keybinds) if store is not None else lambda: NO_KEYBINDS,
+        presser=Presser(sender, focus, game=pack.name),
         feedback=feedback,
         game_state=game_state,
         action_log=action_log,
@@ -897,13 +921,22 @@ def build_session(
     )
 
 
-async def serve(session: Session, store: KeybindStore, stop: asyncio.Event | None = None) -> None:
-    """Run the session until ``stop``, Ctrl+C, or the console window closing."""
+NO_KEYBINDS = Keybinds([])
+"""A pack with no keybinds part's keys (an advisor, #191): none."""
+
+
+async def serve(
+    session: Session, store: KeybindStore | None, stop: asyncio.Event | None = None
+) -> None:
+    """Run the session until ``stop``, Ctrl+C, or the console window closing. ``store``
+    is reread now and then, if the pack has keybinds."""
     from tycho.runtime.console import CloseGuard
 
     stop = stop or asyncio.Event()
     loop = asyncio.get_running_loop()
-    refresher = asyncio.create_task(_refresh_keybinds(store, session.warm_brain))
+    refresher = asyncio.create_task(
+        _refresh_keybinds(store, session.warm_brain) if store is not None else stop.wait()
+    )
 
     def request_stop() -> None:
         loop.call_soon_threadsafe(stop.set)
@@ -1005,11 +1038,12 @@ def _checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Findin
     for name in settings.unknown_keys():
         yield Finding("warn", "Settings", UNKNOWN_SETTING.format(name=name))
     try:
-        pack = built_in(current.game)
+        pack = as_run(built_in(current.game), key_actions=current.key_actions)
     except PackError as e:
         yield Finding("fail", "Game", str(e))
         return
     yield Finding("ok", "Game", f"{pack.name} (game pack {pack.version})")
+    yield key_actions_finding(pack)
 
     binding = current.push_to_talk_binding
     if binding is None:
@@ -1062,48 +1096,50 @@ def _checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Findin
         yield Finding("warn", "Your fleet", problem)
 
     store: KeybindStore | None = None
-    try:
+    # A pack with no keybinds part (an advisor, #191) has no game folder or keys to check.
+    if pack.parts.keybinds is not None:
         try:
-            install = find_install(current)
-            yield Finding("ok", "Star Citizen", str(install.folder))
-        except FileNotFoundError:
-            # Not found anywhere Tycho looks: ask, if someone's there to answer.
-            root = ask_game_root(current.game_channel) if ask and sys.stdin.isatty() else None
-            if root is None:
-                raise
-            current = current.model_copy(update={"game_root": root})
-            saved = settings.save(current)
-            install = find_install(current)
-            yield Finding("ok", "Star Citizen", f"{install.folder} (saved to {saved})")
-        store = KeybindStore.load(install)
-        unbound = [
-            c.id
-            for c in matcher.commands
-            if not c.is_sequence and resolve(c, store.keybinds).action is None
-        ]
-        detail = f"{len(store.keybinds)} actions"
-        if unbound:
+            try:
+                install = find_install(current)
+                yield Finding("ok", "Star Citizen", str(install.folder))
+            except FileNotFoundError:
+                # Not found anywhere Tycho looks: ask, if someone's there to answer.
+                root = ask_game_root(current.game_channel) if ask and sys.stdin.isatty() else None
+                if root is None:
+                    raise
+                current = current.model_copy(update={"game_root": root})
+                saved = settings.save(current)
+                install = find_install(current)
+                yield Finding("ok", "Star Citizen", f"{install.folder} (saved to {saved})")
+            store = KeybindStore.load(install)
+            unbound = [
+                c.id
+                for c in matcher.commands
+                if not c.is_sequence and resolve(c, store.keybinds).action is None
+            ]
+            detail = f"{len(store.keybinds)} actions"
+            if unbound:
+                yield Finding(
+                    "warn",
+                    "Keybinds",
+                    f"{detail}; no key for {len(unbound)} voice command(s): {', '.join(unbound)}",
+                )
+            else:
+                yield Finding("ok", "Keybinds", f"{detail}; every voice command has a key")
+            log_file = install.game_log
+            if log_file.exists():
+                yield Finding("ok", "Game.log", str(log_file))
+            else:
+                yield Finding("warn", "Game.log", f"not found at {log_file}; the game writes it")
+        except FileNotFoundError as e:
             yield Finding(
-                "warn",
-                "Keybinds",
-                f"{detail}; no key for {len(unbound)} voice command(s): {', '.join(unbound)}",
+                "fail",
+                "Star Citizen",
+                str(e),
+                fix=f'set game_root = "<the folder holding Data.p4k>" in {paths.settings_file()}',
             )
-        else:
-            yield Finding("ok", "Keybinds", f"{detail}; every voice command has a key")
-        log_file = install.game_log
-        if log_file.exists():
-            yield Finding("ok", "Game.log", str(log_file))
-        else:
-            yield Finding("warn", "Game.log", f"not found at {log_file}; the game writes it")
-    except FileNotFoundError as e:
-        yield Finding(
-            "fail",
-            "Star Citizen",
-            str(e),
-            fix=f'set game_root = "<the folder holding Data.p4k>" in {paths.settings_file()}',
-        )
-    except GameDataError as e:
-        yield Finding("fail", "Keybinds", f"couldn't read them: {e}")
+        except GameDataError as e:
+            yield Finding("fail", "Keybinds", f"couldn't read them: {e}")
 
     if binding is not None and store is not None:
         warnings = conflict_warnings(binding, store)

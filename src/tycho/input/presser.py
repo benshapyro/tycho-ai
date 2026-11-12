@@ -74,9 +74,12 @@ class Presser:
         *,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
+        game: str = "Star Citizen",
     ) -> None:
+        """``game`` is the game's name, for "isn't focused" (the game pack's)."""
         self._sender = sender
         self._focus = focus
+        self._unfocused = f"{game} isn't focused"
         self._sleep = sleep
         self._clock = clock
 
@@ -97,12 +100,12 @@ class Presser:
                 if cancel.is_set():
                     return Receipt(press.action, "cancelled", taps)
                 if not self._focus.game_has_focus():
-                    return Receipt(press.action, "no_focus", taps, "Star Citizen isn't focused")
+                    return Receipt(press.action, "no_focus", taps, self._unfocused)
                 if tap:  # between taps: a cancel or lost focus here stops the next tap
                     if not self._wait(press.gap_seconds, cancel):
                         return Receipt(press.action, "cancelled", taps)
                     if not self._focus.game_has_focus():
-                        return Receipt(press.action, "no_focus", taps, "Star Citizen isn't focused")
+                        return Receipt(press.action, "no_focus", taps, self._unfocused)
                 if not self._tap(press, held, cancel, on_down if tap == 0 else None):
                     return Receipt(press.action, "cancelled", taps, interrupted=press.main in held)
                 taps += 1

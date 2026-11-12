@@ -38,3 +38,12 @@ class FakeGameKeybinds:
 def fake_pack(folder: Traversable = FOLDER) -> GamePack:
     """Fake Game's pack, loaded as one from outside Tycho would be."""
     return load_pack(folder, built_in=False, registry=REGISTRY)
+
+
+ADVISOR: Traversable = Path(__file__).resolve().parents[1] / "packs" / "fake-advisor"
+"""A fake game whose rules forbid pressing keys: its pack is advisor only (#191)."""
+
+
+def advisor_pack() -> GamePack:
+    """Fake Advisor's pack, loaded as one from outside Tycho would be."""
+    return load_pack(ADVISOR, built_in=False, registry=REGISTRY)
