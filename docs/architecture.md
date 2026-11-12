@@ -129,7 +129,7 @@ As built ([ADR 14](adr/0014-the-brain-voice-and-sequences.md)): the brain calls 
 
 ### 4.7 Safety and confirmations
 
-Every action passes through one safety gate, which can refuse it. The gate is independent of the models: no router or brain output can skip a confirmation. The latency spike showed why: some hosted models engaged quantum travel or fired missiles without being asked.
+Every action passes through one safety gate, which can refuse it. The gate is independent of the models: no router or brain output can skip a confirmation. In advisor mode (a game pack whose game forbids pressing keys, or the player's `key_actions` off: #191, ADR 18) its first check refuses every press, and the brain is offered no tool to press with. The latency spike showed why: some hosted models engaged quantum travel or fired missiles without being asked.
 
 - Actions are graded:
   - **Free:** gear, lights, doors.

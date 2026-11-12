@@ -62,9 +62,12 @@ TOOL_AS_TEXT = re.compile(r"\b[a-z_]{3,}\s*\(\s*\{", re.IGNORECASE)
 _MARKUP = re.compile(r"[*`#]+")
 
 
-def tool_specs(sequences: list[str], lookups: Iterable[Lookup] = ()) -> list[dict[str, object]]:
+def tool_specs(
+    sequences: list[str], lookups: Iterable[Lookup] = (), *, keys: bool = True
+) -> list[dict[str, object]]:
     """Every tool but ``show_card``, as name, description and JSON schema: each adapter
-    puts them in its own provider's shape."""
+    puts them in its own provider's shape. Without ``keys`` (advisor mode, #191) there's
+    no ``run_actions`` or ``run_sequence``: only look-ups."""
     looks: list[dict[str, object]] = [
         {
             "name": lookup.name,
@@ -73,6 +76,8 @@ def tool_specs(sequences: list[str], lookups: Iterable[Lookup] = ()) -> list[dic
         }
         for lookup in lookups
     ]
+    if not keys:
+        return looks
     return [
         {
             "name": "run_sequence",

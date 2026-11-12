@@ -316,11 +316,16 @@ class OpenRouterBrain:
         if sort is not None and sort not in SORTS:
             raise ValueError(f"OpenRouter can't sort hosts by {sort!r}")
         self._route = route(hosts, sort)
-        self._sequences = sorted(c.id for c in matcher.commands if c.is_sequence)
+        self._keys = pack is None or pack.mode == "keys"
+        """Whether the brain may press: in advisor mode it has no tool to (#191)."""
+        self._sequences = (
+            sorted(c.id for c in matcher.commands if c.is_sequence) if self._keys else []
+        )
         self._lookups = {lookup.name: lookup for lookup in lookups}
         if clash := ACTS & self._lookups.keys():
             raise ValueError(f"a look-up can't be named {', '.join(sorted(clash))}")
-        self._tools = [_function(spec) for spec in tool_specs(self._sequences, lookups)]
+        specs = tool_specs(self._sequences, lookups, keys=self._keys)
+        self._tools = [_function(spec) for spec in specs]
         self._reference = reference
         self._about = about
         self._cards = cards
@@ -471,7 +476,8 @@ class OpenRouterBrain:
     ) -> dict[str, Any]:
         tools = self._tools
         if self._cards():
-            tools = [*tools[:2], _function(_SHOW_CARD), *tools[2:]]
+            acts = 2 if self._keys else 0  # after the acts, if offered
+            tools = [*tools[:acts], _function(_SHOW_CARD), *tools[acts:]]
         body: dict[str, Any] = {
             "model": self._model,
             "messages": [self._system, *messages],
@@ -493,7 +499,9 @@ class OpenRouterBrain:
         if keybinds is self._for:
             return
         self._for = keybinds
-        self._actions = frozenset(offered_actions(keybinds, self._matcher, self._pack))
+        # In advisor mode nothing is offered, so a pick can only be refused (#191).
+        offered = offered_actions(keybinds, self._matcher, self._pack) if self._keys else {}
+        self._actions = frozenset(offered)
         text = briefing(keybinds, self._matcher, self._pack)
         if self._reference:
             text += f"\n{self._reference.strip()}\n"

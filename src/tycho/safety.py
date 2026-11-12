@@ -12,6 +12,9 @@ because it first sets NAV (ship weapons offline) and quantum mode (no guns,
 missiles, mining or salvage). That leaves on foot, a risk the author accepted
 for that command, since Tycho only hears what the player says to it on purpose.
 
+In advisor mode (#191, ADR 18) the gate's first check refuses every press, so nothing
+anything says gets a key pressed in a game whose rules forbid it.
+
 The rules are here; the lists they use (which actions ask first, which modes switch a
 control context off) are the game pack's ``safety.toml`` (ADR 18). Each function takes
 ``lists``, Star Citizen's when None.
@@ -70,6 +73,10 @@ def check(
     checked in the mode the game is in before it, not after.
     """
     lists = lists or STAR_CITIZEN
+    if lists.keys_off:
+        # First, whatever asks (#191): no command, sequence, brain pick or "confirm"
+        # gets a key pressed in advisor mode. Not a question: confirming can't change it.
+        return Verdict(False, lists.keys_off)
     name = action.label or action.name
     if missing := [fact for fact in command.requires if fact not in facts]:
         return Verdict(False, "; ".join(lists.facts.get(fact, fact) for fact in missing))

@@ -1,0 +1,15 @@
+# A fake game whose rules forbid tools that press keys (#191): Tycho is only an advisor
+# there. An advisor pack has no commands.toml, keybinds part or window, and says why.
+
+id = "fake-advisor"
+name = "Fake Advisor"
+version = "0.1.0"
+format = 1
+mode = "advisor"
+why = "Its rules allow one action per keypress, made by the player."
+
+[parts]
+lookups = ["settings"]
+
+[web]
+sites = ["fakeadvisor.example"]

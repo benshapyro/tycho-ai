@@ -20,7 +20,7 @@ where it came from, because some lists may only come from a pack Tycho ships.
 import re
 import tomllib
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cache
 from importlib import resources
 from importlib.resources.abc import Traversable
@@ -54,7 +54,9 @@ _FILES = frozenset(
     {"pack.toml", "briefing.md", "facts.md", "terms.txt", "commands.toml", "tile.toml"}
     | {"safety.toml", "eval"}
 )
-_TOP = frozenset({"id", "name", "version", "format", "mode", "window", "parts", "web", "briefing"})
+_TOP = frozenset(
+    {"id", "name", "version", "format", "mode", "why", "window", "parts", "web", "briefing"}
+)
 _PARTS = frozenset({"install", "keybinds", "game_state", "lookups"})
 
 
@@ -105,6 +107,11 @@ class Safety:
     """Facts, and the control contexts they rule out (built-in packs only)."""
     accepted_risks: frozenset[str] = frozenset()
     """Contexts a command may accept the risk of (built-in packs only)."""
+    keys_off: str = ""
+    """Set when Tycho may press nothing (advisor mode, #191), to the sentence that says
+    why. The gate's first check refuses every press while it's set. It comes from the
+    pack's mode or the player's ``key_actions`` setting (``as_run``), never from
+    ``safety.toml``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +121,9 @@ class GamePack:
     version: str
     format: int
     mode: Mode
+    why: str
+    """Why the game is in its mode, in the pack's words: the app and ``tycho check`` say
+    it, and in advisor mode the brain is told it. Every advisor pack has one."""
     window: str | None
     """The program whose window must be in front for Tycho to press (None: never presses)."""
     parts: Parts
@@ -166,11 +176,20 @@ def load_pack(folder: Traversable, *, built_in: bool, registry: Registry = BUILT
         raise PackError(f"{where}: window must be a program's name, like Game.exe")
     parts = _parts(manifest.get("parts", {}), where, registry)
     commands = _read(folder, "commands.toml") if "commands.toml" in names else None
+    why = manifest.get("why", "")
+    if not isinstance(why, str):
+        raise PackError(f"{where}: why must be some text")
+    why = " ".join(why.split())
     if mode == "advisor":
         # An advisor never presses (#191): nothing in it may suggest it could.
         if commands is not None or parts.keybinds is not None or window is not None:
             raise PackError(
                 f"{where}: an advisor pack can't have commands.toml, a keybinds part or a window"
+            )
+        if not why:
+            raise PackError(
+                f"{where}: an advisor pack must say why it presses no keys, in why: "
+                "the player is told"
             )
     elif parts.keybinds is None or window is None:
         raise PackError(f"{where}: a pack with key actions needs a keybinds part and a window")
@@ -182,12 +201,21 @@ def load_pack(folder: Traversable, *, built_in: bool, registry: Registry = BUILT
     briefing = _read(folder, "briefing.md") if "briefing.md" in names else ""
     _check_briefing(briefing, f"{folder.name}/briefing.md")
     filters = _table(manifest, "briefing", where)
+    name = _text(manifest, "name", where)
+    lists = _safety(
+        _toml(folder, "safety.toml") if "safety.toml" in names else {},
+        f"{folder.name}/safety.toml",
+        built_in=built_in,
+    )
+    if mode == "advisor":
+        lists = replace(lists, keys_off=_keys_off(name, why))
     return GamePack(
         id=pack_id,
-        name=_text(manifest, "name", where),
+        name=name,
         version=version,
         format=cast(int, pack_format),
         mode=mode,
+        why=why,
         window=window,
         parts=parts,
         briefing=briefing,
@@ -195,16 +223,37 @@ def load_pack(folder: Traversable, *, built_in: bool, registry: Registry = BUILT
         terms=_terms(_read(folder, "terms.txt")) if "terms.txt" in names else (),
         commands=commands,
         tile=_tile(_toml(folder, "tile.toml") if "tile.toml" in names else {}, folder.name),
-        safety=_safety(
-            _toml(folder, "safety.toml") if "safety.toml" in names else {},
-            f"{folder.name}/safety.toml",
-            built_in=built_in,
-        ),
+        safety=lists,
         web_sites=_sites(_table(manifest, "web", where), where),
         unbriefed_actionmaps=frozenset(_strings(filters, "unbriefed_actionmaps", where)),
         continuous=_pattern(filters.get("continuous"), where),
         built_in=built_in,
     )
+
+
+YOU_TURNED_THEM_OFF = "You turned key actions off in Tycho's settings."
+"""Why a game that allows key actions is in advisor mode: the player chose it."""
+
+
+def as_run(pack: GamePack, *, key_actions: bool = True) -> GamePack:
+    """The pack as Tycho runs it with the player's ``key_actions`` setting (#191).
+
+    Off makes a pack with key actions an advisor: the gate refuses every press, and the
+    brain gets no tool to press with. It can only make Tycho do less: in an advisor
+    pack, the setting can't turn key actions on. The pack's commands stay, so a command
+    the player says is refused with why, rather than passed to the brain as chat."""
+    if key_actions or pack.mode == "advisor":
+        return pack
+    return replace(
+        pack,
+        mode="advisor",
+        why=YOU_TURNED_THEM_OFF,
+        safety=replace(pack.safety, keys_off=_keys_off(pack.name, YOU_TURNED_THEM_OFF)),
+    )
+
+
+def _keys_off(name: str, why: str) -> str:
+    return f"Tycho doesn't press keys in {name}. {why}"
 
 
 @cache

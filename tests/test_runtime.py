@@ -32,6 +32,7 @@ from tycho.game.gamelog import QUANTUM_ROUTE
 from tycho.game.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.input import Presser, code_for
 from tycho.lexicon import Lexicon
+from tycho.packs import Safety, as_run, built_in
 from tycho.ptt.binding import Binding
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime import AlreadyRunning, RecognitionUnavailable, Result, Session, SingleInstance
@@ -114,6 +115,7 @@ def rig(
     matcher: CommandMatcher = _MATCHER,
     address: Callable[[], str] = lambda: "",
     display: FakeDisplay | None = None,
+    safety_lists: Safety | None = None,
 ) -> Rig:
     audio, keys, feedback = FakeAudioSource(RATE), FakeKeySender(), FakeFeedback()
     actions = FakeActionLog()
@@ -150,6 +152,7 @@ def rig(
         address=address,
         display=display,
         sleep=sleep,
+        safety_lists=safety_lists,
     )
     return Rig(session, audio, keys, feedback, transcriber, results, actions, waits)
 
@@ -392,6 +395,34 @@ def test_a_sequence_with_a_step_that_has_no_key_presses_nothing() -> None:
     assert r.results[0].status == "no_key"
     assert "flight_ready" in r.results[0].detail
     assert r.keys.events == []
+
+
+# --- Advisor mode: key actions off (#191) ---------------------------------------------------
+
+KEYS_OFF = as_run(built_in(), key_actions=False).safety
+
+
+@pytest.mark.parametrize(
+    ("lines", "brain"),
+    [
+        (("landing gear",), None),  # the fast path
+        (("gear down and request landing",), None),  # a chain
+        (("prepare for landing",), None),  # a sequence
+        (("eject", "confirm"), None),  # confirm-grade, then "confirm"
+        (("put the wheels out",), FakeBrain(RunActions(("v_toggle_landing_system",), "Gear."))),
+        (("take us down",), FakeBrain(RunSequence("prepare_to_land", "Bringing us in."))),
+        (("get me out", "confirm"), FakeBrain(RunActions(("v_eject",), "Ejecting."))),
+    ],
+)
+def test_with_key_actions_off_no_path_presses_anything(
+    lines: tuple[str, ...], brain: FakeBrain | None
+) -> None:
+    r = _conversation(*lines, brain=brain, safety_lists=KEYS_OFF)
+    assert r.keys.events == []
+    assert r.results[0].status == "refused"
+    assert r.results[0].detail == KEYS_OFF.keys_off
+    assert all(not x.pressed for x in r.results)
+    assert "ask" not in r.feedback.played  # nothing to confirm: it can't be pressed
 
 
 # --- The brain (ADR 14) ------------------------------------------------------------------

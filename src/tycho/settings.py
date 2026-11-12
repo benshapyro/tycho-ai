@@ -145,6 +145,14 @@ class Settings(BaseModel):
         # Longer means a stray "confirm" later still counts (the author's call, 2026-11-05).
         json_schema_extra=_rule("lower_only", "now", how=FILE_OR_APP),
     )
+    key_actions: bool = Field(
+        default=True,
+        description="Let Tycho press keys for you, through its safety gate. Off makes Tycho "
+        "an advisor: it answers, looks things up and shows cards, and presses nothing. Games "
+        "whose rules forbid it are always off. Changes apply when Tycho restarts.",
+        # Off can only make Tycho do less, so voice may turn it off but never on (#191).
+        json_schema_extra=_rule("lower_only", how=FILE_OR_APP),
+    )
     keep_transcripts: bool = Field(
         default=False,
         description="Keep a local record of what you said. Off by default.",

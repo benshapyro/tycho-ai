@@ -95,6 +95,10 @@ def plan_request(
     ``lists`` are the game pack's safety lists (Star Citizen's when None): the one place
     a pack's lists reach the gate (ADR 18).
     """
+    if lists is not None and lists.keys_off:
+        # Advisor mode (#191): refused before anything else, even a missing key, so the
+        # player hears why Tycho presses nothing here. safety.check refuses it too.
+        return Refusal("refused", lists.keys_off)
     steps: list[tuple[float, Press]] = []
     reasons: list[str] = []
     asking_about: list[str] = []
