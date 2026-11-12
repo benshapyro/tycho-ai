@@ -47,7 +47,9 @@ from tycho.brain.rounds import (
     last_note,
     ms,
     tool_specs,
+    traced,
 )
+from tycho.brain.traces import TraceFile, briefing_hash
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Keybinds
 from tycho.tile.cards import TOOL_DESCRIPTION, TOOL_SCHEMA
@@ -287,6 +289,7 @@ class OpenRouterBrain:
         prices: Prices | None = None,
         hosts: Sequence[str] = (),
         sort: str | None = None,
+        traces: TraceFile | None = None,
     ) -> None:
         """``model`` is OpenRouter's id ("anthropic/claude-haiku-5.5"). ``effort`` asks a
         model that reasons to reason that hard ("low"); by default nothing is asked, so
@@ -294,7 +297,7 @@ class OpenRouterBrain:
         report their cost. ``hosts`` pins who serves the model, by OpenRouter's slugs
         ("cerebras", "groq"), tried in order and never falling back to another; ``sort``
         picks the host by "latency", "throughput" or "price" (#267). The rest is as
-        ``ClaudeBrain``."""
+        ``ClaudeBrain``, ``traces`` too (#282)."""
         if client is None and not api_key:
             raise ValueError("an OpenRouter key or a client is needed")
         self._owns_client = client is None
@@ -315,6 +318,8 @@ class OpenRouterBrain:
         self._reference = reference
         self._about = about
         self._cards = cards
+        self._traces = traces
+        self._briefed = ""
         self._for: Keybinds | None = None
         self._system: dict[str, object] = {}
         self._actions: frozenset[str] = frozenset()
@@ -356,10 +361,17 @@ class OpenRouterBrain:
 
     async def decide(self, request: BrainRequest) -> Decision:
         self._brief(request.keybinds)
+        turn = Turn(waiting=request.waiting, looking=request.looking, checking=request.checking)
+        if self._traces is not None:
+            turn.trace = self._traces.start(
+                "openrouter", self._model, self._briefed, request.text, len(request.recent)
+            )
+        return await traced(self._traces, turn, self._decide(request, turn))
+
+    async def _decide(self, request: BrainRequest, turn: Turn) -> Decision:
         started = time.perf_counter()
         about = await asyncio.to_thread(self._about)
         messages = _messages(request.recent, request.text, self._today(), about)
-        turn = Turn(waiting=request.waiting, looking=request.looking, checking=request.checking)
         for call in range(MAX_CALLS):
             decided, message, round_ = await self._call(messages, started, turn)
             if decided is not None:
@@ -369,7 +381,8 @@ class OpenRouterBrain:
                 if isinstance(decided, Reply):
                     return credited(decided, turn.credits)
                 return decided
-            self._log_usage(message.usage, started, host=message.host)
+            tokens, cost = self._log_usage(message.usage, started, host=message.host)
+            round_.used(tokens, cost, message.finish or "unknown", message.host)
             if message.finish == "content_filter":
                 raise BrainError("the model declined")
             if not round_.looking:
@@ -407,6 +420,7 @@ class OpenRouterBrain:
         try:
             async with self._client.stream(self._body(messages)) as stream:
                 async for chunk in stream:
+                    round_.streaming()
                     for call in message.read(chunk):
                         if (
                             decided := await self._tool_call(round_, call, message, started)
@@ -416,7 +430,8 @@ class OpenRouterBrain:
                     if message.finish == "length" and not call.whole():
                         # Cut off at the output limit (#266): its arguments end mid-way.
                         message.calls.remove(call)
-                        self._log_usage(message.usage, started, host=message.host)
+                        tokens, cost = self._log_usage(message.usage, started, host=message.host)
+                        round_.used(tokens, cost, "length", message.host)
                         return await round_.cut_short(call.name), message, round_
                     if (
                         decided := await self._tool_call(round_, call, message, started)
@@ -441,6 +456,8 @@ class OpenRouterBrain:
                 message.generation or "?",
                 _served(message.host),
             )
+            if round_.turn.trace is not None:
+                round_.turn.trace.served(message.host, message.generation or "")
         return decided
 
     def _body(
@@ -478,6 +495,7 @@ class OpenRouterBrain:
         # OpenRouter drops it for the rest, which cache by themselves or not at all.
         part = {"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}
         self._system = {"role": "system", "content": [part]}
+        self._briefed = briefing_hash(text)
 
     def _log_usage(
         self,
@@ -485,10 +503,11 @@ class OpenRouterBrain:
         started: float,
         what: str = "Brain replied",
         host: str = "",
-    ) -> None:
+    ) -> tuple[dict[str, int], float | None]:
+        """Log a call's tokens and cost; returns them, for the trace."""
         if not usage:
             log.debug("%s in %.0f ms: no usage reported%s", what, ms(started), _served(host))
-            return
+            return {}, None
         prompt, completion = (
             int(usage.get("prompt_tokens") or 0),
             int(usage.get("completion_tokens") or 0),
@@ -512,6 +531,8 @@ class OpenRouterBrain:
             priced,
             _served(host),
         )
+        tokens = {"input": prompt, "output": completion, "cache_read": cached}
+        return tokens, float(cost) if isinstance(cost, int | float) else None
 
 
 def route(hosts: Sequence[str] = (), sort: str | None = None) -> dict[str, object]:

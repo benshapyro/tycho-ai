@@ -16,3 +16,4 @@ Code here measures things and may call paid APIs. Product code under `src/` must
   - It needs the game's keybinds and the Anthropic key from Credential Manager. Off the PC (a cloud thread, #262) it reads `--keybinds <file>` from `--export-keybinds` instead, and `ANTHROPIC_API_KEY` / `OPENROUTER_API_KEY` from the environment. Only the eval reads keys from the environment; nothing in `src/` may.
   - The PC may stop it when memory is low, for example while the game runs. Don't restart it without asking.
 - **Results** are appended to `recordings/tycho_eval.results.jsonl`. Compare with the last full run, not a tagged subset.
+- **Traces** of every brain request go to `recordings/tycho_eval.traces.jsonl`, with each case (#282). `traces.py summary --results recordings/tycho_eval.results.jsonl` gives the last run at a glance, and `traces.py diff --run OLD --run NEW` shows what a change did, case by case. It's free: it only reads files.

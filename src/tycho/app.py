@@ -28,6 +28,7 @@ from tycho.voice.voices import Voice
 if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when running
     from tycho.address import Address
     from tycho.audio.source import AudioSource
+    from tycho.brain.traces import TraceFile
     from tycho.desktop.window import AppWindow
     from tycho.input import FocusCheck, KeySender
     from tycho.knowledge.ships import ShipLibrary
@@ -849,7 +850,19 @@ def load_brain(
         lookups=lookups,
         about=about,
         cards=lambda: display is not None and display.on,
+        traces=_traces(),
     )
+
+
+def _traces() -> TraceFile | None:
+    """The brain's trace file when ``TYCHO_TRACE`` is on (#282): for Claude sessions
+    reading what the brain did, never on for players by default."""
+    from tycho.brain.traces import TraceFile
+
+    traces = TraceFile.from_env()
+    if traces is not None:
+        log.info("Tracing the brain's requests to %s", traces.path)
+    return traces
 
 
 def ship_accent(flying: str, library: ShipLibrary | None) -> str | None:

@@ -71,6 +71,15 @@ Runs each case through Tycho's own path: the lexicon, the fast path, then `Claud
 
 Across models (#192): `--provider openrouter --model <id>` runs the same cases through `OpenRouterBrain`, with the OpenRouter key (`uv run python -m tycho.credentials set openrouter`). It has no web search, so web cases fail as such. Each results line names the provider and model, and the run ends with a `summary` line. Cost comes from OpenRouter's own report for each call (an act ends its call early, so its cost is looked up afterwards by the generation's id), or from OpenRouter's price list when a reply reports none; the summary says how many came from where. Cost an hour of play is the cost a brain request times `--per-hour` (30 brain requests an hour, a placeholder until play logs measure it). `--adapter-check` runs Haiku directly and through OpenRouter with no web search and compares them: far apart means the adapter is wrong, not the model. By default OpenRouter picks who serves a model, mostly on price; `--host <slug>` (repeatable, tried in order) pins it with no fallback, and `--sort latency` asks for the fastest host instead (#267). The two can't go together: OpenRouter's docs don't say whether a sort reorders pinned hosts, so the eval refuses the pair (#275). Each result's `hosts` lists who served each call, the meta and summary lines carry the `route` sent, and the summary counts calls by host. Paid: ask first.
 
+Traces (#282): every brain request also gets a line in `recordings/tycho_eval.traces.jsonl`, with its case: the calls, tool calls, look-ups, timings, tokens and cost. Play writes the same lines to the logs folder with `TYCHO_TRACE=1`. Read them with `traces.py` (free):
+
+```powershell
+uv run python tools/bench/traces.py runs                     # the runs in the eval's trace file
+uv run python tools/bench/traces.py summary --results recordings/tycho_eval.results.jsonl
+uv run python tools/bench/traces.py diff --run 2026-11-12T01 --run 2026-11-12T02
+uv run python tools/bench/traces.py summary $env:LOCALAPPDATA\tycho\logs\traces.jsonl  # a play session
+```
+
 Off the PC, in a cloud thread (#262): export the keybinds once on the PC, for free, then point the eval at the file. The export holds your bound actions, the game's activation modes and your own `commands.toml`, and nothing secret.
 
 ```powershell
