@@ -121,3 +121,12 @@ uv run python tools/bench/tts/design_voices.py recordings/voices/designs        
 ```
 
 Lines come from [`voice_lines.txt`](../spike/voice_lines.txt) and [`voice_lines_character.txt`](../spike/voice_lines_character.txt). ElevenLabs costs about half a credit per character on Flash and v4 Turbo; lines already generated are skipped, so a re-run never pays twice.
+
+## Web search: the open-web trial (#354, #360)
+
+```powershell
+uv run python tools/bench/web_trial.py              # both: Star Citizen sites, then the open web
+uv run python tools/bench/web_trial.py --only open  # only the trial
+```
+
+Ten questions, mostly "where is" and "how do I" from a play session, plus one news question. Each goes through `WebSearch` as players have it and with `web_search_open`. It prints the time, searches, pages read, cost, sites and answer for each, then a summary per mode, and appends every answer to `recordings/web_trial.jsonl` for grading. "Concrete" only means the answer didn't say it found nothing; whether it's right needs reading. About 30 to 50 cents a full run, on the Anthropic key Tycho stores or `ANTHROPIC_API_KEY`.
