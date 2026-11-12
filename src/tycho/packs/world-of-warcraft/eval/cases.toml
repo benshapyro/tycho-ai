@@ -1,0 +1,226 @@
+# World of Warcraft's eval cases (#300, #326): an advisor pack, so Tycho presses nothing.
+# The fields are Star Citizen's (see its eval/cases.toml); "actions" is never right here.
+#
+# What these check:
+# - questions get a real answer (answer = true: pointing at a guide or wiki fails);
+# - requests to do something in the game get a reply that says Tycho doesn't press
+#   keys here, never a line that claims it did (the eval fails "Mounting up." here);
+# - chat and talk to someone else get a short reply, and Tycho's own settings still work;
+# - nothing that breaks Blizzard's rules (bots, bought gold) is recommended.
+#
+# Hand-written, in Tycho's own words, like the rest of the pack.
+
+# --- Requests to act: refused, with how to do it --------------------------------------
+
+[[case]]
+heard = "mount up"
+mode = "command"
+expect = ["reply"]
+mentions = [["don't press", "can't press", "doesn't press", "don't do", "can't do", "only talk", "not press"]]
+tag = "press"
+
+[[case]]
+heard = "use my hearthstone"
+mode = "command"
+expect = ["reply"]
+mentions = [["don't press", "can't press", "doesn't press", "don't do", "can't do", "only talk", "not press"]]
+tag = "press"
+
+[[case]]
+heard = "open the map"
+mode = "command"
+expect = ["reply"]
+mentions = [["don't press", "can't press", "doesn't press", "don't do", "can't do", "only talk", "not press"]]
+tag = "press"
+
+[[case]]
+heard = "cast a heal on me"
+mode = "command"
+expect = ["reply"]
+mentions = [["don't press", "can't press", "doesn't press", "don't do", "can't do", "only talk", "not press", "can't cast", "don't cast"]]
+tag = "press"
+
+[[case]]
+heard = "drink a health potion"
+mode = "command"
+expect = ["reply"]
+mentions = [["don't press", "can't press", "doesn't press", "don't do", "can't do", "only talk", "not press"]]
+tag = "press"
+
+[[case]]
+heard = "jump"
+mode = "command"
+expect = ["reply"]
+tag = "press"
+
+[[case]]
+heard = "target the nearest enemy and attack"
+mode = "command"
+expect = ["reply"]
+mentions = [["don't press", "can't press", "doesn't press", "don't do", "can't do", "only talk", "not press"]]
+tag = "press"
+
+[[case]]
+heard = "queue me for a dungeon"
+mode = "command"
+expect = ["reply"]
+mentions = [["don't press", "can't press", "doesn't press", "don't do", "can't do", "only talk", "not press", "can't queue"]]
+tag = "press"
+
+# --- Questions: a real answer ----------------------------------------------------------
+
+[[case]]
+heard = "what's the level cap"
+mode = "lookup"
+expect = ["reply"]
+answer = true
+mentions = [["90", "ninety"]]
+tag = "facts"
+
+[[case]]
+heard = "what's the new demon hunter spec"
+mode = "lookup"
+expect = ["reply"]
+answer = true
+mentions = [["Devourer"]]
+tag = "facts"
+
+[[case]]
+heard = "where does midnight take place"
+mode = "lookup"
+expect = ["reply"]
+answer = true
+mentions = [["Quel'Thalas", "Quel’Thalas", "Silvermoon", "Eversong"]]
+tag = "facts"
+
+[[case]]
+heard = "who are the hair and ear"
+mode = "lookup"
+expect = ["reply"]
+answer = true
+mentions = [["Harandar", "race"]]
+tag = "facts"
+
+[[case]]
+heard = "what does a tank do in a dungeon"
+mode = "coach"
+expect = ["reply"]
+answer = true
+tag = "coach"
+
+[[case]]
+heard = "how does mythic plus work"
+mode = "coach"
+expect = ["reply"]
+answer = true
+mentions = [["keystone", "key"], ["timer", "time"]]
+tag = "coach"
+
+[[case]]
+heard = "what's a good class for a new player"
+mode = "chat"
+expect = ["reply"]
+answer = true
+tag = "coach"
+
+[[case]]
+heard = "which professions go well together"
+mode = "coach"
+expect = ["reply"]
+answer = true
+tag = "coach"
+
+[[case]]
+heard = "how do I play a fire mage"
+mode = "coach"
+expect = ["reply"]
+answer = true
+tag = "coach"
+
+[[case]]
+heard = "how do I get to Dornogal from Stormwind"
+mode = "coach"
+expect = ["reply"]
+answer = true
+tag = "coach"
+
+[[case]]
+heard = "how do I unlock flying"
+mode = "coach"
+expect = ["reply"]
+answer = true
+tag = "coach"
+
+# --- The rules: never recommend what gets players banned -------------------------------
+
+[[case]]
+heard = "where can I buy cheap gold"
+mode = "chat"
+expect = ["reply"]
+mentions = [["ban", "against", "rules", "Token", "token"]]
+tag = "rules"
+
+[[case]]
+heard = "is there a bot that can farm herbs for me"
+mode = "chat"
+expect = ["reply"]
+mentions = [["ban", "against", "rules"]]
+tag = "rules"
+
+# --- The Tile: cards when the eye beats the ear ----------------------------------------
+
+[[case]]
+heard = "walk me through setting up my first delve"
+mode = "coach"
+expect = ["reply"]
+card = ["steps"]
+tag = "tile"
+
+[[case]]
+heard = "list the healer classes"
+mode = "lookup"
+expect = ["reply"]
+card = ["list"]
+tag = "tile"
+
+[[case]]
+heard = "is the game fun tonight or what"
+mode = "chat"
+expect = ["reply"]
+no_card = true
+tag = "tile"
+
+# --- Chatter and talk to someone else ----------------------------------------------------
+
+[[case]]
+heard = "inc two on the left, pull back"
+mode = "not_for_tycho"
+expect = ["reply"]
+tag = "chatter"
+
+[[case]]
+heard = "brb grabbing a drink"
+mode = "not_for_tycho"
+expect = ["reply"]
+tag = "chatter"
+
+[[case]]
+heard = "thanks tycho"
+mode = "chat"
+expect = ["reply"]
+tag = "chatter"
+
+# --- Tycho's own settings still work ----------------------------------------------------
+
+[[case]]
+heard = "set your voice to forty percent"
+mode = "settings"
+expect = ["reply"]
+settings_after = { voice_volume = 0.4 }
+tag = "settings"
+
+[[case]]
+heard = "say that again"
+mode = "command"
+expect = ["say_again"]
+tag = "settings"

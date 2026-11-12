@@ -1,0 +1,67 @@
+# World of Warcraft words that general speech-to-text models get wrong.
+# One term per line, in its canonical spelling. Lines starting with # are ignored.
+# Written by hand (no data source: see pack.toml).
+
+# Places
+Azeroth
+Stormwind
+Orgrimmar
+Ironforge
+Darnassus
+Thunder Bluff
+Undercity
+Silvermoon
+Quel'Thalas
+Eversong
+Zul'Aman
+Harandar
+Voidstorm
+Dornogal
+Khaz Algar
+Valdrakken
+Oribos
+Dalaran
+Kalimdor
+Northrend
+Pandaria
+Draenor
+Zandalar
+Kul Tiras
+
+# Races
+Haranir
+Dracthyr
+Pandaren
+Worgen
+Draenei
+Tauren
+Vulpera
+Mechagnome
+Nightborne
+Lightforged
+Void Elf
+Blood Elf
+Night Elf
+Earthen
+
+# Classes and specs (only words plain English lacks: "balance" stays as said)
+Evoker
+Paladin
+Shaman
+Warlock
+Druid
+Demon Hunter
+Death Knight
+Devourer
+Demonology
+Brewmaster
+Mistweaver
+Windwalker
+
+# Activities and systems
+Mythic Plus
+Delves
+Hearthstone
+Flightmaster
+Skyriding
+Transmog
