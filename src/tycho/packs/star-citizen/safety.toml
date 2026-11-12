@@ -1,0 +1,58 @@
+# Star Citizen's lists for the safety gate (ADR 13, ADR 18). The rules stay in
+# safety.py: the order of checks, the key-clash check, the confirm question, and the
+# danger-word backstop (eject, self-destruct, jettison, respawn, missiles, attack,
+# fire), which applies on top of these lists whatever they say. A pack can add danger
+# here, never remove it: the lists that loosen a check (not_danger, mode_guards,
+# state_guards, accepted_risks) are only read from packs that ship inside Tycho.
+
+# Actions that are hard to undo: losing the ship, leaving it, or firing. Quantum
+# engage and jump-point jumps aren't here: they're routine travel, and the author
+# decided they shouldn't need confirming (2026-10-30 and 2026-10-31).
+confirm = [
+    "v_eject",
+    "v_emergency_exit",
+    "v_self_destruct",
+    "v_jettison_volatile_cargo",
+    "v_weapon_preset_attack",
+    "v_weapon_toggle_launch_missile",
+    "v_weapon_launch_missile",
+    "attack1",
+    "respawn",
+    "force_respawn",
+    "incapacitatedRespawn",
+]
+
+# Quantum and jump engage. Not confirm-grade when the player says it in the fast
+# path's words, but the brain's reading of looser words asks first (ADR 14).
+travel = ["v_toggle_qdrive_engagement", "v_toggle_jump_request"]
+
+# Harmless actions the backstop words would catch: choosing a fire mode, the missile
+# camera, or cycling targets to whoever is attacking you. (Built-in packs only.)
+not_danger = ["fire_mode", "firemode", "staggered_fire", "cinematic", "cycle_attacker"]
+
+# Contexts a command may accept the risk of. Ship contexts aren't: a mode switches
+# those off. (Built-in packs only.)
+accepted_risks = ["player"]
+
+# Setup actions, and the control contexts (actionmaps) they switch off. (Built-in
+# packs only.)
+[mode_guards]
+# NAV takes the ship's weapons offline.
+v_master_mode_set_nav = ["spaceship_weapons", "spaceship_missiles"]
+# Operator modes are exclusive: in quantum mode the trigger engages the drive.
+v_set_quantum_mode = [
+    "spaceship_weapons",
+    "spaceship_missiles",
+    "spaceship_mining",
+    "spaceship_salvage",
+]
+
+# Required facts, and the control contexts they rule out. (Built-in packs only.)
+[state_guards]
+# Plotting a route takes the pilot seat, and leaving it clears the fact: not on foot.
+quantum_route_set = ["player"]
+
+# The facts the game state (Game.log) can report, with what the gate says when one is
+# missing.
+[facts]
+quantum_route_set = "no quantum route is plotted (from Game.log)"

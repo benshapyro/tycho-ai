@@ -1,0 +1,8 @@
+# Fake Game's lists for the safety gate. As a pack from outside Tycho, it may only
+# add danger: confirm, travel and facts.
+
+confirm = ["hatch_open"]  # the hatch vents the cabin
+travel = ["warp_jump"]
+
+[facts]
+docked = "you aren't docked"

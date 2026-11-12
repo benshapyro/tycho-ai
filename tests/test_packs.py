@@ -3,12 +3,14 @@
 import hashlib
 import re
 import shutil
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from tests.fakes.fake_keys import FakeClock, FakeFocus, FakeKeySender
 from tests.fakes.fake_pack import FOLDER, REGISTRY, FakeGameKeybinds, fake_pack
+from tycho import safety
 from tycho.brain.briefing import (
     bound_actions,
     briefing,
@@ -16,7 +18,8 @@ from tycho.brain.briefing import (
     game_facts,
     instructions,
 )
-from tycho.commands import CommandMatcher, Match
+from tycho.commands import Command, CommandMatcher, Match
+from tycho.game.keybinds import Action, Keybinds, KeyInput
 from tycho.input import Presser, code_for
 from tycho.knowledge.web import SITES
 from tycho.lexicon import Lexicon
@@ -24,12 +27,13 @@ from tycho.packs import (
     BUILT_IN,
     CORE_SECTIONS,
     STAR_CITIZEN,
+    GamePack,
     PackError,
     built_in,
     installed,
     load_pack,
 )
-from tycho.runtime.planning import Steps, plan_request
+from tycho.runtime.planning import Planned, Questions, Refusal, Steps, plan_request
 from tycho.tile.design import MAKER_ACCENTS, accent_for, accent_for_maker
 
 STAR_CITIZEN_INSTRUCTIONS = "58cee8ce86e5f0871be300a6e735a1ae05a71563e17244a126897073d284329f"
@@ -107,7 +111,9 @@ def test_the_seam_presses_keys_for_a_game_that_isnt_star_citizen() -> None:
     assert CommandMatcher.default(pack=pack).get("landing_gear") is None  # none of Star Citizen's
     found = matcher.match("get ready")
     assert isinstance(found, Match)
-    planned = plan_request(found.commands, keybinds)
+    # The hatch asks first in Fake Game (its safety.toml); the player said "confirm".
+    assert isinstance(plan_request(found.commands, keybinds, lists=pack.safety), Questions)
+    planned = plan_request(found.commands, keybinds, confirmed=True, lists=pack.safety)
     assert isinstance(planned, Steps)
     assert planned.actions == ("shield_raise", "hatch_open")
 
@@ -225,3 +231,122 @@ def test_only_packs_tycho_ships_load_by_name() -> None:
         built_in("fake-game")
     with pytest.raises(PackError, match="no game pack"):
         built_in("../tests")
+
+
+# --- Safety: a pack can add danger, never remove it (#292) --------------------------------
+
+
+def _plan(pack: GamePack, said: str, keybinds: Keybinds | None = None) -> Planned:
+    found = CommandMatcher.default(pack=pack).match(said)
+    assert isinstance(found, Match), said
+    return plan_request(found.commands, keybinds or FakeGameKeybinds().keybinds, lists=pack.safety)
+
+
+def test_star_citizens_lists_come_from_its_pack() -> None:
+    lists = built_in().safety
+    assert lists == safety.STAR_CITIZEN
+    assert {"v_eject", "v_self_destruct", "attack1"} <= lists.confirm
+    assert lists.travel == {"v_toggle_qdrive_engagement", "v_toggle_jump_request"}
+    assert lists.mode_guards["v_master_mode_set_nav"] == {"spaceship_weapons", "spaceship_missiles"}
+    assert safety.known_facts() == {"quantum_route_set"}
+
+
+def test_a_packs_confirm_list_adds_danger() -> None:
+    planned = _plan(fake_pack(), "open the hatch")
+    assert isinstance(planned, Questions)
+    assert planned.asking_about == ("Open Hatch",)
+    # Star Citizen's lists don't know the hatch: without the pack's, it would just press.
+    assert isinstance(plan_request(planned_commands("open the hatch"), _keys()), Steps)
+
+
+def test_eject_without_asking_is_refused_by_the_backstop() -> None:
+    # Fake Game leaves self_destruct out of its confirm list; the backstop still asks.
+    pack = fake_pack()
+    assert "self_destruct" not in pack.safety.confirm
+    planned = _plan(pack, "blow it up")
+    assert isinstance(planned, Questions)
+    assert planned.asking_about == ("Self Destruct",)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        'not_danger = ["self_destruct"]',
+        'accepted_risks = ["fake"]',
+        '[mode_guards]\nshield_raise = ["fake"]',
+        '[state_guards]\ndocked = ["fake"]',
+    ],
+)
+def test_a_pack_from_outside_tycho_cant_loosen_the_gate(tmp_path: Path, line: str) -> None:
+    folder = _copy(tmp_path)
+    text = (folder / "safety.toml").read_text("utf-8")
+    # Top-level lists go before the first table; tables go at the end.
+    if line.startswith("["):
+        text += "\n" + line + "\n"
+    else:
+        text = line + "\n" + text
+    (folder / "safety.toml").write_text(text, "utf-8")
+    name = line.removeprefix("[").split("]")[0].split(" ")[0]
+    with pytest.raises(PackError, match=f"only a pack that ships inside Tycho may set {name}"):
+        load_pack(folder, built_in=False, registry=REGISTRY)
+
+
+def test_a_pack_that_ships_inside_tycho_may_name_harmless_actions(tmp_path: Path) -> None:
+    folder = _copy(tmp_path)
+    _edit(folder, "safety.toml", "travel =", 'not_danger = ["self_destruct"]\ntravel =')
+    pack = load_pack(folder, built_in=True, registry=REGISTRY)
+    assert isinstance(_plan(pack, "blow it up"), Steps)
+    # The words a pack names are its own business, never a hole in another game's gate.
+    assert isinstance(_plan(fake_pack(), "blow it up"), Questions)
+
+
+def test_a_key_shared_with_a_dangerous_action_is_refused_with_the_packs_lists() -> None:
+    keybinds = Keybinds([*FakeGameKeybinds().keybinds, _bound("hatch_vent", "g", "Vent Hatch")])
+    pack = fake_pack()
+    lists = replace(pack.safety, confirm=pack.safety.confirm | {"hatch_vent"})
+    found = CommandMatcher.default(pack=pack).match("shield up")
+    assert isinstance(found, Match)
+    planned = plan_request(found.commands, keybinds, lists=lists)
+    assert isinstance(planned, Refusal)
+    assert "which is also Vent Hatch" in planned.detail
+
+
+def test_a_packs_facts_say_what_is_missing() -> None:
+    pack = fake_pack()
+    command = Command("dock_up", ("dock up",), ("shield_raise",), requires=("docked",))
+    keybinds = FakeGameKeybinds().keybinds
+    action = keybinds.get("shield_raise")
+    assert action is not None
+    verdict = safety.check(command, action, keybinds, lists=pack.safety)
+    assert verdict.reason == "you aren't docked"
+    assert safety.check(command, action, keybinds, frozenset({"docked"}), lists=pack.safety).allowed
+    assert safety.known_facts(pack.safety) == {"docked"}
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ('ask_twice = ["x"]\n', "unknown lists: ask_twice"),
+        ('[facts]\ndocked = ""\n', "needs the sentence"),
+        ('accepted_risks = ["x"]\n[state_guards]\nflying = ["x"]\n', "doesn't list: flying"),
+    ],
+)
+def test_safety_lists_that_arent_right_are_refused(tmp_path: Path, text: str, message: str) -> None:
+    folder = _copy(tmp_path)
+    (folder / "safety.toml").write_text(text, "utf-8")
+    with pytest.raises(PackError, match=re.escape(message)):
+        load_pack(folder, built_in=True, registry=REGISTRY)
+
+
+def planned_commands(said: str) -> tuple[Command, ...]:
+    found = CommandMatcher.default(pack=fake_pack()).match(said)
+    assert isinstance(found, Match)
+    return found.commands
+
+
+def _keys() -> Keybinds:
+    return FakeGameKeybinds().keybinds
+
+
+def _bound(name: str, key: str, label: str) -> Action:
+    return Action(name=name, actionmap="fake", label=label, inputs=(KeyInput(key),))
