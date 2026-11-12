@@ -45,6 +45,8 @@ nav button:hover { color: var(--text); background: var(--well); }
 nav button[aria-current="page"] { color: var(--acc); border-bottom-color: var(--acc); background: var(--acc-soft); }
 nav .badge { font-family: var(--f-num); font-size: 11px; color: var(--caution); letter-spacing: 0; }
 .grow { flex: 1; }
+.update { align-self: center; font: inherit; font-size: 12px; color: var(--caution); background: none; border: 1px solid color-mix(in srgb, var(--caution) 50%, transparent); padding: 2px 8px; cursor: pointer; }
+.update:hover { background: color-mix(in srgb, var(--caution) 12%, transparent); }
 .ver { align-self: center; font-size: 12px; color: var(--dim); border: 1px solid var(--rule); padding: 2px 8px; }
 
 main { overflow: auto; padding: 22px 26px 40px; }
