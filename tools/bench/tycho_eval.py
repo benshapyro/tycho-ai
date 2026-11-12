@@ -73,6 +73,7 @@ from tycho import credentials, logs, paths, safety, settings
 from tycho.address import Address
 from tycho.app import find_install, load_commands
 from tycho.brain import BrainError, BrainRequest, Exchange, Reply, providers
+from tycho.brain.briefing import instructions_hash
 from tycho.brain.claude import MODEL, ClaudeBrain
 from tycho.brain.lookups import Lookup, LookupResult
 from tycho.brain.openrouter import SORTS, OpenRouterBrain, Prices, route
@@ -90,12 +91,21 @@ from tycho.knowledge.store import ensure
 from tycho.knowledge.trade_lookup import trade_lookups
 from tycho.knowledge.web import WebSearch
 from tycho.lexicon import Lexicon
+from tycho.packs import STAR_CITIZEN, GamePack, Safety, built_in
 from tycho.runtime import routing
 from tycho.runtime.planning import Questions, Refusal, Steps, plan_request
 from tycho.runtime.routing import NotUnderstood, Picked, Reserved, from_brain
 from tycho.spoken_settings import SettingsTool
 
-CASES = Path(__file__).resolve().parents[1] / "spike" / "brain_cases.toml"
+PACKS = Path(__file__).resolve().parents[2] / "src" / "tycho" / "packs"
+
+
+def cases_file(pack: str = STAR_CITIZEN) -> Path:
+    """A game pack's own eval cases (ADR 18): ``eval/cases.toml`` in its folder."""
+    return PACKS / pack / "eval" / "cases.toml"
+
+
+CASES = cases_file()
 RESULTS = Path(__file__).resolve().parents[2] / "recordings" / "tycho_eval.results.jsonl"
 TRACES = RESULTS.with_name("tycho_eval.traces.jsonl")
 """One line per brain request, the same as play writes with TYCHO_TRACE=1, each with its
@@ -360,7 +370,10 @@ async def run_case(
     matcher: CommandMatcher | None = None,
     *,
     tile: bool = True,
+    lists: Safety | None = None,
 ) -> Outcome:
+    """One case through Tycho's path. ``lists`` are the pack's safety lists (Star
+    Citizen's when None)."""
     outcome = Outcome(rule["heard"], str(rule.get("tag", "")))
     text = lexicon.correct(rule["heard"]).text
     matcher = matcher or MATCHER
@@ -374,7 +387,7 @@ async def run_case(
         return outcome
     if isinstance(routed, Picked):
         outcome.route = "fast"
-        _plan(outcome, routed.commands, keybinds)
+        _plan(outcome, routed.commands, keybinds, lists)
         return outcome
     outcome.route = "brain"
     recent = [Exchange(said, did) for said, did in rule.get("recent", [])]
@@ -415,18 +428,23 @@ async def run_case(
     outcome.say = decision.say
     outcome.calls += 1  # the call that chose the act ended early, so it logged no reply
     try:
-        picked = from_brain(decision, matcher)
+        picked = from_brain(decision, matcher, lists)
     except BrainError as e:
         outcome.kind, outcome.notes = "error", [str(e)]
     else:
         assert isinstance(picked, Picked)  # noqa: S101 - a Reply returned above
-        _plan(outcome, picked.commands, keybinds)
+        _plan(outcome, picked.commands, keybinds, lists)
     if len(decision.say.split()) > SAY_WORDS:
         outcome.notes.append(f"say line is {len(decision.say.split())} words")
     return outcome
 
 
-def _plan(outcome: Outcome, commands: tuple[Command, ...], keybinds: Keybinds) -> None:
+def _plan(
+    outcome: Outcome,
+    commands: tuple[Command, ...],
+    keybinds: Keybinds,
+    lists: Safety | None = None,
+) -> None:
     """What Tycho would press for these commands, through the session's own planning and
     safety gate (#55): after "confirm" if the gate asks first, with every fact the game
     state can report present (the most it could ever press).
@@ -435,9 +453,9 @@ def _plan(outcome: Outcome, commands: tuple[Command, ...], keybinds: Keybinds) -
     what was picked: a pick the gate had to stop is a wrong pick, and the gate is the
     backstop, not the bar. The refusal is noted."""
     outcome.kind = "actions"
-    facts = safety.known_facts()
-    outcome.asks = isinstance(plan_request(commands, keybinds, facts), Questions)
-    planned = plan_request(commands, keybinds, facts, confirmed=True)
+    facts = safety.known_facts(lists)
+    outcome.asks = isinstance(plan_request(commands, keybinds, facts, lists=lists), Questions)
+    planned = plan_request(commands, keybinds, facts, confirmed=True, lists=lists)
     if isinstance(planned, Steps):
         outcome.actions = list(planned.actions)
         return
@@ -553,19 +571,26 @@ def _export(path: Path) -> None:
     print(", with your own commands." if commands else ".")
 
 
-def _matcher(commands: str) -> CommandMatcher:
+def _matcher(commands: str, pack: GamePack | None = None) -> CommandMatcher:
     """The fast path with a keybinds file's own commands, as on the player's PC."""
     if not commands:
-        return CommandMatcher.default()
+        return CommandMatcher.default(pack=pack)
     with tempfile.TemporaryDirectory() as folder:
         own = Path(folder) / "commands.toml"
         own.write_text(commands, "utf-8")
-        return CommandMatcher.default(own)
+        return CommandMatcher.default(own, pack)
 
 
 def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("cases", type=Path, nargs="?", default=CASES)
+    parser.add_argument(
+        "cases", type=Path, nargs="?", help="a cases file (default: the pack's eval/cases.toml)"
+    )
+    parser.add_argument(
+        "--pack",
+        default=STAR_CITIZEN,
+        help="the game pack whose cases, briefing, commands and safety lists to use (ADR 18)",
+    )
     parser.add_argument(
         "--keybinds",
         type=Path,
@@ -630,6 +655,8 @@ def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
         f"{OPENROUTER_HAIKU}), with no web search, and compare the two",
     )
     args = parser.parse_args(argv)
+    if args.cases is None:
+        args.cases = cases_file(args.pack)
     if args.adapter_check:
         args.no_web = True  # the OpenRouter brain has none, so neither side gets it
     elif args.provider == "openrouter" and not args.model:
@@ -668,6 +695,11 @@ async def main() -> None:
 async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     """Every case through one brain; prints each, appends them to the results, and
     prints the summary."""
+    pack = built_in(args.pack)
+    if pack.parts.keybinds != STAR_CITIZEN:
+        raise SystemExit(f"{pack.name}: the eval can only read Star Citizen's keybinds so far")
+    briefed = instructions_hash(pack)
+    print(f"Game: {pack.name}, pack {pack.version} (briefing {briefed})")
     data: dict[str, Any] = tomllib.loads(args.cases.read_text("utf-8"))
     rules: list[dict[str, Any]] = data["case"]
     if args.tag:
@@ -688,10 +720,10 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
             "ANTHROPIC_API_KEY)"
         )
 
-    matcher = MATCHER
+    matcher = load_commands(pack)
     if args.keybinds:
         keybinds, game, own = load_keybinds(args.keybinds)
-        matcher = _matcher(own)
+        matcher = _matcher(own, pack)
         print(f"Keybinds: {args.keybinds} ({game}){', with own commands' if own else ''}")
     else:
         keybinds = KeybindStore.load(find_install(settings.load())).keybinds
@@ -741,7 +773,8 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     def cards() -> bool:
         return not args.no_tile
 
-    traces = TraceFile(TRACES, source="eval", run=f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {model}")
+    label = f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {model} {pack.id} {pack.version} {briefed}"
+    traces = TraceFile(TRACES, source="eval", run=label)
     brain: ClaudeBrain | OpenRouterBrain
     if provider == "openrouter":
         prices = await price_list(model)
@@ -759,6 +792,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
             hosts=args.host,
             sort=args.sort,
             traces=traces,
+            pack=pack,
         )
     else:
         brain = ClaudeBrain(
@@ -770,9 +804,10 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
             about=about,
             cards=cards,
             traces=traces,
+            pack=pack,
         )
     await brain.warm(keybinds)
-    lexicon = Lexicon.default()
+    lexicon = Lexicon.default(pack)
 
     outcomes: list[Outcome] = []
     try:
@@ -787,7 +822,16 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
                 start = settings.load(settings_file)
             traces.case = rule["heard"]
             outcome = await run_case(
-                rule, lexicon, brain, keybinds, counted, journal, costs, matcher, tile=cards()
+                rule,
+                lexicon,
+                brain,
+                keybinds,
+                counted,
+                journal,
+                costs,
+                matcher,
+                tile=cards(),
+                lists=pack.safety,
             )
             outcome.verdict = grade(outcome, rule, valid)
             if outcome.verdict == "pass":
@@ -810,6 +854,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     with RESULTS.open("a", encoding="utf-8") as f:
         meta = {"type": "meta", "time": time.strftime("%Y-%m-%dT%H:%M:%S")}
         meta |= {"provider": provider, "model": model, "route": pinned, "traces": traces.run}
+        meta |= {"pack": pack.id, "pack_version": pack.version, "briefing": briefed}
         f.write(json.dumps(meta) + "\n")
         for outcome in outcomes:
             f.write(json.dumps({**asdict(outcome), "provider": provider, "model": model}) + "\n")

@@ -20,6 +20,7 @@ from tycho.commands import CommandFileError, CommandMatcher, resolve
 from tycho.findings import TYCHO, Finding, key_finding, stored_key
 from tycho.game.install import GameInstall, root_from, search_roots
 from tycho.game.store import GameDataError, KeybindStore
+from tycho.packs import GamePack, PackError, built_in
 from tycho.ptt.binding import Binding, DeviceKind
 from tycho.ptt.monitor import InputSource
 from tycho.settings import Settings, SettingsError
@@ -243,7 +244,7 @@ def _start(
     from tycho.address import Address, Pronouncing
     from tycho.audio.microphone import Microphone
     from tycho.feedback import SoundDevicePlayer, SoundFeedback
-    from tycho.input.windows import WindowsFocusCheck, WindowsKeySender
+    from tycho.input.windows import GAME_EXECUTABLE, WindowsFocusCheck, WindowsKeySender
     from tycho.runtime.actionlog import FileActionLog
     from tycho.tile.cards import notice
     from tycho.tile.display import TileDisplay
@@ -260,6 +261,7 @@ def _start(
             return 1
         current = rebound
 
+    pack = game_pack(current)
     if starting is not None:
         starting.doing("Reading your keybinds")
     store = load_keybinds(current, binding)
@@ -307,13 +309,14 @@ def _start(
             transcriber,
             audio=mic,
             sender=WindowsKeySender(),
-            focus=WindowsFocusCheck(),
+            focus=WindowsFocusCheck(pack.window or GAME_EXECUTABLE),
             feedback=feedback,
             action_log=action_log,
-            make_brain=lambda matcher: load_brain(matcher, current, live, address, display),
+            make_brain=lambda matcher: load_brain(matcher, current, live, address, display, pack),
             speaker=speaker,
             address=address,
             display=display,
+            pack=pack,
         )
         live["confirm_seconds"] = lambda v: session.set_confirm_seconds(_float(v))
         log.info("Listening. Hold %s and speak; press Ctrl+C to stop.", describe(binding))
@@ -547,6 +550,16 @@ def _float(value: object) -> float:
     return float(value)
 
 
+def game_pack(current: Settings) -> GamePack:
+    """The game the settings pick (ADR 18), named in the log with its version and the
+    hash of its briefing, so a bug report or a score says which pack it came from."""
+    from tycho.brain.briefing import instructions_hash
+
+    pack = built_in(current.game)
+    log.info("Game: %s, pack %s (briefing %s)", pack.name, pack.version, instructions_hash(pack))
+    return pack
+
+
 def load_keybinds(current: Settings, binding: Binding) -> KeybindStore:
     install = find_install(current)
     store = KeybindStore.load(install)
@@ -647,9 +660,10 @@ def actions_command(current: Settings, words: list[str]) -> int:
     # The game's names often aren't the player's ("Landing System", not "landing gear"),
     # so Tycho's own commands that are said with those words are shown too.
     try:
-        matcher = CommandMatcher.default(paths.commands_file())
+        pack = built_in(current.game)
+        matcher = CommandMatcher.default(paths.commands_file(pack.id), pack)
     except CommandFileError:  # tycho check explains it; the built-in ones still help here
-        matcher = CommandMatcher.default()
+        matcher = CommandMatcher.default(pack=built_in(current.game))
     said = [
         c
         for c in matcher.commands
@@ -810,14 +824,15 @@ def load_speaker(
     )
 
 
-def load_commands() -> CommandMatcher:
-    """The built-in commands plus the player's own file. A broken file is reported
-    and skipped, so a typo never stops Tycho starting."""
+def load_commands(pack: GamePack | None = None) -> CommandMatcher:
+    """The game's built-in commands plus the player's own file for that game. A broken
+    file is reported and skipped, so a typo never stops Tycho starting."""
+    pack = pack or built_in()
     try:
-        matcher = CommandMatcher.default(paths.commands_file())
+        matcher = CommandMatcher.default(paths.commands_file(pack.id), pack)
     except CommandFileError as e:
         log.warning("Your commands file can't be used, so only the built-in ones are: %s", e)
-        return CommandMatcher.default()
+        return CommandMatcher.default(pack=pack)
     for warning in matcher.warnings:
         log.warning("Your commands file: %s", warning)
     return matcher
@@ -840,26 +855,30 @@ def build_session(
     on_result: Callable[[Result], None] | None = None,
     address: Address | None = None,
     display: Display | None = None,
+    pack: GamePack | None = None,
 ) -> Session:
-    """The talking loop, wired the way ``tycho run`` wires it."""
+    """The talking loop, wired the way ``tycho run`` wires it, for ``pack``'s game (Star
+    Citizen when None): its commands, words and safety lists."""
     from tycho.game.gamelog import GameLog
     from tycho.input import Presser
     from tycho.lexicon import Lexicon
     from tycho.ptt.monitor import PushToTalk
     from tycho.runtime import Session
 
-    if game_state is None:
+    pack = pack or built_in()
+    if game_state is None and pack.parts.game_state is not None:
+        # "star-citizen", the only game-state part built in: Game.log.
         game_log = GameLog(store.install.game_log)
         game_log.facts()  # read the session so far now, not on the first command
         if not game_log.readable:
             log.info("No Game.log yet; Tycho reads it once the game writes one")
         game_state = game_log
-    matcher = load_commands()
+    matcher = load_commands(pack)
     return Session(
         audio=audio,
         push_to_talk=PushToTalk(binding, input_sources(binding)),
         transcriber=transcriber,
-        lexicon=Lexicon.default(),
+        lexicon=Lexicon.default(pack),
         matcher=matcher,
         keybinds=lambda: store.keybinds,
         presser=Presser(sender, focus),
@@ -874,6 +893,7 @@ def build_session(
         on_result=on_result,
         address=(lambda: address.name) if address is not None else (lambda: ""),
         display=display,
+        safety_lists=pack.safety,
     )
 
 
@@ -984,6 +1004,12 @@ def _checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Findin
     yield Finding("ok", "Settings", str(paths.settings_file()))
     for name in settings.unknown_keys():
         yield Finding("warn", "Settings", UNKNOWN_SETTING.format(name=name))
+    try:
+        pack = built_in(current.game)
+    except PackError as e:
+        yield Finding("fail", "Game", str(e))
+        return
+    yield Finding("ok", "Game", f"{pack.name} (game pack {pack.version})")
 
     binding = current.push_to_talk_binding
     if binding is None:
@@ -1013,13 +1039,13 @@ def _checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Findin
     else:
         yield voice_finding(current, quick)
 
-    commands_file = paths.commands_file()
+    commands_file = paths.commands_file(pack.id)
     try:
-        matcher = CommandMatcher.default(commands_file)
+        matcher = CommandMatcher.default(commands_file, pack)
     except CommandFileError as e:
         # A warning, not a failure: run starts anyway, with the built-in commands.
         yield Finding("warn", "Your commands", f"{e} (only the built-in ones are used)")
-        matcher = CommandMatcher.default()
+        matcher = CommandMatcher.default(pack=pack)
     else:
         sequences = sum(c.is_sequence for c in matcher.commands)
         counts = f"{len(matcher.commands) - sequences} commands, {sequences} sequences"
@@ -1032,7 +1058,7 @@ def _checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Findin
 
     from tycho.knowledge.fleet import Fleet
 
-    if problem := Fleet.load(paths.fleet_file()).problem:
+    if problem := Fleet.load(paths.fleet_file(pack.id)).problem:
         yield Finding("warn", "Your fleet", problem)
 
     store: KeybindStore | None = None

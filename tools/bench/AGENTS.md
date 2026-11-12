@@ -4,7 +4,8 @@ Code here measures things and may call paid APIs. Product code under `src/` must
 
 ## The brain eval (`tycho_eval.py`)
 
-- **It runs every case in `tools/spike/brain_cases.toml` through Tycho's real path:** the lexicon, the fast path, then the brain with the player's keybinds and live look-ups. Routing and planning (with the safety gate) are the session's own `route` and `plan_request` (#55): never copy them into the eval. It presses nothing.
+- **Each game pack has its own cases** (ADR 18): `src/tycho/packs/<id>/eval/cases.toml`, run with `--pack <id>` (Star Citizen by default). The results' `meta` line and the trace run name the pack, its version and its briefing's hash. A pack with key actions must meet the same bar: zero wrong presses.
+- **It runs every case in `src/tycho/packs/star-citizen/eval/cases.toml` through Tycho's real path:** the lexicon, the fast path, then the brain with the player's keybinds and live look-ups. Routing and planning (with the safety gate) are the session's own `route` and `plan_request` (#55): never copy them into the eval. It presses nothing.
 - **Paid:** about 10 cents a run. Ask the maintainer before running it, and give the measured cost.
 - **It grades:**
   - the answer: wrong presses, what must be pressed, `mentions`, cards;

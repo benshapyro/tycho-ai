@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from tycho import paths
 from tycho.brain.providers import Choice, choose
 from tycho.findings import Finding, key_finding, key_help, stored_key
+from tycho.packs import GamePack, built_in
 
 if TYPE_CHECKING:
     from tycho.address import Address
@@ -56,12 +57,15 @@ def load_brain(
     live: Live | None = None,
     address: Address | None = None,
     display: TileDisplay | None = None,
+    pack: GamePack | None = None,
 ) -> Brain | None:
     """The brain the settings pick, if the player stored its provider's key. Without
     one, the fast path only. ``live`` applies settings changed by voice to the running
     session; ``address`` is what to call the player (#15), read fresh for each request.
     With a ``display``, the brain may show cards while the Tile is on, in the colour of
-    the ship being flown."""
+    the ship being flown. ``pack`` is the game (Star Citizen when None): its briefing,
+    and only the look-ups it names (ADR 18)."""
+    pack = pack or built_in()
     choice = chosen(current)
     key = brain_key(choice)
     if key is None:
@@ -79,16 +83,20 @@ def load_brain(
 
     log.info("Brain: %s, for anything the built-in phrasings don't cover", choice.describe())
     ships = ShipLookup(WikiApi(), paths.knowledge_dir(), concepts=UexApi())
-    fleet = Fleet.load(paths.fleet_file())
-    lookups: list[Lookup] = [
-        ships,
-        FleetUpdate(fleet, lambda: ships.library),
-        ItemLookup(WikiApi()),
-        MiningLookup(WikiApi()),
-        *trade_lookups(UexApi()),
-        SettingsTool(live=live),
+    fleet = Fleet.load(paths.fleet_file(pack.id))
+    parts: list[tuple[str, Lookup]] = [
+        ("ships", ships),
+        ("fleet", FleetUpdate(fleet, lambda: ships.library)),
+        ("items", ItemLookup(WikiApi())),
+        ("mining", MiningLookup(WikiApi())),
+        *(("trade", lookup) for lookup in trade_lookups(UexApi())),
+        ("settings", SettingsTool(live=live)),  # core: every pack gets it
     ]
-    if not current.web_search:
+    wanted = {*pack.parts.lookups, "settings"}
+    lookups: list[Lookup] = [lookup for part, lookup in parts if part in wanted]
+    if "web" not in wanted:
+        log.info("Web search: %s has none", pack.name)
+    elif not current.web_search:
         log.info("Web search: off (web_search is false)")
     else:
         search_key = key if choice.provider == "anthropic" else anthropic_key()
@@ -102,6 +110,7 @@ def load_brain(
                 WebSearch(
                     anthropic.AsyncAnthropic(api_key=search_key, max_retries=0),
                     log_queries=current.keep_transcripts,
+                    sites=pack.web_sites,
                 )
             )
 
@@ -118,6 +127,7 @@ def load_brain(
         lookups=lookups,
         about=about,
         cards=lambda: display is not None and display.on,
+        pack=pack,
     )
 
 
@@ -129,8 +139,9 @@ def make_brain(
     lookups: Sequence[Lookup] = (),
     about: Callable[[], str] = lambda: "",
     cards: Callable[[], bool] = lambda: False,
+    pack: GamePack | None = None,
 ) -> Brain:
-    """The adapter for the chosen provider, on the chosen model."""
+    """The adapter for the chosen provider, on the chosen model, briefed for ``pack``."""
     if choice.provider == "openrouter":
         from tycho.brain.openrouter import OpenRouterBrain
 
@@ -142,6 +153,7 @@ def make_brain(
             about=about,
             cards=cards,
             traces=_traces(),
+            pack=pack,
         )
     from tycho.brain.claude import ClaudeBrain
 
@@ -153,6 +165,7 @@ def make_brain(
         about=about,
         cards=cards,
         traces=_traces(),
+        pack=pack,
     )
 
 

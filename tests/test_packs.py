@@ -1,16 +1,23 @@
 """Game packs: the loader, Star Citizen as the first pack, and a fake second game (ADR 18)."""
 
 import hashlib
+import logging
 import re
 import shutil
+import tomllib
+import typing
 from dataclasses import replace
+from importlib import resources
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from tests.fakes.fake_keys import FakeClock, FakeFocus, FakeKeySender
 from tests.fakes.fake_pack import FOLDER, REGISTRY, FakeGameKeybinds, fake_pack
-from tycho import safety
+from tycho import paths, safety, settings
+from tycho.app import _checks, game_pack, load_commands  # pyright: ignore[reportPrivateUsage]
+from tycho.brain import RunActions
 from tycho.brain.briefing import (
     bound_actions,
     briefing,
@@ -18,6 +25,7 @@ from tycho.brain.briefing import (
     game_facts,
     instructions,
 )
+from tycho.brain.claude import ClaudeBrain
 from tycho.commands import Command, CommandMatcher, Match
 from tycho.game.keybinds import Action, Keybinds, KeyInput
 from tycho.input import Presser, code_for
@@ -34,6 +42,9 @@ from tycho.packs import (
     load_pack,
 )
 from tycho.runtime.planning import Planned, Questions, Refusal, Steps, plan_request
+from tycho.runtime.routing import Picked, from_brain
+from tycho.settings import Game, Settings
+from tycho.settings import rule as settings_rule
 from tycho.tile.design import MAKER_ACCENTS, accent_for, accent_for_maker
 
 STAR_CITIZEN_INSTRUCTIONS = "58cee8ce86e5f0871be300a6e735a1ae05a71563e17244a126897073d284329f"
@@ -242,9 +253,27 @@ def _plan(pack: GamePack, said: str, keybinds: Keybinds | None = None) -> Planne
     return plan_request(found.commands, keybinds or FakeGameKeybinds().keybinds, lists=pack.safety)
 
 
-def test_star_citizens_lists_come_from_its_pack() -> None:
+def test_star_citizens_lists_are_exactly_what_they_were_before_packs() -> None:
     lists = built_in().safety
     assert lists == safety.STAR_CITIZEN
+    # Every entry, so a deleted line can't pass unnoticed (the values on main at 6645025).
+    assert lists.confirm == {
+        *("v_eject", "v_emergency_exit", "v_self_destruct", "v_jettison_volatile_cargo"),
+        *("v_weapon_preset_attack", "v_weapon_toggle_launch_missile", "v_weapon_launch_missile"),
+        *("attack1", "respawn", "force_respawn", "incapacitatedRespawn"),
+    }
+    assert lists.not_danger == (
+        *("fire_mode", "firemode", "staggered_fire", "cinematic", "cycle_attacker"),
+    )
+    assert dict(lists.mode_guards) == {
+        "v_master_mode_set_nav": {"spaceship_weapons", "spaceship_missiles"},
+        "v_set_quantum_mode": {
+            *("spaceship_weapons", "spaceship_missiles", "spaceship_mining", "spaceship_salvage"),
+        },
+    }
+    assert dict(lists.state_guards) == {"quantum_route_set": {"player"}}
+    assert lists.accepted_risks == {"player"}
+    assert dict(lists.facts) == {"quantum_route_set": "no quantum route is plotted (from Game.log)"}
     assert {"v_eject", "v_self_destruct", "attack1"} <= lists.confirm
     assert lists.travel == {"v_toggle_qdrive_engagement", "v_toggle_jump_request"}
     assert lists.mode_guards["v_master_mode_set_nav"] == {"spaceship_weapons", "spaceship_missiles"}
@@ -259,7 +288,7 @@ def test_a_packs_confirm_list_adds_danger() -> None:
     assert isinstance(plan_request(planned_commands("open the hatch"), _keys()), Steps)
 
 
-def test_eject_without_asking_is_refused_by_the_backstop() -> None:
+def test_eject_left_off_the_confirm_list_still_asks_by_the_backstop() -> None:
     # Fake Game leaves self_destruct out of its confirm list; the backstop still asks.
     pack = fake_pack()
     assert "self_destruct" not in pack.safety.confirm
@@ -350,3 +379,100 @@ def _keys() -> Keybinds:
 
 def _bound(name: str, key: str, label: str) -> Action:
     return Action(name=name, actionmap="fake", label=label, inputs=(KeyInput(key),))
+
+
+# --- The app wires the loaded pack (#293) -------------------------------------------------
+
+
+def test_the_game_setting_offers_the_packs_tycho_ships() -> None:
+    assert typing.get_args(Game.__value__) == installed()
+    assert Settings().game == "star-citizen"
+    assert settings_rule("game")["voice"] == "no"
+    assert settings_rule("game")["applies"] == "restart"
+    with pytest.raises(ValidationError):
+        Settings.model_validate({"game": "fake-game"})
+
+
+def test_an_old_settings_file_with_no_game_is_star_citizen(tmp_path: Path) -> None:
+    file = tmp_path / "settings.toml"
+    file.write_text("version = 1\nvoice_volume = 0.5\n", "utf-8")
+    assert settings.load(file).game == "star-citizen"
+
+
+def test_star_citizens_player_files_stay_where_they_were(tmp_path: Path) -> None:
+    assert paths.commands_file() == paths.config_dir() / "commands.toml"
+    assert paths.fleet_file("star-citizen") == paths.config_dir() / "fleet.toml"
+    assert paths.commands_file("fake-game") == (
+        paths.config_dir() / "packs" / "fake-game" / "commands.toml"
+    )
+
+
+def test_the_players_own_commands_are_per_game() -> None:
+    own = paths.commands_file("fake-game")
+    own.parent.mkdir(parents=True)
+    own.write_text('[[phrases]]\ncommand = "raise_shield"\nsay = ["brace yourself"]\n', "utf-8")
+    matcher = load_commands(fake_pack())
+    assert isinstance(matcher.match("brace yourself"), Match)
+    # Star Citizen doesn't read Fake Game's file.
+    assert not isinstance(load_commands().match("brace yourself"), Match)
+
+
+def test_tycho_check_names_the_game_and_its_pack_version() -> None:
+    found = next(f for f in _checks(Settings(), quick=True, ask=False) if f.what == "Game")
+    assert (found.level, found.detail) == ("ok", "Star Citizen (game pack 1.0.0)")
+
+
+def test_the_brain_is_briefed_for_the_game_it_was_given() -> None:
+    pack = fake_pack()
+    brain = ClaudeBrain(CommandMatcher.default(pack=pack), api_key="test", pack=pack)
+    brain._brief(FakeGameKeybinds().keybinds)  # pyright: ignore[reportPrivateUsage]
+    text = brain._system[0]["text"]  # pyright: ignore[reportPrivateUsage]
+    assert text.startswith("You are Tycho, a voice helper in Fake Game")
+    assert "get_ready | raise_shield, then open_hatch | get ready" in text
+    assert "shield_raise | raise the shield" in text
+
+
+def test_travel_the_brain_picks_asks_first_by_the_packs_list() -> None:
+    pack = fake_pack()
+    matcher = CommandMatcher.default(pack=pack)
+    picked = from_brain(RunActions(("warp_jump",), "Jumping."), matcher, pack.safety)
+    assert isinstance(picked, Picked)
+    assert picked.commands[0].confirm
+    star_citizen = from_brain(RunActions(("warp_jump",), "Jumping."), matcher)
+    assert isinstance(star_citizen, Picked)
+    assert not star_citizen.commands[0].confirm
+
+
+def test_the_start_log_names_the_pack_and_its_briefing(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, "tycho")
+    pack = game_pack(Settings())
+    assert pack.id == "star-citizen"
+    assert f"pack 1.0.0 (briefing {STAR_CITIZEN_INSTRUCTIONS[:12]})" in caplog.text
+
+
+# --- The pack's own eval cases (#294) -----------------------------------------------------
+
+
+def test_star_citizens_eval_cases_live_in_its_pack() -> None:
+    folder = Path(str(resources.files("tycho.packs").joinpath("star-citizen")))
+    cases = tomllib.loads((folder / "eval" / "cases.toml").read_text("utf-8"))
+    assert len(cases["case"]) > 100
+
+
+def test_a_packs_commands_are_checked_against_its_own_facts(tmp_path: Path) -> None:
+    folder = _copy(tmp_path)
+    _edit(
+        folder,
+        "commands.toml",
+        'actions = ["hatch_open"]',
+        'actions = ["hatch_open"]\nrequires = ["docked"]',
+    )
+    pack = load_pack(folder, built_in=False, registry=REGISTRY)
+    command = CommandMatcher.default(pack=pack).get("open_hatch")
+    assert command is not None
+    assert command.requires == ("docked",)
+
+
+def test_a_packs_lists_cant_be_changed_once_loaded() -> None:
+    with pytest.raises(TypeError):
+        built_in().safety.mode_guards["v_eject"] = frozenset()  # pyright: ignore[reportIndexIssue]

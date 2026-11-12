@@ -10,6 +10,7 @@ plain message (``PackError``). What a pack may hold:
     commands.toml  fast-path commands and sequences (only in a pack with key actions)
     tile.toml      the Tile's accents, by maker
     safety.toml    the safety gate's lists: what asks first, and what a mode switches off
+    eval/cases.toml  the pack's own brain eval cases (tools/bench/tycho_eval.py --pack)
 
 Packs load only from inside Tycho for now (``built_in``): a folder a player adds isn't
 loaded until ADR 8's trust questions are answered. ``built_in`` on the pack records
@@ -23,6 +24,7 @@ from dataclasses import dataclass, field
 from functools import cache
 from importlib import resources
 from importlib.resources.abc import Traversable
+from types import MappingProxyType
 from typing import Literal, cast
 
 from tycho.packs.parts import BUILT_IN, Registry
@@ -50,7 +52,7 @@ _COLOUR = re.compile(r"#[0-9a-f]{6}")
 _SITE = re.compile(r"[a-z0-9-]+(\.[a-z0-9-]+)+")
 _FILES = frozenset(
     {"pack.toml", "briefing.md", "facts.md", "terms.txt", "commands.toml", "tile.toml"}
-    | {"safety.toml"}
+    | {"safety.toml", "eval"}
 )
 _TOP = frozenset({"id", "name", "version", "format", "mode", "window", "parts", "web", "briefing"})
 _PARTS = frozenset({"install", "keybinds", "game_state", "lookups"})
@@ -316,7 +318,10 @@ def _tile(table: Mapping[str, object], name: str) -> Tile:
         raise PackError(f"{where}: accents must be colours like #4fb3ff: {', '.join(bad)}")
     if bad := [k for k, v in makers.items() if v not in accents]:
         raise PackError(f"{where}: makers with no accent: {', '.join(bad)}")
-    return Tile(cast(dict[str, str], accents), cast(dict[str, str], makers))
+    return Tile(
+        MappingProxyType(cast(dict[str, str], accents)),
+        MappingProxyType(cast(dict[str, str], makers)),
+    )
 
 
 def _check_briefing(text: str, where: str) -> None:
@@ -354,10 +359,11 @@ def _safety(table: Mapping[str, object], where: str, *, built_in: bool) -> Safet
     return Safety(
         confirm=frozenset(_strings(table, "confirm", where)),
         travel=frozenset(_strings(table, "travel", where)),
-        facts=cast(dict[str, str], facts),
+        # Read-only: the built-in packs are cached and shared by the whole process.
+        facts=MappingProxyType(cast(dict[str, str], facts)),
         not_danger=_strings(table, "not_danger", where),
-        mode_guards=_guards(table, "mode_guards", where),
-        state_guards=state_guards,
+        mode_guards=MappingProxyType(_guards(table, "mode_guards", where)),
+        state_guards=MappingProxyType(state_guards),
         accepted_risks=frozenset(_strings(table, "accepted_risks", where)),
     )
 

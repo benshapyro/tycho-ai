@@ -50,6 +50,7 @@ from tycho.commands.reserved import (
 from tycho.game.keybinds import Keybinds
 from tycho.input import Presser
 from tycho.lexicon import Lexicon
+from tycho.packs import Safety
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime.conversation import (
     FOLLOW_UP_LIMIT,
@@ -215,7 +216,11 @@ class Session:
         address: Callable[[], str] = lambda: "",
         display: Display | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        safety_lists: Safety | None = None,
     ) -> None:
+        """``safety_lists`` are the game pack's lists for the safety gate (Star Citizen's
+        when None): every plan and every brain pick uses them (ADR 18)."""
+        self._safety_lists = safety_lists
         self._tail_seconds = tail_seconds
         self._tail_pending = False
         self._audio = audio
@@ -533,7 +538,9 @@ class Session:
         facts: frozenset[str] = frozenset()
         if self._game_state is not None and needs_facts(commands):
             facts = await asyncio.to_thread(self._game_state.facts)
-        planned = plan_request(commands, keybinds, facts, confirmed=confirmed)
+        planned = plan_request(
+            commands, keybinds, facts, confirmed=confirmed, lists=self._safety_lists
+        )
         if isinstance(planned, Refusal):
             return end(planned.status, planned.detail)
         trace.mark("gate")
@@ -604,7 +611,7 @@ class Session:
                         checking=lambda: self._fill(self._checking),
                     )
                 )
-            return from_brain(decision, self._matcher)
+            return from_brain(decision, self._matcher, self._safety_lists)
         except (BrainError, TimeoutError) as e:
             return str(e) or "it took too long"
 

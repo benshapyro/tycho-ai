@@ -25,6 +25,7 @@ from tycho.commands.reserved import (
     SAY_AGAIN_WORDS,
     TILE_WORDS,
 )
+from tycho.packs import Safety
 from tycho.text import normalize
 
 type TileWord = Literal["pin", "clear", "again", "show"]
@@ -109,9 +110,11 @@ def route(text: str, matcher: CommandMatcher, *, tile: bool = False, brain: bool
     return ToBrain(match.reason) if brain else NotUnderstood(match.reason)
 
 
-def from_brain(decision: Decision, matcher: CommandMatcher) -> Picked | Reply:
+def from_brain(
+    decision: Decision, matcher: CommandMatcher, lists: Safety | None = None
+) -> Picked | Reply:
     """The brain's decision as commands to plan, exactly as the fast path's are, or
     its reply. Raises ``BrainError`` if it picked something that isn't a command."""
     if isinstance(decision, Reply):
         return decision
-    return Picked(commands_for(decision, matcher), by_brain=True, say=decision.say)
+    return Picked(commands_for(decision, matcher, lists), by_brain=True, say=decision.say)

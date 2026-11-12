@@ -29,14 +29,24 @@ def settings_file() -> Path:
     return config_dir() / "settings.toml"
 
 
-def commands_file() -> Path:
-    """The player's own commands and sequences, added to the built-in ones (ADR 14)."""
-    return config_dir() / "commands.toml"
+STAR_CITIZEN = "star-citizen"
+"""The first game pack, whose player files stay where they were before packs."""
 
 
-def fleet_file() -> Path:
+def pack_dir(pack: str = STAR_CITIZEN) -> Path:
+    """Where the player's own files for a game pack live (ADR 18). Star Citizen's stay
+    in the config folder itself, so nobody's phrases or fleet move."""
+    return config_dir() if pack == STAR_CITIZEN else config_dir() / "packs" / pack
+
+
+def commands_file(pack: str = STAR_CITIZEN) -> Path:
+    """The player's own commands and sequences, added to the game's built-in ones (ADR 14)."""
+    return pack_dir(pack) / "commands.toml"
+
+
+def fleet_file(pack: str = STAR_CITIZEN) -> Path:
     """The player's ships (ADR 15), kept by Tycho and editable by hand."""
-    return config_dir() / "fleet.toml"
+    return pack_dir(pack) / "fleet.toml"
 
 
 def cache_dir() -> Path:

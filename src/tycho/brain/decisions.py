@@ -12,6 +12,7 @@ from dataclasses import dataclass, field, replace
 from tycho import safety
 from tycho.commands import Command, CommandMatcher
 from tycho.game.keybinds import Keybinds
+from tycho.packs import Safety
 from tycho.tile import Card, from_tool
 
 MAX_ACTIONS = 8
@@ -132,7 +133,7 @@ def parse_tool_call(
 
 
 def commands_for(
-    decision: RunActions | RunSequence, matcher: CommandMatcher
+    decision: RunActions | RunSequence, matcher: CommandMatcher, lists: Safety | None = None
 ) -> tuple[Command, ...]:
     """The commands to plan for what the brain picked.
 
@@ -143,13 +144,16 @@ def commands_for(
     does the pick.
     A bare action counts as announced if an announced command uses it, so Tycho
     doesn't talk over the game. Travel the brain picked always asks first (the
-    author's call, 2026-10-31).
+    author's call, 2026-10-31): the game pack's ``travel`` list (``lists``, Star
+    Citizen's when None).
     """
     if isinstance(decision, RunSequence):
         sequence = matcher.get(decision.name)
         if sequence is None or not sequence.is_sequence:
             raise BrainError(f"{decision.name!r} isn't a sequence")
-        steps = tuple(replace(s, command=_ask_before_travel(s.command)) for s in sequence.steps)
+        steps = tuple(
+            replace(s, command=_ask_before_travel(s.command, lists)) for s in sequence.steps
+        )
         return (replace(sequence, steps=steps),)
     own: dict[str, Command] = {}
     users: dict[str, list[Command]] = {}
@@ -164,7 +168,7 @@ def commands_for(
         command = own.get(name) or Command(
             id=name, say=(), actions=(name,), announced=any(c.announced for c in using)
         )
-        picked.append(_ask_before_travel(_strictest(command, using)))
+        picked.append(_ask_before_travel(_strictest(command, using), lists))
     return tuple(picked)
 
 
@@ -179,7 +183,7 @@ def _strictest(command: Command, using: list[Command]) -> Command:
     return replace(command, confirm=confirm, requires=requires)
 
 
-def _ask_before_travel(command: Command) -> Command:
-    if safety.is_travel(command) and not command.confirm:
+def _ask_before_travel(command: Command, lists: Safety | None = None) -> Command:
+    if safety.is_travel(command, lists) and not command.confirm:
         return replace(command, confirm=True)
     return command

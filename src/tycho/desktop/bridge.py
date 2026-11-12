@@ -47,6 +47,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
     "Safety": ("confirm_seconds",),
     "Privacy": ("keep_transcripts", "web_search", "check_for_updates"),
     "Game and controls": (
+        "game",
         "game_channel",
         "game_root",
         "push_to_talk",
@@ -497,6 +498,7 @@ def _label(name: str) -> str:
         "call_me_how_often": "How often",
         "confirm_seconds": "Time to say confirm",
         "feedback_volume": "Sound volume",
+        "game": "Game",
         "game_root": "Game folder",
         "transcription_device": "Speech recognition on",
         "voice": "Voice",

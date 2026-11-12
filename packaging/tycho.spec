@@ -26,7 +26,8 @@ datas = [
     *collect_data_files(
         "tycho",
         includes=["**/*.toml", "**/*.txt", "**/*.md", "**/*.html", "**/*.css", "**/*.js"],
-        excludes=["**/AGENTS.md"],  # guides for coding agents, not for players' installs
+        # Guides for coding agents, and the packs' eval cases: not for players' installs.
+        excludes=["**/AGENTS.md", "packs/*/eval/*"],
     ),
     *collect_data_files("onnx_asr", includes=["preprocessors/data/*"]),
     *collect_data_files("sdl2dll", includes=["dll/SDL2.dll"]),

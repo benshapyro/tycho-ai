@@ -14,6 +14,7 @@ are what changed since Claude learned about the game, kept by hand: update them 
 patch. Facts only, never keys: Tycho uses the player's own keybinds.
 """
 
+import hashlib
 from importlib import resources
 
 from tycho.commands import CommandMatcher, resolve
@@ -145,3 +146,9 @@ def briefing(keybinds: Keybinds, matcher: CommandMatcher, pack: GamePack | None 
         + "\n".join(sorted(actions.values()))
         + "\n"
     )
+
+
+def instructions_hash(pack: GamePack | None = None) -> str:
+    """A short hash of the pack's fixed briefing text, for the log and traces: which
+    briefing a score or a bug report came from (ADR 18)."""
+    return hashlib.sha256(instructions(pack).encode()).hexdigest()[:12]

@@ -50,6 +50,7 @@ from tycho.brain.rounds import (
 from tycho.brain.traces import TraceFile, briefing_hash
 from tycho.commands import CommandMatcher
 from tycho.game.keybinds import Keybinds
+from tycho.packs import GamePack
 from tycho.tile.cards import TOOL_DESCRIPTION, TOOL_SCHEMA
 
 log = logging.getLogger(__name__)
@@ -114,6 +115,7 @@ class ClaudeBrain:
         about: Callable[[], str] = lambda: "",
         cards: Callable[[], bool] = lambda: False,
         traces: TraceFile | None = None,
+        pack: GamePack | None = None,
     ) -> None:
         """``reference`` is extra text for the end of the cached briefing, such as
         the ship table being measured against the ship look-up (ADR 15). ``about``
@@ -126,6 +128,8 @@ class ClaudeBrain:
             api_key=api_key, timeout=anthropic.Timeout(8.0, connect=3.0), max_retries=1
         )
         self._matcher = matcher
+        self._pack = pack
+        """The game the briefing is for (Star Citizen when None, ADR 18)."""
         self._model = model
         self._today = today
         self._sequences = sorted(c.id for c in matcher.commands if c.is_sequence)
@@ -285,8 +289,8 @@ class ClaudeBrain:
         if keybinds is self._for:
             return
         self._for = keybinds
-        self._actions = frozenset(offered_actions(keybinds, self._matcher))
-        text = briefing(keybinds, self._matcher)
+        self._actions = frozenset(offered_actions(keybinds, self._matcher, self._pack))
+        text = briefing(keybinds, self._matcher, self._pack)
         if self._reference:
             text += f"\n{self._reference.strip()}\n"
         self._system = [

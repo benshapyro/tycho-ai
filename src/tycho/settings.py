@@ -31,6 +31,9 @@ from tycho.voice import voices
 
 CURRENT_VERSION = 1
 
+type Game = Literal["star-citizen"]
+"""The game packs that ship inside Tycho (ADR 18); a test keeps it the same as
+``packs.installed()``."""
 type Device = Literal["auto", "gpu", "cpu"]
 type VoiceRule = Literal["yes", "lower_only", "no"]
 type Applies = Literal["now", "restart"]
@@ -81,6 +84,13 @@ class Settings(BaseModel):
         description="Microphone name or number. Empty means the Windows default.",
         # A wrong microphone would leave Tycho unable to hear the request to undo it.
         json_schema_extra=_rule("no", how=FILE_FOR_NOW),
+    )
+    game: Game = Field(
+        default="star-citizen",
+        description="The game Tycho helps with: its commands, keybinds, look-ups and what the "
+        "brain knows. Changes apply when Tycho restarts.",
+        # Keybinds, the briefing and the look-ups are all loaded at start (ADR 18).
+        json_schema_extra=_rule("no", how=FILE_OR_APP),
     )
     game_root: Path | None = Field(
         default=None,
