@@ -6,20 +6,23 @@
 
 The command goes through the same fast-path matcher Tycho uses, then your own
 keybinds. After a countdown, keys are sent only if Star Citizen is the focused
-window. Until the safety gate exists (issue #19), this tool refuses dangerous
-actions outright.
+window. This tool refuses dangerous actions outright, and presses nothing when the
+settings' game has key actions off (#191). It reads Star Citizen's keybinds, the only
+game whose keybinds Tycho can read so far, with the lists of the game the settings pick.
 """
 
 import argparse
 import sys
 import time
 
+from tycho import settings
 from tycho.commands import CommandMatcher, Defer, resolve
 from tycho.game.install import GameInstall
 from tycho.game.keybinds import Action
 from tycho.game.store import KeybindStore
 from tycho.input import NotPressable, Press, Presser, UnsupportedKey, plan
 from tycho.input.windows import WindowsFocusCheck, WindowsKeySender, foreground_executable
+from tycho.packs import as_run, built_in
 from tycho.safety import is_confirm_grade
 
 
@@ -40,6 +43,11 @@ def main() -> int:
     if not args.say and not args.action:
         parser.error("say a command, or pass --action")
 
+    current = settings.load()
+    pack = as_run(built_in(current.game), key_actions=current.key_actions)
+    if pack.safety.keys_off:
+        print(pack.safety.keys_off)
+        return 1
     keybinds = KeybindStore.load(GameInstall.find()).keybinds
     actions: list[Action] = []
     if args.action:
@@ -49,7 +57,7 @@ def main() -> int:
             return 1
         actions.append(found)
     else:
-        result = CommandMatcher.default().match(args.say)
+        result = CommandMatcher.default(pack=pack).match(args.say)
         if isinstance(result, Defer):
             print(
                 f"The fast path doesn't handle {args.say!r} ({result.reason}); Claude would decide."
@@ -66,9 +74,9 @@ def main() -> int:
 
     presses: list[Press] = []
     for action in actions:
-        if is_confirm_grade(action.name):
+        if is_confirm_grade(action.name, pack.safety):
             name = action.label or action.name
-            print(f"Refusing {name}: confirm-grade, and the safety gate isn't built yet.")
+            print(f"Refusing {name}: confirm-grade, and this tool doesn't ask.")
             return 1
         try:
             press = plan(action, keybinds.modes, args.hold)
@@ -83,9 +91,11 @@ def main() -> int:
         print("Dry run: nothing pressed.")
         return 0
 
-    print(f"\nSwitch to Star Citizen now. Pressing in {args.countdown:.0f} seconds...")
+    print(f"\nSwitch to {pack.name} now. Pressing in {args.countdown:.0f} seconds...")
     time.sleep(args.countdown)
-    presser = Presser(WindowsKeySender(), WindowsFocusCheck())
+    presser = Presser(
+        WindowsKeySender(), WindowsFocusCheck(pack.window or "StarCitizen.exe"), game=pack.name
+    )
     for press in presses:
         receipt = presser.press(press)
         print(

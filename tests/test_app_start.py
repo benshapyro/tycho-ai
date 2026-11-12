@@ -246,8 +246,8 @@ def test_with_no_terminal_a_tray_that_wont_start_stops_tycho_with_a_reason(
     from types import SimpleNamespace
 
     session = SimpleNamespace(paused=False)
-    ok = app.serve_with_tray(session, object(), {}, None)  # type: ignore[arg-type]
-    assert ok is False
+    outcome = app.serve_with_tray(session, object(), {}, None)  # type: ignore[arg-type]
+    assert outcome == "failed"
     assert "couldn't put its icon" in capsys.readouterr().err
 
 
@@ -394,11 +394,16 @@ def test_once_listening_a_second_start_opens_the_trays_window(
     asked: list[str] = []
 
     class Host:
+        restarting = False
+
         def __init__(self, _voice: object) -> None:
             self.on_quit: Any = None
 
         def ask(self, request: str) -> None:
             asked.append(request)
+
+        def restart(self) -> bool:
+            return False
 
         def run(self, _open: object) -> None:
             requests.target()  # a second start while Tycho listens
@@ -408,5 +413,6 @@ def test_once_listening_a_second_start_opens_the_trays_window(
     monkeypatch.setattr(app, "app_window", lambda **_options: _Window(_Requests()))
     requests = _Requests()
     session = SimpleNamespace(paused=False)
-    assert app.serve_with_tray(session, object(), {}, None, requests)  # type: ignore[arg-type]
+    outcome = app.serve_with_tray(session, object(), {}, None, requests)  # type: ignore[arg-type]
+    assert outcome == "stopped"
     assert asked == ["open"]
