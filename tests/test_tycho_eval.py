@@ -541,6 +541,7 @@ def test_generation_costs_that_cant_be_found_are_kept_and_reported(
     assert costs.generations == ["gen-2"]
     assert costs.total == pytest.approx(0.0004)
     assert asked == {"gen-1": 1, "gen-2": 3, "gen-3": 2}
+    assert costs.looked_up == {"gen-1": 0.0003, "gen-3": 0.0001}  # for the traces (#317)
     summary = e.metrics(e.Run("openrouter", "some/model", [_outcome()], costs))
     assert summary["calls_without_cost"] == 1
     assert summary["cost_sources"] == {"reported": 2, "not reported": 1}

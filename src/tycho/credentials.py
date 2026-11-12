@@ -126,8 +126,16 @@ NOT_A_TERMINAL = (
     "Run this in a terminal window, where you can paste the key: it's hidden as you type "
     "and stored only in Windows Credential Manager. Tycho doesn't read a key piped in by a "
     "script or an AI agent, so it never ends up in a transcript. An agent can open a window "
-    'for you:\n  start "Tycho key" cmd /k tycho key set {name}'
+    'for you:\n  start "Tycho key" cmd /k {command}'
 )
+
+
+def set_command(name: str) -> str:
+    """The command that stores ``name``'s key: ``tycho key`` offers only the product's
+    keys, so a benchmark key is stored through this module instead (#301)."""
+    if name in PRODUCT:
+        return f"tycho key set {name}"
+    return f"uv run python -m tycho.credentials set {name}"
 
 
 def _interactive() -> bool:
@@ -138,7 +146,7 @@ def _interactive() -> bool:
 def _run(command: str, name: str) -> int:
     if command == "set":
         if not _interactive():
-            print(NOT_A_TERMINAL.format(name=name), file=sys.stderr)
+            print(NOT_A_TERMINAL.format(command=set_command(name)), file=sys.stderr)
             return 2
         value = getpass.getpass(f"Paste your {name} API key (input is hidden): ").strip()
         if not value:
@@ -158,7 +166,7 @@ def _run(command: str, name: str) -> int:
     else:
         value = get(name)
         if value and not usable(value):
-            print(f"Stored, but unusable: this key {UNUSABLE}: tycho key set {name}")
+            print(f"Stored, but unusable: this key {UNUSABLE}: {set_command(name)}")
             return 1
         print(f"Stored: {masked(value)}" if value else "No key stored.")
         return 0 if value else 1
