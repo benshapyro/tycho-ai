@@ -38,7 +38,7 @@ class _Client:
         self.messages = SimpleNamespace(create=create, stream=stream)
 
 
-def _found(*texts: str) -> Any:
+def _found(*texts: str, stop_reason: str = "end_turn") -> Any:
     results = SimpleNamespace(
         type="web_search_tool_result",
         content=[
@@ -52,7 +52,7 @@ def _found(*texts: str) -> Any:
         *(SimpleNamespace(type="text", text=t) for t in texts),
     ]
     usage = SimpleNamespace(input_tokens=15000, output_tokens=120)
-    return SimpleNamespace(content=content, usage=usage)
+    return SimpleNamespace(content=content, usage=usage, stop_reason=stop_reason)
 
 
 def _search(client: _Client, query: object = "Star Citizen 4.11") -> tuple[bool, Any]:
@@ -92,7 +92,42 @@ def test_it_searches_only_star_citizen_sites_once() -> None:
 
 def test_the_answer_is_one_spoken_line() -> None:
     _, result = _search(_Client(_found("RSI's roadmap has ", " 4.11 for Q4 ", ".\n")))
-    assert result["answer"] == "RSI's roadmap has 4.11 for Q4 ."
+    assert result["answer"] == "RSI's roadmap has 4.11 for Q4."
+
+
+def test_cited_text_joins_without_a_space_before_punctuation() -> None:
+    # Cited text comes in blocks that split mid-sentence (#366).
+    _, result = _search(
+        _Client(_found("Remote turrets have no way in for players", ", and run from a seat", "."))
+    )
+    assert result["answer"] == "Remote turrets have no way in for players, and run from a seat."
+
+
+def test_the_reply_has_room_for_thinking_and_the_answer() -> None:
+    # With 400, half the answers stopped mid-word (#366).
+    client = _Client(_found("RSI's roadmap has 4.11 for Q4 2026."))
+    _search(client)
+    assert client.requests[0]["max_tokens"] >= 2000
+
+
+def test_an_answer_cut_off_keeps_only_whole_sentences() -> None:
+    cut = _found(
+        "Land on a pad and open Vehicle Services. Select Repair, Restock, Ref",
+        stop_reason="max_tokens",
+    )
+    _, result = _search(_Client(cut))
+    assert result["answer"] == "Land on a pad and open Vehicle Services."
+    error, result = _search(
+        _Client(_found("Open the Contract Manager and accept a salv", stop_reason="max_tokens"))
+    )
+    assert error
+    assert "nothing usable" in result["error"]
+
+
+def test_why_the_reply_stopped_reaches_the_log(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.DEBUG, logger="tycho.knowledge.web")
+    _search(_Client(_found("Half an answ", stop_reason="max_tokens")))
+    assert "stopped: max_tokens" in caplog.text
 
 
 def test_a_failed_or_empty_search_says_so() -> None:
