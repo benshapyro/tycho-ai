@@ -43,6 +43,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
         "call_me_says",
         "call_me_how_often",
     ),
+    "Brain": ("brain_provider", "brain_model", "brain_seconds"),
     "Safety": ("confirm_seconds",),
     "Privacy": ("keep_transcripts", "web_search", "check_for_updates"),
     "Game and controls": (
@@ -57,7 +58,11 @@ GROUPS: dict[str, tuple[str, ...]] = {
 """Which settings each tab shows. Every setting but ``version`` is in one (a test checks)."""
 SETUP_CHOICES = frozenset({"game_root", "push_to_talk", "microphone"})
 """Chosen with their own controls (a folder, a button press, a device), from setup."""
-KEYS: dict[str, str] = {"anthropic": "Anthropic", "elevenlabs": "ElevenLabs"}
+KEYS: dict[str, str] = {
+    "anthropic": "Anthropic",
+    "openrouter": "OpenRouter",
+    "elevenlabs": "ElevenLabs",
+}
 UNDO_DEPTH = 20
 DEVICES_SECONDS = 10.0
 """How long the list of microphones is kept between redraws."""
@@ -484,6 +489,9 @@ def _shown(name: str, value: object) -> object:
 def _label(name: str) -> str:
     special = {
         "tile": "Show the Tile",
+        "brain_provider": "Who runs the brain",
+        "brain_model": "Brain model",
+        "brain_seconds": "Time to answer",
         "call_me": "What Tycho calls you",
         "call_me_says": "How to say it",
         "call_me_how_often": "How often",
@@ -523,6 +531,8 @@ def _kind(name: str, annotation: object, prop: Mapping[str, Any]) -> str:
 def _shape(name: str, key: str) -> str:
     if name == "anthropic" and not key.startswith("sk-ant-"):
         return "That doesn't look like an Anthropic key: it starts with sk-ant-."
+    if name == "openrouter" and not key.startswith("sk-or-"):
+        return "That doesn't look like an OpenRouter key: it starts with sk-or-."
     if name == "elevenlabs" and not key.startswith("sk_"):
         return "That doesn't look like an ElevenLabs key: it starts with sk_."
     if len(key) < 24 or any(c.isspace() for c in key):

@@ -6,7 +6,8 @@ Claude decides what to do with anything the fast path doesn't match. Its output 
 
 - `rounds.py`: what every adapter does with a complete tool call (`Round`): start a look-up, refuse an unbound act, or take the first act. The rules below live here once.
 - `claude.py`: the adapter. One request is up to `MAX_CALLS` calls to Claude: look-ups run, their results go back, Claude carries on.
-- `openrouter.py`: the same through OpenRouter, for any model (#192). Only the eval uses it: players can't pick a model until #112. It has no web search.
+- `openrouter.py`: the same through OpenRouter, for any model (#192). Players get it with `brain_provider = "openrouter"` (#112), on a model from `providers`; the eval uses it on any model. It has no web search of its own: with the player's Anthropic key it gets the usual `WebSearch`, and without one `SearchNeedsAnthropic`, which tells the model to say so.
+- `providers.py`: the allowlist players pick from (#112). A model goes in only after the eval scores it with zero wrong presses; the settings schema refuses anything else. The wiring is in `src/tycho/brain_choice.py`.
 - `decisions.py`: what Claude can decide (`RunActions`, `RunSequence`, `Reply`), `parse_tool_call`, and the errors.
 - `briefing.py`: the cached system prompt. It lists the player's bound actions.
 - `lookups.py`: the `Lookup` Protocol and `run_lookup`, which never raises.

@@ -71,13 +71,14 @@ from brain_report import GLOBAL_NEVER  # pyright: ignore[reportMissingImports, r
 
 from tycho import credentials, logs, paths, safety, settings
 from tycho.address import Address
-from tycho.app import anthropic_key, find_install, load_commands, openrouter_key
-from tycho.brain import BrainError, BrainRequest, Exchange, Reply
+from tycho.app import find_install, load_commands
+from tycho.brain import BrainError, BrainRequest, Exchange, Reply, providers
 from tycho.brain.claude import MODEL, ClaudeBrain
 from tycho.brain.lookups import Lookup, LookupResult
 from tycho.brain.openrouter import SORTS, OpenRouterBrain, Prices, route
 from tycho.brain.rounds import NO_PRESS_AFTER_SEARCH
 from tycho.brain.traces import TraceFile
+from tycho.brain_choice import anthropic_key, openrouter_key
 from tycho.commands import Command, CommandMatcher, resolve
 from tycho.game.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.game.store import KeybindStore
@@ -455,8 +456,8 @@ LIVE: dict[str, Callable[[object], None]] = {
 
 
 PROVIDERS = ("anthropic", "openrouter")
-OPENROUTER_HAIKU = "anthropic/claude-haiku-5.5"
-"""Haiku through OpenRouter, for the adapter check. Check the id on openrouter.ai/models."""
+OPENROUTER_HAIKU = providers.OPENROUTER_HAIKU
+"""Haiku through OpenRouter, as players get it (#112), for the adapter check."""
 PER_HOUR = 30.0
 """Brain requests in an hour of play: a placeholder until the play logs measure it (#192)."""
 OPENROUTER = "https://openrouter.ai/api/v1"

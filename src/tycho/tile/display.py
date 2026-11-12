@@ -46,7 +46,7 @@ class TileDisplay:
         """``ship_accent`` is the accent of the ship the player is flying, if known."""
         self._settings = current
         self.ship_accent = ship_accent
-        """Set once the ship data is loaded (``app.load_brain``)."""
+        """Set once the ship data is loaded (``brain_choice.load_brain``)."""
         self._clock = clock
         self._lock = threading.Lock()
         self._board = Board(clock=clock)

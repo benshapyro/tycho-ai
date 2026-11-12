@@ -78,7 +78,7 @@ For each key the user wants, open a window where they paste it. You never see it
 
 ```powershell
 $tycho = "$env:LOCALAPPDATA\Programs\Tycho\tycho.exe"
-Start-Process cmd -ArgumentList "/k", "`"`"$tycho`" key set anthropic`""    # or: elevenlabs
+Start-Process cmd -ArgumentList "/k", "`"`"$tycho`" key set anthropic`""    # or: elevenlabs, openrouter
 ```
 
 Tell the user: "In the window that opened, paste your key (it stays hidden) and press Enter, then close the window." When they say it's done, confirm it:

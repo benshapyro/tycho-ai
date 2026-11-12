@@ -8,7 +8,6 @@ import os
 import sys
 import time
 from collections.abc import Callable, Iterator, Mapping
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -16,7 +15,9 @@ import numpy as np
 
 from tycho import __version__, credentials, logs, paths, settings, updates
 from tycho.audio.source import AudioError
+from tycho.brain_choice import brain_findings, load_brain
 from tycho.commands import CommandFileError, CommandMatcher, resolve
+from tycho.findings import TYCHO, Finding, key_finding, stored_key
 from tycho.game.install import GameInstall, root_from, search_roots
 from tycho.game.store import GameDataError, KeybindStore
 from tycho.ptt.binding import Binding, DeviceKind
@@ -28,10 +29,8 @@ from tycho.voice.voices import Voice
 if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when running
     from tycho.address import Address
     from tycho.audio.source import AudioSource
-    from tycho.brain.traces import TraceFile
     from tycho.desktop.window import AppWindow
     from tycho.input import FocusCheck, KeySender
-    from tycho.knowledge.ships import ShipLibrary
     from tycho.runtime import (
         ActionLog,
         Brain,
@@ -49,9 +48,6 @@ if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when run
     from tycho.tile.display import TileDisplay
 
 log = logging.getLogger("tycho")
-
-TYCHO = "tycho" if getattr(sys, "frozen", False) else "uv run tycho"
-"""How to run Tycho, for messages: installed, it's `tycho` (on PATH and the Start menu)."""
 
 UNKNOWN_SETTING = (
     "{name} in settings.toml isn't a setting this Tycho knows, so it's ignored. It may be a "
@@ -734,157 +730,11 @@ def gpu_command(action: str) -> int:
     return 0
 
 
-BRAIN_KEY_HELP = f"{TYCHO} key set anthropic"
-
-
-def _stored_key(name: str, label: str, fix: str) -> str | None:
-    """The player's stored key, or None if there's none or it can't be used."""
-    from tycho import credentials
-
-    try:
-        key = credentials.get(name)
-    except credentials.CredentialStoreError as e:
-        log.warning("Couldn't read your %s key: %s", label, e)
-        return None
-    if key is not None and not credentials.usable(key):
-        # A pasted zero-width space, say: it can't go in a request header, and would stop
-        # Tycho starting (#246, #248). Keys stored before `tycho key set` refused these.
-        log.warning("Your %s key %s: %s", label, credentials.UNUSABLE, fix)
-        return None
-    return key
-
-
-def _unusable_key(name: str) -> bool:
-    """Whether a key is stored but can't be used, so a check says so, not "no key" (#250)."""
-    from tycho import credentials
-
-    try:
-        key = credentials.get(name)
-    except credentials.CredentialStoreError:
-        return False
-    return key is not None and not credentials.usable(key)
-
-
-def _key_finding(name: str, what: str, label: str, without: str, fix: str) -> Finding:
-    """The warning for a missing key, or for a stored one Tycho can't use (#250)."""
-    if _unusable_key(name):
-        detail = (
-            f"your {label} key is stored but unusable: it has a character keys don't have, "
-            f"maybe an invisible one, so {without}. Store it again: {fix}"
-        )
-        return Finding("warn", what, detail, fix=fix)
-    return Finding("warn", what, f"no {label} key, so {without}: {fix}", fix=fix)
-
-
-def anthropic_key() -> str | None:
-    return _stored_key("anthropic", "Anthropic", BRAIN_KEY_HELP)
-
-
-def openrouter_key() -> str | None:
-    """For the brain eval across models (#192); players can't pick a model yet (#112)."""
-    return _stored_key(
-        "openrouter", "OpenRouter", "uv run python -m tycho.credentials set openrouter"
-    )
-
-
-def load_brain(
-    matcher: CommandMatcher,
-    current: Settings,
-    live: Live | None = None,
-    address: Address | None = None,
-    display: TileDisplay | None = None,
-) -> Brain | None:
-    """Claude, if the player has stored an Anthropic key. Without one, the fast path only.
-    ``live`` applies settings changed by voice to the running session; ``address`` is
-    what to call the player (#15), read fresh for each request. With a ``display``,
-    Claude may show cards while the Tile is on, in the colour of the ship being flown."""
-    key = anthropic_key()
-    if key is None:
-        log.info(
-            "No Anthropic key, so only the built-in phrasings work. Add one: %s", BRAIN_KEY_HELP
-        )
-        return None
-    import anthropic
-
-    from tycho import paths
-    from tycho.brain.claude import MODEL, ClaudeBrain
-    from tycho.brain.lookups import Lookup
-    from tycho.knowledge import ShipLookup, UexApi, WikiApi
-    from tycho.knowledge.fleet import Fleet, FleetUpdate
-    from tycho.knowledge.item_lookup import ItemLookup
-    from tycho.knowledge.mining import MiningLookup
-    from tycho.knowledge.trade_lookup import trade_lookups
-    from tycho.knowledge.web import WebSearch
-    from tycho.spoken_settings import SettingsTool
-
-    log.info("Brain: %s, for anything the built-in phrasings don't cover", MODEL)
-    if not current.web_search:
-        log.info("Web search: off (web_search is false)")
-    ships = ShipLookup(WikiApi(), paths.knowledge_dir(), concepts=UexApi())
-    fleet = Fleet.load(paths.fleet_file())
-    lookups: list[Lookup] = [
-        ships,
-        FleetUpdate(fleet, lambda: ships.library),
-        ItemLookup(WikiApi()),
-        MiningLookup(WikiApi()),
-        *trade_lookups(UexApi()),
-        SettingsTool(live=live),
-    ]
-    if current.web_search:
-        lookups.append(
-            WebSearch(
-                anthropic.AsyncAnthropic(api_key=key, max_retries=0),
-                log_queries=current.keep_transcripts,
-            )
-        )
-
-    def about() -> str:
-        parts = [fleet.describe(ships.library), address.header() if address else ""]
-        return "\n".join(p for p in parts if p)
-
-    if display is not None:
-        display.ship_accent = lambda: ship_accent(fleet.flying, ships.library)
-    return ClaudeBrain(
-        matcher,
-        api_key=key,
-        lookups=lookups,
-        about=about,
-        cards=lambda: display is not None and display.on,
-        traces=_traces(),
-    )
-
-
-def _traces() -> TraceFile | None:
-    """The brain's trace file when ``TYCHO_TRACE`` is on (#282): for Claude sessions
-    reading what the brain did, never on for players by default."""
-    from tycho.brain.traces import TraceFile
-
-    traces = TraceFile.from_env()
-    if traces is not None:
-        log.info("Tracing the brain's requests to %s", traces.path)
-    return traces
-
-
-def ship_accent(flying: str, library: ShipLibrary | None) -> str | None:
-    """The Tile's colour for the ship the player said they're flying, if Tycho knows it."""
-    from tycho.knowledge.ships import Ship
-    from tycho.tile.design import MAKER_ACCENTS, accent_for, accent_for_maker
-
-    if not flying or library is None:
-        return None
-    found = library.find(flying)
-    if not isinstance(found, Ship):
-        return None
-    if found.key.split("_", 1)[0].upper() in MAKER_ACCENTS:
-        return accent_for(found.key)
-    return accent_for_maker(found.maker)
-
-
 VOICE_KEY_HELP = f"{TYCHO} key set elevenlabs"
 
 
 def elevenlabs_key() -> str | None:
-    return _stored_key("elevenlabs", "ElevenLabs", VOICE_KEY_HELP)
+    return stored_key("elevenlabs", "ElevenLabs", VOICE_KEY_HELP)
 
 
 _voice_now: Finding | None = None
@@ -1018,6 +868,7 @@ def build_session(
         action_log=action_log,
         brain=make_brain(matcher) if make_brain is not None else None,
         speaker=speaker,
+        brain_seconds=current.brain_seconds,
         confirm_seconds=current.confirm_seconds,
         log_transcripts=current.keep_transcripts,
         on_result=on_result,
@@ -1085,17 +936,6 @@ def _download_progress(
 
 # --- tycho check ---------------------------------------------------------------------
 
-type Level = Literal["ok", "warn", "fail"]
-
-
-@dataclass(frozen=True, slots=True)
-class Finding:
-    level: Level
-    what: str
-    detail: str
-    fix: str = ""
-    """What to run or change to fix it, when there is one (for `tycho check --json`)."""
-
 
 def check_command(current: Settings, *, quick: bool = False) -> int:
     findings = list(diagnose(current, quick=quick))
@@ -1156,19 +996,14 @@ def _checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Findin
     if not quick:
         yield microphone_finding(current)
 
-    if anthropic_key() is None:
-        yield _key_finding(
-            "anthropic", "Brain", "Anthropic", "only built-in phrasings work", BRAIN_KEY_HELP
-        )
-    else:
-        yield Finding("ok", "Brain", "Claude, with your Anthropic key")
+    yield from brain_findings(current, quick=quick)
 
     if current.voice_volume == 0:
         yield Finding(
             "ok", "Voice", "off (voice_volume is 0); Tycho's replies are shown in its window"
         )
     elif elevenlabs_key() is None:
-        yield _key_finding(
+        yield key_finding(
             "elevenlabs",
             "Voice",
             "ElevenLabs",

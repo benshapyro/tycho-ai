@@ -1,7 +1,8 @@
 """Checking a key with its provider before Tycho stores it (ADR 17): an outside service,
 so a ``Protocol`` with a fake in ``tests/fakes``.
 
-One free request each: Anthropic's model list, ElevenLabs' account. Nothing is logged,
+One free request each: Anthropic's model list, OpenRouter's key details, ElevenLabs'
+account. Nothing is logged,
 and the key goes nowhere but its own provider.
 """
 
@@ -42,6 +43,10 @@ class ProviderKeyCheck:
                 "https://api.anthropic.com/v1/models?limit=1",
                 {"x-api-key": key, "anthropic-version": "2023-06-01"},
             ),
+            "openrouter": (
+                "https://openrouter.ai/api/v1/key",
+                {"Authorization": f"Bearer {key}"},
+            ),
             "elevenlabs": ("https://api.elevenlabs.io/v1/user", {"xi-api-key": key}),
         }
         if name not in request:
@@ -53,7 +58,7 @@ class ProviderKeyCheck:
             return (
                 "Couldn't reach the provider to check the key. Check your connection and try again."
             )
-        who = "Anthropic" if name == "anthropic" else "ElevenLabs"
+        who = {"anthropic": "Anthropic", "openrouter": "OpenRouter"}.get(name, "ElevenLabs")
         refused = response.status_code in (401, 403)
         if refused and name == "elevenlabs" and "permission" in response.text:
             return ""  # a key limited to speech: valid, just not allowed to read the account
