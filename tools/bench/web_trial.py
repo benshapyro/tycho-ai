@@ -1,15 +1,17 @@
 """Compare web search with and without the open-web trial (#354, #360).
 
-    uv run python tools/bench/web_trial.py [--only open|sites] [--out FILE]
+    uv run python tools/bench/web_trial.py [--only sites|open|read] [--out FILE]
 
-Asks each question below through ``WebSearch`` twice: as players have it (Star Citizen
-sites only, one search), and with ``web_search_open`` (any site, two searches, two page
-reads). It prints, for each, how long it took, how many searches ran and pages were
-read, the cost, the sites, and the answer, then a summary. It writes every answer to
+Asks each question below through ``WebSearch`` three ways: as players have it (Star
+Citizen sites only, one search), with ``web_search_open`` (any site, two searches, two
+page reads), and ``read``: the open web told to always read a page before answering, to
+measure what a page read costs and adds (the first run, 12 Nov, read none). It prints,
+for each, how long it took, how many searches ran and pages were read, the cost, why
+the reply stopped, the sites, and the answer, then a summary. It writes every answer to
 ``recordings/web_trial.jsonl`` for a person (or Claude) to grade: whether a spoken
 answer is concrete is counted here, whether it's right needs reading.
 
-Costs money: about 1 cent a search, so a full run is about 30 to 50 cents. Uses the
+Costs money: about 1 cent a search, so a full run is about 50 to 80 cents. Uses the
 Anthropic key Tycho stores (``tycho key set anthropic``), or ``ANTHROPIC_API_KEY``.
 """
 
@@ -28,10 +30,13 @@ from typing import Any
 import anthropic
 
 from tycho.brain_choice import anthropic_key
+from tycho.knowledge import web
 from tycho.knowledge.web import WebSearch
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "recordings" / "web_trial.jsonl"
+MODES = ("sites", "open", "read")
+NAMES = {"sites": "Star Citizen sites", "open": "Open web (trial)", "read": "Open web, page read"}
 
 QUESTIONS = (
     # From the 11 Nov play session (#353, #354): five requests, no usable answer.
@@ -46,7 +51,17 @@ QUESTIONS = (
     "where can I sell RMC in Stanton",
     # News, which the site list was made for: the trial shouldn't do worse here.
     "what's in the next Star Citizen patch",
+    # Answers that live in a page's body, a table or a guide's steps, not in a snippet.
+    "what are the refining methods and how do their yield and speed compare",
+    "what weapons and components does a stock Cutlass Black come with",
+    "what are the steps of a box delivery mission from accepting it to getting paid",
 )
+
+READ_FIRST = (
+    " Always read the most useful page from the results before you answer, even when the "
+    "snippets look enough."
+)
+"""Added to the open web's brief in ``read`` mode."""
 
 EMPTY = re.compile(
     r"\b(couldn'?t find|could not find|no (official |clear )?(word|information|details)|"
@@ -55,7 +70,9 @@ EMPTY = re.compile(
 )
 """An answer that says it found nothing, or hedges: not concrete."""
 
-LOGGED = re.compile(r"(\d+) searches, (\d+) pages read, \d+ sites, about \$([\d.]+)")
+LOGGED = re.compile(
+    r"(\d+) searches, (\d+) pages read, \d+ sites, about \$([\d.]+), stopped: (\w*)"
+)
 
 
 class _Calls(logging.Handler):
@@ -76,8 +93,8 @@ async def _ask(search: WebSearch, calls: _Calls, question: str) -> dict[str, Any
     seconds = time.perf_counter() - started
     body = json.loads(result.content)
     found = LOGGED.search(calls.last)
-    searches, pages, cost = (
-        (int(found[1]), int(found[2]), float(found[3])) if found else (0, 0, 0.0)
+    searches, pages, cost, stopped = (
+        (int(found[1]), int(found[2]), float(found[3]), found[4]) if found else (0, 0, 0.0, "")
     )
     answer = str(body.get("answer") or body.get("error") or "")
     return {
@@ -86,6 +103,7 @@ async def _ask(search: WebSearch, calls: _Calls, question: str) -> dict[str, Any
         "searches": searches,
         "pages": pages,
         "cost": cost,
+        "stopped": stopped,
         "concrete": not result.is_error and not EMPTY.search(answer),
         "sites": body.get("sites", []),
         "answer": answer,
@@ -99,13 +117,14 @@ def _summary(name: str, rows: list[dict[str, Any]]) -> str:
         f"{name}: {sum(r['concrete'] for r in rows)}/{len(rows)} concrete, "
         f"{sum(r['failed'] for r in rows)} failed, median {statistics.median(times):.1f} s, "
         f"slowest {max(times):.1f} s, {sum(r['pages'] for r in rows)} pages read, "
+        f"{sum(r['stopped'] == 'max_tokens' for r in rows)} cut off, "
         f"about ${sum(r['cost'] for r in rows):.3f}"
     )
 
 
 async def main() -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0])
-    parser.add_argument("--only", choices=("open", "sites"))
+    parser.add_argument("--only", choices=MODES)
     parser.add_argument("--out", type=Path, default=OUT)
     args = parser.parse_args()
     key = os.environ.get("ANTHROPIC_API_KEY") or anthropic_key()
@@ -117,12 +136,14 @@ async def main() -> int:
     web_log.setLevel(logging.DEBUG)
     web_log.addHandler(calls)
     client = anthropic.AsyncAnthropic(api_key=key, max_retries=0)
-    modes = [m for m in ("sites", "open") if args.only in (None, m)]
+    modes = [m for m in MODES if args.only in (None, m)]
+    plain_brief = web.OPEN_BRIEF
     results: dict[str, list[dict[str, Any]]] = {}
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("a", encoding="utf-8") as out:
         for mode in modes:
-            search = WebSearch(client, open_web=mode == "open")
+            web.OPEN_BRIEF = plain_brief + (READ_FIRST if mode == "read" else "")
+            search = WebSearch(client, open_web=mode != "sites")
             rows = results[mode] = []
             for question in QUESTIONS:
                 row = {"mode": mode, **await _ask(search, calls, question)}
@@ -130,12 +151,15 @@ async def main() -> int:
                 out.write(json.dumps(row, ensure_ascii=False) + "\n")
                 print(
                     f"[{mode}] {row['seconds']:>5.1f} s  {row['searches']}s/{row['pages']}p  "
-                    f"${row['cost']:.3f}  {'OK ' if row['concrete'] else '-- '} {question}\n"
+                    f"${row['cost']:.3f}  {row['stopped'] or '?':<10} "
+                    f"{'OK ' if row['concrete'] else '-- '} {question}\n"
                     f"        {row['answer']}\n        {', '.join(row['sites'][:3])}"
                 )
     print()
     for mode, rows in results.items():
-        print(_summary("Star Citizen sites" if mode == "sites" else "Open web (trial)", rows))
+        print(_summary(NAMES[mode], rows))
+    if results.get("read") and not any(r["pages"] for r in results["read"]):
+        print("No page was read even when told to: page reading isn't working.")
     print(f"Answers: {args.out}")
     return 0
 

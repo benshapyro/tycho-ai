@@ -15,6 +15,7 @@ import httpx2
 import pytest
 
 from tycho.knowledge.web import (
+    MAX_ANSWER,
     OPEN_BRIEF,
     OPEN_PAGE_TOKENS,
     OPEN_SECONDS,
@@ -47,7 +48,7 @@ class _Client:
         self.messages = SimpleNamespace(create=create, stream=stream)
 
 
-def _found(*texts: str) -> Any:
+def _found(*texts: str, stop_reason: str = "end_turn") -> Any:
     results = SimpleNamespace(
         type="web_search_tool_result",
         content=[
@@ -61,7 +62,7 @@ def _found(*texts: str) -> Any:
         *(SimpleNamespace(type="text", text=t) for t in texts),
     ]
     usage = SimpleNamespace(input_tokens=15000, output_tokens=120)
-    return SimpleNamespace(content=content, usage=usage)
+    return SimpleNamespace(content=content, usage=usage, stop_reason=stop_reason)
 
 
 def _search(client: _Client, query: object = "Star Citizen 4.11") -> tuple[bool, Any]:
@@ -101,7 +102,70 @@ def test_it_searches_only_star_citizen_sites_once() -> None:
 
 def test_the_answer_is_one_spoken_line() -> None:
     _, result = _search(_Client(_found("RSI's roadmap has ", " 4.11 for Q4 ", ".\n")))
-    assert result["answer"] == "RSI's roadmap has 4.11 for Q4 ."
+    assert result["answer"] == "RSI's roadmap has 4.11 for Q4."
+
+
+def test_cited_text_joins_without_a_space_before_punctuation() -> None:
+    # Cited text comes in blocks that split mid-sentence (#366).
+    _, result = _search(
+        _Client(_found("Remote turrets have no way in for players", ", and run from a seat", "."))
+    )
+    assert result["answer"] == "Remote turrets have no way in for players, and run from a seat."
+
+
+def test_the_reply_has_room_for_thinking_and_the_answer() -> None:
+    # With 400, half the answers stopped mid-word (#366).
+    client = _Client(_found("RSI's roadmap has 4.11 for Q4 2026."))
+    _search(client)
+    assert client.requests[0]["max_tokens"] >= 2000
+
+
+def test_an_answer_cut_off_keeps_only_whole_sentences() -> None:
+    cut = _found(
+        "Land on a pad and open Vehicle Services. Select Repair, Restock, Ref",
+        stop_reason="max_tokens",
+    )
+    _, result = _search(_Client(cut))
+    assert result["answer"] == "Land on a pad and open Vehicle Services."
+    error, result = _search(
+        _Client(_found("Open the Contract Manager and accept a salv", stop_reason="max_tokens"))
+    )
+    assert error
+    assert "nothing usable" in result["error"]
+
+
+def test_a_lead_in_before_the_search_is_left_out_of_the_answer() -> None:
+    message = _found("RSI has 4.11 for Q4.")
+    message.content.insert(0, SimpleNamespace(type="text", text="I'll search for that."))
+    _, result = _search(_Client(message))
+    assert result["answer"] == "RSI has 4.11 for Q4."
+    # Not even as the only whole sentence of a cut answer (#370).
+    cut = _found("RSI has 4.11 for Q", stop_reason="max_tokens")
+    cut.content.insert(0, SimpleNamespace(type="text", text="I'll search for that."))
+    error, result = _search(_Client(cut))
+    assert error
+
+
+def test_a_cut_answer_does_not_stop_at_an_abbreviation() -> None:
+    cut = _found("Patch 4.11 is due. It lands Dec. 12 and adds the Kra", stop_reason="max_tokens")
+    _, result = _search(_Client(cut))
+    assert result["answer"] == "Patch 4.11 is due."
+
+
+def test_a_long_answer_ends_on_a_whole_sentence() -> None:
+    sentence = "Quantum fuel is sold at Megumi Refueling and both Pyro gateways. "
+    _, result = _search(_Client(_found(sentence * 12)))
+    assert len(result["answer"]) <= MAX_ANSWER
+    assert result["answer"].endswith("gateways.")
+    _, result = _search(_Client(_found("word " * 200)))
+    assert len(result["answer"]) <= MAX_ANSWER
+    assert result["answer"].endswith("word")
+
+
+def test_why_the_reply_stopped_reaches_the_log(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.DEBUG, logger="tycho.knowledge.web")
+    _search(_Client(_found("Half an answ", stop_reason="max_tokens")))
+    assert "stopped: max_tokens" in caplog.text
 
 
 def test_a_failed_or_empty_search_says_so() -> None:

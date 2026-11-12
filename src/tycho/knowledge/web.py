@@ -17,6 +17,7 @@ web fetch), for "where is" and "how do I" answers that live in community guides.
 import datetime
 import json
 import logging
+import re
 import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
@@ -41,6 +42,10 @@ SEARCH_PRICE = 0.01
 SECONDS = 12.0
 """How long the search request may take; searches take 4 to 8 s."""
 MAX_ANSWER = 600
+MAX_TOKENS = 2000
+"""Room for the search request's whole reply. Haiku thinks before and after it
+searches, and that counts too: with 400, half the answers stopped mid-word (#366). A
+spoken answer is about 80 tokens, so the extra room costs nothing unless it's used."""
 
 WEB_FETCH = "web_fetch_20250910"
 """The version Haiku 5.5 has, without dynamic filtering; no beta header."""
@@ -215,12 +220,13 @@ class WebSearch:
         ]
         content: list[Any] = []
         spent = [0, 0]
+        stopped = ""
         try:
             # A long run of server tools can pause the turn; the open web may go on once.
             for _ in range(2 if self._open else 1):
                 message = await self._client.messages.create(
                     model=self._model,
-                    max_tokens=400,
+                    max_tokens=MAX_TOKENS,
                     system=OPEN_BRIEF if self._open else BRIEF,
                     tools=self._tools(),  # pyright: ignore[reportArgumentType]
                     output_config={"effort": "low"},
@@ -229,19 +235,20 @@ class WebSearch:
                 content += message.content
                 spent[0] += message.usage.input_tokens
                 spent[1] += message.usage.output_tokens
-                if getattr(message, "stop_reason", None) != "pause_turn":
+                stopped = str(getattr(message, "stop_reason", "") or "")
+                if stopped != "pause_turn":
                     break
                 messages = [*messages, {"role": "assistant", "content": message.content}]
         except anthropic.APIError as e:
             log.warning("Web search failed: %s", e)
             return failure(f"the web search failed ({type(e).__name__}); answer without it")
-        answer = _answer(content)
+        answer = _answer(content, cut=stopped == "max_tokens")
         sites = _sites(content)
         searches, pages = _uses(content)
         cost = (spent[0] * PRICES[0] + spent[1] * PRICES[1]) / 1_000_000
         log.debug(
             "Web search%s%s in %.0f ms: %d in, %d out, %d searches, %d pages read, %d sites, "
-            "about $%.5f",
+            "about $%.5f, stopped: %s",
             " (open web)" if self._open else "",
             f" {query!r}" if self._log_queries else "",
             (time.perf_counter() - started) * 1000,
@@ -251,6 +258,7 @@ class WebSearch:
             pages,
             len(sites),
             cost + SEARCH_PRICE * max(searches, 1),
+            stopped,
         )
         if not answer:
             return failure("the search found nothing usable; answer without it")
@@ -260,21 +268,42 @@ class WebSearch:
             else "web search of Star Citizen sites",
             "searched": query,
             "date": today.isoformat(),
-            "answer": answer[:MAX_ANSWER],
+            "answer": answer,
             "sites": sites[:3],
         }
         return LookupResult(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
 
 
-def _answer(content: Sequence[Any]) -> str:
-    """The text after the last search or page read, on one line: anything before it
-    is the model saying what it will look up, not the answer."""
+_SPACE_BEFORE = re.compile(r"\s+([,.;:!?])")
+_SENTENCE_END = re.compile(r"[.!?](?=\s+[A-Z\"']|$)")
+"""A full stop that ends a sentence: the next word starts with a capital, or the text
+ends. Not "Dec. 12" (#368)."""
+
+
+def _answer(content: Sequence[Any], *, cut: bool) -> str:
+    """The text after the last search or page read, on one line, at most ``MAX_ANSWER``
+    long: anything before it is the model saying what it will look up, not the answer.
+    Cited text comes in several blocks that split mid-sentence, so they're joined as they
+    are (#366: "enter , and"). ``cut``:
+    the reply hit ``MAX_TOKENS``, so keep only whole sentences: a word cut in half, read
+    aloud, sounds broken, and nothing whole means nothing usable."""
     last = max(
         (i for i, b in enumerate(content) if str(getattr(b, "type", "")).endswith("_tool_result")),
         default=-1,
     )
-    text = " ".join(b.text for b in content[last + 1 :] if getattr(b, "type", "") == "text")
-    return " ".join(text.split())
+    text = "".join(str(b.text) for b in content[last + 1 :] if getattr(b, "type", "") == "text")
+    text = _SPACE_BEFORE.sub(r"\1", " ".join(text.split()))
+    if cut:
+        text = _whole_sentences(text)
+    if len(text) > MAX_ANSWER:
+        text = _whole_sentences(text[: MAX_ANSWER + 1]) or text[:MAX_ANSWER].rsplit(" ", 1)[0]
+    return text
+
+
+def _whole_sentences(text: str) -> str:
+    """``text`` up to the end of its last whole sentence, or "" if none ends."""
+    ends = [m.end() for m in _SENTENCE_END.finditer(text)]
+    return text[: ends[-1]] if ends else ""
 
 
 def _sites(content: Any) -> list[str]:

@@ -125,8 +125,8 @@ Lines come from [`voice_lines.txt`](../spike/voice_lines.txt) and [`voice_lines_
 ## Web search: the open-web trial (#354, #360)
 
 ```powershell
-uv run python tools/bench/web_trial.py              # both: Star Citizen sites, then the open web
-uv run python tools/bench/web_trial.py --only open  # only the trial
+uv run python tools/bench/web_trial.py              # all three: Star Citizen sites, the open web, the open web told to read a page
+uv run python tools/bench/web_trial.py --only open  # only the trial as players would have it
 ```
 
-Ten questions, mostly "where is" and "how do I" from a play session, plus one news question. Each goes through `WebSearch` as players have it and with `web_search_open`. It prints the time, searches, pages read, cost, sites and answer for each, then a summary per mode, and appends every answer to `recordings/web_trial.jsonl` for grading. "Concrete" only means the answer didn't say it found nothing; whether it's right needs reading. About 30 to 50 cents a full run, on the Anthropic key Tycho stores or `ANTHROPIC_API_KEY`.
+Thirteen questions: mostly "where is" and "how do I" from a play session, one news question, and three whose answers live in a page's body (a table, a loadout, a guide's steps). Each goes through `WebSearch` as players have it, with `web_search_open`, and in `read` mode (the open web told to always read a page first, to measure what a page read costs and adds: the first run read none). It prints the time, searches, pages read, cost, why the reply stopped (`max_tokens` means it was cut off), sites and answer for each, then a summary per mode, and appends every answer to `recordings/web_trial.jsonl` for grading. "Concrete" only means the answer didn't say it found nothing; whether it's right needs reading. About 50 to 80 cents a full run, on the Anthropic key Tycho stores or `ANTHROPIC_API_KEY`.
