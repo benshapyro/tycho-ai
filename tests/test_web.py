@@ -459,3 +459,21 @@ def test_a_tag_put_last_is_read_and_never_spoken(reply: str, verdict_wider: bool
         assert "nothing usable" in result["error"]
     else:
         assert result["answer"] == "Fines are paid at admin offices."
+
+
+def test_a_found_tag_with_no_answer_doesnt_discard_the_open_webs() -> None:
+    """#375: the sites said only "FOUND.", and a PARTIAL answer from the open web was
+    thrown away for ranking lower."""
+    _, error, result = _fallback(
+        _found("FOUND."), _read_page("PARTIAL: Players report it's near the hangars.")
+    )
+    assert not error
+    assert result["answer"] == "Players report it's near the hangars."
+
+
+def test_a_tag_written_first_and_last_is_never_spoken() -> None:
+    """#375: only the first was stripped, so the last was read aloud."""
+    _, _, result = _fallback(
+        _found("PARTIAL: Fines are paid at admin offices. PARTIAL"), _read_page("NONE: Nothing.")
+    )
+    assert result["answer"] == "Fines are paid at admin offices."

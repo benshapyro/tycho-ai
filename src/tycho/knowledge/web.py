@@ -286,7 +286,9 @@ class WebSearch:
         if first.verdict == "FOUND" and first.answer:
             return self._result(query, today, first, False)
         wider = await self._wider(query, asked, first, started)
-        if wider is None or not wider.answer or RANK[wider.verdict] < RANK[first.verdict]:
+        # A sites' tag with no answer under it is no answer to keep (#375).
+        worse = bool(first.answer) and RANK[wider.verdict] < RANK[first.verdict] if wider else False
+        if wider is None or not wider.answer or worse:
             return self._result(query, today, first, False)
         return self._result(query, today, wider, True)
 
@@ -415,6 +417,8 @@ def _verdict(answer: str) -> tuple[str, str]:
     it. With no tag, PARTIAL: it didn't say it found a clear answer."""
     if tag := FALLBACK_TAG.match(answer):
         verdict, answer = tag[1], answer[tag.end() :]
+        if last := FALLBACK_TAG_LAST.search(answer):  # written first and last too (#375)
+            answer = answer[: last.start()]
     elif tag := FALLBACK_TAG_LAST.search(answer):
         verdict, answer = tag[1], answer[: tag.start()]
     else:
