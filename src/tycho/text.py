@@ -79,7 +79,8 @@ def _near(said: str, word: str) -> bool:
     return word.startswith(said) or similarity(said, word) >= 0.8
 
 
-_SENTENCE_END = re.compile(r"[.!?](?=[\"')\]]*(?:\s|$))")
+_SENTENCE_END = re.compile(r"[.!?][\"')\]]*(?=\s|$)")
+"""A sentence's end, with any closing quote or bracket after it (the review of #382)."""
 
 
 def clip_spoken(text: str, limit: int) -> str:

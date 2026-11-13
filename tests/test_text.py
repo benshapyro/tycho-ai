@@ -32,3 +32,9 @@ def test_a_decimal_point_isnt_a_sentence_end() -> None:
 
 def test_one_long_word_is_cut_inside_it() -> None:
     assert clip_spoken("x" * 50, 10) == "x" * 9 + "."
+
+
+def test_a_closing_quote_stays_with_its_sentence() -> None:
+    """The review of #382: a cut after "go now." dropped the quote that closed it."""
+    line = 'He said "go now." Then he left without another word to anyone there'
+    assert clip_spoken(line, 30) == 'He said "go now."'
