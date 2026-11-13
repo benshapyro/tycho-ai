@@ -5,9 +5,9 @@
 
 Asks each question below through ``WebSearch`` in each mode:
 
-- ``sites``: as players have it, the game pack's sites only, one search.
-- ``fallback``: ``web_search_open``: the sites first, then the open web with a page read
-  when they have no clear answer.
+- ``sites``: ``web_search_open = false``, the game pack's sites only, one search.
+- ``fallback``: as players have it (``web_search_open``, on by default): the sites
+  first, then the open web with a page read when they have no clear answer.
 - ``open``: the open web every time (any site, two searches, two page reads).
 - ``read``: ``open``, told to always read a page first.
 
