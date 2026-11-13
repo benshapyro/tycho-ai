@@ -92,7 +92,7 @@ from tycho.knowledge.store import ensure
 from tycho.knowledge.trade_lookup import trade_lookups
 from tycho.knowledge.web import WebSearch
 from tycho.lexicon import Lexicon
-from tycho.packs import STAR_CITIZEN, GamePack, Safety, built_in
+from tycho.packs import STAR_CITIZEN, GamePack, Safety, as_run, built_in
 from tycho.runtime import routing
 from tycho.runtime.planning import Questions, Refusal, Steps, plan_request
 from tycho.runtime.routing import NotUnderstood, Picked, Reserved, from_brain
@@ -275,6 +275,8 @@ def grade(
     if invented := [a for a in outcome.actions if a not in valid]:
         return f"WRONG PRESS (no such key) {invented}"
     expect = {"reply" if kind == "look_up" else kind for kind in rule["expect"]}
+    if keys_off and "actions" in expect:  # nothing can be pressed, so say so instead
+        expect = (expect - {"actions"}) | {"reply", "ask"}
     if outcome.kind not in expect:
         if outcome.kind == "actions":
             return f"WRONG PRESS (expected {'/'.join(sorted(expect))})"
@@ -663,6 +665,12 @@ def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--no-web", action="store_true", help="don't offer web search")
     parser.add_argument("--no-tile", action="store_true", help="don't offer Tile cards")
     parser.add_argument(
+        "--keys-off",
+        action="store_true",
+        help="run the pack as with key_actions off (advisor mode, #191): a case that "
+        "expects a press passes on a reply or question that claims no press (#380)",
+    )
+    parser.add_argument(
         "--provider",
         choices=PROVIDERS,
         default="anthropic",
@@ -746,7 +754,7 @@ async def main() -> None:
 async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     """Every case through one brain; prints each, appends them to the results, and
     prints the summary."""
-    pack = built_in(args.pack)
+    pack = as_run(built_in(args.pack), key_actions=not getattr(args, "keys_off", False))
     if pack.parts.keybinds not in (None, STAR_CITIZEN):
         raise SystemExit(f"{pack.name}: the eval can only read Star Citizen's keybinds so far")
     if pack.parts.keybinds is None and args.keybinds:
