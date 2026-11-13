@@ -301,7 +301,7 @@
     const auto = data.groups.flatMap((g) => g.rows).find((r) => r.name === "check_for_updates");
     return `<div class="card frame"><h3>You have Tycho <span class="num">${esc($("#ver").textContent)}</span></h3>
         <div class="keyrow"><button class="btn primary frame" type="button" id="checkUpdates">Check for updates</button><span id="updateMsg"></span></div>
-        <div class="keyrow" id="getRow" hidden><button class="btn frame" type="button" id="getUpdate"></button><span class="err" id="getErr"></span></div>
+        <div class="keyrow" id="getRow" ${lastUpdate.state === "newer" ? "" : "hidden"}><button class="btn frame" type="button" id="getUpdate">${lastUpdate.state === "newer" ? `Get Tycho ${esc(lastUpdate.latest)}` : ""}</button><span class="err" id="getErr"></span></div>
         <p class="note">Tycho never updates itself. The release page has the installer: quit Tycho from the tray, run it, and it installs over this version. Your settings and keys stay.</p>
         <p class="note">${auto && auto.value ? "Tycho also checks each time its window opens, and says so at the top." : "Automatic checks are off (Privacy tab), so Tycho only checks when you press the button."}</p></div>`;
   }
@@ -315,19 +315,31 @@
     $("#checkUpdates")?.addEventListener("click", async () => {
       const b = $("#checkUpdates"), msg = $("#updateMsg");
       b.disabled = true; msg.className = "note"; msg.textContent = "Checking…";
-      const u = await api.check_updates(true);
-      b.disabled = false;
-      [msg.textContent, msg.className] = updateWords(u);
-      $("#getRow").hidden = u.state !== "newer";
-      if (u.state === "newer") $("#getUpdate").textContent = `Get Tycho ${u.latest}`;
-      notice(u);
+      try {
+        const u = await api.check_updates(true);
+        [msg.textContent, msg.className] = updateWords(u);
+        $("#getRow").hidden = u.state !== "newer";
+        if (u.state === "newer") $("#getUpdate").textContent = `Get Tycho ${u.latest}`;
+        notice(u);
+      } catch (e) {
+        [msg.textContent, msg.className] = ["Couldn't check.", "err"];  // never stuck on "Checking…" (#376)
+      } finally {
+        b.disabled = false;
+      }
     });
     $("#getUpdate")?.addEventListener("click", async () => {
-      const r = await api.open_release();
-      $("#getErr").textContent = r.ok ? "" : r.problem;
+      try {
+        const r = await api.open_release();
+        $("#getErr").textContent = r.ok ? "" : r.problem;
+      } catch (e) {
+        $("#getErr").textContent = "Couldn't open the release page.";
+      }
     });
   }
+  let lastUpdate = { state: "" };
+  /* The last check's answer: the notice opens the Updates tab with its button (#376). */
   function notice(u) {
+    lastUpdate = u;
     const b = $("#updateNotice");
     b.hidden = u.state !== "newer";
     if (u.state === "newer") b.textContent = `Tycho ${u.latest} is out`;

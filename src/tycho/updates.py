@@ -29,6 +29,10 @@ class UpdateError(Exception):
     """GitHub couldn't be asked, or answered with something unexpected."""
 
 
+class RateLimited(UpdateError):
+    """GitHub answered, but won't say more for now (403 or 429): the PC is online (#376)."""
+
+
 @dataclass(frozen=True)
 class Release:
     version: str
@@ -60,6 +64,8 @@ def latest_json(url: str) -> Any:
             response = client.get(url)
             if response.status_code == 404:
                 return None
+            if response.status_code in (403, 429):
+                raise RateLimited(f"GitHub answered {response.status_code}")
             response.raise_for_status()
             return response.json()
     except (httpx2.HTTPError, ValueError) as e:

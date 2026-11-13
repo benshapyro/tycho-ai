@@ -614,6 +614,43 @@ def test_the_windows_own_check_asks_github_once_an_hour(path: Path) -> None:
     assert asked == [1, 1]
 
 
+def test_the_windows_own_check_is_kept_an_hour_from_when_it_asked(
+    path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#376: it was kept per clock hour, so a check at 10:59 asked again at 11:00."""
+    from tycho.desktop import bridge as bridge_module
+
+    now = [3599.0]
+    monkeypatch.setattr(bridge_module.time, "monotonic", lambda: now[0])
+    latest, asked = _releases(None, NEWER)
+    bridge, _ = _bridge(path, latest_release=latest)
+    assert bridge.check_updates(False)["state"] == "none"
+    now[0] = 3601.0  # a new clock hour, two seconds later
+    assert bridge.check_updates(False)["state"] == "none"
+    assert asked == [1]
+    now[0] = 3599.0 + 3600.0
+    assert bridge.check_updates(False)["state"] == "newer"
+    assert asked == [1, 1]
+
+
+def test_a_rate_limit_says_try_later_not_offline(path: Path) -> None:
+    """#376: a GitHub rate limit asked whether the PC was online."""
+    bridge, _ = _bridge(
+        path, latest_release=_releases(updates.RateLimited("GitHub answered 403"))[0]
+    )
+    answer = bridge.check_updates()
+    assert answer["problem"] == "GitHub didn't answer. Try again later."
+
+
+def test_the_updates_tab_shows_the_get_button_from_the_last_check() -> None:
+    """#376: the notice opened the Updates tab with no "Get Tycho X" button, and a check
+    that failed left the button on "Checking…"."""
+    page = (Path(__file__).parents[1] / "src/tycho/desktop/app/app.js").read_text("utf-8")
+    assert '${lastUpdate.state === "newer" ? "" : "hidden"}' in page
+    assert "lastUpdate = u;" in page
+    assert "} finally {\n        b.disabled = false;" in page
+
+
 def test_open_release_opens_only_tychos_own_release_page(path: Path) -> None:
     opened: list[str] = []
     elsewhere = updates.Release("99.0.0", "https://example.com/not-tycho")
