@@ -33,10 +33,10 @@ def test_the_game_setting_lists_each_pack_with_its_mode_and_why(path: Path) -> N
     assert rows["game"]["packs"] == [
         {"id": "star-citizen", "name": "Star Citizen", "mode": "keys", "why": ""},
         {
-            "id": "world-of-warcraft",
-            "name": "World of Warcraft",
+            "id": "wow-forever",
+            "name": "World of Warcraft: Forever",
             "mode": "advisor",
-            "why": built_in("world-of-warcraft").why,
+            "why": built_in("wow-forever").why,
         },
     ]
     assert "packs" not in rows["game_channel"]

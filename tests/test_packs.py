@@ -65,7 +65,7 @@ def test_star_citizens_briefing_is_byte_for_byte_what_it_was_before_packs() -> N
 
 def test_star_citizen_is_the_pack_tycho_ships() -> None:
     pack = built_in()
-    assert installed() == ("star-citizen", "world-of-warcraft")
+    assert installed() == ("star-citizen", "wow-forever")
     assert (pack.id, pack.name, pack.version, pack.format) == (
         "star-citizen",
         "Star Citizen",

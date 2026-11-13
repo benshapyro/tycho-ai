@@ -342,7 +342,7 @@ def _start(
     voice = load_speaker(
         current, voice_fell_back, starting.doing if starting is not None else lambda _now: None
     )
-    address = Address.from_settings(current)
+    address = Address.from_settings(current, pack)  # the pack's default name (#349)
     speaker = Pronouncing(voice, address) if voice is not None else None
     # What a setting changed by voice changes in the running session (#111). A name
     # missing here applies at the next start; the session is added once it's built.

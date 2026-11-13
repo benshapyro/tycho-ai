@@ -1,4 +1,5 @@
-# World of Warcraft's eval cases (#300, #326): an advisor pack, so Tycho presses nothing.
+# World of Warcraft: Forever's eval cases (#300, #326): an advisor pack, so Tycho presses
+# nothing. The facts are Forever's (out 4 November 2026), not modern WoW's or Classic's.
 # The fields are Star Citizen's (see its eval/cases.toml); "actions" is never right here.
 #
 # What these check:
@@ -6,9 +7,14 @@
 # - requests to do something in the game get a reply that says Tycho doesn't press
 #   keys here, never a line that claims it did (the eval fails "Mounting up." here);
 # - chat and talk to someone else get a short reply, and Tycho's own settings still work;
-# - nothing that breaks Blizzard's rules (bots, bought gold) is recommended.
+# - nothing that breaks Blizzard's rules (bots, bought gold) is recommended;
+# - no reply sounds like Star Citizen (never_say, #349).
 #
 # Hand-written, in Tycho's own words, like the rest of the pack.
+
+# Words from another game: any reply that says one fails (#349). "Ship" stays allowed,
+# since WoW has boats; "Commander" is Tycho's Star Citizen name for the player.
+never_say = ['\bquantum\b', '\bCommander\b', '\b(space|star)ships?\b', 'Star Citizen']
 
 # --- Requests to act: refused, with how to do it --------------------------------------
 
@@ -74,31 +80,55 @@ heard = "what's the level cap"
 mode = "lookup"
 expect = ["reply"]
 answer = true
-mentions = [["90", "ninety"]]
+mentions = [["60", "sixty"]]
 tag = "facts"
 
 [[case]]
-heard = "what's the new demon hunter spec"
+heard = "can a sky born be a paladin"
 mode = "lookup"
 expect = ["reply"]
 answer = true
-mentions = [["Devourer"]]
+mentions = [['\bno\b', "can't", "cannot", "aren't", "isn't"]]
 tag = "facts"
 
 [[case]]
-heard = "where does midnight take place"
+heard = "where do skyborne start"
 mode = "lookup"
 expect = ["reply"]
 answer = true
-mentions = [["Quel'Thalas", "Quel’Thalas", "Silvermoon", "Eversong"]]
+mentions = [["Zephras"]]
 tag = "facts"
 
 [[case]]
-heard = "who are the hair and ear"
+heard = "when do the raids open"
 mode = "lookup"
 expect = ["reply"]
 answer = true
-mentions = [["Harandar", "race"]]
+mentions = [["December", "9th", "ninth"]]
+tag = "facts"
+
+[[case]]
+heard = "what's the legacy system"
+mode = "lookup"
+expect = ["reply"]
+answer = true
+mentions = [["account"], ["Professions", "Adventure", "Resourcefulness", "points", "perks", "tree"]]
+tag = "facts"
+
+[[case]]
+heard = "can I get a flying mount"
+mode = "lookup"
+expect = ["reply"]
+answer = true
+mentions = [['\bno\b', "can't", "cannot", "flight path"]]
+tag = "facts"
+
+[[case]]
+heard = "is this the same as wow classic"
+mode = "chat"
+expect = ["reply"]
+answer = true
+mentions = [["separate", "different", "not the same", "its own", "apart", '\bno\b']]
 tag = "facts"
 
 [[case]]
@@ -106,14 +136,6 @@ heard = "what does a tank do in a dungeon"
 mode = "coach"
 expect = ["reply"]
 answer = true
-tag = "coach"
-
-[[case]]
-heard = "how does mythic plus work"
-mode = "coach"
-expect = ["reply"]
-answer = true
-mentions = [["keystone", "key"], ["timer", "time"]]
 tag = "coach"
 
 [[case]]
@@ -138,17 +160,11 @@ answer = true
 tag = "coach"
 
 [[case]]
-heard = "how do I get to Dornogal from Stormwind"
+heard = "how do I get from Stormwind to Kalimdor"
 mode = "coach"
 expect = ["reply"]
 answer = true
-tag = "coach"
-
-[[case]]
-heard = "how do I unlock flying"
-mode = "coach"
-expect = ["reply"]
-answer = true
+mentions = [["boat", "ship", "Menethil", "flight", "portal", "zeppelin", "harbor", "harbour"]]
 tag = "coach"
 
 # --- The rules: never recommend what gets players banned -------------------------------
@@ -170,7 +186,7 @@ tag = "rules"
 # --- The Tile: cards when the eye beats the ear ----------------------------------------
 
 [[case]]
-heard = "walk me through setting up my first delve"
+heard = "walk me through getting ready for my first dungeon"
 mode = "coach"
 expect = ["reply"]
 card = ["steps"]

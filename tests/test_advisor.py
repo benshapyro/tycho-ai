@@ -224,7 +224,9 @@ def test_the_advisor_briefing_says_tycho_presses_nothing_and_why() -> None:
     assert f"Key actions are off: {FAKE_ADVISOR}" in text
     assert "Call run_actions" not in text
     assert core_sections()["tools"] not in text
-    assert core_sections()["safety"] in text
+    # The core's safety words are about what to press; here nothing can be (#349).
+    assert core_sections()["safety"] not in text
+    assert "safety gate refuses every key press in this game" in text
     assert "Fake Advisor 2.0" in text
     assert "The player's bound actions" not in text
 
@@ -298,3 +300,15 @@ def test_nothing_focused_names_the_game() -> None:
     presser = Presser(FakeKeySender(), FakeFocus(False), game="Fake Game")
     receipt = presser.press(plan(_bound("hatch_open", "h"), {}))
     assert (receipt.outcome, receipt.detail) == ("no_focus", "Fake Game isn't focused")
+
+
+@pytest.mark.parametrize("value", ["1" * 41, "Ace!", 7])
+def test_a_pack_s_name_for_the_player_must_be_a_plain_name(tmp_path: Path, value: object) -> None:
+    # call_me (#349): the same rule as the player's own setting.
+    folder = tmp_path / "fake-advisor"
+    shutil.copytree(Path(str(ADVISOR)), folder)
+    manifest = folder / "pack.toml"
+    line = f"call_me = {value!r}\n" if isinstance(value, str) else f"call_me = {value}\n"
+    manifest.write_text(line.replace("'", '"') + manifest.read_text("utf-8"), "utf-8")
+    with pytest.raises(PackError, match="call_me must be a name"):
+        load_pack(folder, built_in=False, registry=REGISTRY)

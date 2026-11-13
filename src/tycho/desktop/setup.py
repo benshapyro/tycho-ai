@@ -30,7 +30,7 @@ class Game:
     problem: str = ""
     needed: bool = True
     """Whether the chosen game needs its folder found. An advisor pack with no install
-    part (World of Warcraft, #300) reads nothing from the game, so setup skips it."""
+    part (World of Warcraft: Forever, #300) reads nothing from the game, so setup skips it."""
     name: str = "Star Citizen"
     """The chosen game's name, for setup's first step."""
 
