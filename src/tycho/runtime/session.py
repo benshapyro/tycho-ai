@@ -493,6 +493,7 @@ class Session:
             self._matcher,
             tile=self._display is not None and self._display.on,
             brain=self._brain is not None,
+            keys=not (self._safety_lists is not None and self._safety_lists.keys_off),
         )
         trace.mark("match")
         if isinstance(routed, Reserved):
@@ -533,6 +534,11 @@ class Session:
             if isinstance(picked, Reply):
                 progress.say, progress.card = picked.text, picked.card
                 return self._result(request, "replied", trace, heard, text, progress=progress)
+            if isinstance(picked, str) and routed.matched:
+                # Key actions are off and the brain failed (#384): the gate's refusal
+                # still says why nothing was pressed, as it did before the brain heard it.
+                picked = Picked(routed.matched)
+                progress.by_brain = False
             if isinstance(picked, str):
                 detail = f"the brain couldn't answer: {picked}"
                 return self._result(

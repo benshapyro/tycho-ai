@@ -57,6 +57,20 @@ def _commands(text: str) -> tuple[Command, ...]:
 # Routing
 
 
+def test_with_key_actions_off_a_built_in_phrase_goes_to_the_brain() -> None:
+    # #384: the brain says how; what was matched is kept for when it can't answer.
+    routed = route("landing gear", MATCHER, keys=False)
+    assert isinstance(routed, ToBrain)
+    assert [command.id for command in routed.matched] == [
+        command.id for command in _commands("landing gear")
+    ]
+
+
+def test_with_key_actions_off_and_no_brain_a_built_in_phrase_stays_a_pick() -> None:
+    # So the player still hears the gate's refusal.
+    assert isinstance(route("landing gear", MATCHER, keys=False, brain=False), Picked)
+
+
 @pytest.mark.parametrize("what", sorted(TILE_WORDS))
 def test_the_tiles_words_are_the_tiles_only_while_it_is_on(what: str) -> None:
     phrase = sorted(TILE_WORDS[what])[0]

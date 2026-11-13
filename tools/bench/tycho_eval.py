@@ -415,7 +415,7 @@ async def run_case(
     text = lexicon.correct(rule["heard"]).text
     matcher = matcher or MATCHER
     # The session's own routing (#55), so the eval grades the path the words really take.
-    routed = routing.route(text, matcher, tile=tile)
+    routed = routing.route(text, matcher, tile=tile, keys=not (lists and lists.keys_off))
     if isinstance(routed, Reserved):  # the session answers these itself ("say that again", #222)
         outcome.route, outcome.kind = "session", routed.word
         return outcome
