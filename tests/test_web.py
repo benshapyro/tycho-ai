@@ -154,6 +154,12 @@ def test_a_cut_answer_does_not_stop_at_an_abbreviation() -> None:
     assert result["answer"] == "Patch 4.11 is due."
 
 
+def test_a_short_word_before_a_number_still_ends_a_sentence() -> None:
+    cut = _found("Take the lift near the Hub. 3 terminals are on the le", stop_reason="max_tokens")
+    _, result = _search(_Client(cut))
+    assert result["answer"] == "Take the lift near the Hub."
+
+
 def test_a_long_answer_ends_on_a_whole_sentence() -> None:
     sentence = "Quantum fuel is sold at Megumi Refueling and both Pyro gateways. "
     _, result = _search(_Client(_found(sentence * 12)))

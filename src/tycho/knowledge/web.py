@@ -387,9 +387,11 @@ _SPACE_BEFORE = re.compile(r"\s+([,.;:!?])")
 _SENTENCE_END = re.compile(r"[.!?](?=\s+[A-Z0-9\"'\u201c\u2018]|$)")
 """A full stop that ends a sentence: the next word starts with a capital, a digit or an
 opening quote (#370), or the text ends."""
-_ABBREVIATION = re.compile(r"(?:^|\s)[A-Z][a-z]{1,3}$")
-"""A short capitalised word before a full stop and a number: "Dec. 12", "No. 3", "St. 4"
-aren't sentence ends (#368)."""
+_ABBREVIATION = re.compile(
+    r"(?:^|\s)(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|No|Nos|St|Vol|Pt|Ch|Fig|Ver|Rev|Gen|Ep)$"
+)
+"""A known abbreviation before a full stop and a number: "Dec. 12", "No. 3", "St. 4" aren't
+sentence ends (#368). Any other word is: "near the Hub. 3 terminals" ends at "Hub." (#383)."""
 
 
 def _answer(content: Sequence[Any], *, cut: bool) -> str:
