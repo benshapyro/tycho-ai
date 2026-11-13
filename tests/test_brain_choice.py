@@ -155,9 +155,9 @@ def test_through_openrouter_search_uses_the_anthropic_key_when_there_is_one() ->
 
 @pytest.mark.parametrize("trial", [False, True])
 def test_the_open_web_trial_reaches_the_search_only_when_set(trial: bool) -> None:
-    # #354: off by default, so the Star Citizen sites stay the only ones.
+    # #354: on by default since the #374 re-test; off, the Star Citizen sites only.
     _store(anthropic=ANTHROPIC)
-    brain = _load(Settings(web_search_open=True) if trial else Settings())
+    brain = _load(Settings() if trial else Settings(web_search_open=False))
     assert brain is not None
     search = brain._lookups["web_search"]  # pyright: ignore[reportPrivateUsage]
     assert isinstance(search, WebSearch)

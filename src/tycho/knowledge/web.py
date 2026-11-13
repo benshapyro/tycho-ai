@@ -9,9 +9,10 @@ with its own brief: short, in its own words, official word first.
 What comes back can't be checked, so the brain may not press anything after it
 (``from_the_web``), and it takes longer than other look-ups (``seconds``).
 
-``web_search_open`` (a trial for #354, off by default) lifts the site list: the search
-may use the whole web, and it may read up to two of the pages it finds (Anthropic's
-web fetch), for "where is" and "how do I" answers that live in community guides.
+``web_search_open`` (#354, on by default since 13 Nov 2026) adds a fallback: when the
+sites have no clear answer, a second request may use the whole web and read up to two
+of the pages it finds (Anthropic's web fetch), for "where is" and "how do I" answers
+that live in community guides.
 """
 
 import asyncio
@@ -35,9 +36,9 @@ MODEL = "claude-haiku-5-5"
 WEB_SEARCH = "web_search_20250305"
 """Haiku 5.5 has the version without dynamic filtering."""
 SITES = built_in().web_sites
-"""The only sites a search may read: the game pack's (``[web]`` in its pack.toml). For
-Star Citizen, RSI's own, the community wiki and the community tools (2026-11-02): the
-open web brought fan sites and leaked dates."""
+"""The sites a search asks first, and the only ones without the fallback: the game
+pack's (``[web]`` in its pack.toml). For Star Citizen, RSI's own, the community wiki and
+the community tools (2026-11-02): the open web alone brought fan sites and leaked dates."""
 PRICES = (0.10, 0.50)
 """Haiku 5.5 per million tokens, input and output."""
 SEARCH_PRICE = 0.01

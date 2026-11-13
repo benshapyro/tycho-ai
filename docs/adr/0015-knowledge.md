@@ -1,6 +1,6 @@
 # 15. Knowledge: look-ups, sources and the player's fleet
 
-Date: 2026-11-01 · Status: accepted; amended the same day after the source checks ([research](../research/knowledge-sources-and-tools.md))
+Date: 2026-11-01 · Status: accepted; amended the same day after the source checks ([research](../research/knowledge-sources-and-tools.md)), and on 2026-11-13 for web search's open-web fallback (item 4)
 
 ## Context
 
@@ -21,7 +21,7 @@ The architecture lists Knowledge as stage 3 ("trade, loadout and location questi
 | Ships | Star Citizen Wiki API; UEX Corp for ships still in concept | A local copy, refreshed each patch |
 | Trade | UEX Corp | Live, saved for a few minutes (UEX itself updates hourly) |
 | Items and blueprints | Star Citizen Wiki API; starcitizen.tools for prose | A local copy, refreshed each patch |
-| Web search | Anthropic's web search tool, in a request of its own, on Star Citizen sites only | Live, one search a request |
+| Web search | Anthropic's web search tool, in a request of its own: Star Citizen sites first, then the open web when they have no clear answer (item 4) | Live, one or two requests |
 
 How often data changes decides how it's fetched: specs change each patch, prices each hour.
 
@@ -63,6 +63,17 @@ Each is its own pull request, measured with the brain eval:
    | Search tool in the brain's request | 1.91 to 1.94 s | about 5.3 s, 45 to 66 words |
 
    The built-in tool cost every command about 0.3 s, searched or not, so it lost. While a search runs, Tycho says a short filler line ("Let me check."), kept as audio after the first time, and the brain gets 12 s from the search's start instead of the usual 8 s. Nothing is pressed in a request after a search. A search costs about 1.2 cents. On by default; `web_search = false` turns it off. The open web brought fan sites and leaked dates, and the community tool sites are mostly browser apps a search can't see into, but listing them costs nothing.
+
+   **Update (13 November 2026, #354, #360, #372, #374): the open web as a fallback, on by default (Ben).** A play session (#353) asked where things are and how to do things, which the sites rarely answer clearly: 5 requests, no usable answer. Now the search asks the game pack's sites first and has the answer start with FOUND, PARTIAL or NONE. Anything short of FOUND goes to a second request on any site, with up to two searches and two page reads. That request is told what the sites said, trusts RSI's patch notes and the community wiki over guides and forum posts, and tags its own answer. The sites' answer stands if the open web does no better, fails, or would pass the search's 25 s limit. Reddit's pages are never read, because its terms restrict automated access; its search snippets are used. Players' answers say "players report". Nothing is pressed after either request, as before. `web_search_open = false` keeps to the sites.
+
+   Measured with `tools/bench/web_trial.py`: 38 questions (where things are, how to do things, news, what players think), graded by Sonnet 5.5 against fixed reference answers (`web_references.toml`), one round:
+
+   | | Right | Partial | Wrong | None | Median | Cost |
+   |---|---|---|---|---|---|---|
+   | Sites only | 12 | 19 | 5 | 2 | 4.5 s | about 1.2 cents |
+   | **Sites, then the open web (kept)** | **16** | **16** | **5** | **1** | **11 s** | **about 3 cents** |
+
+   About 4 more right answers with no more wrong ones, for about 6 s more and about 2 cents more on the 31 of 38 questions that went wider. The earlier run, graded by a judge searching for itself, had shown 3 against 5 wrong; graded against the same references, both have 5, so that gap was the judge. Its notes are where the references came from, and nobody has checked them in the game. The brain gets 27 s once a search starts (32 s at most) instead of 12 s. Searching the open web every time, or always reading a page, did no better than the fallback and was slower (12 November, #360). Only Star Citizen's pack has `[web]` sites today, and the search's briefs name Star Citizen, so another game with sites needs its own wording; World of Warcraft has none, so it has no web search (ADR 18).
 5. Trade: the UEX tool and token, with the filler line.
 
    **Result (2 November 2026).** Two look-ups sharing one set of UEX data (`knowledge/trade.py`, `trade_lookup.py`): `commodity_prices` (where to sell highest and buy cheapest, or the price at one place; raw ore is priced at refineries) and `trade_routes` (what to buy at a place and where to sell it, ranked by profit per SCU, or by profit for the cargo when the player gives it or names a ship). The commodity and terminal lists load at startup; prices and routes are fetched when asked (0.2 to 0.6 s) and reused for 10 minutes. Commodity and place names are matched in code: an exact word beats a near miss ("laranite" is not Caranite), a whole name beats part of one ("Pyro" is the system, not Pyro Gateway), and a planet beats its orbit. UEX starts routes only from a terminal, a planet or an orbit, so a route from a station, city or outpost asks about each of its terminals at once. Answers name UEX once and say a price's age only when it's over 6 hours old (Ben). No token and no filler line: reads are open, and answers come in about 3 s, without a search. Eval: 5 trade cases, 10/10 over two runs.
@@ -89,6 +100,6 @@ Checked 1 November 2026 (details in the research note):
 
 - Answers that need a look-up take about 1–3 s longer than today's 1.1 s. The filler line covers the wait; local copies keep most look-ups to milliseconds.
 - Local copies need refreshing each patch, which joins the facts sheet in the patch-day routine ([#51](https://github.com/benshapyro/tycho-ai/issues/51)).
-- Web search costs about 1 cent a search, on top of the request.
+- Web search costs about 1 cent a search, on top of the request, and about 3 cents when it falls back to the open web (most "where is" and "how do I" questions), which also takes about 11 s instead of 4.5 s.
 - Trade depends on UEX keeping anonymous reads open.
 - First run downloads the local copy, which takes a minute or two.

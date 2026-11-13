@@ -16,9 +16,10 @@ game_state = "star-citizen" # Game.log
 lookups = ["ships", "fleet", "items", "mining", "trade", "settings", "web"]
 
 [web]
-# The only sites web search may read (2026-11-02): RSI's own (patch notes, roadmap,
+# The sites web search asks first (2026-11-02): RSI's own (patch notes, roadmap,
 # Comm-Links, Spectrum, support), the community wiki and the community tools. The open
-# web brought fan sites and leaked dates.
+# web alone brought fan sites and leaked dates; it's only the fallback when these have
+# no clear answer (web_search_open, ADR 15).
 sites = [
     "robertsspaceindustries.com",
     "starcitizen.tools",
