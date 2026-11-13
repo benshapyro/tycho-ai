@@ -248,6 +248,12 @@ def test_the_keys_page_marks_an_unusable_key() -> None:
     assert ">Unusable<" in page
 
 
+def test_the_setup_keys_note_names_openrouter_as_the_brains_other_choice() -> None:
+    """#316: the note named only Anthropic, beside the OpenRouter key field."""
+    page = (Path(__file__).parents[1] / "src/tycho/desktop/app/app.js").read_text("utf-8")
+    assert "an OpenRouter key does the same with the brain set to OpenRouter" in page
+
+
 def test_removing_a_key(path: Path, vault: dict[str, str]) -> None:
     vault["elevenlabs"] = "sk_" + "b" * 30
     bridge, _ = _bridge(path)
@@ -280,6 +286,36 @@ def test_checking_a_key_with_its_provider(name: str, status: int, text: str, pro
 
     answer = ProviderKeyCheck(get).check(name, "a-key")
     assert (problem in answer) if problem else answer == ""
+
+
+@pytest.mark.parametrize(
+    ("key", "credits", "problem"),
+    [
+        (
+            '{"data": {"limit": null, "limit_remaining": null}}',
+            '{"data": {"total_credits": 10, "total_usage": 3.5}}',
+            "",
+        ),
+        ('{"data": {"limit": 5, "limit_remaining": 0}}', "{}", "reached its spending limit"),
+        (
+            '{"data": {"limit_remaining": null}}',
+            '{"data": {"total_credits": 5, "total_usage": 5.0}}',
+            "no credit left",
+        ),
+        ("not json", "not json", ""),  # an odd answer says nothing: the key check passed
+    ],
+)
+def test_an_openrouter_key_with_nothing_left_to_spend_says_so(
+    key: str, credits: str, problem: str
+) -> None:
+    """#315: OpenRouter's key check answers 200 for a key with no credit left."""
+
+    def get(url: str, **_kwargs: object) -> _Response:
+        return _Response(200, credits if url.endswith("/credits") else key)
+
+    answer = ProviderKeyCheck(get).credit("openrouter", "a-key")
+    assert (problem in answer) if problem else answer == ""
+    assert ProviderKeyCheck(get).credit("anthropic", "a-key") == ""
 
 
 def test_offline_the_key_isnt_judged() -> None:

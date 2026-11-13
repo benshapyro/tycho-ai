@@ -142,6 +142,12 @@ def load_brain(
     )
 
 
+PLAYER_HOSTS = ("anthropic",)
+"""Who serves a player's OpenRouter brain: Anthropic only, never Bedrock or Vertex, so
+"What leaves your PC" in the README holds (#313). No fallback: if OpenRouter's Anthropic
+route is down, a request fails, as Claude direct would."""
+
+
 def make_brain(
     choice: Choice,
     key: str,
@@ -165,6 +171,7 @@ def make_brain(
             cards=cards,
             traces=_traces(),
             pack=pack,
+            hosts=PLAYER_HOSTS,
         )
     from tycho.brain.claude import ClaudeBrain
 
@@ -226,6 +233,8 @@ def brain_findings(
             check = ProviderKeyCheck()
         if problem := check.check(choice.key, key):
             yield Finding("warn", "Brain", f"{choice.describe()}: {problem}", fix=fix)
+        elif spent := check.credit(choice.key, key):
+            yield Finding("warn", "Brain", f"{choice.describe()}: the key works, but {spent}")
         else:
             yield Finding("ok", "Brain", f"{choice.describe()}; your {choice.label} key works")
     if choice.provider != "anthropic" and current.web_search and anthropic_key() is None:

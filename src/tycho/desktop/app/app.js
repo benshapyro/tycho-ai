@@ -94,7 +94,7 @@
         ${micSelect(s.microphone)}
         <div class="keyrow"><button class="btn frame" type="button" id="micTest">Test: say something</button><span class="note" id="micMsg">It listens for a moment and tells you how you sound.</span></div></div>`;
     } else if (step === 3) {
-      body = `<p class="note">An Anthropic key lets Tycho understand anything said your way and answer questions; without one, only the built-in phrases work. ElevenLabs gives Tycho its voice; without it, Tycho answers with sounds and the Tile.</p>${await keysView()}`;
+      body = `<p class="note">An Anthropic key lets Tycho understand anything said your way and answer questions; an OpenRouter key does the same with the brain set to OpenRouter (Settings, Brain), though web search still needs the Anthropic key. Without either, only the built-in phrases work. ElevenLabs gives Tycho its voice; without it, Tycho answers with sounds and the Tile.</p>${await keysView()}`;
     } else {
       ok = s.ready;
       body = `<div class="card frame"><h3>${firstRun ? "Ready" : "All set"}</h3>
