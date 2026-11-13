@@ -164,6 +164,46 @@ def test_a_long_answer_ends_on_a_whole_sentence() -> None:
     assert result["answer"].endswith("word")
 
 
+def test_the_cap_never_ends_on_the_point_inside_a_version() -> None:
+    """#370: the slice's end counted as a sentence end, so "... patch 4.11" became
+    "... patch 4." (and one over the cap)."""
+    lead = "Short one. " + "X" * (MAX_ANSWER - 19) + " patch 4.11 lands after that"
+    assert lead[MAX_ANSWER] == "."  # the old cap's slice ended "patch 4."
+    _, result = _search(_Client(_found(lead)))
+    assert result["answer"] == "Short one."
+
+
+def test_a_sentence_ending_right_at_the_cap_is_kept() -> None:
+    first = "Aa" + " aaaa" * ((MAX_ANSWER - 3) // 5) + "a" * ((MAX_ANSWER - 3) % 5) + "."
+    assert len(first) == MAX_ANSWER
+    _, result = _search(_Client(_found(first + " Then more words follow here.")))
+    assert result["answer"] == first
+
+
+def test_a_sentence_before_a_number_or_a_curly_quote_ends_there() -> None:
+    """#370: "Patch 4.11 is due. 4.12 follows in Ma..." was nothing usable."""
+    cut = _found("Patch 4.11 is due. 4.12 follows in Ma", stop_reason="max_tokens")
+    _, result = _search(_Client(cut))
+    assert result["answer"] == "Patch 4.11 is due."
+    quoted = _found(
+        "It is in Area18. \u201cThe Plaza\u201d is where you go for th", stop_reason="max_tokens"
+    )
+    _, result = _search(_Client(quoted))
+    assert result["answer"] == "It is in Area18."
+
+
+def test_the_word_cut_keeps_a_word_ending_at_the_cap_and_no_comma() -> None:
+    """#370: a space right after the cap dropped the last whole word; a cut could end
+    on a comma."""
+    words = ("word " * (MAX_ANSWER // 5))[: MAX_ANSWER - 4] + "last more after"
+    _, result = _search(_Client(_found(words)))
+    assert result["answer"].endswith("last")
+    commas = "alpha, " * 100
+    _, result = _search(_Client(_found(commas)))
+    assert not result["answer"].endswith(",")
+    assert len(result["answer"]) <= MAX_ANSWER
+
+
 def test_why_the_reply_stopped_reaches_the_log(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.DEBUG, logger="tycho.knowledge.web")
     _search(_Client(_found("Half an answ", stop_reason="max_tokens")))
