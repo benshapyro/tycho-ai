@@ -26,12 +26,12 @@ The commands below are PowerShell. From a POSIX shell (for example Git Bash), ru
 if ($env:OS -ne "Windows_NT") { "Tycho runs on Windows only." }
 $tycho = "$env:LOCALAPPDATA\Programs\Tycho\tycho.exe"
 if (Test-Path $tycho) { & $tycho --version } else { "Tycho isn't installed." }
-Get-Process tycho -ErrorAction SilentlyContinue
+Get-Process tycho, tycho-app -ErrorAction SilentlyContinue
 ```
 
 Each snippet here stands alone and sets `$tycho` itself, because your shell may not keep variables between commands. Always use the full path: the installer adds Tycho to the user's PATH, but only shells started afterwards see it.
 
-If Tycho is running, ask the user to close its window before you install or upgrade.
+If Tycho is running, ask the user to quit it before you install or upgrade: right-click its star by the clock and choose Quit Tycho (closing its window leaves it running), or press Ctrl+C in its terminal. Check again that it's gone. The installer can't replace a running Tycho's files, and a silent install stops without installing if it finds one. Don't end the process yourself: quitting lets Tycho release any key it's holding.
 
 ## 2. Install, or upgrade, from the latest release
 

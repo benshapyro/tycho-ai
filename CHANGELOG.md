@@ -18,6 +18,9 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - When the Star Citizen sites have no clear answer, web search now looks further: any website (guides, forums, Reddit) and a page it finds, so it can answer "where is" and "how do I" questions from community posts. Answers from players say so. It trusts RSI's patch notes and the community wiki over older guides, and when it does no better, fails or runs out of time, you get the Star Citizen sites' answer instead. That wider search usually takes about 11 seconds (at most 25) and costs about 3 cents. It's on by default: set `web_search_open = false` (Settings, Privacy, or `settings.toml`) to keep to the Star Citizen sites. ([#354](https://github.com/benshapyro/tycho-ai/issues/354), [#373](https://github.com/benshapyro/tycho-ai/issues/373))
 - `brain_seconds` sets how long Tycho waits for the brain before saying it couldn't answer (8 seconds, as before). ([#112](https://github.com/benshapyro/tycho-ai/issues/112))
 
+### Fixed
+- Upgrading while Tycho was running ended in a string of file errors, and the old version stayed. The installer now tells you Tycho is running and waits for you to quit it (right-click its star by the clock, Quit Tycho) before it changes anything. Uninstalling does the same. ([#333](https://github.com/benshapyro/tycho-ai/issues/333))
+
 ## [0.6.0] - 2026-11-12
 
 ### Changed
