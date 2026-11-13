@@ -90,7 +90,12 @@ def clip_spoken(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
     head = text[: limit + 1]  # the character after the limit says whether a word ends there
-    ends = [m.end() for m in _SENTENCE_END.finditer(head) if m.end() <= limit]
+    # A closing quote that doesn't fit is left off, not the sentence (review of #383).
+    ends = [
+        m.end() if m.end() <= limit else m.start() + 1
+        for m in _SENTENCE_END.finditer(head)
+        if m.start() < limit
+    ]
     if ends and ends[-1] >= limit // 3:
         return head[: ends[-1]].rstrip()
     cut = head.rfind(" ", 0, limit)

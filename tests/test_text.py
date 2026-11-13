@@ -38,3 +38,9 @@ def test_a_closing_quote_stays_with_its_sentence() -> None:
     """The review of #382: a cut after "go now." dropped the quote that closed it."""
     line = 'He said "go now." Then he left without another word to anyone there'
     assert clip_spoken(line, 30) == 'He said "go now."'
+
+
+def test_a_closing_quote_past_the_limit_leaves_its_sentence_whole() -> None:
+    """The review of #383: the quote one past the limit lost the whole sentence."""
+    line = 'Head on to the main concourse now." Then take the lift down'
+    assert clip_spoken(line, 34) == "Head on to the main concourse now."
