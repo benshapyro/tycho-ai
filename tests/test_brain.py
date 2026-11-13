@@ -1269,7 +1269,7 @@ def _sse(*events: dict[str, Any]) -> bytes:
 
 def _message_start() -> dict[str, Any]:
     usage = {"input_tokens": 20, "output_tokens": 1}
-    message = {
+    message: dict[str, Any] = {
         "id": "msg_1",
         "type": "message",
         "role": "assistant",
@@ -1283,7 +1283,7 @@ def _message_start() -> dict[str, Any]:
 
 
 def _tool_block(index: int, use_id: str, name: str, partial: str) -> list[dict[str, Any]]:
-    start = {"type": "tool_use", "id": use_id, "name": name, "input": {}}
+    start: dict[str, Any] = {"type": "tool_use", "id": use_id, "name": name, "input": {}}
     delta = {"type": "input_json_delta", "partial_json": partial}
     return [
         {"type": "content_block_start", "index": index, "content_block": start},
