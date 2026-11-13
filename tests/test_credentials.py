@@ -211,3 +211,34 @@ def test_developers_can_still_store_the_benchmarks_keys(memory: MemoryKeyring) -
     assert not set(credentials.BENCH) & set(credentials.PRODUCT)
     assert credentials.KNOWN == credentials.PRODUCT + credentials.BENCH
     assert credentials.main(["delete", "cerebras"]) == 0  # accepted, nothing stored
+
+
+def test_a_bench_key_is_pointed_at_the_command_that_takes_it(
+    memory: MemoryKeyring, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # `tycho key` offers only product keys, so its command would fail for a bench key
+    # with an argparse error (#301): the hints name the module instead.
+    monkeypatch.setattr(credentials, "_interactive", lambda: False)
+    assert credentials.main(["set", "cerebras"]) == 2
+    err = capsys.readouterr().err
+    assert "cmd /k uv run python -m tycho.credentials set cerebras" in err
+    assert "tycho key set" not in err
+
+    credentials.set_secret("cerebras", "csk-" + "a" * 30 + "​")
+    assert credentials.main(["check", "cerebras"]) == 1
+    out = capsys.readouterr().out
+    assert out.startswith("Stored, but unusable")
+    assert out.rstrip().endswith("uv run python -m tycho.credentials set cerebras")
+
+
+def test_every_key_s_set_command_is_one_that_takes_it() -> None:
+    from tycho import app
+
+    for name in credentials.PRODUCT:
+        command = credentials.set_command(name).split()
+        assert command[:3] == ["tycho", "key", "set"]
+        assert app.build_parser().parse_args(command[1:]).name == name
+    for name in credentials.BENCH:
+        command = credentials.set_command(name).split()
+        assert command[:5] == ["uv", "run", "python", "-m", "tycho.credentials"]
+        assert command[5:] == ["set", name]

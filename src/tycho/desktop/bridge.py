@@ -33,6 +33,7 @@ from tycho.desktop import setup
 from tycho.desktop.commands import Commands
 from tycho.desktop.keys import KeyCheck
 from tycho.game.keybinds import Keybinds
+from tycho.packs import GamePack, PackError, as_run, built_in, installed
 from tycho.settings import Settings, SettingsError
 
 log = logging.getLogger(__name__)
@@ -49,7 +50,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
     ),
     "Brain": ("brain_provider", "brain_model", "brain_seconds"),
     "Safety": ("key_actions", "confirm_seconds"),
-    "Privacy": ("keep_transcripts", "web_search", "check_for_updates"),
+    "Privacy": ("keep_transcripts", "web_search", "web_search_open", "check_for_updates"),
     "Game and controls": (
         "game",
         "game_channel",
@@ -68,6 +69,9 @@ KEYS: dict[str, str] = {
     "openrouter": "OpenRouter",
     "elevenlabs": "ElevenLabs",
 }
+RESTARTS = frozenset({"game"})
+"""Settings a change in the app applies by restarting the voice loop (#295): the game's
+keybinds, briefing and look-ups are all loaded at start (ADR 18)."""
 UNDO_DEPTH = 20
 DEVICES_SECONDS = 10.0
 """How long the list of microphones is kept between redraws."""
@@ -100,10 +104,14 @@ class Bridge:
         commands: Commands | None = None,
         latest_release: Callable[[], updates.Release | None] = updates.latest_release,
         open_page: Callable[[str], object] = webbrowser.open,
+        restart: Callable[[], bool] = lambda: False,
     ) -> None:
         """``apply`` changes a setting in the running Tycho (the live callbacks);
         ``findings`` are the checks ``tycho check`` makes; ``key_check`` tries a key
-        with its provider; ``ship_accent`` is the colour of the ship being flown."""
+        with its provider; ``ship_accent`` is the colour of the ship being flown.
+        ``restart`` restarts the voice loop with the settings as saved (#295); False if
+        nothing is running to restart. ``commands`` is for tests: otherwise the Commands
+        page is the chosen game's."""
         self._apply = apply
         self._findings = findings
         self._path = settings_path
@@ -116,7 +124,8 @@ class Bridge:
         self._choose_folder = choose_folder
         self._finish = finish
         self._first_run = first_run
-        self._commands = commands or Commands(paths.commands_file(), self._keybinds)
+        self._given_commands = commands
+        self._restart = restart
         self._capture = threading.Event()
         """Set to stop a push-to-talk capture the player has left."""
         self._undo: list[tuple[str, object]] = []
@@ -214,6 +223,8 @@ class Bridge:
         }
         if choices := _choices(field.annotation):
             row["choices"] = list(choices)
+        if name == "game":
+            row["packs"] = _packs()
         for key in ("minimum", "maximum"):
             if key in prop:
                 row[key] = prop[key]
@@ -322,8 +333,14 @@ class Bridge:
         return self._applied(name, after)
 
     def _applied(self, name: str, value: object) -> dict[str, object]:
-        applies = settings.rule(name)["applies"]
-        if applies == "now":
+        applies: str = settings.rule(name)["applies"]
+        if name in RESTARTS:
+            try:
+                if self._restart():
+                    applies = "restarting"  # the voice loop starts again with it
+            except Exception:
+                log.exception("Couldn't restart Tycho for %s", name)
+        elif applies == "now":
             try:
                 if not self._apply(name, value):
                     applies = "restart"  # nothing running to apply it to
@@ -372,15 +389,30 @@ class Bridge:
 
     def commands(self) -> dict[str, object]:
         """Every command and sequence: phrases, the player's own, keys, what to bind."""
-        return self._commands.rows()
+        return self._commands().rows()
 
     def add_phrase(self, command_id: object, phrase: object) -> dict[str, object]:
         """One more phrase for a command, in the player's commands.toml."""
-        return self._commands.add_phrase(command_id, phrase)
+        return self._commands().add_phrase(command_id, phrase)
 
     def remove_phrase(self, command_id: object, phrase: object) -> dict[str, object]:
         """Take one of the player's own phrases away."""
-        return self._commands.remove_phrase(command_id, phrase)
+        return self._commands().remove_phrase(command_id, phrase)
+
+    def _commands(self) -> Commands:
+        """The Commands page for the game the settings pick, and its own file (#295)."""
+        if self._given_commands is not None:
+            return self._given_commands
+        pack = self._game_pack(settings.load(self._path))
+        return Commands(paths.commands_file(pack.id), self._keybinds, pack)
+
+    def _game_pack(self, current: Settings) -> GamePack:
+        """The chosen game, as the player's ``key_actions`` runs it (#191)."""
+        try:
+            return as_run(built_in(current.game), key_actions=current.key_actions)
+        except PackError:  # tycho check and the status page say why
+            log.exception("The chosen game's pack didn't load")
+            return as_run(built_in(), key_actions=current.key_actions)
 
     # --- setup: the choices made with their own controls -------------------------------
 
@@ -496,11 +528,11 @@ class Bridge:
     # Slow look-ups, kept while their inputs are the same.
 
     def _game(self, current: Settings) -> setup.Game:
-        key = (current.game_channel, str(current.game_root))
-        return cast(setup.Game, self._cached("game", key, lambda: self._pc.game(current)))
+        key = (current.game, current.game_channel, str(current.game_root))
+        return cast(setup.Game, self._cached("game", key, lambda: setup.game(current, self._pc)))
 
     def _conflicts(self, ptt: str, current: Settings) -> list[str]:
-        key = (ptt, current.game_channel, str(current.game_root))
+        key = (ptt, current.game, current.game_channel, str(current.game_root))
         found = self._cached("conflicts", key, lambda: self._pc.conflicts(ptt, current))
         return list(cast(list[str], found))
 
@@ -508,7 +540,16 @@ class Bridge:
         """The player's keybinds, for the Commands page: kept a while, since reading them
         parses the game's files, and they change only when the player rebinds in game."""
         current = settings.load(self._path)
-        key = (current.game_channel, str(current.game_root), time.monotonic() // KEYBINDS_SECONDS)
+        if self._game_pack(current).parts.keybinds is None:
+            return None  # a game Tycho never presses keys in has none to read (#191)
+        # The game too: once two packs read keybinds, a switch mustn't show the last
+        # game's keys until the cache runs out (#331).
+        key = (
+            current.game,
+            current.game_channel,
+            str(current.game_root),
+            time.monotonic() // KEYBINDS_SECONDS,
+        )
 
         def read() -> Keybinds | None:
             from tycho.app import find_install
@@ -548,6 +589,20 @@ def _shown(name: str, value: object) -> object:
     if value is None or isinstance(value, bool | int | float | str):
         return value
     return str(value)
+
+
+def _packs() -> list[dict[str, str]]:
+    """Each game pack Tycho ships, for the Game setting: its name, and whether Tycho may
+    press keys there, and why not, in the pack's words (#295)."""
+    shown: list[dict[str, str]] = []
+    for pack_id in installed():
+        try:
+            pack = built_in(pack_id)
+        except PackError:
+            log.exception("Game pack %s didn't load", pack_id)
+            continue
+        shown.append({"id": pack.id, "name": pack.name, "mode": pack.mode, "why": pack.why})
+    return shown
 
 
 def _label(name: str) -> str:

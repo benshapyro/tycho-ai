@@ -7,7 +7,7 @@ import logging
 import os
 import sys
 import time
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -225,12 +225,65 @@ def _run(
             current = settings.load()
     # The star while it starts, for a terminal `tycho run` too: a second start then
     # says it's still starting rather than nothing (review of #157).
-    starting = _Starting(requests) if window and sys.platform == "win32" else None
-    try:
-        return _start(current, window=window, requests=requests, starting=starting)
-    finally:
-        if starting is not None:
-            starting.close()
+    reopen = False
+    previous: Settings | None = None
+    """The settings before a restart, while the new game hasn't started yet (#329)."""
+    notices: list[str] = []
+    while True:
+        starting = _Starting(requests) if window and sys.platform == "win32" else None
+        try:
+            code = _start(
+                current,
+                window=window,
+                requests=requests,
+                starting=starting,
+                reopen=reopen,
+                notices=notices,
+            )
+        except GAME_ERRORS as e:
+            if previous is None or previous.game == current.game:
+                raise
+            # The new game didn't start (its folder isn't there): rather than vanish with
+            # the window already closed, go back to the game that ran, and say why (#329).
+            current, notices = _back_to(previous, current, str(e))
+            previous = None
+            continue
+        finally:
+            if starting is not None:
+                starting.close()
+        if code != RESTART:
+            return code
+        # A new game was picked in the window (#295): everything loaded at start, again.
+        log.info("Restarting with the settings as saved")
+        previous, current, notices = current, settings.load(), []
+        reopen = True
+        if previous.game != current.game and window and sys.platform == "win32":
+            from tycho.desktop.setup import needs_setup
+
+            if needs_setup(current):
+                # The new game needs setting up (its folder isn't found): the window asks.
+                log.info("Opening Tycho's window to set up %s", current.game)
+                if first_run(requests) == "done":
+                    current = settings.load()
+                else:
+                    current, notices = _back_to(previous, current, "its setup wasn't finished")
+                    previous = None
+
+
+RESTART = -1
+"""``_start``'s answer when the voice loop stopped to start again (#295)."""
+GAME_ERRORS = (FileNotFoundError, GameDataError)
+"""What a game that can't be started raises: its folder or its files aren't there."""
+
+
+def _back_to(previous: Settings, current: Settings, why: str) -> tuple[Settings, list[str]]:
+    """Save the game that ran before a restart back to the settings, and the notice that
+    says why (#329). The window opens again on it, as it was."""
+    tried, back = built_in(current.game).name, built_in(previous.game).name
+    said = f"Couldn't start {tried} ({why}), so Tycho is back on {back}."
+    log.warning("%s", said)
+    settings.update({"game": previous.game})
+    return settings.load(), [said]
 
 
 def _start(
@@ -239,9 +292,13 @@ def _start(
     window: bool,
     requests: OpenRequests | None,
     starting: _Starting | None,
+    reopen: bool = False,
+    notices: Sequence[str] = (),
 ) -> int:
     """Everything after setup: the speech model, the keybinds, the Tile, the
-    microphone, then listening."""
+    microphone, then listening. ``RESTART`` if the window asked to start again;
+    ``reopen`` opens the window once listening, as it was before a restart. ``notices``
+    are shown on the Tile once it's up (why a new game didn't start, #329)."""
     from tycho.address import Address, Pronouncing
     from tycho.audio.microphone import Microphone
     from tycho.feedback import SoundDevicePlayer, SoundFeedback
@@ -271,8 +328,9 @@ def _start(
     action_log = FileActionLog()
     log.info("Action log: %s", action_log.path)
     feedback = SoundFeedback(SoundDevicePlayer(), current.feedback_volume)
-    told: list[str] = []
-    """The voice fell back to George (#242): shown on the Tile once it's up."""
+    told: list[str] = list(notices)
+    """The voice fell back to George (#242), or a game didn't start: shown on the Tile
+    once it's up."""
 
     def voice_fell_back(said: str) -> None:
         if display is None:
@@ -324,10 +382,13 @@ def _start(
         log.info("Listening. Hold %s and speak; press Ctrl+C to stop.", describe(binding))
         if starting is not None:
             starting.close()  # the tray's own star takes its place
+        restart = False
         try:
             if window and sys.platform == "win32":
-                if not serve_with_tray(session, store, live, display, requests):
+                outcome = serve_with_tray(session, store, live, display, requests, reopen=reopen)
+                if outcome == "failed":
                     return 1
+                restart = outcome == "restart"
             else:
                 asyncio.run(serve(session, store))
         finally:
@@ -336,7 +397,7 @@ def _start(
                 display.close()
     if mic.overflows:
         log.warning("The microphone dropped audio %d time(s)", mic.overflows)
-    return 0
+    return RESTART if restart else 0
 
 
 NO_WINDOW = (
@@ -361,10 +422,14 @@ def serve_with_tray(
     live: Live,
     display: TileDisplay | None,
     requests: OpenRequests | None = None,
-) -> bool:
+    *,
+    reopen: bool = False,
+) -> Literal["stopped", "restart", "failed"]:
     """Run the session with Tycho's tray icon (ADR 17): pause, the Tile, the logs, quit.
     Without a tray (it couldn't start), the terminal only, as before; with no terminal
-    either (the Start menu's Tycho), it stops, says why and returns False."""
+    either (the Start menu's Tycho), it stops, says why and returns "failed". "restart":
+    the window picked a new game (#295), so the caller starts everything again;
+    ``reopen`` opens the window at once, as it was before that restart."""
     import os
 
     from tycho.desktop.host import Host
@@ -380,7 +445,9 @@ def serve_with_tray(
         return callback is not None and host.run_now(lambda: callback(value))
 
     window = app_window(
-        apply=apply, ship_accent=display.ship_accent if display is not None else lambda: None
+        apply=apply,
+        ship_accent=display.ship_accent if display is not None else lambda: None,
+        restart=host.restart,
     )
     host.on_quit = window.close
     host.window_open = lambda: window.is_open
@@ -400,19 +467,21 @@ def serve_with_tray(
         if WINDOWED:
             log.error("No tray icon (%s), and no terminal: stopping", tray.failed)
             print(NO_TRAY.format(why=tray.failed), file=sys.stderr)
-            return False
+            return "failed"
         log.warning("No tray icon (%s); press Ctrl+C to stop", tray.failed)
         asyncio.run(serve(session, store))
-        return True
+        return "stopped"
     if requests is not None:
         requests.target = lambda: host.ask("open")
+    if reopen:
+        host.ask("open")  # the window asked for the restart: it's back, on the new loop
     try:
         host.run(window.open)
     finally:
         if requests is not None:
             requests.target = lambda: None
         tray.close()
-    return True
+    return "restart" if host.restarting else "stopped"
 
 
 def app_window(
@@ -421,6 +490,7 @@ def app_window(
     ship_accent: Callable[[], str | None] = lambda: None,
     first_run: bool = False,
     finish: Callable[[], None] = lambda: None,
+    restart: Callable[[], bool] = lambda: False,
 ) -> AppWindow:
     """Tycho's window and its bridge, for the first run and for the tray alike."""
     import dataclasses
@@ -443,6 +513,7 @@ def app_window(
         choose_folder=lambda: window.choose_folder(),
         finish=finish,
         first_run=first_run,
+        restart=restart,
     )
     window = AppWindow(bridge)
     return window
@@ -912,6 +983,8 @@ def build_session(
         brain=make_brain(matcher) if make_brain is not None else None,
         speaker=speaker,
         brain_seconds=current.brain_seconds,
+        search_seconds=_search_seconds(current.web_search_open)[0],
+        search_limit=_search_seconds(current.web_search_open)[1],
         confirm_seconds=current.confirm_seconds,
         log_transcripts=current.keep_transcripts,
         on_result=on_result,
@@ -919,6 +992,16 @@ def build_session(
         display=display,
         safety_lists=pack.safety,
     )
+
+
+def _search_seconds(open_web: bool) -> tuple[float, float]:
+    """How long the brain has once a search starts, and the request's limit. The
+    open-web trial (#354) searches twice and reads pages: it gets longer."""
+    from tycho.runtime import session
+
+    if open_web:
+        return session.OPEN_SEARCH_SECONDS, session.OPEN_SEARCH_LIMIT
+    return session.SEARCH_SECONDS, session.SEARCH_LIMIT
 
 
 NO_KEYBINDS = Keybinds([])

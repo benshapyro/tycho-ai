@@ -27,6 +27,9 @@ POLL_SECONDS = 0.2
 """How often the main thread wakes, so Ctrl+C is felt at once."""
 APPLY_SECONDS = 2.0
 """How long a change made in the window waits for the voice loop to apply it."""
+CLOSE_SECONDS = 0.5
+"""How long a restart waits before closing the window: the page's call that asked for
+it returns first."""
 
 
 class Host:
@@ -44,6 +47,12 @@ class Host:
         """Closes the window, if it's open: Tycho is stopping."""
         self.window_open: Callable[[], bool] = lambda: False
         self.focus_window: Callable[[], None] = lambda: None
+        self.restarting = False
+        """The voice loop stopped to start again, with the settings as saved (#295)."""
+        self._quitting = False
+        """The player asked to quit: no restart after that (#330)."""
+        self._deciding = threading.Lock()
+        """Held while deciding between a quit and a restart (#345)."""
 
     # From any thread: the tray, or tests.
 
@@ -52,9 +61,27 @@ class Host:
         if request == "open" and self.window_open():
             self.focus_window()  # already open: bring it forward, don't queue another
             return
+        if request == "quit":
+            # A quit wins over a restart asked for just before it (#330), under the
+            # lock restart() takes, so neither can slip between the other's steps (#345).
+            with self._deciding:
+                self._quitting = True
+                self.restarting = False
         self._requests.put(request)
         if request == "quit":
             self.on_quit()  # the main thread may be inside the window: close it
+
+    def restart(self) -> bool:
+        """Stop the voice loop so Tycho starts it again, as after a new game is picked
+        (#295). It stops as quitting does, letting go of any key; the window closes, and
+        opens again once the new loop is listening. False if nothing is running."""
+        with self._deciding:
+            if not self._thread.is_alive() or self._quitting:
+                return False
+            self.restarting = True
+        self._requests.put("restart")
+        threading.Timer(CLOSE_SECONDS, self.on_quit).start()
+        return True
 
     def call(self, fn: Callable[[], None]) -> None:
         """Run ``fn`` on the voice loop's thread, e.g. pausing the session."""
@@ -95,13 +122,15 @@ class Host:
                         request = self._requests.get(timeout=POLL_SECONDS)
                     except queue.Empty:
                         continue
-                    if request == "quit":
+                    if request in ("quit", "restart"):
                         self.stop()
                     elif request == "open":
                         self._drop_queued("open")  # clicks while it was opening: one window
                         self.windows += 1
                         open_window()  # runs until the player closes the window
         except KeyboardInterrupt:
+            with self._deciding:
+                self._quitting, self.restarting = True, False
             self.stop()
             raise
         finally:

@@ -48,8 +48,11 @@ jobs:
           if ($version -match "unknown") { throw "the version's metadata is missing" }
           # What's imported only on first use (the speech model, joysticks): a module or
           # package metadata missing from the build fails here, not on a player's PC.
-          & $exe --smoke-imports
-          if ($LASTEXITCODE -ne 0) { throw "a lazily imported module is missing" }
+          # And every game pack, read as the frozen app reads them (#320).
+          $smoke = & $exe --smoke-imports | Out-String
+          Write-Output $smoke
+          if ($LASTEXITCODE -ne 0) { throw "a lazily imported module or a game pack is missing" }
+          if ($smoke -notmatch "loaded \d+ game packs: .*star-citizen") { throw "Star Citizen's pack didn't load" }
           # No game or microphone here, so check reports problems; it must still run.
           $out = & $exe check --quick 2>&1 | Out-String
           Write-Output $out
@@ -57,6 +60,7 @@ jobs:
             throw "the frozen app is missing something"
           }
           if ($out -notmatch "Settings") { throw "tycho check didn't run" }
+          if ($out -notmatch "Star Citizen \(game pack \d") { throw "tycho check didn't load the game pack" }
           & $exe key --help | Out-Null
           # The Start menu's Tycho (#146): built beside tycho.exe, with no console.
           $app = "dist\tycho\tycho-app.exe"

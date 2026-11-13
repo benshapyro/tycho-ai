@@ -33,6 +33,8 @@ from tycho.commands import Command, CommandFileError, CommandMatcher, resolve
 from tycho.commands.matcher import built_in_commands
 from tycho.commands.reserved import USES, reserved_for
 from tycho.game.keybinds import Keybinds, KeyInput
+from tycho.packs import GamePack, Safety
+from tycho.packs import built_in as built_in_pack
 from tycho.safety import is_confirm_grade
 from tycho.text import normalize
 
@@ -62,10 +64,18 @@ class Row:
 
 
 class Commands:
-    def __init__(self, user_file: Path, keybinds: Callable[[], Keybinds | None]) -> None:
-        """``keybinds`` gives the player's keybinds, or None if the game wasn't found."""
+    def __init__(
+        self,
+        user_file: Path,
+        keybinds: Callable[[], Keybinds | None],
+        pack: GamePack | None = None,
+    ) -> None:
+        """``keybinds`` gives the player's keybinds, or None if the game wasn't found.
+        ``pack`` is the game the page is for (Star Citizen when None, #295): its
+        commands, and its safety lists for which ones ask first."""
         self._path = user_file
         self._keybinds = keybinds
+        self._pack = pack or built_in_pack()
 
     # --- reading -------------------------------------------------------------------
 
@@ -73,12 +83,14 @@ class Commands:
         """Every command and sequence, for the page; and the file's problem, if any."""
         problem = ""
         try:
-            matcher = CommandMatcher.default(self._path)
+            matcher = CommandMatcher.default(self._path, self._pack)
         except CommandFileError as e:
             problem = f"Your commands file can't be used, so only the built-in ones are: {e}"
-            matcher = CommandMatcher.default()
+            matcher = CommandMatcher.default(pack=self._pack)
         keybinds = self._keybinds()
-        mine = {} if problem else _phrases(self._user_data())  # its phrases aren't in use
+        mine = (
+            {} if problem else _phrases(self._user_data(), self._pack)
+        )  # its phrases aren't in use
         rows: list[Row] = []
         for command in matcher.commands:
             yours = mine.get(command.id, [])
@@ -97,7 +109,7 @@ class Commands:
                         command.id.replace("_", " ").capitalize(),
                         said,
                         yours,
-                        confirm=_asks(command, keybinds),
+                        confirm=_asks(command, keybinds, self._pack.safety),
                         sequence=True,
                         steps=steps,
                     )
@@ -105,7 +117,15 @@ class Commands:
                 continue
             label = _label(command.id, command.actions, keybinds)
             if keybinds is None:
-                rows.append(Row(command.id, label, said, yours, confirm=_asks(command, None)))
+                rows.append(
+                    Row(
+                        command.id,
+                        label,
+                        said,
+                        yours,
+                        confirm=_asks(command, None, self._pack.safety),
+                    )
+                )
                 continue
             found = resolve(command, keybinds)
             if found.action is None:
@@ -116,7 +136,7 @@ class Commands:
                         said,
                         yours,
                         to_bind=label,
-                        confirm=_asks(command, keybinds),
+                        confirm=_asks(command, keybinds, self._pack.safety),
                     )
                 )
                 continue
@@ -129,7 +149,7 @@ class Commands:
                     yours,
                     key=key,
                     toggle=found.fallback,
-                    confirm=_asks(command, keybinds),
+                    confirm=_asks(command, keybinds, self._pack.safety),
                 )
             )
         rows.sort(key=lambda r: (r.sequence, r.label.lower()))
@@ -139,6 +159,8 @@ class Commands:
             "problem": problem,
             "warnings": list(matcher.warnings),
             "game": keybinds is not None,
+            "game_name": self._pack.name,
+            "keys_off": self._pack.safety.keys_off,
         }
 
     def _user_data(self) -> dict[str, Any]:
@@ -199,7 +221,7 @@ class Commands:
                 "ok": False,
                 "problem": f"Your commands file has a mistake; fix it first ({e}).",
             }
-        if said not in _phrases(self._user_data()).get(str(command_id), []):
+        if said not in _phrases(self._user_data(), self._pack).get(str(command_id), []):
             return {"ok": False, "problem": "That isn't one of your phrases."}  # a built-in one
         for table in _tables(doc, str(command_id)):  # their own entry, then its [[phrases]]
             say = table.get("say")
@@ -219,7 +241,7 @@ class Commands:
         for table in _tables(doc, command_id):
             return doc, table
         tables = doc.get("phrases")
-        if command_id not in _built_in() or not create:
+        if command_id not in _built_in(self._pack) or not create:
             return doc, None
         table = tomlkit.table()
         table.comment("more ways to say a built-in command (Tycho's window)")
@@ -236,7 +258,7 @@ class Commands:
         overwrite what the player meant (a ``[phrases]`` table with one bracket pair),
         or be refused for a clash that isn't the new phrase's."""
         try:
-            CommandMatcher.default(self._path)
+            CommandMatcher.default(self._path, self._pack)
         except CommandFileError as e:
             return f"Your commands file has a mistake; fix it first ({str(e).split(': ', 1)[-1]})."
         return ""
@@ -244,7 +266,7 @@ class Commands:
     def _said(self, command_id: str) -> tuple[str, ...]:
         """Every phrase the command has now, built-in and the player's."""
         try:
-            command = CommandMatcher.default(self._path).get(command_id)
+            command = CommandMatcher.default(self._path, self._pack).get(command_id)
         except CommandFileError:
             return ()
         return command.say if command is not None else ()
@@ -252,7 +274,7 @@ class Commands:
     def _owner(self, said: str, command_id: object) -> str:
         """The built-in command that had this phrase, which it now leaves (ADR 14)."""
         words = tuple(normalize(said))
-        for entry_id, entry in _built_in().items():
+        for entry_id, entry in _built_in(self._pack).items():
             if entry_id != command_id and any(
                 tuple(normalize(str(p))) == words for p in entry.get("say", [])
             ):
@@ -269,7 +291,7 @@ class Commands:
             with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
                 f.write(text)
             try:
-                CommandMatcher.default(Path(temp))
+                CommandMatcher.default(Path(temp), self._pack)
             except CommandFileError as e:
                 return {"ok": False, "problem": _readable(str(e), temp, str(command_id))}
             os.replace(temp, self._path)
@@ -334,10 +356,10 @@ def _by_id(data: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     return entries
 
 
-def _phrases(data: Mapping[str, Any]) -> dict[str, list[str]]:
+def _phrases(data: Mapping[str, Any], pack: GamePack | None = None) -> dict[str, list[str]]:
     """The player's own phrases for each id: their ``[[phrases]]``, and those of their
     entries not in the built-in entry with the same id (an older copy of it)."""
-    built_in = _built_in()
+    built_in = _built_in(pack)
     out: dict[str, list[str]] = {}
     for entry_id, entry in _by_id(data).items():
         theirs = [str(p) for p in _list(entry.get("say"))]
@@ -359,7 +381,7 @@ def _key(phrase: str) -> tuple[str, ...]:
     return tuple(normalize(phrase))
 
 
-def _asks(command: Command, keybinds: Keybinds | None) -> bool:
+def _asks(command: Command, keybinds: Keybinds | None, lists: Safety | None = None) -> bool:
     """Whether Tycho asks first, as the safety gate decides it: the command says so,
     or something it presses always asks. That's its ``setup`` actions and the action
     it resolves to (any of its actions, without keybinds). A sequence asks if any step
@@ -367,12 +389,12 @@ def _asks(command: Command, keybinds: Keybinds | None) -> bool:
     if command.confirm:
         return True
     if command.is_sequence:
-        return any(_asks(s.command, keybinds) for s in command.steps)
+        return any(_asks(s.command, keybinds, lists) for s in command.steps)
     pressed: tuple[str, ...] = command.actions
     if keybinds is not None:
         found = resolve(command, keybinds).action
         pressed = (found.name,) if found is not None else command.actions
-    return any(is_confirm_grade(a) for a in (*command.setup, *pressed))
+    return any(is_confirm_grade(a, lists) for a in (*command.setup, *pressed))
 
 
 def _tables(doc: Any, command_id: str) -> list[Table]:
@@ -385,8 +407,8 @@ def _tables(doc: Any, command_id: str) -> list[Table]:
     return found
 
 
-def _built_in() -> dict[str, dict[str, Any]]:
-    text = built_in_commands()
+def _built_in(pack: GamePack | None = None) -> dict[str, dict[str, Any]]:
+    text = built_in_commands(pack)
     return _by_id(tomllib.loads(text))
 
 

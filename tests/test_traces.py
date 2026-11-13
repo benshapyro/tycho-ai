@@ -12,12 +12,13 @@ import pytest
 
 from tests import test_brain as claude_fakes
 from tests import test_openrouter as openrouter_fakes
-from tests.fakes.fake_chat import FakeChat, tool_call
+from tests.fakes.fake_chat import FakeChat, text, tool_call
 from tests.fakes.fake_lookup import FakeLookup
 from tools.bench import traces as reader
 from tycho import logs, paths
 from tycho.brain import BrainError, BrainRequest, Reply, RunActions
 from tycho.brain.claude import ClaudeBrain
+from tycho.brain.openrouter import Prices
 from tycho.brain.traces import ENV, FILE, TraceFile
 
 KEYBINDS = claude_fakes.KEYBINDS
@@ -130,6 +131,48 @@ def test_no_key_or_absolute_path_reaches_a_line(tmp_path: Path) -> None:
     assert "~/notes.txt" in line["text"].replace("\\", "/")
     assert "<config>" in line["text"]
     assert "<data>" in line["decided"]["say"]
+
+
+def test_a_key_or_a_path_in_a_tool_call_s_arguments_is_cleaned_and_the_line_stays_json(
+    tmp_path: Path,
+) -> None:
+    # The arguments are a JSON string inside the line: cleaned after nesting, the token
+    # pattern ate the backslash before a closing quote, which broke the line, and a
+    # path, escaped twice, stayed whole (#304).
+    traces = TraceFile(tmp_path / FILE)
+    note = str(Path.home() / "fleet" / "notes.txt")
+    card = {"say": "Saved.", "token": "abcdef123456", "path": note}
+    client = claude_fakes._Calls(
+        ([claude_fakes._tool_stop("ship_lookup", card)], claude_fakes._looks_up()[1]),
+        ([], claude_fakes._final("Done.")),
+    )
+    asyncio.run(_claude(client, traces, FakeLookup()).decide(BrainRequest("hm", KEYBINDS)))
+    traces.close()
+    text = traces.path.read_text("utf-8")
+    (line,) = [json.loads(row) for row in text.splitlines()]  # whole JSON, not skipped
+    arguments = json.loads(line["calls"][0]["tools"][0]["arguments"])
+    assert arguments["token"] == "[redacted]"  # noqa: S105
+    assert arguments["path"].replace("\\", "/") == "~/fleet/notes.txt"
+    assert "abcdef123456" not in text
+    assert str(Path.home()) not in text
+
+
+def test_a_look_up_an_act_stopped_is_marked_cancelled(tmp_path: Path) -> None:
+    # The task's done callback runs after the line is written, so the round marks it
+    # when it stops it (#305).
+    traces = TraceFile(tmp_path / FILE)
+    look = claude_fakes._tool_stop("ship_lookup", {"name": "Andromeda"}, "toolu_1")
+    gear = {"actions": ["v_toggle_landing_system"], "say": "Gear."}
+    act = claude_fakes._tool_stop("run_actions", gear, "toolu_2")
+    client = claude_fakes._Client([look, act])
+    brain = _claude(client, traces, FakeLookup(hang=True))
+    decided = asyncio.run(brain.decide(BrainRequest("gear", KEYBINDS)))
+    assert decided == RunActions(("v_toggle_landing_system",), "Gear.")
+    (line,) = _lines(traces)
+    (stopped,) = line["lookups"]
+    assert stopped["name"] == "ship_lookup"
+    assert stopped["cancelled"]
+    assert not stopped["error"]
 
 
 def test_tracing_is_off_unless_asked_for(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -249,3 +292,71 @@ def test_a_run_can_be_named_by_its_start() -> None:
     assert reader.pick(lines, "2026-11-12T01")[0] == "2026-11-12T01:00:00 haiku"
     with pytest.raises(SystemExit):
         reader.pick(lines, "2026-11-12")  # two runs start so
+
+
+# --- Costs: where each came from, and the ones looked up after (#317) ------------------
+
+
+@pytest.mark.parametrize(
+    ("cost", "prices", "priced"),
+    [
+        (0.0001, None, "reported"),
+        (None, Prices(prompt=1e-6, completion=5e-6), "price list"),
+        (None, None, ""),
+    ],
+)
+def test_an_openrouter_call_says_where_its_cost_came_from(
+    tmp_path: Path, cost: float | None, prices: Prices | None, priced: str
+) -> None:
+    traces = TraceFile(tmp_path / FILE)
+    brain = openrouter_fakes._brain(FakeChat(text("Hi.", cost=cost)), traces=traces, prices=prices)
+    asyncio.run(brain.decide(BrainRequest("hello", openrouter_fakes.KEYBINDS)))
+    ((call,),) = [line["calls"] for line in _lines(traces)]
+    assert call["priced"] == priced
+    assert (call["cost"] is None) == (priced == "")
+    if priced == "price list":
+        assert call["cost"] == pytest.approx(1000 * 1e-6 + 20 * 5e-6)
+
+
+def test_a_claude_call_s_cost_is_marked_as_tycho_s_estimate(tmp_path: Path) -> None:
+    traces = TraceFile(tmp_path / FILE)
+    client = claude_fakes._Calls(([], claude_fakes._final("Hi.")))
+    asyncio.run(_claude(client, traces).decide(BrainRequest("hello", KEYBINDS)))
+    ((call,),) = [line["calls"] for line in _lines(traces)]
+    assert call["priced"] == "estimate"
+
+
+def test_costs_the_eval_looked_up_after_the_run_reach_their_calls(tmp_path: Path) -> None:
+    # Calls that end at an act never get their usage; the eval looks their cost up by
+    # generation id after the run, and the reader puts it back in the call (#317).
+    file = tmp_path / "traces.jsonl"
+    acted = _line("gear", "run 1", "actions")
+    acted["calls"] = [{"at_ms": 0, "cost": None, "generation": "gen-7", "tools": []}]
+    lost = _line("eject", "run 1", "actions")
+    lost["calls"] = [{"at_ms": 0, "cost": None, "generation": "gen-8", "tools": []}]
+    priced = _line("hello", "run 1", provider="openrouter")
+    priced["calls"][0]["priced"] = "price list"
+    file.write_text("\n".join(json.dumps(x) for x in (acted, lost, priced)) + "\n", "utf-8")
+    reader.add_costs(file, "run 1", {"gen-7": 0.003})
+    reader.add_costs(file, "run 1", {})  # nothing looked up: nothing written
+
+    lines = reader.load(file)
+    assert reader.runs(lines) == [("run 1", 3)]  # the costs line isn't a request
+    _, picked = reader.pick(lines)
+    assert [line["case"] for line in picked] == ["gear", "eject", "hello"]
+    assert picked[0]["calls"][0] == {
+        "at_ms": 0,
+        "cost": 0.003,
+        "generation": "gen-7",
+        "tools": [],
+        "priced": "looked up",
+    }
+    shown = "\n".join(reader.summary(picked, "run 1"))
+    assert "Cost: $0.0032 in all" in shown
+    assert "Costs: 1 looked up, 1 price list; 1 call(s) with no cost" in shown
+
+
+def test_old_claude_lines_count_their_costs_as_estimates() -> None:
+    shown = "\n".join(reader.summary([_line("a", "r"), _line("b", "r")], "r"))
+    assert "Costs: 2 estimate" in shown
+    assert "no cost" not in shown

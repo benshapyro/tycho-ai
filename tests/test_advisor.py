@@ -239,6 +239,39 @@ def test_with_keys_off_star_citizens_briefing_lists_nothing_to_press() -> None:
     assert instructions(built_in()) != instructions(pack)
 
 
+@pytest.mark.parametrize("pack", [advisor_pack(), _star_citizen_off()], ids=["advisor", "sc-off"])
+def test_with_keys_off_no_line_of_the_briefing_tells_the_brain_to_press(pack: GamePack) -> None:
+    # The core's settings and voice sections, and Star Citizen's fleet and quantum lines,
+    # told it to call run_actions or open the star map (#325, #336).
+    text = instructions(pack)
+    for pressing in ("run_actions", "run_sequence", "open the star map if", "keys are pressed"):
+        assert pressing not in text, pressing
+    assert "{{" not in text
+    assert core_sections()["settings"] not in text
+    assert core_sections()["voice"] not in text
+    assert "call settings, then say in the same reply that you don't press keys" in text
+
+
+def test_with_keys_off_star_citizen_s_own_lines_take_their_advisor_words() -> None:
+    off, on = instructions(_star_citizen_off()), instructions(built_in())
+    assert "call update_fleet first and then answer the action as you would alone" in off
+    assert "call update_fleet first and run_actions after it, in the same reply" in on
+    assert "say to open the star map, set the destination there and engage quantum" in off
+    assert "open the star map if it's listed" in on
+
+
+@pytest.mark.parametrize(
+    "line", ["{{keys:only one part}}", "{{keys:a|b|c}}", "{{keys:spans\nlines|b}}"]
+)
+def test_a_keys_marker_that_isn_t_whole_is_refused(tmp_path: Path, line: str) -> None:
+    folder = tmp_path / "fake-advisor"
+    shutil.copytree(Path(str(ADVISOR)), folder)
+    briefing_md = folder / "briefing.md"
+    briefing_md.write_text(briefing_md.read_text("utf-8") + "\n" + line + "\n", "utf-8")
+    with pytest.raises(PackError, match="a keys marker is"):
+        load_pack(folder, built_in=False, registry=REGISTRY)
+
+
 # --- The app and tycho check say which mode, and why -------------------------------------
 
 

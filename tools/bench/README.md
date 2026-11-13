@@ -63,6 +63,7 @@ Results are written next to the clips, in `recordings/<session>/results/`, and s
 uv run python tools/bench/tycho_eval.py                 # every case in src/tycho/packs/star-citizen/eval/cases.toml
 uv run python tools/bench/tycho_eval.py --tag log       # only the cases from play logs
 uv run python tools/bench/tycho_eval.py --pack star-citizen  # a game pack's own cases (ADR 18)
+uv run python tools/bench/tycho_eval.py --pack world-of-warcraft  # an advisor pack: no keybinds, only its own look-ups (#326)
 uv run python tools/bench/tycho_eval.py --provider openrouter --model deepseek/deepseek-v4
 uv run python tools/bench/tycho_eval.py --adapter-check  # Haiku directly, then through OpenRouter
 uv run python tools/bench/tycho_eval.py --provider openrouter --model openai/gpt-oss-120b --host cerebras  # one host only
@@ -98,7 +99,7 @@ uv run python tools/bench/brain_report.py src/tycho/packs/star-citizen/eval/case
 uv run python tools/bench/brain_report.py recordings/<session>   # the recorded phrases, via a speech-to-text engine's transcripts
 ```
 
-Each request gets your bound actions as a cached briefing. Answers are graded against [`cases.toml`](../../src/tycho/packs/star-citizen/eval/cases.toml): the expected kind of answer (actions, look-up, reply), actions that must be pressed, and actions that must never be (a global list covers eject, self-destruct, quantum and jump engage, jettison, respawn and firing). Nothing is pressed. Every run prints its estimated cost.
+Each request gets your bound actions as a cached briefing. Answers are graded against [`cases.toml`](../../src/tycho/packs/star-citizen/eval/cases.toml): the expected kind of answer (actions, look-up, reply), actions that must be pressed, and actions that must never be (a global list covers eject, self-destruct, quantum and jump engage, jettison, respawn and firing). Nothing is pressed. Every run prints its estimated cost. Results go to `recordings/<pack id>.cases.results.jsonl` (Star Citizen's were `recordings/cases.results.jsonl` before [#323](https://github.com/benshapyro/tycho-ai/issues/323): rename that file once to keep comparing with them).
 
 ## Fast router (Jev)
 
@@ -120,3 +121,18 @@ uv run python tools/bench/tts/design_voices.py recordings/voices/designs        
 ```
 
 Lines come from [`voice_lines.txt`](../spike/voice_lines.txt) and [`voice_lines_character.txt`](../spike/voice_lines_character.txt). ElevenLabs costs about half a credit per character on Flash and v4 Turbo; lines already generated are skipped, so a re-run never pays twice.
+
+## Web search: sites first, then the open web (#354, #360)
+
+```powershell
+uv run python tools/bench/web_trial.py                          # sites vs the fallback, 40 questions, 2 rounds, judged
+uv run python tools/bench/web_trial.py --modes fallback --rounds 1 --compare recordings/web_372.jsonl   # a change, beside an earlier run
+uv run python tools/bench/web_trial.py --modes sites,fallback,open,read --rounds 1
+uv run python tools/bench/web_trial.py --limit 5 --judge none   # a quick look
+```
+
+Forty questions: the "where is" and "how do I" requests from a play session, news, answers that live in a page's body, and the "what do players think" kind that live in Reddit threads and blogs. Each goes through `WebSearch` in each mode: `sites` (as players have it), `fallback` (`web_search_open`: the sites first, then the open web and a page read when they have no clear answer), `open` (the open web every time) and `read` (the open web told to read a page).
+
+A stronger Claude (`JUDGE`) grades each question's answers side by side, shuffled so it can't tell the modes apart: right, partial, wrong or none. By default it grades against the question's reference answer in [`web_references.toml`](web_references.toml), about 1 cent a question; a question with no reference stays ungraded. `--judge search` has it search the web itself instead, about 8 cents a question, which cost most of the 12 Nov run. The references were written from that run's graded answers and haven't been checked in the game: the news and opinion ones date first, so update them when the game changes. `--compare` grades an earlier run's answers (its JSONL) beside the new ones as "(before)", so a change to one mode is measured without paying for the other again.
+
+It prints each answer with its time, searches, pages read, cost, stop reason and grade, then a summary per mode and how often a question got the same grade in every round, and appends every new row to `recordings/web_trial.jsonl`. Spot-check the judge by reading some answers yourself. A failed grading leaves that question ungraded and the run goes on. It stops starting new work at `--budget` dollars (5 by default); a fallback-only round costs about $1.10 plus about $0.25 of judging, on the Anthropic key Tycho stores or `ANTHROPIC_API_KEY`.

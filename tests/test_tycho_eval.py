@@ -384,8 +384,21 @@ def test_the_model_benchmarks_load_the_real_case_file(tmp_path: Path) -> None:
         results=results,
     )
     assert cases
-    assert out == results / "cases.results.jsonl"
+    assert out == results / "star-citizen.cases.results.jsonl"  # each pack its own (#323)
     assert results.is_dir()
+
+
+def test_only_a_pack_s_cases_are_named_after_their_pack(tmp_path: Path) -> None:
+    _eval()  # puts tools/bench on the path
+    from brain_report import results_name  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
+
+    pack = tmp_path / "some-folder"
+    (pack / "eval").mkdir(parents=True)
+    (pack / "pack.toml").write_text('id = "some-game"\n', "utf-8")
+    assert results_name(pack / "eval" / "cases.toml") == "some-game.cases"  # its id (#342)
+    assert results_name(tmp_path / "brain_cases.toml") == "brain_cases"
+    (tmp_path / "eval").mkdir()
+    assert results_name(tmp_path / "eval" / "cases.toml") == "cases"  # no pack.toml above
 
 
 # --- Across models (#192) ---------------------------------------------------------------
@@ -541,6 +554,7 @@ def test_generation_costs_that_cant_be_found_are_kept_and_reported(
     assert costs.generations == ["gen-2"]
     assert costs.total == pytest.approx(0.0004)
     assert asked == {"gen-1": 1, "gen-2": 3, "gen-3": 2}
+    assert costs.looked_up == {"gen-1": 0.0003, "gen-3": 0.0001}  # for the traces (#317)
     summary = e.metrics(e.Run("openrouter", "some/model", [_outcome()], costs))
     assert summary["calls_without_cost"] == 1
     assert summary["cost_sources"] == {"reported": 2, "not reported": 1}
@@ -756,6 +770,21 @@ def test_a_pick_the_gate_refuses_is_still_graded_and_noted() -> None:
     assert any("would press nothing (refused" in note for note in outcome.notes)
 
 
+def test_a_confirm_grade_pick_the_gate_refuses_is_graded_as_refused_not_unconfirmed() -> None:
+    # Eject on the same key as Self Destruct: the gate refuses it, so the plan never
+    # "asks", and the verdict said "not confirmed first" (#311). It still fails.
+    e = _eval()
+    keybinds = _with(("v_self_destruct", "ralt+y"))  # Eject's key in the test keybinds
+    outcome = _act(("v_eject",), keybinds)
+    assert outcome.actions == ["v_eject"]
+    assert outcome.refused.startswith("refused")
+    verdict = e.grade(outcome, {"expect": ["actions"], "allow": ["v_eject"]}, {"v_eject"})
+    assert verdict.startswith("WRONG PRESS (the gate refused it: refused")
+    assert "not confirmed first" not in verdict
+    never = e.grade(outcome, {"expect": ["actions"], "never": ["v_eject"]}, {"v_eject"})
+    assert never.startswith("WRONG PRESS ['v_eject']; the gate refused it (refused")
+
+
 def test_the_fast_path_is_planned_through_the_gate_too() -> None:
     from tycho.lexicon import Lexicon
 
@@ -772,3 +801,59 @@ def test_the_tiles_words_never_reach_the_brain_while_it_is_on() -> None:
     rule = {"heard": "keep that up", "expect": ["reply"]}
     outcome = asyncio.run(e.run_case(rule, Lexicon.default(), _NoBrain(), _keybinds()))
     assert (outcome.route, outcome.kind) == ("session", "pin")
+
+
+# --- Advisor packs: Tycho presses nothing, and never says it did (#326) -----------------
+
+
+@pytest.mark.parametrize(
+    "say",
+    [
+        "Mounting up.",
+        "Done.",
+        "On it!",
+        "Hearthing.",
+        "Casting now.",
+        "I've opened your map.",
+        "I cast it.",
+    ],
+)
+def test_a_reply_that_claims_a_press_fails_with_keys_off(say: str) -> None:
+    e = _eval()
+    outcome = _outcome(say=say)
+    verdict = e.grade(outcome, {"expect": ["reply"]}, set(), keys_off=True)
+    assert verdict.startswith("claimed a press with keys off")
+    # With keys on, the same words aren't a claim the eval checks here.
+    assert e.grade(outcome, {"expect": ["reply"]}, set()) == "pass"
+
+
+@pytest.mark.parametrize(
+    "say",
+    [
+        "I don't press keys in this game. Your mount key summons it.",
+        "Opening the map is M by default, and the zone map is shift M.",
+        "Casting while moving only works for instant spells.",
+        "Okay, back soon.",
+        "Casting is faster with more haste.",
+        "Jumping puzzles reward a toy.",
+        "Not unless I cast it, and I can't.",
+    ],
+)
+def test_a_reply_that_says_how_passes_with_keys_off(say: str) -> None:
+    e = _eval()
+    assert e.grade(_outcome(say=say), {"expect": ["reply"]}, set(), keys_off=True) == "pass"
+
+
+def test_an_advisor_pack_is_offered_only_the_look_ups_it_names() -> None:
+    from tycho.packs import built_in
+
+    e = _eval()
+    pack = built_in("world-of-warcraft")
+    wanted = {*pack.parts.lookups, "settings"}
+    tools = {name: FakeLookup(name=name) for name in ("ships", "trade", "settings", "web")}
+    offered = e.pack_lookups(wanted, [*tools.items(), ("items", None)])
+    assert offered == [tools["settings"]]
+    assert e.pack_lookups({"ships", "settings"}, list(tools.items())) == [
+        tools["ships"],
+        tools["settings"],
+    ]

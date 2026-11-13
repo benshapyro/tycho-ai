@@ -84,6 +84,9 @@ h1 { margin: 0 0 4px; font-family: var(--f-label); font-weight: 600; font-size: 
 .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); }
 .seg button { border: 0; background: none; padding: 5px 10px; cursor: pointer; color: var(--dim); font-size: 13px; }
 .seg button[aria-pressed="true"] { background: var(--acc-soft); color: var(--acc); }
+.packs { display: grid; gap: 6px; width: 100%; }
+.pack { display: grid; gap: 2px; text-align: left; padding: 8px 10px; background: none; cursor: pointer; color: var(--dim); }
+.pack[aria-pressed="true"] { background: var(--acc-soft); color: var(--acc); }
 .switch { width: 44px; height: 22px; border: 1px solid var(--rule); background: #060a12; position: relative; cursor: pointer; padding: 0; }
 .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; background: var(--dim); transform: rotate(45deg) scale(.8); transition: left .15s; }
 .switch[aria-checked="true"] { border-color: var(--acc-line); background: var(--acc-soft); }

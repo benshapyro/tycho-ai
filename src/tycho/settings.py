@@ -31,7 +31,7 @@ from tycho.voice import voices
 
 CURRENT_VERSION = 1
 
-type Game = Literal["star-citizen"]
+type Game = Literal["star-citizen", "world-of-warcraft"]
 """The game packs that ship inside Tycho (ADR 18); a test keeps it the same as
 ``packs.installed()``."""
 type Device = Literal["auto", "gpu", "cpu"]
@@ -162,6 +162,15 @@ class Settings(BaseModel):
         default=True,
         description="Let Tycho search Star Citizen sites for news, upcoming patches and new "
         "ships. Each search costs about 1 cent of your Anthropic credit.",
+        json_schema_extra=_rule("lower_only", how=FILE_OR_APP),
+    )
+    web_search_open: bool = Field(
+        default=False,
+        description="Trial: when the Star Citizen sites have no clear answer, let web search "
+        "look on any website (guides, forums, Reddit) and read a page, for where things are "
+        "and how to do things. Answers may come from players' posts and be out of date. "
+        "That search takes longer (up to about 25 s) and costs about 2 to 4 cents. Off by "
+        "default.",
         json_schema_extra=_rule("lower_only", how=FILE_OR_APP),
     )
     brain_provider: Provider = Field(

@@ -69,11 +69,15 @@
       : "Change anything you chose the first time. Changes apply when Tycho restarts.";
     let body = "";
     let ok = true;
-    if (step === 0) {
+    if (step === 0 && !s.game.needed) {
+      body = `<div class="card frame"><h3>Which game?</h3>
+        <p class="ok-line">✓ ${esc(s.game.name)}: Tycho needs nothing from the game's folder.</p>
+        <p class="note">Change the game under Settings, Game and controls.</p></div>`;
+    } else if (step === 0) {
       ok = s.game.found;
       body = `<div class="card frame"><h3>Which game?</h3>
         <div class="seg" role="group" aria-label="Game channel">${s.channels.map((c) => `<button type="button" aria-pressed="${c === s.game.channel}" data-channel="${esc(c)}">${esc(c)}</button>`).join("")}</div>
-        ${s.game.found ? `<p class="ok-line">✓ Found Star Citizen ${esc(s.game.channel)} in <span class="num">${esc(s.game.folder)}</span></p>`
+        ${s.game.found ? `<p class="ok-line">✓ Found ${esc(s.game.name)} ${esc(s.game.channel)} in <span class="num">${esc(s.game.folder)}</span></p>`
           : `<p class="err">${esc(s.game.problem)}. Choose the folder it's in (the RSI Launcher shows it under Settings, Games, Library Folder).</p>`}
         <div class="keyrow"><button class="btn frame" type="button" id="folder">Choose the folder…</button><span class="err" id="folderErr"></span></div>
         <p class="note">Tycho reads your keybinds from the game's files and never changes them.</p></div>`;
@@ -215,6 +219,7 @@
       case "number":
         return `<input type="range" min="${r.minimum ?? 0}" max="${r.maximum ?? 100}" step="1" value="${v}" data-num="${esc(r.name)}" aria-label="${esc(r.label)}"><span class="num val">${v} s</span>`;
       case "choice":
+        if (r.packs) return packChoice(r);
         return `<div class="seg" role="group" aria-label="${esc(r.label)}">${r.choices.map((c) => `<button type="button" aria-pressed="${v === c}" data-pick="${esc(r.name)}" data-v="${esc(c)}">${esc(c)}</button>`).join("")}</div>`;
       case "setup":
         if (r.name === "push_to_talk")
@@ -226,6 +231,10 @@
         return `<input class="input" value="${esc(v ?? "")}" data-text="${esc(r.name)}" aria-label="${esc(r.label)}" style="max-width:220px">`;
     }
   }
+  // The Game setting: each game pack, and whether Tycho presses keys there, and why not (#295).
+  const packChoice = (r) => `<div class="packs" role="group" aria-label="${esc(r.label)}">${r.packs.map((p) =>
+    `<button type="button" class="pack frame" aria-pressed="${r.value === p.id}" data-pick="${esc(r.name)}" data-v="${esc(p.id)}" data-name="${esc(p.name)}">
+      <b>${esc(p.name)}</b><span class="note">${p.mode === "advisor" ? `Advisor only: Tycho presses no keys. ${esc(p.why)}` : `Tycho presses your keys.${p.why ? ` ${esc(p.why)}` : ""}`}</span></button>`).join("")}</div>`;
   const row = (r) => `<div class="set"><div><b>${esc(r.label)}</b>${r.description ? `<p>${esc(r.description)}</p>` : ""}<div class="meta">${chips(r)}</div></div><div class="ctl">${control(r)}</div></div>`;
 
   let setupState = null;
@@ -262,7 +271,8 @@
     const r = await api.set(name, value);
     if (!r.ok) { toast(r.problem); await render(); return; }
     if (!r.changed) return;
-    toast(`${words}.${r.applies === "now" ? "" : " Applies when Tycho restarts."}`, true);
+    const when = { now: "", restarting: " Tycho restarts with it now." }[r.applies] ?? " Applies when Tycho restarts.";
+    toast(`${words}.${when}`, true);
     await render();
   }
   function bindSettings() {
@@ -278,7 +288,7 @@
       r.addEventListener("input", () => (r.nextElementSibling.textContent = r.value + " s"));
       r.addEventListener("change", () => change(r.dataset.num, Number(r.value), `${label(r.dataset.num)}: ${r.value} s`));
     });
-    page.querySelectorAll("[data-pick]").forEach((b) => b.addEventListener("click", () => change(b.dataset.pick, b.dataset.v, `${label(b.dataset.pick)}: ${b.dataset.v}`)));
+    page.querySelectorAll("[data-pick]").forEach((b) => b.addEventListener("click", () => change(b.dataset.pick, b.dataset.v, `${label(b.dataset.pick)}: ${b.dataset.name || b.dataset.v}`)));
     page.querySelectorAll("[data-text]").forEach((i) => i.addEventListener("change", () => change(i.dataset.text, i.value, `${label(i.dataset.text)}: ${i.value || "none"}`)));
     $("#setCapture")?.addEventListener("click", () => capture($("#setCapture"), $("#setPtt")));
     $("#setFolder")?.addEventListener("click", chooseFolder);
@@ -375,7 +385,7 @@
     page.innerHTML = `<h1>Commands</h1>
       <p class="lede">What you can say, what it does in the game, and your key for it. Built-in phrases are instant; anything else goes to Claude. Your phrases are saved to <span class="num">${esc(d.file)}</span> and apply when Tycho restarts.</p>
       ${d.problem ? `<p class="err">${esc(d.problem)}</p>` : ""}${d.warnings.map((w) => `<p class="warn-line">${esc(w)}</p>`).join("")}
-      ${d.game ? "" : `<p class="warn-line">Star Citizen wasn't found, so keys can't be shown. Set the game folder in Settings.</p>`}
+      ${d.keys_off ? `<p class="warn-line">Key actions are off. ${esc(d.keys_off)} These commands press nothing.</p>` : d.game ? "" : `<p class="warn-line">${esc(d.game_name)} wasn't found, so keys can't be shown. Set the game folder in Settings.</p>`}
       <div class="toolbar"><input class="input" id="cmdSearch" type="search" placeholder="Search: gear, doors, quantum…" value="${esc(cmdQuery)}" aria-label="Search commands">
         <div class="seg" role="group" aria-label="Show">${filters.map(([k, l]) => `<button type="button" aria-pressed="${cmdFilter === k}" data-filter="${k}">${l} ${counts[k]}</button>`).join("")}</div></div>
       <div class="tablewrap"><table><thead><tr><th>Command</th><th>Say it</th><th>Your key</th><th>Notes</th></tr></thead><tbody>

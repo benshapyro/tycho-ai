@@ -111,6 +111,7 @@ def load_brain(
                     anthropic.AsyncAnthropic(api_key=search_key, max_retries=0),
                     log_queries=current.keep_transcripts,
                     sites=pack.web_sites,
+                    fallback=current.web_search_open,
                 )
             )
 

@@ -89,7 +89,7 @@ from tycho.runtime.routing import (
     tile_command,
 )
 from tycho.tile import Card
-from tycho.tile.cards import long_answer
+from tycho.tile.cards import long_answer, notice
 from tycho.voice import SpeechError
 
 log = logging.getLogger(__name__)
@@ -136,6 +136,10 @@ least this long from then: a look-up and Claude's answer to it take 3-5 s, and t
 a row ran past BRAIN_SECONDS in the play session (#150). Never less than
 BRAIN_SECONDS, and never past LOOKING_LIMIT."""
 SEARCH_LIMIT = 20.0
+OPEN_SEARCH_SECONDS = 27.0
+OPEN_SEARCH_LIMIT = 32.0
+"""With ``web_search_open`` (the #354 trial): two searches and page reads take longer,
+up to the search's own 25 s, so the brain gets more time once it starts."""
 """A request with a web search answers or fails this long after it was asked."""
 LOOKING_LIMIT = 15.0
 """However many look-ups, an answer comes or fails this long after the request."""
@@ -203,6 +207,7 @@ class Session:
         brain: Brain | None = None,
         brain_seconds: float = BRAIN_SECONDS,
         search_seconds: float = SEARCH_SECONDS,
+        search_limit: float = SEARCH_LIMIT,
         looking_seconds: float = LOOKING_SECONDS,
         looking_limit: float = LOOKING_LIMIT,
         speaker: Speaker | None = None,
@@ -236,9 +241,12 @@ class Session:
         self._brain = brain
         self._brain_seconds = brain_seconds
         self._search_seconds = search_seconds
+        self._search_limit = search_limit
         self._looking_seconds = looking_seconds
         self._looking_limit = looking_limit
         self._speaker = speaker
+        self._told_keys_off = False
+        """Whether this session has said why a press was refused with key actions off."""
         self._speech: asyncio.Task[None] | None = None
         self._filling: asyncio.Task[None] | None = None
         """The filler line, while it plays; the answer waits for it rather than cut it off."""
@@ -591,7 +599,9 @@ class Session:
 
                 def searching() -> None:
                     # Capped too (#169): after look-ups, a search can't run past it.
-                    budget.reschedule(min(loop.time() + self._search_seconds, asked + SEARCH_LIMIT))
+                    budget.reschedule(
+                        min(loop.time() + self._search_seconds, asked + self._search_limit)
+                    )
                     self._fill()
 
                 def looking() -> None:
@@ -718,7 +728,15 @@ class Session:
         self._reporter.report(result, voice=self._speaker is not None, speak=speak)
         self._conversation.heard(result)
         self._to_tile(result)
-        if self._speaker is not None and speak:
+        if self._keys_off_first(result):
+            # A player who forgot they turned key actions off hears why, once a session
+            # (#327): on the Tile, and spoken after the not-done sound.
+            if self._display is not None:
+                self._display.show(notice(result.detail))
+            self._feedback.not_done()
+            if self._speaker is not None:
+                self._start_speaking(self._speaker, result.detail, lambda: None)
+        elif self._speaker is not None and speak:
             self._start_speaking(self._speaker, result.say, self._feedback.done)
         elif result.status == "asking" and self._speaker is not None and result.question:
             self._start_speaking(self._speaker, result.question, self._feedback.ask)
@@ -730,6 +748,16 @@ class Session:
             self._feedback.not_done()
         if self._on_result is not None:
             self._on_result(result)
+
+    def _keys_off_first(self, result: Result) -> bool:
+        """Whether this is the session's first press refused because key actions are off."""
+        lists = self._safety_lists
+        if self._told_keys_off or lists is None or not lists.keys_off:
+            return False
+        if result.status != "refused" or result.detail != lists.keys_off:
+            return False
+        self._told_keys_off = True
+        return True
 
     def _to_tile(self, result: Result) -> None:
         """The talk light goes out, and a reply's card or the gate's question goes up."""
