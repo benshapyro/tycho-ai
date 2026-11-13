@@ -138,7 +138,7 @@ BRAIN_SECONDS, and never past LOOKING_LIMIT."""
 SEARCH_LIMIT = 20.0
 OPEN_SEARCH_SECONDS = 27.0
 OPEN_SEARCH_LIMIT = 32.0
-"""With ``web_search_open`` (the #354 trial): two searches and page reads take longer,
+"""With ``web_search_open`` (#354, on by default): two searches and page reads take longer,
 up to the search's own 25 s, so the brain gets more time once it starts."""
 """A request with a web search answers or fails this long after it was asked."""
 LOOKING_LIMIT = 15.0
