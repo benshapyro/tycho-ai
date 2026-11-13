@@ -392,8 +392,8 @@ class OpenRouterBrain:
                 if isinstance(decided, Reply):
                     return credited(decided, turn.credits)
                 return decided
-            tokens, cost = self._log_usage(message.usage, started, host=message.host)
-            round_.used(tokens, cost, message.finish or "unknown", message.host)
+            tokens, cost, priced = self._log_usage(message.usage, started, host=message.host)
+            round_.used(tokens, cost, message.finish or "unknown", message.host, priced)
             if message.finish == "content_filter":
                 raise BrainError("the model declined")
             if not round_.looking:
@@ -441,8 +441,10 @@ class OpenRouterBrain:
                     if message.finish == "length" and not call.whole():
                         # Cut off at the output limit (#266): its arguments end mid-way.
                         message.calls.remove(call)
-                        tokens, cost = self._log_usage(message.usage, started, host=message.host)
-                        round_.used(tokens, cost, "length", message.host)
+                        tokens, cost, priced = self._log_usage(
+                            message.usage, started, host=message.host
+                        )
+                        round_.used(tokens, cost, "length", message.host, priced)
                         return await round_.cut_short(call.name), message, round_
                     if (
                         decided := await self._tool_call(round_, call, message, started)
@@ -517,11 +519,12 @@ class OpenRouterBrain:
         started: float,
         what: str = "Brain replied",
         host: str = "",
-    ) -> tuple[dict[str, int], float | None]:
-        """Log a call's tokens and cost; returns them, for the trace."""
+    ) -> tuple[dict[str, int], float | None, str]:
+        """Log a call's tokens and cost; returns them, and where the cost came from, for
+        the trace."""
         if not usage:
             log.debug("%s in %.0f ms: no usage reported%s", what, ms(started), _served(host))
-            return {}, None
+            return {}, None, ""
         prompt, completion = (
             int(usage.get("prompt_tokens") or 0),
             int(usage.get("completion_tokens") or 0),
@@ -546,7 +549,9 @@ class OpenRouterBrain:
             _served(host),
         )
         tokens = {"input": prompt, "output": completion, "cache_read": cached}
-        return tokens, float(cost) if isinstance(cost, int | float) else None
+        if not isinstance(cost, int | float):
+            return tokens, None, ""
+        return tokens, float(cost), source
 
 
 def route(hosts: Sequence[str] = (), sort: str | None = None) -> dict[str, object]:

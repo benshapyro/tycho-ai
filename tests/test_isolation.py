@@ -37,3 +37,17 @@ def test_keys_go_to_a_memory_keyring_that_starts_empty() -> None:
 def test_only_the_replay_tests_keep_the_real_speech_model(tmp_path: Path) -> None:
     assert not paths.models_dir().is_relative_to(tmp_path)
     assert paths.config_dir().is_relative_to(tmp_path)
+
+
+def test_the_models_folder_is_real_only_for_a_replay_test(
+    tmp_path: Path, request: pytest.FixtureRequest
+) -> None:
+    # The replay test above never runs in CI (-m "not replay"), so the choice is checked
+    # here, with and without the marker (#302).
+    from tests.conftest import REAL_MODELS, models_folder
+
+    node = request.node
+    assert isinstance(node, pytest.Item)
+    assert models_folder(node, tmp_path) == tmp_path / "models"
+    node.add_marker(pytest.mark.replay)
+    assert models_folder(node, tmp_path) == REAL_MODELS

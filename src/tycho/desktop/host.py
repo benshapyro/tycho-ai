@@ -49,6 +49,10 @@ class Host:
         self.focus_window: Callable[[], None] = lambda: None
         self.restarting = False
         """The voice loop stopped to start again, with the settings as saved (#295)."""
+        self._quitting = False
+        """The player asked to quit: no restart after that (#330)."""
+        self._deciding = threading.Lock()
+        """Held while deciding between a quit and a restart (#345)."""
 
     # From any thread: the tray, or tests.
 
@@ -57,6 +61,12 @@ class Host:
         if request == "open" and self.window_open():
             self.focus_window()  # already open: bring it forward, don't queue another
             return
+        if request == "quit":
+            # A quit wins over a restart asked for just before it (#330), under the
+            # lock restart() takes, so neither can slip between the other's steps (#345).
+            with self._deciding:
+                self._quitting = True
+                self.restarting = False
         self._requests.put(request)
         if request == "quit":
             self.on_quit()  # the main thread may be inside the window: close it
@@ -65,9 +75,10 @@ class Host:
         """Stop the voice loop so Tycho starts it again, as after a new game is picked
         (#295). It stops as quitting does, letting go of any key; the window closes, and
         opens again once the new loop is listening. False if nothing is running."""
-        if not self._thread.is_alive():
-            return False
-        self.restarting = True
+        with self._deciding:
+            if not self._thread.is_alive() or self._quitting:
+                return False
+            self.restarting = True
         self._requests.put("restart")
         threading.Timer(CLOSE_SECONDS, self.on_quit).start()
         return True
@@ -118,6 +129,8 @@ class Host:
                         self.windows += 1
                         open_window()  # runs until the player closes the window
         except KeyboardInterrupt:
+            with self._deciding:
+                self._quitting, self.restarting = True, False
             self.stop()
             raise
         finally:

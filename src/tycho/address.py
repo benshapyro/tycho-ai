@@ -1,5 +1,6 @@
 """What Tycho calls the player (#15, architecture 4.8): "Commander" by default, or a
-name, callsign or rank they choose, or nothing.
+name, callsign or rank they choose, or nothing. A game pack may set its own default
+(``call_me`` in pack.toml, #349): "Commander" is a Star Citizen title.
 
 The brain hears it in each request's header (``header``), not in the cached briefing,
 so a change by voice applies to the next request. Tycho's own confirm question ends
@@ -9,21 +10,34 @@ voice speaks, so the console and logs keep the spelling the player chose.
 
 import re
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from tycho.runtime.ports import Speaker
-from tycho.settings import HowOften, Settings
+from tycho.settings import DEFAULT_CALL_ME, HowOften, Settings
+
+if TYPE_CHECKING:
+    from tycho.packs import GamePack
 
 
 @dataclass(slots=True)
 class Address:
-    name: str = "Commander"
+    name: str = DEFAULT_CALL_ME
     says: str = ""
     """How to say ``name`` if the voice gets it wrong; empty means as written."""
     how_often: HowOften = "sparingly"
 
     @classmethod
-    def from_settings(cls, current: Settings) -> Address:
-        return cls(current.call_me, current.call_me_says, current.call_me_how_often)
+    def from_settings(cls, current: Settings, pack: GamePack | None = None) -> Address:
+        """What the settings say to call the player, in ``pack``'s game: while they keep
+        Tycho's default name, the pack's own default takes its place (#349)."""
+        return cls(
+            default_name(current.call_me, pack), current.call_me_says, current.call_me_how_often
+        )
+
+    @classmethod
+    def for_pack(cls, pack: GamePack | None) -> Address:
+        """The default address in ``pack``'s game, as for a player who never chose one."""
+        return cls(default_name(DEFAULT_CALL_ME, pack))
 
     def set(self, setting: str, value: object) -> None:
         """Apply one ``call_me`` setting changed by voice."""
@@ -53,6 +67,15 @@ class Address:
         if not self.name or not self.says:
             return text
         return re.sub(rf"\b{re.escape(self.name)}\b", self.says, text, flags=re.IGNORECASE)
+
+
+def default_name(call_me: str, pack: GamePack | None) -> str:
+    """``call_me``, or the pack's own default if it's Tycho's default (#349). The settings
+    file stores the default like any choice, so a player who picked "Commander"
+    themselves gets the pack's default too, and can choose another name."""
+    if pack is not None and pack.call_me is not None and call_me == DEFAULT_CALL_ME:
+        return pack.call_me
+    return call_me
 
 
 class Pronouncing:

@@ -7,7 +7,7 @@ import logging
 import os
 import sys
 import time
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -226,12 +226,28 @@ def _run(
     # The star while it starts, for a terminal `tycho run` too: a second start then
     # says it's still starting rather than nothing (review of #157).
     reopen = False
+    previous: Settings | None = None
+    """The settings before a restart, while the new game hasn't started yet (#329)."""
+    notices: list[str] = []
     while True:
         starting = _Starting(requests) if window and sys.platform == "win32" else None
         try:
             code = _start(
-                current, window=window, requests=requests, starting=starting, reopen=reopen
+                current,
+                window=window,
+                requests=requests,
+                starting=starting,
+                reopen=reopen,
+                notices=notices,
             )
+        except GAME_ERRORS as e:
+            if previous is None or previous.game == current.game:
+                raise
+            # The new game didn't start (its folder isn't there): rather than vanish with
+            # the window already closed, go back to the game that ran, and say why (#329).
+            current, notices = _back_to(previous, current, str(e))
+            previous = None
+            continue
         finally:
             if starting is not None:
                 starting.close()
@@ -239,12 +255,35 @@ def _run(
             return code
         # A new game was picked in the window (#295): everything loaded at start, again.
         log.info("Restarting with the settings as saved")
-        current = settings.load()
+        previous, current, notices = current, settings.load(), []
         reopen = True
+        if previous.game != current.game and window and sys.platform == "win32":
+            from tycho.desktop.setup import needs_setup
+
+            if needs_setup(current):
+                # The new game needs setting up (its folder isn't found): the window asks.
+                log.info("Opening Tycho's window to set up %s", current.game)
+                if first_run(requests) == "done":
+                    current = settings.load()
+                else:
+                    current, notices = _back_to(previous, current, "its setup wasn't finished")
+                    previous = None
 
 
 RESTART = -1
 """``_start``'s answer when the voice loop stopped to start again (#295)."""
+GAME_ERRORS = (FileNotFoundError, GameDataError)
+"""What a game that can't be started raises: its folder or its files aren't there."""
+
+
+def _back_to(previous: Settings, current: Settings, why: str) -> tuple[Settings, list[str]]:
+    """Save the game that ran before a restart back to the settings, and the notice that
+    says why (#329). The window opens again on it, as it was."""
+    tried, back = built_in(current.game).name, built_in(previous.game).name
+    said = f"Couldn't start {tried} ({why}), so Tycho is back on {back}."
+    log.warning("%s", said)
+    settings.update({"game": previous.game})
+    return settings.load(), [said]
 
 
 def _start(
@@ -254,10 +293,12 @@ def _start(
     requests: OpenRequests | None,
     starting: _Starting | None,
     reopen: bool = False,
+    notices: Sequence[str] = (),
 ) -> int:
     """Everything after setup: the speech model, the keybinds, the Tile, the
     microphone, then listening. ``RESTART`` if the window asked to start again;
-    ``reopen`` opens the window once listening, as it was before a restart."""
+    ``reopen`` opens the window once listening, as it was before a restart. ``notices``
+    are shown on the Tile once it's up (why a new game didn't start, #329)."""
     from tycho.address import Address, Pronouncing
     from tycho.audio.microphone import Microphone
     from tycho.feedback import SoundDevicePlayer, SoundFeedback
@@ -287,8 +328,9 @@ def _start(
     action_log = FileActionLog()
     log.info("Action log: %s", action_log.path)
     feedback = SoundFeedback(SoundDevicePlayer(), current.feedback_volume)
-    told: list[str] = []
-    """The voice fell back to George (#242): shown on the Tile once it's up."""
+    told: list[str] = list(notices)
+    """The voice fell back to George (#242), or a game didn't start: shown on the Tile
+    once it's up."""
 
     def voice_fell_back(said: str) -> None:
         if display is None:
@@ -300,7 +342,7 @@ def _start(
     voice = load_speaker(
         current, voice_fell_back, starting.doing if starting is not None else lambda _now: None
     )
-    address = Address.from_settings(current)
+    address = Address.from_settings(current, pack)  # the pack's default name (#349)
     speaker = Pronouncing(voice, address) if voice is not None else None
     # What a setting changed by voice changes in the running session (#111). A name
     # missing here applies at the next start; the session is added once it's built.
@@ -941,6 +983,8 @@ def build_session(
         brain=make_brain(matcher) if make_brain is not None else None,
         speaker=speaker,
         brain_seconds=current.brain_seconds,
+        search_seconds=_search_seconds(current.web_search_open)[0],
+        search_limit=_search_seconds(current.web_search_open)[1],
         confirm_seconds=current.confirm_seconds,
         log_transcripts=current.keep_transcripts,
         on_result=on_result,
@@ -948,6 +992,16 @@ def build_session(
         display=display,
         safety_lists=pack.safety,
     )
+
+
+def _search_seconds(open_web: bool) -> tuple[float, float]:
+    """How long the brain has once a search starts, and the request's limit. The
+    open-web fallback (#354) searches twice and reads pages: it gets longer."""
+    from tycho.runtime import session
+
+    if open_web:
+        return session.OPEN_SEARCH_SECONDS, session.OPEN_SEARCH_LIMIT
+    return session.SEARCH_SECONDS, session.SEARCH_LIMIT
 
 
 NO_KEYBINDS = Keybinds([])

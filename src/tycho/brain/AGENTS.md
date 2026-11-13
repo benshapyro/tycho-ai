@@ -9,7 +9,7 @@ Claude decides what to do with anything the fast path doesn't match. Its output 
 - `openrouter.py`: the same through OpenRouter, for any model (#192). Players get it with `brain_provider = "openrouter"` (#112), on a model from `providers`; the eval uses it on any model. It has no web search of its own: with the player's Anthropic key it gets the usual `WebSearch`, and without one `SearchNeedsAnthropic`, which tells the model to say so.
 - `providers.py`: the allowlist players pick from (#112). A model goes in only after the eval scores it with zero wrong presses; the settings schema refuses anything else. The wiring is in `src/tycho/brain_choice.py`.
 - `decisions.py`: what Claude can decide (`RunActions`, `RunSequence`, `Reply`), `parse_tool_call`, and the errors.
-- `briefing.py`: the cached system prompt. It lists the player's bound actions.
+- `briefing.py`: the cached system prompt. It lists the player's bound actions. With key actions off, `advisor.md` replaces the core's `tools`, `no-key`, `settings`, `tile`, `unclear`, `squad`, `safety`, `date` and `voice` sections, in words that name no game (#349), and a pack's own `{{keys:with keys|without}}` markers take their second text (#325): no line may tell the brain to press when it can't.
 - `lookups.py`: the `Lookup` Protocol and `run_lookup`, which never raises.
 - `traces.py`: one JSON line per request for Claude sessions to read (#282; root AGENTS.md, "Brain traces"). `rounds` records the calls, tool calls and look-ups on `Turn.trace`, and `traced` writes the line; an adapter only reports its stream (`Round.streaming`, `Round.used`). A new adapter passes `traces` through and does the same.
 

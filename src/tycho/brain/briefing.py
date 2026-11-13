@@ -21,7 +21,7 @@ from tycho.commands import CommandMatcher, resolve
 from tycho.game.keybinds import Keybinds
 from tycho.input.plan import pressable_input
 from tycho.packs import GamePack, built_in
-from tycho.packs.pack import MARKER
+from tycho.packs.pack import KEYS, MARKER
 
 
 def core_sections() -> dict[str, str]:
@@ -46,12 +46,16 @@ def instructions(pack: GamePack | None = None) -> str:
     """The briefing's fixed text: the pack's part, with the core sections in their places.
     For Star Citizen it's byte for byte the text from before packs (a test pins it), so
     the prompt cache and eval scores carry over. In advisor mode, the tool rules say
-    Tycho presses nothing, and why (#191)."""
+    Tycho presses nothing, and why (#191), and the pack's ``{{keys:...|...}}`` lines take
+    their advisor words (#325)."""
     pack = pack or built_in()
     core = core_sections()
-    if pack.safety.keys_off:
+    off = bool(pack.safety.keys_off)
+    if off:
         core |= advisor_sections(pack.safety.keys_off)
-    return MARKER.sub(lambda found: core[found.group(1)], pack.briefing)
+    # The pack's own lines that differ when nothing can be pressed (#325).
+    game = KEYS.sub(lambda found: found.group(2 if off else 1), pack.briefing)
+    return MARKER.sub(lambda found: core[found.group(1)], game)
 
 
 def briefed(action_name: str, actionmap: str, pack: GamePack | None = None) -> bool:

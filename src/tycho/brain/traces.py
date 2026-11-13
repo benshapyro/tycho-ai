@@ -27,6 +27,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from time import perf_counter
+from typing import cast
 
 from tycho import __version__, logs, paths
 from tycho.brain.decisions import Decision, Reply, RunActions, RunSequence
@@ -85,6 +86,9 @@ class Call:
     stream at an act, so the rest never arrived."""
     tokens: dict[str, int] = field(default_factory=dict[str, int])
     cost: float | None = None
+    priced: str = ""
+    """Where ``cost`` came from: "reported" by OpenRouter, worked out from its "price
+    list", or Tycho's own "estimate" from Anthropic's prices; empty with no cost (#317)."""
     host: str = ""
     """Who served it, through OpenRouter."""
     generation: str = ""
@@ -134,19 +138,27 @@ class Trace:
         """A tool call in the current call was complete."""
         if not self.calls:
             self.call()
-        shown = json.dumps(arguments, ensure_ascii=False, default=str)
+        # Cleaned here, while it's plain text: once nested in the line its quotes are
+        # escaped, so a key pattern could eat a backslash and a path is escaped twice (#304).
+        shown = _clean(json.dumps(arguments, ensure_ascii=False, default=str))
         if len(shown) > ARGUMENT_CHARS:
             shown = shown[:ARGUMENT_CHARS] + "...(cut)"
         self.calls[-1].tools.append({"name": name, "arguments": shown, "ms": self.elapsed()})
 
     def used(
-        self, tokens: Mapping[str, int], cost: float | None, stop: str = "", host: str = ""
+        self,
+        tokens: Mapping[str, int],
+        cost: float | None,
+        stop: str = "",
+        host: str = "",
+        priced: str = "",
     ) -> None:
         """The current call's usage, when it finished with a whole reply."""
         if not self.calls:
             return
         last = self.calls[-1]
         last.tokens, last.cost, last.host = dict(tokens), cost, host or last.host
+        last.priced = priced if cost is not None else ""
         last.stop = stop or last.stop
 
     def served(self, host: str, generation: str = "") -> None:
@@ -198,7 +210,7 @@ class Trace:
         data = {"version": __version__, **data}
         if not self.case:
             data.pop("case")
-        return _relative(logs.redact(json.dumps(data, ensure_ascii=False, default=str)))
+        return json.dumps(_cleaned(data), ensure_ascii=False, default=str)
 
 
 class TraceFile:
@@ -260,6 +272,26 @@ class TraceFile:
         if self._handler is not None:
             with contextlib.suppress(Exception):
                 self._handler.close()
+
+
+def _clean(text: str) -> str:
+    """No key and no absolute path in ``text``."""
+    return _relative(logs.redact(text))
+
+
+def _cleaned(value: object) -> object:
+    """Every text in ``value`` cleaned before it's written as JSON, so the cleaning never
+    sees JSON's escapes and can't break the line (#304)."""
+    match value:
+        case str():
+            return _clean(value)
+        case dict():
+            items = cast(dict[object, object], value).items()
+            return {_cleaned(k): _cleaned(v) for k, v in items}
+        case list() | tuple():
+            return [_cleaned(v) for v in cast(list[object], value)]
+        case _:
+            return value
 
 
 def _relative(text: str) -> str:

@@ -226,7 +226,7 @@ class ClaudeBrain:
                         return credited(decided, turn.credits)
                     return decided
                 tokens, cost = _log_usage(message.usage, started)
-                round_.used(tokens, cost, str(message.stop_reason))
+                round_.used(tokens, cost, str(message.stop_reason), priced="estimate")
                 if message.stop_reason == "refusal":
                     raise BrainError("Claude declined")
                 if not round_.looking:

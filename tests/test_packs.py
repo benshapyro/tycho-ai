@@ -41,6 +41,7 @@ from tycho.packs import (
     installed,
     load_pack,
 )
+from tycho.packs import pack as pack_module
 from tycho.runtime.planning import Planned, Questions, Refusal, Steps, plan_request
 from tycho.runtime.routing import Picked, from_brain
 from tycho.settings import Game, Settings
@@ -64,7 +65,7 @@ def test_star_citizens_briefing_is_byte_for_byte_what_it_was_before_packs() -> N
 
 def test_star_citizen_is_the_pack_tycho_ships() -> None:
     pack = built_in()
-    assert installed() == ("star-citizen",)
+    assert installed() == ("star-citizen", "wow-forever")
     assert (pack.id, pack.name, pack.version, pack.format) == (
         "star-citizen",
         "Star Citizen",
@@ -219,6 +220,52 @@ def test_a_tile_accent_must_be_a_colour(tmp_path: Path) -> None:
     (folder / "tile.toml").write_text('[accents]\nFAKE = "orange"\n', "utf-8")
     with pytest.raises(PackError, match="accents must be colours"):
         load_pack(folder, built_in=False, registry=REGISTRY)
+
+
+@pytest.mark.parametrize(
+    ("name", "text", "message"),
+    [
+        ("tile.toml", '[accents]\nDRAK = "#f5901e"\n[makers]\ndrake = ["DRAK"]\n', "maker"),
+        ("tile.toml", '[accents]\nDRAK = ["#f5901e"]\n', "accents must be colours"),
+        ("tile.toml", "[accents]\nDRAK = 5\n", "accents must be colours"),
+        ("tile.toml", "accents = 5\n", "[accents] must be a table"),
+        ("tile.toml", "makers = []\n", "[makers] must be a table"),
+        ("pack.toml", None, "lookups must be a list of text"),
+        ("safety.toml", 'confirm = "hatch_open"\n', "confirm must be a list of text"),
+        ("safety.toml", "travel = [1]\n", "travel must be a list of text"),
+        ("safety.toml", "[facts.docked]\nsay = 1\n", "each fact needs the sentence"),
+        ("safety.toml", 'facts = ["docked"]\n', "[facts] must be a table"),
+    ],
+)
+def test_a_wrongly_typed_value_in_a_pack_s_tables_is_refused_not_a_crash(
+    tmp_path: Path, name: str, text: str | None, message: str
+) -> None:
+    # Each table's values are checked one by one: drake = ["DRAK"] was a TypeError (#319).
+    folder = _copy(tmp_path)
+    if text is None:
+        _edit(folder, "pack.toml", 'lookups = ["settings"]', 'lookups = "settings"')
+    else:
+        (folder / name).write_text(text, "utf-8")
+    with pytest.raises(PackError, match=re.escape(message)):
+        load_pack(folder, built_in=False, registry=REGISTRY)
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ('mode_guards = ["landed"]', "[mode_guards] must be a table"),
+        ("[mode_guards]\nlanded = 5", "[mode_guards]: landed must be a list of text"),
+        ('not_danger = [""]', "not_danger must be a list of text"),
+        ('[facts]\ndocked = "x"\n[state_guards]\ndocked = "a"', "docked must be a list of text"),
+        ("accepted_risks = 1", "accepted_risks must be a list of text"),
+    ],
+)
+def test_a_built_in_pack_s_loosening_lists_are_type_checked_too(text: str, message: str) -> None:
+    # Only a pack Tycho ships may set them (ADR 18), so they're only read for one (#319).
+    with pytest.raises(PackError, match=re.escape(message)):
+        pack_module._safety(  # pyright: ignore[reportPrivateUsage]
+            tomllib.loads(text), "safety.toml", built_in=True
+        )
 
 
 def test_an_advisor_pack_has_no_keys_to_press(tmp_path: Path) -> None:

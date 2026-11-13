@@ -23,7 +23,7 @@ import json
 import statistics
 import sys
 from collections import Counter
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
 
@@ -51,9 +51,23 @@ def load(path: Path) -> list[Line]:
     return lines
 
 
+def add_costs(path: Path, run: str, looked_up: Mapping[str, float]) -> None:
+    """Note the costs the eval looked up after a run, by generation id: its calls that
+    ended at an act were written with none (#317). ``pick`` puts them in their calls."""
+    if not looked_up:
+        return
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps({"run": run, "looked_up": dict(looked_up)}) + "\n")
+
+
+def requests(lines: Iterable[Line]) -> list[Line]:
+    """The lines that are brain requests, not a run's looked-up costs."""
+    return [line for line in lines if "looked_up" not in line]
+
+
 def runs(lines: Iterable[Line]) -> list[tuple[str, int]]:
     """Each run in the file, in the order it started, with its number of requests."""
-    counted = Counter(str(line.get("run", "")) for line in lines)
+    counted = Counter(str(line.get("run", "")) for line in requests(lines))
     return list(counted.items())
 
 
@@ -72,7 +86,24 @@ def pick(lines: Sequence[Line], run: str | None = None) -> tuple[str, list[Line]
             found = "no run" if not matching else f"{len(matching)} runs"
             raise SystemExit(f"{found} matches {run!r}; see: traces.py runs")
         chosen = matching[0]
-    return chosen, [line for line in lines if str(line.get("run", "")) == chosen]
+    mine = [line for line in lines if str(line.get("run", "")) == chosen]
+    looked_up: dict[str, float] = {}
+    for line in mine:
+        looked_up |= cast(dict[str, float], line.get("looked_up") or {})
+    return chosen, [_with_costs(line, looked_up) for line in requests(mine)]
+
+
+def _with_costs(line: Line, looked_up: Mapping[str, float]) -> Line:
+    """The line, with each call's cost the eval looked up after the run."""
+    if not any(c.get("cost") is None and c.get("generation") in looked_up for c in calls(line)):
+        return line
+    priced = [
+        {**c, "cost": looked_up[c["generation"]], "priced": "looked up"}
+        if c.get("cost") is None and c.get("generation") in looked_up
+        else c
+        for c in calls(line)
+    ]
+    return {**line, "calls": priced}
 
 
 def key(line: Line) -> str:
@@ -186,14 +217,13 @@ def summary(
     for line in errors:
         out.append(f"Error: {key(line)!r}: {line.get('stopped', '')}")
     costs = [c for line in lines if (c := cost(line)) is not None]
-    unpriced = sum(1 for line in lines for c in calls(line) if c.get("cost") is None)
     if costs:
         each = statistics.fmean(costs)
         out.append(
             f"Cost: ${sum(costs):.4f} in all, ${each:.5f} a request, "
             f"about ${each * per_hour:.3f} an hour at {per_hour:g} requests"
-            + (f" ({unpriced} call(s) reported no cost)" if unpriced else "")
         )
+        out.append(_cost_sources(lines))
     out.append("Slowest:")
     for line in sorted(lines, key=lambda line: -float(line.get("ms") or 0))[:SLOWEST]:
         used = tools(line)
@@ -205,6 +235,25 @@ def summary(
         out.append(f"Wrong presses in the eval: {len(wrong) or 'none'}")
         out.extend(f"  {heard!r}: {verdict}" for heard, verdict in wrong)
     return out
+
+
+def _cost_sources(lines: Iterable[Line]) -> str:
+    """Where the calls' costs came from, and how many had none, so a total that's an
+    estimate or too low says so (#317)."""
+    sources: Counter[str] = Counter()
+    missing = 0
+    for line in lines:
+        # Lines from before #317 don't say: Anthropic's costs were always Tycho's estimate.
+        usual = "estimate" if line.get("provider") == "anthropic" else "reported"
+        for c in calls(line):
+            if isinstance(c.get("cost"), int | float):
+                sources[str(c.get("priced") or usual)] += 1
+            else:
+                missing += 1
+    shown = ", ".join(f"{n} {source}" for source, n in sources.most_common())
+    if missing:
+        shown += f"; {missing} call(s) with no cost, so the total is too low by theirs"
+    return f"Costs: {shown}"
 
 
 def _shape(line: Line) -> str:

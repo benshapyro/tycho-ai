@@ -156,7 +156,7 @@ Your voice never does: speech recognition runs on your PC. Only text is sent, an
 | OpenRouter, instead of Anthropic | The same as Anthropic (Claude) above. OpenRouter forwards it to Anthropic, who runs the model, so both receive it | Only with `brain_provider = "openrouter"`, instead of sending it to Anthropic directly |
 | ElevenLabs | The text Tycho speaks | When Tycho speaks |
 | Star Citizen Wiki API, UEX Corp | Nothing about you: Tycho downloads their ship lists | On first run, and when a new patch goes live |
-| Anthropic (web search) | A short search query Claude writes from your question | Questions about news, upcoming patches, events and new ships; off with `web_search = false`. Always Anthropic directly, with your Anthropic key, even when the brain runs through OpenRouter |
+| Anthropic (web search) | A short search query Claude writes from your question | Questions about news, upcoming patches, events and new ships; off with `web_search = false`. When those sites have no clear answer, any website, and Anthropic reads up to two of the pages it finds (never Reddit's pages, only its search snippets); `web_search_open = false` keeps it to the Star Citizen sites. Always Anthropic directly, with your Anthropic key, even when the brain runs through OpenRouter |
 | UEX Corp | Which commodity or trading place you asked about | Trade questions |
 | Star Citizen Wiki API | The item names you ask about | Weapon, armor, component and crafting questions |
 | *Planned:* Anthropic (Claude) | A capture of the game window | Only if you turn vision on and ask Tycho to look |

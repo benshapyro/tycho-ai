@@ -3,7 +3,8 @@
 ``load_pack`` turns the folder into one frozen ``GamePack``, or refuses it with a
 plain message (``PackError``). What a pack may hold:
 
-    pack.toml      the manifest: id, name, version, format, mode, the built-in parts it uses
+    pack.toml      the manifest: id, name, version, format, mode, the built-in parts it uses,
+                   and what to call the player there (call_me)
     briefing.md    the game part of the brain's briefing, placing the core sections
     facts.md       what's true in the current patch
     terms.txt      game words for the speech corrector
@@ -43,12 +44,17 @@ CORE_SECTIONS = (
 places once each, by a line of its own: ``{{core:safety}}``."""
 
 MARKER = re.compile(r"^\{\{core:([a-z-]+)\}\}$", re.MULTILINE)
+KEYS = re.compile(r"\{\{keys:([^|{}\n]*)\|([^|{}\n]*)\}\}")
+"""``{{keys:with keys|without}}`` in a briefing: the first text when Tycho presses keys,
+the second in advisor mode (#325), so a line that tells the brain to press has its own
+words when it can't. Keys on, the briefing reads as if the marker were the first text."""
 
 type Mode = Literal["keys", "advisor"]
 
 _ID = re.compile(r"[a-z0-9][a-z0-9-]*")
 _VERSION = re.compile(r"\d+\.\d+\.\d+")
 _COLOUR = re.compile(r"#[0-9a-f]{6}")
+_CALL_ME = re.compile(r"[\w '.-]{0,40}")
 _SITE = re.compile(r"[a-z0-9-]+(\.[a-z0-9-]+)+")
 _FILES = frozenset(
     {"pack.toml", "briefing.md", "facts.md", "terms.txt", "commands.toml", "tile.toml"}
@@ -56,6 +62,7 @@ _FILES = frozenset(
 )
 _TOP = frozenset(
     {"id", "name", "version", "format", "mode", "why", "window", "parts", "web", "briefing"}
+    | {"call_me"}
 )
 _PARTS = frozenset({"install", "keybinds", "game_state", "lookups"})
 
@@ -143,6 +150,10 @@ class GamePack:
     """Actions held for as long as they should last, which one press can't do."""
     built_in: bool
     """Whether the pack ships inside Tycho, reviewed like code (ADR 18)."""
+    call_me: str | None = None
+    """What Tycho calls the player in this game while they keep Tycho's default name
+    (#349): "Commander" is Star Citizen's, so World of Warcraft: Forever has "" (nothing).
+    None keeps Tycho's default. A name the player chose always wins (``address``)."""
 
 
 def load_pack(folder: Traversable, *, built_in: bool, registry: Registry = BUILT_IN) -> GamePack:
@@ -209,6 +220,12 @@ def load_pack(folder: Traversable, *, built_in: bool, registry: Registry = BUILT
     )
     if mode == "advisor":
         lists = replace(lists, keys_off=_keys_off(name, why))
+    call_me = manifest.get("call_me")
+    if call_me is not None and (not isinstance(call_me, str) or not _CALL_ME.fullmatch(call_me)):
+        raise PackError(
+            f"{where}: call_me must be a name of up to 40 letters, digits, spaces, "
+            'apostrophes, hyphens or full stops, or "" for none'
+        )
     return GamePack(
         id=pack_id,
         name=name,
@@ -228,6 +245,7 @@ def load_pack(folder: Traversable, *, built_in: bool, registry: Registry = BUILT
         unbriefed_actionmaps=frozenset(_strings(filters, "unbriefed_actionmaps", where)),
         continuous=_pattern(filters.get("continuous"), where),
         built_in=built_in,
+        call_me=" ".join(call_me.split()) if call_me is not None else None,
     )
 
 
@@ -363,8 +381,11 @@ def _tile(table: Mapping[str, object], name: str) -> Tile:
     where = f"{name}/tile.toml"
     accents = _table(table, "accents", where)
     makers = _table(table, "makers", where)
-    if bad := [k for k, v in accents.items() if not _COLOUR.fullmatch(str(v))]:
+    # Each value's type first: a list as a maker's accent can't be looked up (#319).
+    if bad := [k for k, v in accents.items() if not (isinstance(v, str) and _COLOUR.fullmatch(v))]:
         raise PackError(f"{where}: accents must be colours like #4fb3ff: {', '.join(bad)}")
+    if bad := [k for k, v in makers.items() if not isinstance(v, str)]:
+        raise PackError(f"{where}: each maker must name an accent: {', '.join(bad)}")
     if bad := [k for k, v in makers.items() if v not in accents]:
         raise PackError(f"{where}: makers with no accent: {', '.join(bad)}")
     return Tile(
@@ -375,6 +396,8 @@ def _tile(table: Mapping[str, object], name: str) -> Tile:
 
 def _check_briefing(text: str, where: str) -> None:
     """Every core section once, and nothing else in braces that looks like one."""
+    if "{{keys:" in KEYS.sub("", text):
+        raise PackError(f"{where}: a keys marker is {{{{keys:with keys|without}}}}, on one line")
     if "{{core:" in MARKER.sub("", text):
         raise PackError(
             f"{where}: a core marker must be a line of its own, like {{{{core:safety}}}}"
