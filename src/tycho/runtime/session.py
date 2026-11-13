@@ -605,10 +605,12 @@ class Session:
                 asked = loop.time()
 
                 def searching() -> None:
-                    # Capped too (#169): after look-ups, a search can't run past it.
-                    budget.reschedule(
-                        min(loop.time() + self._search_seconds, asked + self._search_limit)
-                    )
+                    # Capped (#169): after look-ups, a search can't run past the limit.
+                    # Never earlier than brain_seconds, though (#314): a long one stands.
+                    when = budget.when()
+                    later = loop.time() + self._search_seconds
+                    cap = asked + max(self._search_limit, self._brain_seconds)
+                    budget.reschedule(min(max(later, when or later), cap))
                     self._fill()
 
                 def looking() -> None:

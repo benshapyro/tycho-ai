@@ -570,6 +570,21 @@ def export_keybinds(keybinds: Keybinds, path: Path, game: str = "", commands: st
     path.write_text(json.dumps(data, indent=1), "utf-8")
 
 
+def _inputs(entry: dict[str, Any]) -> list[list[str]]:
+    """An action's inputs, each a list of strings (key, then modifiers): a bare string
+    would unpack letter by letter (#288)."""
+    inputs: object = entry["inputs"]
+    if not isinstance(inputs, list):
+        raise TypeError("an action's inputs must be a list")
+    checked: list[list[str]] = []
+    for each in cast(list[object], inputs):
+        parts = cast(list[object], each) if isinstance(each, list) else []
+        if not parts or not all(isinstance(p, str) for p in parts):
+            raise TypeError("each input must be a list of strings")
+        checked.append([str(p) for p in parts])
+    return checked
+
+
 def load_keybinds(path: Path) -> tuple[Keybinds, str, str]:
     """Keybinds written by ``export_keybinds``, the game build they came from, and the
     player's own commands (empty if they have none)."""
@@ -581,7 +596,7 @@ def load_keybinds(path: Path) -> tuple[Keybinds, str, str]:
         actions = [
             Action(
                 **{k: v for k, v in entry.items() if k != "inputs"},
-                inputs=tuple(KeyInput(key, tuple(mods)) for key, *mods in entry["inputs"]),
+                inputs=tuple(KeyInput(key, tuple(mods)) for key, *mods in _inputs(entry)),
             )
             for entry in data["actions"]
         ]

@@ -667,6 +667,8 @@ def test_a_keybinds_file_from_another_format_is_refused(tmp_path: Path) -> None:
         '{"format": 1, "actions": [{"name": "v_eject"}], "modes": {}}',  # no inputs
         '{"format": 1, "actions": [{"inputs": [], "colour": "red"}], "modes": {}}',
         "[1, 2]",
+        '{"format": 1, "actions": [{"name": "v_eject", "inputs": ["kb1_a"]}], "modes": {}}',
+        '{"format": 1, "actions": [{"name": "v_eject", "inputs": [[1]]}], "modes": {}}',
     ],
 )
 def test_a_broken_keybinds_file_says_export_it_again(tmp_path: Path, text: str) -> None:
