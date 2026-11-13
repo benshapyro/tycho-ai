@@ -1432,3 +1432,29 @@ heard = "walk me through quantum travel"
 mode = "coach"
 expect = ["reply"]
 tag = "routing"
+
+# --- Where is, how do I: search on the first ask (#353) ------------------------
+# From a play session on 0.6.0: a guess from memory, then "I can't look it up from here",
+# then a search only when asked. These need web search: left out of runs without it.
+
+[[case]]
+heard = "where do I pay off a crime stat on Levski"
+mode = "lookup"
+expect = ["look_up"]
+tools = ["web_search"]
+tag = "search_first"
+
+[[case]]
+heard = "how do I find the admin offices at Levski"
+mode = "lookup"
+expect = ["look_up"]
+tools = ["web_search"]
+tag = "search_first"
+
+[[case]]
+heard = "so where exactly is that terminal then"
+mode = "lookup"
+recent = [["where do I pay my fines on Levski", "said: The fines terminals are on the main concourse, near security."]]
+expect = ["look_up"]
+tools = ["web_search"]
+tag = "search_first"

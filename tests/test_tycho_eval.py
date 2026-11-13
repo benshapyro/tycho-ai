@@ -872,3 +872,26 @@ def test_a_reply_with_another_game_s_words_fails() -> None:
     assert e.grade(fine, {"expect": ["reply"]}, set(), keys_off=True, never_say=never) == "pass"
     # Without the list, the old verdict stands.
     assert e.grade(leaked, {"expect": ["reply"]}, set(), keys_off=True) == "pass"
+
+
+def test_cases_that_must_search_are_left_out_without_web_search() -> None:
+    """#353's cases need ``web_search``: a run without it (OpenRouter, ``--no-web``)
+    would fail them for want of the tool, not for what the brain did."""
+    rules: list[dict[str, Any]] = [
+        {"heard": "lights", "expect": ["actions"]},
+        {"heard": "where is the fines terminal", "tools": ["web_search"]},
+        {"heard": "ship", "tools": ["ship_lookup"]},
+    ]
+    kept, left_out = _eval().without_search(rules)
+    assert [r["heard"] for r in kept] == ["lights", "ship"]
+    assert left_out == 1
+
+
+def test_the_star_citizen_cases_that_must_search_are_tagged() -> None:
+    """#353: the search-first cases exist, so a run with web search grades them."""
+    cases = tomllib.loads(
+        (ROOT / "src/tycho/packs/star-citizen/eval/cases.toml").read_text("utf-8")
+    )["case"]
+    searching = [c for c in cases if "web_search" in c.get("tools", [])]
+    assert len(searching) >= 3
+    assert all(c["tag"] == "search_first" for c in searching)

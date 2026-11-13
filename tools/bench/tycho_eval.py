@@ -791,6 +791,10 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
         print("Web search: not offered. The OpenRouter brain has none (it's Anthropic's tool).")
     elif not args.no_web:
         web = [WebSearch(anthropic.AsyncAnthropic(api_key=key))]
+    if not web:
+        rules, left_out = without_search(rules)
+        if left_out:
+            print(f"Left out {left_out} case(s) that must search the web")
     # A fleet in a scratch file, set by each case ("fleet", "flying"): never the player's own.
     scratch = Path(tempfile.mkdtemp())
     fleet = Fleet(scratch / "fleet.toml")
@@ -915,6 +919,13 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
         f.write(json.dumps({"type": "summary", **summary}) + "\n")
     _summary(outcomes, costs, summary)
     return done
+
+
+def without_search(rules: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+    """The cases that can run with no web search, and how many were left out: a case
+    whose ``tools`` must include ``web_search`` (#353) can't pass without it."""
+    kept = [r for r in rules if "web_search" not in r.get("tools", [])]
+    return kept, len(rules) - len(kept)
 
 
 def pack_lookups(wanted: set[str], parts: list[tuple[str, Lookup | None]]) -> list[Lookup]:
