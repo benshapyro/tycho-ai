@@ -125,8 +125,11 @@ class WindowsPC:
     def conflicts(self, setting: str, current: Settings) -> list[str]:
         from tycho.app import conflict_warnings, find_install
         from tycho.game.store import GameDataError, KeybindStore
+        from tycho.packs import built_in
         from tycho.ptt.binding import Binding
 
+        if built_in(current.game).parts.keybinds is None:
+            return []  # a game Tycho reads no keybinds for: Star Citizen's aren't it (#341)
         try:
             store = KeybindStore.load(find_install(current))
         except FileNotFoundError, GameDataError, OSError:

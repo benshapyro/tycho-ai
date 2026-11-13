@@ -227,6 +227,12 @@ def test_get_lists_the_settings_with_how_each_can_change(tmp_path: Path) -> None
     assert found["microphone"] == {"value": "not set", "by_voice": "no"}
 
 
+def test_get_says_what_the_game_calls_the_player(tmp_path: Path) -> None:
+    """#380: in Forever, which calls the player nothing, get said "Commander"."""
+    _, result = _run(SettingsTool(_file(tmp_path, 'game = "wow-forever"\n')), "get")
+    assert result["settings"]["call_me"]["value"] == ""
+
+
 def test_a_broken_settings_file_is_reported_and_not_written(tmp_path: Path) -> None:
     path = _file(tmp_path, "voice_volume = [broken\n")
     error, result = _run(SettingsTool(path), "set", ("voice_volume", "40%"))

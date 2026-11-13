@@ -264,10 +264,13 @@ class SettingsTool:
         return failure('action must be "get", "set" or "undo"')
 
     def _describe(self, current: Settings) -> dict[str, object]:
+        from tycho.address import called  # as the game uses it (#380)
+
         out: dict[str, object] = {}
         for name, value in current.model_dump(mode="json").items():
             if name != "version":
-                said = "not set" if value is None else shown(name, getattr(current, name))
+                now = called(current) if name == "call_me" else getattr(current, name)
+                said = "not set" if value is None else shown(name, now)
                 out[name] = {"value": said, "by_voice": settings.rule(name)["voice"]}
         return out
 

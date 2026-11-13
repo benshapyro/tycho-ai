@@ -9,7 +9,7 @@ voice speaks, so the console and logs keep the spelling the player chose.
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from tycho.runtime.ports import Speaker
@@ -25,24 +25,30 @@ class Address:
     says: str = ""
     """How to say ``name`` if the voice gets it wrong; empty means as written."""
     how_often: HowOften = "sparingly"
+    pack: GamePack | None = field(default=None, repr=False, compare=False)
+    """The game, whose own default stands in for Tycho's (#349): a change by voice, or
+    its undo, goes through ``default_name`` too (#380)."""
 
     @classmethod
     def from_settings(cls, current: Settings, pack: GamePack | None = None) -> Address:
         """What the settings say to call the player, in ``pack``'s game: while they keep
         Tycho's default name, the pack's own default takes its place (#349)."""
         return cls(
-            default_name(current.call_me, pack), current.call_me_says, current.call_me_how_often
+            default_name(current.call_me, pack),
+            current.call_me_says,
+            current.call_me_how_often,
+            pack,
         )
 
     @classmethod
     def for_pack(cls, pack: GamePack | None) -> Address:
         """The default address in ``pack``'s game, as for a player who never chose one."""
-        return cls(default_name(DEFAULT_CALL_ME, pack))
+        return cls(default_name(DEFAULT_CALL_ME, pack), pack=pack)
 
     def set(self, setting: str, value: object) -> None:
         """Apply one ``call_me`` setting changed by voice."""
         if setting == "call_me" and isinstance(value, str):
-            self.name = value
+            self.name = default_name(value, self.pack)
         elif setting == "call_me_says" and isinstance(value, str):
             self.says = value
         elif setting == "call_me_how_often" and value in ("sparingly", "often"):
@@ -76,6 +82,17 @@ def default_name(call_me: str, pack: GamePack | None) -> str:
     if pack is not None and pack.call_me is not None and call_me == DEFAULT_CALL_ME:
         return pack.call_me
     return call_me
+
+
+def called(current: Settings) -> str:
+    """What Tycho calls the player in their chosen game, as the settings page and the
+    settings tool show ``call_me`` (#380): Forever's nothing, not the stored "Commander"."""
+    from tycho.packs import PackError, built_in
+
+    try:
+        return default_name(current.call_me, built_in(current.game))
+    except PackError:  # tycho check and the status page say why
+        return current.call_me
 
 
 class Pronouncing:

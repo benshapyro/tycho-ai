@@ -204,7 +204,7 @@ class Bridge:
         props: dict[str, Any] = schema.get("properties", {})
         groups: list[dict[str, object]] = []
         for group, names in GROUPS.items():
-            rows = [self._row(name, getattr(current, name), props.get(name, {})) for name in names]
+            rows = [self._row(name, _value(current, name), props.get(name, {})) for name in names]
             groups.append({"name": group, "rows": rows})
         return {"groups": groups, "can_undo": bool(self._undo)}
 
@@ -603,6 +603,15 @@ def _packs() -> list[dict[str, str]]:
             continue
         shown.append({"id": pack.id, "name": pack.name, "mode": pack.mode, "why": pack.why})
     return shown
+
+
+def _value(current: Settings, name: str) -> object:
+    """A setting's value as the page shows it: ``call_me`` as the game uses it (#380)."""
+    if name == "call_me":
+        from tycho.address import called
+
+        return called(current)
+    return getattr(current, name)
 
 
 def _label(name: str) -> str:

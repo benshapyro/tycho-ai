@@ -73,3 +73,25 @@ def test_call_me_by_voice() -> None:
     assert parse("call_me", "off", "Commander").value == ""  # "stop calling me commander"
     with pytest.raises(Refused, match="up to 40 letters"):
         parse("call_me", "<script>", "Commander")
+
+
+def test_undo_in_forever_brings_back_its_own_default_not_commander() -> None:
+    """#380: "call me Ace", then "undo", sent the stored "Commander" back as the name."""
+    from tycho.packs import built_in
+
+    address = Address.from_settings(Settings(), built_in("wow-forever"))
+    assert address.name == ""
+    address.set("call_me", "Ace")
+    assert address.name == "Ace"
+    address.set("call_me", "Commander")  # what undo puts back from the settings file
+    assert address.name == ""
+    assert Address.from_settings(Settings()).name == "Commander"  # Star Citizen's is
+
+
+def test_the_settings_show_what_the_game_calls_the_player() -> None:
+    """#380: the settings page and the settings tool said "Commander" in Forever."""
+    from tycho.address import called
+
+    assert called(Settings(game="wow-forever")) == ""
+    assert called(Settings()) == "Commander"
+    assert called(Settings(game="wow-forever", call_me="Ace")) == "Ace"

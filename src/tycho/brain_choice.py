@@ -82,18 +82,27 @@ def load_brain(
     from tycho.spoken_settings import SettingsTool
 
     log.info("Brain: %s, for anything the built-in phrasings don't cover", choice.describe())
-    ships = ShipLookup(WikiApi(), paths.knowledge_dir(), concepts=UexApi())
-    fleet = Fleet.load(paths.fleet_file(pack.id))
-    parts: list[tuple[str, Lookup]] = [
-        ("ships", ships),
-        ("fleet", FleetUpdate(fleet, lambda: ships.library)),
-        ("items", ItemLookup(WikiApi())),
-        ("mining", MiningLookup(WikiApi())),
-        *(("trade", lookup) for lookup in trade_lookups(UexApi())),
-        ("settings", SettingsTool(live=live)),  # core: every pack gets it
-    ]
+    # Only the parts the pack names are built (#339): no ship data, fleet file or fleet
+    # line for a game without them. The order is the tools' order: keep it (the cache).
     wanted = {*pack.parts.lookups, "settings"}
-    lookups: list[Lookup] = [lookup for part, lookup in parts if part in wanted]
+    ships = (
+        ShipLookup(WikiApi(), paths.knowledge_dir(), concepts=UexApi())
+        if wanted & {"ships", "fleet"}
+        else None
+    )
+    fleet = Fleet.load(paths.fleet_file(pack.id)) if "fleet" in wanted else None
+    lookups: list[Lookup] = []
+    if ships is not None and "ships" in wanted:
+        lookups.append(ships)
+    if ships is not None and fleet is not None:
+        lookups.append(FleetUpdate(fleet, lambda: ships.library))
+    if "items" in wanted:
+        lookups.append(ItemLookup(WikiApi()))
+    if "mining" in wanted:
+        lookups.append(MiningLookup(WikiApi()))
+    if "trade" in wanted:
+        lookups.extend(trade_lookups(UexApi()))
+    lookups.append(SettingsTool(live=live))  # core: every pack gets it
     if "web" not in wanted:
         log.info("Web search: %s has none", pack.name)
     elif not current.web_search:
@@ -116,10 +125,11 @@ def load_brain(
             )
 
     def about() -> str:
-        parts = [fleet.describe(ships.library), address.header() if address else ""]
+        flown = fleet.describe(ships.library) if fleet is not None and ships is not None else ""
+        parts = [flown, address.header() if address else ""]
         return "\n".join(p for p in parts if p)
 
-    if display is not None:
+    if display is not None and fleet is not None and ships is not None:
         display.ship_accent = lambda: ship_accent(fleet.flying, ships.library)
     return make_brain(
         choice,

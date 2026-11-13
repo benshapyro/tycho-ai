@@ -78,7 +78,8 @@
       body = `<div class="card frame"><h3>Which game?</h3>
         <div class="seg" role="group" aria-label="Game channel">${s.channels.map((c) => `<button type="button" aria-pressed="${c === s.game.channel}" data-channel="${esc(c)}">${esc(c)}</button>`).join("")}</div>
         ${s.game.found ? `<p class="ok-line">✓ Found ${esc(s.game.name)} ${esc(s.game.channel)} in <span class="num">${esc(s.game.folder)}</span></p>`
-          : `<p class="err">${esc(s.game.problem)}. Choose the folder it's in (the RSI Launcher shows it under Settings, Games, Library Folder).</p>`}
+          : `<p class="err">${esc(s.game.problem)}. Choose the folder it's in (the RSI Launcher shows it under Settings, Games, Library Folder).</p>
+            <p class="note">Playing another game? Choose it under Settings, Game and controls.</p>`}
         <div class="keyrow"><button class="btn frame" type="button" id="folder">Choose the folder…</button><span class="err" id="folderErr"></span></div>
         <p class="note">Tycho reads your keybinds from the game's files and never changes them.</p></div>`;
     } else if (step === 1) {
@@ -98,7 +99,7 @@
       ok = s.ready;
       body = `<div class="card frame"><h3>${firstRun ? "Ready" : "All set"}</h3>
         <p>${firstRun ? "Tycho starts listening when you press Start. Its star sits by the clock (if you don't see it, it's under the ^ arrow there): click it to open this window again, or open Tycho from the Start menu." : "Changes apply when Tycho next starts."}</p>
-        <p class="note">Play in Borderless Window mode so the Tile can show over the game. Then hold your button and try “gear down”.</p>
+        <p class="note">${s.game.needed ? "Play in Borderless Window mode so the Tile can show over the game. Then hold your button and try “gear down”." : `Hold your button and ask Tycho something about ${esc(s.game.name)}.`}</p>
         <span class="err" id="finishErr"></span></div>`;
     }
     const last = step === STEPS.length - 1;

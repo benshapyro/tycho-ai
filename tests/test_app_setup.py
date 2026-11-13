@@ -457,3 +457,28 @@ def test_capture_binding_stops_when_cancelled() -> None:
     found = capture_binding([Nothing()], cancelled=cancelled, sleep=lambda _s: None)  # type: ignore[list-item]
     assert found is None
     assert calls[0] == 4
+
+
+def test_push_to_talk_conflicts_are_star_citizens_only_when_it_is_the_game(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#341: with World of Warcraft: Forever chosen, a button Star Citizen uses still
+    showed "It also does something in the game"."""
+    from tycho import app
+
+    def install(current: Settings) -> object:
+        raise AssertionError("Star Citizen's keybinds read for another game")
+
+    monkeypatch.setattr(app, "find_install", install)
+    assert setup.WindowsPC().conflicts("mouse:0x06", Settings(game="wow-forever")) == []
+
+
+def test_the_setup_page_points_other_games_to_settings_and_leaves_gear_down_to_star_citizen() -> (
+    None
+):
+    """#341: a WoW-only PC saw only "Star Citizen wasn't found" and the folder button, and
+    the last step said to try "gear down" whatever the game."""
+    page = (Path(__file__).parents[1] / "src/tycho/desktop/app/app.js").read_text("utf-8")
+    assert "Playing another game? Choose it under Settings, Game and controls." in page
+    assert 's.game.needed ? "Play in Borderless Window mode' in page
+    assert "ask Tycho something about ${esc(s.game.name)}" in page
