@@ -502,6 +502,13 @@ class Session:
             if word == "confirm" or word == "cancel":
                 if question is None or self._clock() > question.deadline:
                     detail = f"nothing to {word}" if question is None else "the question expired"
+                    if word == "cancel":
+                        # "Never mind" with nothing to cancel is still heard (#351): no
+                        # not-done sound, and the talk so far is let go.
+                        progress.commands = ("cancel",)
+                        return self._result(
+                            request, "done", trace, heard, text, detail, progress=progress
+                        )
                     return self._result(request, "not_understood", trace, heard, text, detail)
                 if word == "cancel":
                     progress.commands = ("cancel",)  # never logged as the cancelled command

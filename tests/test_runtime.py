@@ -305,6 +305,23 @@ def test_the_question_expires() -> None:
     assert late.keys.events == []
 
 
+@pytest.mark.parametrize("reply", ["never mind", "cancel"])
+def test_never_mind_with_nothing_asked_is_heard_not_a_failure(reply: str) -> None:
+    """#351: "never mind" after an answer was not understood, with the not-done sound."""
+    r = _conversation(reply)
+    assert r.results[0].status == "done"
+    assert r.results[0].detail == "nothing to cancel"
+    assert r.feedback.played == ["done"]
+    assert r.keys.events == []
+
+
+def test_never_mind_lets_go_of_the_talk_so_far() -> None:
+    """#351: after "never mind", the next request isn't an answer to Tycho's question."""
+    brain = FakeBrain(Reply("Which door?"), Reply("Hello."))
+    _conversation("sort the door out", "never mind", "hi there", brain=brain)
+    assert brain.asked[1].recent == ()
+
+
 def test_confirm_with_nothing_asked_does_nothing() -> None:
     r = _conversation("confirm")
     assert r.results[0].status == "not_understood"

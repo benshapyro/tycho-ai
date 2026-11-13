@@ -53,6 +53,11 @@ class Conversation:
 
     def heard(self, result: Result) -> None:
         """Take in how a request ended."""
+        if result.commands == ("cancel",):
+            # "Never mind" ends the talk so far: the next request starts fresh, not as
+            # an answer to whatever Tycho last asked (#351).
+            self._recent.clear()
+            return
         self._remember(result)
         if result.status == "replied":
             self.last_reply = (result.say, result.card)

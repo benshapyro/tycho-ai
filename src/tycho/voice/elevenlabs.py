@@ -27,6 +27,7 @@ from pathlib import Path
 
 import httpx2
 
+from tycho.text import clip_spoken
 from tycho.voice import SpeechError
 from tycho.voice.playback import Sink, SoundDeviceSink
 from tycho.voice.voices import API, DEFAULT, Voice, fallback, missing
@@ -95,7 +96,7 @@ class ElevenLabsSpeaker:
         Raises ``SpeechError`` if nothing could be spoken. A connection lost part
         way is logged, and what already arrived is still played.
         """
-        text = " ".join(text.split())[:MAX_CHARACTERS]
+        text = clip_spoken(" ".join(text.split()), MAX_CHARACTERS)
         if not text:
             return
         file = self._file_for(text) if keep else None

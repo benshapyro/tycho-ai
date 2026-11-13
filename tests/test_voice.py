@@ -196,6 +196,16 @@ def test_a_long_line_is_cut_and_blank_lines_cost_nothing() -> None:
     assert len(json.loads(request.content)["text"]) == MAX_CHARACTERS
 
 
+def test_a_long_line_is_cut_at_a_sentence() -> None:
+    """#350: the voice's cap cut mid-word, wherever the 400th character fell."""
+    rig = Rig(_audio)
+    asyncio.run(rig.speaker.speak("This one fits. " * 30))
+    (request,) = rig.requests
+    text = json.loads(request.content)["text"]
+    assert len(text) <= MAX_CHARACTERS
+    assert text.endswith("This one fits.")
+
+
 def test_a_chosen_voice_is_asked_for_with_its_own_model() -> None:
     rig = Rig(_audio, voice=voices.choose("Sarah"))
     asyncio.run(rig.speaker.speak("Lights off."))

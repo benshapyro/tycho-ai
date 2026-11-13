@@ -1034,11 +1034,17 @@ async def serve(
 
 async def _refresh_keybinds(store: KeybindStore, changed: Callable[[], None]) -> None:
     """Reread the keybinds now and then; ``changed`` is called when they change, to warm
-    the brain's cache for the new briefing (#60)."""
+    the brain's cache for the new briefing (#60), once they've settled: the game writes
+    the file once per rebind, so a player rebinding several keys would warm it each time
+    (#352). The new keys are used at once either way."""
     last_error: str | None = None
+    settling = False
     while True:
         await asyncio.sleep(KEYBIND_REFRESH_SECONDS)
         if await asyncio.to_thread(store.refresh):
+            settling = True
+        elif settling:
+            settling = False
             log.info("Keybinds changed in game; using the new ones")
             changed()
         if store.last_error and store.last_error != last_error:

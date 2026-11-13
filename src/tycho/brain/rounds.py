@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from tycho.brain.decisions import BrainError, Decision, Reply, UnboundAction, parse_tool_call
 from tycho.brain.lookups import LOOKUP_SECONDS, Lookup, LookupResult, failure, run_lookup
 from tycho.brain.traces import Look, Trace, TraceFile
+from tycho.text import clip_spoken
 
 log = logging.getLogger(__name__)
 
@@ -394,7 +395,21 @@ def final_reply(text: str, credits: Sequence[str], stopped: str) -> Reply:
         reply = reply[: found_call.start()].strip()
         if not reply:
             raise BrainError("it wrote a tool call as text")
-    return credited(Reply(reply[:400]), credits)
+    return fitted(clip_spoken(reply, SPOKEN_LIMIT), credits)
+
+
+SPOKEN_LIMIT = 400
+"""The most a spoken reply may be, credits and all: the voice's own cap (#350)."""
+
+
+def fitted(reply: str, credits: Sequence[str]) -> Reply:
+    """``reply`` with its credits, cut at a sentence end to leave them room, so the
+    voice's cap never takes them, or half a sentence, off (#350)."""
+    answer = credited(Reply(reply), credits)
+    if len(answer.text) <= SPOKEN_LIMIT:
+        return answer
+    room = SPOKEN_LIMIT - (len(answer.text) - len(reply))
+    return credited(Reply(clip_spoken(reply, room)), credits)
 
 
 def spoken(text: str) -> str:
