@@ -32,17 +32,17 @@ def test_a_fresh_install_needs_setup() -> None:
 
 
 def test_a_game_that_reads_nothing_from_its_folder_needs_none(path: Path) -> None:
-    # World of Warcraft (#300): an advisor pack with no install part. A PC without
+    # World of Warcraft: Forever (#300): an advisor pack with no install part. A PC without
     # Star Citizen must still get through setup and start (the review of #335).
     pc = FakeSetupPC()  # no game found
-    wow = Settings(game="world-of-warcraft", push_to_talk="mouse:0x06")
+    wow = Settings(game="wow-forever", push_to_talk="mouse:0x06")
     assert not setup.needs_setup(wow, pc)
     assert setup.needs_setup(Settings(push_to_talk="mouse:0x06"), pc)  # Star Citizen still is
     settings.save(wow, path)
     bridge = _bridge(path, pc)
     state = bridge.setup_state()
     assert state["game"]["needed"] is False  # type: ignore[index]
-    assert state["game"]["name"] == "World of Warcraft"  # type: ignore[index]
+    assert state["game"]["name"] == "World of Warcraft: Forever"  # type: ignore[index]
     assert state["ready"] is True
     assert bridge.finish_setup() == {"ok": True, "first_run": False}
 

@@ -848,7 +848,7 @@ def test_an_advisor_pack_is_offered_only_the_look_ups_it_names() -> None:
     from tycho.packs import built_in
 
     e = _eval()
-    pack = built_in("world-of-warcraft")
+    pack = built_in("wow-forever")
     wanted = {*pack.parts.lookups, "settings"}
     tools = {name: FakeLookup(name=name) for name in ("ships", "trade", "settings", "web")}
     offered = e.pack_lookups(wanted, [*tools.items(), ("items", None)])
@@ -857,3 +857,18 @@ def test_an_advisor_pack_is_offered_only_the_look_ups_it_names() -> None:
         tools["ships"],
         tools["settings"],
     ]
+
+
+def test_a_reply_with_another_game_s_words_fails() -> None:
+    # World of Warcraft: Forever's cases fail "quantum" and "Commander" (#349).
+    import re
+
+    e = _eval()
+    never = [re.compile(r"\bquantum\b", re.IGNORECASE), re.compile(r"\bCommander\b")]
+    leaked = _outcome(say="Enjoy the drink, Commander.")
+    verdict = e.grade(leaked, {"expect": ["reply"]}, set(), keys_off=True, never_say=never)
+    assert verdict.startswith("said 'Commander', from another game")
+    fine = _outcome(say="Take the boat from Menethil Harbor.")
+    assert e.grade(fine, {"expect": ["reply"]}, set(), keys_off=True, never_say=never) == "pass"
+    # Without the list, the old verdict stands.
+    assert e.grade(leaked, {"expect": ["reply"]}, set(), keys_off=True) == "pass"

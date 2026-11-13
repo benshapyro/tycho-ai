@@ -160,3 +160,12 @@ def test_the_voice_is_george_unless_set_and_never_changes_by_voice() -> None:
             "applies": "restart",
             "how": settings.FILE_OR_APP,
         }
+
+
+def test_a_file_with_the_old_world_of_warcraft_id_gets_world_of_warcraft_forever(
+    tmp_path: Path,
+) -> None:
+    # The pack was renamed before it shipped (#349); a file saved on main kept the old id.
+    path = tmp_path / "settings.toml"
+    path.write_text('game = "world-of-warcraft"\n', "utf-8")
+    assert settings.load(path).game == "wow-forever"

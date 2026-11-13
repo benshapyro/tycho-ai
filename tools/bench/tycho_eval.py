@@ -60,7 +60,7 @@ import tempfile
 import time
 import tomllib
 from collections import Counter
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, cast
@@ -247,10 +247,17 @@ def pressed(commands: tuple[Command, ...], keybinds: Keybinds) -> list[str]:
 
 
 def grade(
-    outcome: Outcome, rule: dict[str, Any], valid: set[str], *, keys_off: bool = False
+    outcome: Outcome,
+    rule: dict[str, Any],
+    valid: set[str],
+    *,
+    keys_off: bool = False,
+    never_say: Sequence[re.Pattern[str]] = (),
 ) -> str:
     """The case's verdict. ``keys_off``: Tycho presses nothing in this game (advisor mode,
-    #191), so a reply that claims it did something fails (#326)."""
+    #191), so a reply that claims it did something fails (#326). ``never_say``: the
+    cases file's words from another game ("quantum" in World of Warcraft), which fail
+    any case whose spoken line says one (#349)."""
     never = (set(GLOBAL_NEVER) | set(rule.get("never", []))) - set(rule.get("allow", []))
     if outcome.kind == "error":
         return "error"
@@ -279,6 +286,8 @@ def grade(
     said = plain(outcome.say)
     if NARRATED.search(said):
         return f"narrated its reply: {outcome.say!r}"
+    if found := next((p.search(said) for p in never_say if p.search(said)), None):
+        return f"said {found.group(0)!r}, from another game: {outcome.say!r}"
     if keys_off and outcome.kind == "reply" and CLAIMED.search(said.strip()):
         return f"claimed a press with keys off: {outcome.say!r}"
     if outcome.kind == "reply" and rule.get("answer") and DODGE.search(said):
@@ -731,6 +740,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     print(f"Game: {pack.name}, pack {pack.version} (briefing {briefed})")
     data: dict[str, Any] = tomllib.loads(args.cases.read_text("utf-8"))
     rules: list[dict[str, Any]] = data["case"]
+    never_say = [re.compile(p, re.IGNORECASE) for p in data.get("never_say", [])]
     if args.tag:
         rules = [r for r in rules if r.get("tag") in args.tag]
     pinned = route(args.host, args.sort) if provider == "openrouter" else {}
@@ -803,9 +813,12 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
         ],
     )
 
-    # As tycho run does: the fleet, then what to call the player (#15).
+    # As tycho run does: the fleet, then what to call the player (#15), by the pack's
+    # default (#349): no player has chosen a name here.
+    address = Address.for_pack(pack).header()
+
     def about() -> str:
-        return "\n".join(p for p in (fleet.describe(library), Address().header()) if p)
+        return "\n".join(p for p in (fleet.describe(library), address) if p)
 
     def cards() -> bool:
         return not args.no_tile
@@ -870,7 +883,9 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
                 tile=cards(),
                 lists=pack.safety,
             )
-            outcome.verdict = grade(outcome, rule, valid, keys_off=bool(pack.safety.keys_off))
+            outcome.verdict = grade(
+                outcome, rule, valid, keys_off=bool(pack.safety.keys_off), never_say=never_say
+            )
             if outcome.verdict == "pass":
                 outcome.verdict = grade_fleet(fleet, rule)
             if outcome.verdict == "pass":
@@ -904,7 +919,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
 
 def pack_lookups(wanted: set[str], parts: list[tuple[str, Lookup | None]]) -> list[Lookup]:
     """The look-ups the pack names, in order, as ``brain_choice`` gives them to tycho run:
-    an advisor pack with none (World of Warcraft) gets only the settings tool."""
+    an advisor pack with none (World of Warcraft: Forever) gets only the settings tool."""
     return [lookup for part, lookup in parts if part in wanted and lookup is not None]
 
 

@@ -31,9 +31,14 @@ from tycho.voice import voices
 
 CURRENT_VERSION = 1
 
-type Game = Literal["star-citizen", "world-of-warcraft"]
+type Game = Literal["star-citizen", "wow-forever"]
 """The game packs that ship inside Tycho (ADR 18); a test keeps it the same as
 ``packs.installed()``."""
+RENAMED_GAMES = {"world-of-warcraft": "wow-forever"}
+"""Pack ids that changed before a release, to their new ones: the World of Warcraft pack
+became World of Warcraft: Forever's (#349), and a file saved on main says the old id."""
+DEFAULT_CALL_ME = "Commander"
+"""What Tycho calls the player unless they or the game pack choose otherwise (#15, #349)."""
 type Device = Literal["auto", "gpu", "cpu"]
 type VoiceRule = Literal["yes", "lower_only", "no"]
 type Applies = Literal["now", "restart"]
@@ -197,7 +202,7 @@ class Settings(BaseModel):
         json_schema_extra=_rule("no", how=FILE_OR_APP),
     )
     call_me: str = Field(
-        default="Commander",
+        default=DEFAULT_CALL_ME,
         description="What Tycho calls you: a name, nickname, callsign or rank. Empty means "
         'nothing. Say "call me Ace".',
         json_schema_extra=_rule("yes", "now"),
@@ -298,6 +303,11 @@ class Settings(BaseModel):
         "version is out, and say so. Tycho never updates itself.",
         json_schema_extra=_rule("lower_only", how=FILE_OR_APP),
     )
+
+    @field_validator("game", mode="before")
+    @classmethod
+    def _renamed_game(cls, value: object) -> object:
+        return RENAMED_GAMES.get(value, value) if isinstance(value, str) else value
 
     @field_validator("push_to_talk")
     @classmethod

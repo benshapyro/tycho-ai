@@ -1,0 +1,58 @@
+# World of Warcraft: Forever words that general speech-to-text models get wrong.
+# One term per line, in its canonical spelling. Lines starting with # are ignored.
+# Written by hand (no data source: see pack.toml).
+
+# Places
+Azeroth
+Kalimdor
+Stormwind
+Orgrimmar
+Ironforge
+Darnassus
+Teldrassil
+Thunder Bluff
+Undercity
+Elwynn
+Westfall
+Durotar
+Mulgore
+Desolace
+Ashenvale
+Stranglethorn
+Tanaris
+Silithus
+Felwood
+Winterspring
+Menethil
+Ratchet
+Booty Bay
+Lordaeron
+Dalaran
+Zephras Isle
+Riverglades
+Shen'dralas
+Hyjal
+
+# Dungeons and raids
+Hall of Thanes
+Krol'dok Stronghold
+Shaper's Terrace
+Barrow Deeps
+Hyjal Summit
+Onyxia
+
+# Races
+Skyborne
+Tauren
+Night Elf
+Forsaken
+
+# Classes (only words plain English lacks: "warrior" stays as said)
+Paladin
+Shaman
+Warlock
+Druid
+
+# Activities and systems
+Hearthstone
+Flightmaster

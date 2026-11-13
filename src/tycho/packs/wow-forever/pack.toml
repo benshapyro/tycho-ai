@@ -1,0 +1,25 @@
+# World of Warcraft: Forever, Tycho's first advisor pack (ADR 18, #300). Tycho only talks
+# here: it answers, explains and shows cards, and presses nothing.
+#
+# Which game: Blizzard's World of Warcraft: Forever (out 4 November 2026), its level-60
+# take on the original Azeroth, not modern World of Warcraft (Midnight) or WoW Classic
+# (the maintainer's call, 13 November 2026). Packs for those may follow under their own ids.
+#
+# Data (the maintainer's call, 12 November 2026): everything in this folder is written
+# in Tycho's own words. No look-ups: nothing from Blizzard's API, and nothing copied or
+# fetched from guide sites or wikis (their terms and licences: Warcraft Wiki is
+# CC BY-SA, guide text belongs to its site, and Blizzard's API terms forbid paid
+# features built on its data). Read a source's own terms before adding a look-up.
+
+id = "wow-forever"
+name = "World of Warcraft: Forever"
+version = "0.2.0"
+format = 1
+mode = "advisor"
+why = "Blizzard's rules don't allow tools that play the game for you, so in World of Warcraft Tycho only talks."
+# "Commander" is a Star Citizen title (#349): here Tycho calls the player nothing unless
+# they choose a name.
+call_me = ""
+
+[parts]
+lookups = ["settings"]
