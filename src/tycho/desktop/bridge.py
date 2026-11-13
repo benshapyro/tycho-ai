@@ -131,6 +131,8 @@ class Bridge:
         self._undo: list[tuple[str, object]] = []
         self._latest_release = latest_release
         self._open_page = open_page
+        self._checked: tuple[float, updates.Release | None] | None = None
+        """When the window last asked GitHub, and what it said: kept for an hour (#376)."""
         self._release: updates.Release | None = None
         """The newer release the last check found: the only page ``open_release`` opens."""
 
@@ -162,15 +164,20 @@ class Bridge:
                     return {"state": "off", "current": current}
             except SettingsError:
                 return {"state": "off", "current": current}
+        now = time.monotonic()
         try:
-            if asked is True:
-                release = self._latest_release()
-                self._cache["updates"] = (time.monotonic() // UPDATE_SECONDS, release)
+            if asked is not True and self._checked and now - self._checked[0] < UPDATE_SECONDS:
+                release = self._checked[1]  # an hour since the last check, not the clock's
             else:
-                key = time.monotonic() // UPDATE_SECONDS
-                release = cast(
-                    updates.Release | None, self._cached("updates", key, self._latest_release)
-                )
+                release = self._latest_release()
+                self._checked = (now, release)
+        except updates.RateLimited as e:
+            log.debug("GitHub wouldn't say if a newer Tycho is out: %s", e)
+            return {
+                "state": "error",
+                "current": current,
+                "problem": "GitHub didn't answer. Try again later.",
+            }
         except updates.UpdateError as e:
             log.debug("Couldn't check for a newer Tycho: %s", e)
             return {
@@ -204,7 +211,7 @@ class Bridge:
         props: dict[str, Any] = schema.get("properties", {})
         groups: list[dict[str, object]] = []
         for group, names in GROUPS.items():
-            rows = [self._row(name, getattr(current, name), props.get(name, {})) for name in names]
+            rows = [self._row(name, _value(current, name), props.get(name, {})) for name in names]
             groups.append({"name": group, "rows": rows})
         return {"groups": groups, "can_undo": bool(self._undo)}
 
@@ -603,6 +610,15 @@ def _packs() -> list[dict[str, str]]:
             continue
         shown.append({"id": pack.id, "name": pack.name, "mode": pack.mode, "why": pack.why})
     return shown
+
+
+def _value(current: Settings, name: str) -> object:
+    """A setting's value as the page shows it: ``call_me`` as the game uses it (#380)."""
+    if name == "call_me":
+        from tycho.address import called
+
+        return called(current)
+    return getattr(current, name)
 
 
 def _label(name: str) -> str:

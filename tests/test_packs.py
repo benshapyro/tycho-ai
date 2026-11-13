@@ -48,10 +48,11 @@ from tycho.settings import Game, Settings
 from tycho.settings import rule as settings_rule
 from tycho.tile.design import MAKER_ACCENTS, accent_for, accent_for_maker
 
-STAR_CITIZEN_INSTRUCTIONS = "58cee8ce86e5f0871be300a6e735a1ae05a71563e17244a126897073d284329f"
-"""The SHA-256 of Star Citizen's fixed briefing text, as it was before packs (main at
-6645025). The prompt cache and the eval's scores depend on it staying byte for byte the
-same. If you change the text on purpose, update this, and expect the cache to refill."""
+STAR_CITIZEN_INSTRUCTIONS = "86743244daab1c496f16613c424a808f7d90914898b527d4bce46530788bab02"
+"""The SHA-256 of Star Citizen's fixed briefing text: as it was before packs (main at
+6645025), then with "where is" and "how do I" searched on the first ask (#353). The
+prompt cache and the eval's scores depend on it staying byte for byte the same. If you
+change the text on purpose, update this, and expect the cache to refill."""
 
 
 # --- Star Citizen, the first pack --------------------------------------------------------

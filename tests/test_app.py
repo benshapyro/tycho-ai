@@ -375,6 +375,20 @@ def test_tycho_actions_finds_names_by_label_and_by_what_players_say(
     assert app.main(["actions", "zzqq"]) == 1
 
 
+def test_actions_for_an_advisor_game_says_there_are_none(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#338: with World of Warcraft: Forever chosen, it read Star Citizen's keybinds."""
+
+    def install(current: settings.Settings) -> object:
+        raise AssertionError("an advisor game has no keybinds to find")
+
+    monkeypatch.setattr(app, "find_install", install)
+    monkeypatch.setattr(settings, "load", lambda: settings.Settings(game="wow-forever"))
+    assert app.main(["actions", "jump"]) == 1
+    assert "World of Warcraft: Forever has no actions" in capsys.readouterr().out
+
+
 def test_a_keybind_change_warms_the_brain_again(monkeypatch: pytest.MonkeyPatch) -> None:
     """#60: ``_refresh_keybinds`` never asked for a warm-up, so the first request after a
     rebind was about 3 s cold. Only a change asks."""

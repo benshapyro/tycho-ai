@@ -120,3 +120,19 @@ def test_game_log_is_read_only_for_a_pack_with_a_game_state_part(
     assert star_citizen.parts.game_state is not None
     session = _session(star_citizen, store, monkeypatch)
     assert type(session._game_state).__name__ == "GameLog"
+
+
+def test_a_pack_without_ships_or_a_fleet_builds_neither(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#339: every pack built Star Citizen's ship look-up and fleet, and got its fleet
+    line, even World of Warcraft: Forever, which names neither."""
+    import tycho.knowledge
+    from tycho.knowledge import fleet
+
+    def never(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("built for a pack that doesn't name it")
+
+    monkeypatch.setattr(tycho.knowledge, "ShipLookup", never)
+    monkeypatch.setattr(fleet.Fleet, "load", never)
+    brain = _brain(built_in("wow-forever"))
+    assert "update_fleet" not in brain._lookups
+    asyncio.run(brain.close())

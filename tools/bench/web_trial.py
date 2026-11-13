@@ -164,6 +164,31 @@ class _Calls(logging.Handler):
         self.lines.append(record.getMessage())
 
 
+def unlogged_wider(lines: list[str]) -> float:
+    """An estimate for an open-web step that started but logged no cost, because it was
+    cancelled or failed (#375): its searches at their price. ``--budget`` counts it."""
+    started = next((i for i, line in enumerate(lines) if "trying the open web" in line), None)
+    if started is None or any(LOGGED.search(line) for line in lines[started + 1 :]):
+        return 0.0
+    return web.OPEN_USES * web.SEARCH_PRICE
+
+
+def earlier(lines: list[str]) -> dict[tuple[int, str], list[dict[str, Any]]]:
+    """An earlier run's answers, by round and question, for ``--compare``. A file that
+    holds several runs keeps each (round, question, mode)'s last answer, so grades
+    never clash (#375)."""
+    kept: dict[tuple[int, str, str], dict[str, Any]] = {}
+    for line in lines:
+        old = json.loads(line)
+        old = {k: v for k, v in old.items() if k not in ("grade", "why")}
+        old["mode"] = f"{old['mode']} (before)"
+        kept[(int(old["round"]), old["question"], old["mode"])] = old
+    before: dict[tuple[int, str], list[dict[str, Any]]] = {}
+    for (round_, question, _), row in kept.items():
+        before.setdefault((round_, question), []).append(row)
+    return before
+
+
 async def _ask(search: WebSearch, calls: _Calls, question: str) -> dict[str, Any]:
     calls.lines = []
     started = time.perf_counter()
@@ -172,13 +197,14 @@ async def _ask(search: WebSearch, calls: _Calls, question: str) -> dict[str, Any
     body = json.loads(result.content)
     requests = [m for line in calls.lines if (m := LOGGED.search(line))]
     answer = str(body.get("answer") or body.get("error") or "")
+    cost = sum(float(m[3]) for m in requests) + unlogged_wider(calls.lines)
     return {
         "question": question,
         "seconds": round(seconds, 1),
         "requests": len(requests),
         "searches": sum(int(m[1]) for m in requests),
         "pages": sum(int(m[2]) for m in requests),
-        "cost": round(sum(float(m[3]) for m in requests), 5),
+        "cost": round(cost, 5),
         "stopped": requests[-1][4] if requests else "",
         "wider": "any site" in str(body.get("source", "")),
         "sites": body.get("sites", []),
@@ -285,13 +311,7 @@ async def main() -> int:
     web_log.setLevel(logging.DEBUG)
     web_log.addHandler(calls)
     client = anthropic.AsyncAnthropic(api_key=key, max_retries=2)
-    before: dict[tuple[int, str], list[dict[str, Any]]] = {}
-    if args.compare:
-        for line in args.compare.read_text("utf-8").splitlines():
-            old = json.loads(line)
-            old = {k: v for k, v in old.items() if k not in ("grade", "why")}
-            old["mode"] = f"{old['mode']} (before)"
-            before.setdefault((int(old["round"]), old["question"]), []).append(old)
+    before = earlier(args.compare.read_text("utf-8").splitlines()) if args.compare else {}
     plain_brief = web.OPEN_BRIEF
     spent = 0.0
     results: dict[str, list[dict[str, Any]]] = {m: [] for m in modes}

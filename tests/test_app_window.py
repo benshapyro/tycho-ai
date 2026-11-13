@@ -248,6 +248,12 @@ def test_the_keys_page_marks_an_unusable_key() -> None:
     assert ">Unusable<" in page
 
 
+def test_the_setup_keys_note_names_openrouter_as_the_brains_other_choice() -> None:
+    """#316: the note named only Anthropic, beside the OpenRouter key field."""
+    page = (Path(__file__).parents[1] / "src/tycho/desktop/app/app.js").read_text("utf-8")
+    assert "an OpenRouter key does the same with the brain set to OpenRouter" in page
+
+
 def test_removing_a_key(path: Path, vault: dict[str, str]) -> None:
     vault["elevenlabs"] = "sk_" + "b" * 30
     bridge, _ = _bridge(path)
@@ -280,6 +286,36 @@ def test_checking_a_key_with_its_provider(name: str, status: int, text: str, pro
 
     answer = ProviderKeyCheck(get).check(name, "a-key")
     assert (problem in answer) if problem else answer == ""
+
+
+@pytest.mark.parametrize(
+    ("key", "credits", "problem"),
+    [
+        (
+            '{"data": {"limit": null, "limit_remaining": null}}',
+            '{"data": {"total_credits": 10, "total_usage": 3.5}}',
+            "",
+        ),
+        ('{"data": {"limit": 5, "limit_remaining": 0}}', "{}", "reached its spending limit"),
+        (
+            '{"data": {"limit_remaining": null}}',
+            '{"data": {"total_credits": 5, "total_usage": 5.0}}',
+            "no credit left",
+        ),
+        ("not json", "not json", ""),  # an odd answer says nothing: the key check passed
+    ],
+)
+def test_an_openrouter_key_with_nothing_left_to_spend_says_so(
+    key: str, credits: str, problem: str
+) -> None:
+    """#315: OpenRouter's key check answers 200 for a key with no credit left."""
+
+    def get(url: str, **_kwargs: object) -> _Response:
+        return _Response(200, credits if url.endswith("/credits") else key)
+
+    answer = ProviderKeyCheck(get).credit("openrouter", "a-key")
+    assert (problem in answer) if problem else answer == ""
+    assert ProviderKeyCheck(get).credit("anthropic", "a-key") == ""
 
 
 def test_offline_the_key_isnt_judged() -> None:
@@ -576,6 +612,43 @@ def test_the_windows_own_check_asks_github_once_an_hour(path: Path) -> None:
     assert bridge.check_updates(True)["state"] == "newer"  # the button always asks
     assert bridge.check_updates(False)["state"] == "newer"  # and refreshes what's kept
     assert asked == [1, 1]
+
+
+def test_the_windows_own_check_is_kept_an_hour_from_when_it_asked(
+    path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#376: it was kept per clock hour, so a check at 10:59 asked again at 11:00."""
+    from tycho.desktop import bridge as bridge_module
+
+    now = [3599.0]
+    monkeypatch.setattr(bridge_module.time, "monotonic", lambda: now[0])
+    latest, asked = _releases(None, NEWER)
+    bridge, _ = _bridge(path, latest_release=latest)
+    assert bridge.check_updates(False)["state"] == "none"
+    now[0] = 3601.0  # a new clock hour, two seconds later
+    assert bridge.check_updates(False)["state"] == "none"
+    assert asked == [1]
+    now[0] = 3599.0 + 3600.0
+    assert bridge.check_updates(False)["state"] == "newer"
+    assert asked == [1, 1]
+
+
+def test_a_rate_limit_says_try_later_not_offline(path: Path) -> None:
+    """#376: a GitHub rate limit asked whether the PC was online."""
+    bridge, _ = _bridge(
+        path, latest_release=_releases(updates.RateLimited("GitHub answered 403"))[0]
+    )
+    answer = bridge.check_updates()
+    assert answer["problem"] == "GitHub didn't answer. Try again later."
+
+
+def test_the_updates_tab_shows_the_get_button_from_the_last_check() -> None:
+    """#376: the notice opened the Updates tab with no "Get Tycho X" button, and a check
+    that failed left the button on "Checking…"."""
+    page = (Path(__file__).parents[1] / "src/tycho/desktop/app/app.js").read_text("utf-8")
+    assert '${lastUpdate.state === "newer" ? "" : "hidden"}' in page
+    assert "lastUpdate = u;" in page
+    assert "} finally {\n        b.disabled = false;" in page
 
 
 def test_open_release_opens_only_tychos_own_release_page(path: Path) -> None:

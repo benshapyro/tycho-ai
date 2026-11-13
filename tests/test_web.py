@@ -154,6 +154,12 @@ def test_a_cut_answer_does_not_stop_at_an_abbreviation() -> None:
     assert result["answer"] == "Patch 4.11 is due."
 
 
+def test_a_short_word_before_a_number_still_ends_a_sentence() -> None:
+    cut = _found("Take the lift near the Hub. 3 terminals are on the le", stop_reason="max_tokens")
+    _, result = _search(_Client(cut))
+    assert result["answer"] == "Take the lift near the Hub."
+
+
 def test_a_long_answer_ends_on_a_whole_sentence() -> None:
     sentence = "Quantum fuel is sold at Megumi Refueling and both Pyro gateways. "
     _, result = _search(_Client(_found(sentence * 12)))
@@ -162,6 +168,46 @@ def test_a_long_answer_ends_on_a_whole_sentence() -> None:
     _, result = _search(_Client(_found("word " * 200)))
     assert len(result["answer"]) <= MAX_ANSWER
     assert result["answer"].endswith("word")
+
+
+def test_the_cap_never_ends_on_the_point_inside_a_version() -> None:
+    """#370: the slice's end counted as a sentence end, so "... patch 4.11" became
+    "... patch 4." (and one over the cap)."""
+    lead = "Short one. " + "X" * (MAX_ANSWER - 19) + " patch 4.11 lands after that"
+    assert lead[MAX_ANSWER] == "."  # the old cap's slice ended "patch 4."
+    _, result = _search(_Client(_found(lead)))
+    assert result["answer"] == "Short one."
+
+
+def test_a_sentence_ending_right_at_the_cap_is_kept() -> None:
+    first = "Aa" + " aaaa" * ((MAX_ANSWER - 3) // 5) + "a" * ((MAX_ANSWER - 3) % 5) + "."
+    assert len(first) == MAX_ANSWER
+    _, result = _search(_Client(_found(first + " Then more words follow here.")))
+    assert result["answer"] == first
+
+
+def test_a_sentence_before_a_number_or_a_curly_quote_ends_there() -> None:
+    """#370: "Patch 4.11 is due. 4.12 follows in Ma..." was nothing usable."""
+    cut = _found("Patch 4.11 is due. 4.12 follows in Ma", stop_reason="max_tokens")
+    _, result = _search(_Client(cut))
+    assert result["answer"] == "Patch 4.11 is due."
+    quoted = _found(
+        "It is in Area18. \u201cThe Plaza\u201d is where you go for th", stop_reason="max_tokens"
+    )
+    _, result = _search(_Client(quoted))
+    assert result["answer"] == "It is in Area18."
+
+
+def test_the_word_cut_keeps_a_word_ending_at_the_cap_and_no_comma() -> None:
+    """#370: a space right after the cap dropped the last whole word; a cut could end
+    on a comma."""
+    words = ("word " * (MAX_ANSWER // 5))[: MAX_ANSWER - 4] + "last more after"
+    _, result = _search(_Client(_found(words)))
+    assert result["answer"].endswith("last")
+    commas = "alpha, " * 100
+    _, result = _search(_Client(_found(commas)))
+    assert not result["answer"].endswith(",")
+    assert len(result["answer"]) <= MAX_ANSWER
 
 
 def test_why_the_reply_stopped_reaches_the_log(caplog: pytest.LogCaptureFixture) -> None:
@@ -419,3 +465,21 @@ def test_a_tag_put_last_is_read_and_never_spoken(reply: str, verdict_wider: bool
         assert "nothing usable" in result["error"]
     else:
         assert result["answer"] == "Fines are paid at admin offices."
+
+
+def test_a_found_tag_with_no_answer_doesnt_discard_the_open_webs() -> None:
+    """#375: the sites said only "FOUND.", and a PARTIAL answer from the open web was
+    thrown away for ranking lower."""
+    _, error, result = _fallback(
+        _found("FOUND."), _read_page("PARTIAL: Players report it's near the hangars.")
+    )
+    assert not error
+    assert result["answer"] == "Players report it's near the hangars."
+
+
+def test_a_tag_written_first_and_last_is_never_spoken() -> None:
+    """#375: only the first was stripped, so the last was read aloud."""
+    _, _, result = _fallback(
+        _found("PARTIAL: Fines are paid at admin offices. PARTIAL"), _read_page("NONE: Nothing.")
+    )
+    assert result["answer"] == "Fines are paid at admin offices."

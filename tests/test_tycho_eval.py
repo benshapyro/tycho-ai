@@ -667,6 +667,8 @@ def test_a_keybinds_file_from_another_format_is_refused(tmp_path: Path) -> None:
         '{"format": 1, "actions": [{"name": "v_eject"}], "modes": {}}',  # no inputs
         '{"format": 1, "actions": [{"inputs": [], "colour": "red"}], "modes": {}}',
         "[1, 2]",
+        '{"format": 1, "actions": [{"name": "v_eject", "inputs": ["kb1_a"]}], "modes": {}}',
+        '{"format": 1, "actions": [{"name": "v_eject", "inputs": [[1]]}], "modes": {}}',
     ],
 )
 def test_a_broken_keybinds_file_says_export_it_again(tmp_path: Path, text: str) -> None:
@@ -844,6 +846,25 @@ def test_a_reply_that_says_how_passes_with_keys_off(say: str) -> None:
     assert e.grade(_outcome(say=say), {"expect": ["reply"]}, set(), keys_off=True) == "pass"
 
 
+def test_a_press_case_passes_on_a_plain_reply_with_keys_off() -> None:
+    e = _eval()
+    rule = {"expect": ["actions"], "must": [["v_toggle_landing_system"]]}
+    said = _outcome(say="Key actions are off, so lower your gear yourself: N by default.")
+    assert e.grade(said, rule, set()) == "expected actions"
+    assert e.grade(said, rule, set(), keys_off=True) == "pass"
+    claimed = _outcome(say="Done.")
+    assert e.grade(claimed, rule, set(), keys_off=True).startswith("claimed a press")
+
+
+def test_keys_off_runs_the_pack_as_advisor() -> None:
+    e = _eval()
+    args = e._arguments(["--keys-off", "--no-web"])
+    assert args.keys_off
+    from tycho.packs import as_run, built_in
+
+    assert as_run(built_in(args.pack), key_actions=False).safety.keys_off
+
+
 def test_an_advisor_pack_is_offered_only_the_look_ups_it_names() -> None:
     from tycho.packs import built_in
 
@@ -872,3 +893,26 @@ def test_a_reply_with_another_game_s_words_fails() -> None:
     assert e.grade(fine, {"expect": ["reply"]}, set(), keys_off=True, never_say=never) == "pass"
     # Without the list, the old verdict stands.
     assert e.grade(leaked, {"expect": ["reply"]}, set(), keys_off=True) == "pass"
+
+
+def test_cases_that_must_search_are_left_out_without_web_search() -> None:
+    """#353's cases need ``web_search``: a run without it (OpenRouter, ``--no-web``)
+    would fail them for want of the tool, not for what the brain did."""
+    rules: list[dict[str, Any]] = [
+        {"heard": "lights", "expect": ["actions"]},
+        {"heard": "where is the fines terminal", "tools": ["web_search"]},
+        {"heard": "ship", "tools": ["ship_lookup"]},
+    ]
+    kept, left_out = _eval().without_search(rules)
+    assert [r["heard"] for r in kept] == ["lights", "ship"]
+    assert left_out == 1
+
+
+def test_the_star_citizen_cases_that_must_search_are_tagged() -> None:
+    """#353: the search-first cases exist, so a run with web search grades them."""
+    cases = tomllib.loads(
+        (ROOT / "src/tycho/packs/star-citizen/eval/cases.toml").read_text("utf-8")
+    )["case"]
+    searching = [c for c in cases if "web_search" in c.get("tools", [])]
+    assert len(searching) >= 3
+    assert all(c["tag"] == "search_first" for c in searching)

@@ -92,7 +92,7 @@ from tycho.knowledge.store import ensure
 from tycho.knowledge.trade_lookup import trade_lookups
 from tycho.knowledge.web import WebSearch
 from tycho.lexicon import Lexicon
-from tycho.packs import STAR_CITIZEN, GamePack, Safety, built_in
+from tycho.packs import STAR_CITIZEN, GamePack, Safety, as_run, built_in
 from tycho.runtime import routing
 from tycho.runtime.planning import Questions, Refusal, Steps, plan_request
 from tycho.runtime.routing import NotUnderstood, Picked, Reserved, from_brain
@@ -275,6 +275,8 @@ def grade(
     if invented := [a for a in outcome.actions if a not in valid]:
         return f"WRONG PRESS (no such key) {invented}"
     expect = {"reply" if kind == "look_up" else kind for kind in rule["expect"]}
+    if keys_off and "actions" in expect:  # nothing can be pressed, so say so instead
+        expect = (expect - {"actions"}) | {"reply", "ask"}
     if outcome.kind not in expect:
         if outcome.kind == "actions":
             return f"WRONG PRESS (expected {'/'.join(sorted(expect))})"
@@ -570,6 +572,21 @@ def export_keybinds(keybinds: Keybinds, path: Path, game: str = "", commands: st
     path.write_text(json.dumps(data, indent=1), "utf-8")
 
 
+def _inputs(entry: dict[str, Any]) -> list[list[str]]:
+    """An action's inputs, each a list of strings (key, then modifiers): a bare string
+    would unpack letter by letter (#288)."""
+    inputs: object = entry["inputs"]
+    if not isinstance(inputs, list):
+        raise TypeError("an action's inputs must be a list")
+    checked: list[list[str]] = []
+    for each in cast(list[object], inputs):
+        parts = cast(list[object], each) if isinstance(each, list) else []
+        if not parts or not all(isinstance(p, str) for p in parts):
+            raise TypeError("each input must be a list of strings")
+        checked.append([str(p) for p in parts])
+    return checked
+
+
 def load_keybinds(path: Path) -> tuple[Keybinds, str, str]:
     """Keybinds written by ``export_keybinds``, the game build they came from, and the
     player's own commands (empty if they have none)."""
@@ -581,7 +598,7 @@ def load_keybinds(path: Path) -> tuple[Keybinds, str, str]:
         actions = [
             Action(
                 **{k: v for k, v in entry.items() if k != "inputs"},
-                inputs=tuple(KeyInput(key, tuple(mods)) for key, *mods in entry["inputs"]),
+                inputs=tuple(KeyInput(key, tuple(mods)) for key, *mods in _inputs(entry)),
             )
             for entry in data["actions"]
         ]
@@ -647,6 +664,12 @@ def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--no-web", action="store_true", help="don't offer web search")
     parser.add_argument("--no-tile", action="store_true", help="don't offer Tile cards")
+    parser.add_argument(
+        "--keys-off",
+        action="store_true",
+        help="run the pack as with key_actions off (advisor mode, #191): a case that "
+        "expects a press passes on a reply or question that claims no press (#380)",
+    )
     parser.add_argument(
         "--provider",
         choices=PROVIDERS,
@@ -731,7 +754,7 @@ async def main() -> None:
 async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     """Every case through one brain; prints each, appends them to the results, and
     prints the summary."""
-    pack = built_in(args.pack)
+    pack = as_run(built_in(args.pack), key_actions=not getattr(args, "keys_off", False))
     if pack.parts.keybinds not in (None, STAR_CITIZEN):
         raise SystemExit(f"{pack.name}: the eval can only read Star Citizen's keybinds so far")
     if pack.parts.keybinds is None and args.keybinds:
@@ -791,6 +814,10 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
         print("Web search: not offered. The OpenRouter brain has none (it's Anthropic's tool).")
     elif not args.no_web:
         web = [WebSearch(anthropic.AsyncAnthropic(api_key=key))]
+    if not web:
+        rules, left_out = without_search(rules)
+        if left_out:
+            print(f"Left out {left_out} case(s) that must search the web")
     # A fleet in a scratch file, set by each case ("fleet", "flying"): never the player's own.
     scratch = Path(tempfile.mkdtemp())
     fleet = Fleet(scratch / "fleet.toml")
@@ -915,6 +942,13 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
         f.write(json.dumps({"type": "summary", **summary}) + "\n")
     _summary(outcomes, costs, summary)
     return done
+
+
+def without_search(rules: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+    """The cases that can run with no web search, and how many were left out: a case
+    whose ``tools`` must include ``web_search`` (#353) can't pass without it."""
+    kept = [r for r in rules if "web_search" not in r.get("tools", [])]
+    return kept, len(rules) - len(kept)
 
 
 def pack_lookups(wanted: set[str], parts: list[tuple[str, Lookup | None]]) -> list[Lookup]:

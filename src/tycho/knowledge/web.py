@@ -286,7 +286,9 @@ class WebSearch:
         if first.verdict == "FOUND" and first.answer:
             return self._result(query, today, first, False)
         wider = await self._wider(query, asked, first, started)
-        if wider is None or not wider.answer or RANK[wider.verdict] < RANK[first.verdict]:
+        # A sites' tag with no answer under it is no answer to keep (#375).
+        worse = bool(first.answer) and RANK[wider.verdict] < RANK[first.verdict] if wider else False
+        if wider is None or not wider.answer or worse:
             return self._result(query, today, first, False)
         return self._result(query, today, wider, True)
 
@@ -382,9 +384,14 @@ class _Found:
 
 
 _SPACE_BEFORE = re.compile(r"\s+([,.;:!?])")
-_SENTENCE_END = re.compile(r"[.!?](?=\s+[A-Z\"']|$)")
-"""A full stop that ends a sentence: the next word starts with a capital, or the text
-ends. Not "Dec. 12" (#368)."""
+_SENTENCE_END = re.compile(r"[.!?](?=\s+[A-Z0-9\"'\u201c\u2018]|$)")
+"""A full stop that ends a sentence: the next word starts with a capital, a digit or an
+opening quote (#370), or the text ends."""
+_ABBREVIATION = re.compile(
+    r"(?:^|\s)(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|No|Nos|St|Vol|Pt|Ch|Fig|Ver|Rev|Gen|Ep)$"
+)
+"""A known abbreviation before a full stop and a number: "Dec. 12", "No. 3", "St. 4" aren't
+sentence ends (#368). Any other word is: "near the Hub. 3 terminals" ends at "Hub." (#383)."""
 
 
 def _answer(content: Sequence[Any], *, cut: bool) -> str:
@@ -403,7 +410,7 @@ def _answer(content: Sequence[Any], *, cut: bool) -> str:
     if cut:
         text = _whole_sentences(text)
     if len(text) > MAX_ANSWER:
-        text = _whole_sentences(text[: MAX_ANSWER + 1]) or text[:MAX_ANSWER].rsplit(" ", 1)[0]
+        text = _whole_sentences(text, MAX_ANSWER) or _whole_words(text, MAX_ANSWER)
     return text
 
 
@@ -412,6 +419,8 @@ def _verdict(answer: str) -> tuple[str, str]:
     it. With no tag, PARTIAL: it didn't say it found a clear answer."""
     if tag := FALLBACK_TAG.match(answer):
         verdict, answer = tag[1], answer[tag.end() :]
+        if last := FALLBACK_TAG_LAST.search(answer):  # written first and last too (#375)
+            answer = answer[: last.start()]
     elif tag := FALLBACK_TAG_LAST.search(answer):
         verdict, answer = tag[1], answer[: tag.start()]
     else:
@@ -419,10 +428,28 @@ def _verdict(answer: str) -> tuple[str, str]:
     return verdict, "" if verdict == "NONE" else answer
 
 
-def _whole_sentences(text: str) -> str:
-    """``text`` up to the end of its last whole sentence, or "" if none ends."""
-    ends = [m.end() for m in _SENTENCE_END.finditer(text)]
+def _whole_sentences(text: str, limit: int | None = None) -> str:
+    """``text`` up to the end of its last whole sentence, within ``limit`` characters if
+    given, or "" if none ends. Ends are found in the whole text, so a cap never makes one
+    of "4.11" (#370)."""
+    ends = [
+        m.end()
+        for m in _SENTENCE_END.finditer(text)
+        if (limit is None or m.end() <= limit)
+        and not (
+            m.end() < len(text)
+            and text[m.end() :].lstrip()[:1].isdigit()
+            and _ABBREVIATION.search(text[: m.start()])
+        )
+    ]
     return text[: ends[-1]] if ends else ""
+
+
+def _whole_words(text: str, limit: int) -> str:
+    """``text`` cut at the last space within ``limit``, so a word that ends right at the
+    limit stays, and not on a comma (#370)."""
+    cut = text.rfind(" ", 0, limit + 1)
+    return (text[:cut] if cut > 0 else text[:limit]).rstrip(" ,;:-")
 
 
 def _sites(content: Any) -> list[str]:

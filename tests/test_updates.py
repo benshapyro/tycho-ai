@@ -135,3 +135,13 @@ def test_check_reports_a_newer_version(monkeypatch: pytest.MonkeyPatch) -> None:
     offline = app.update_finding(fail)
     assert offline.level == "ok"
     assert "couldn't check" in offline.detail
+
+
+@pytest.mark.parametrize("status", [403, 429])
+def test_a_rate_limit_is_told_apart_from_being_offline(
+    monkeypatch: pytest.MonkeyPatch, status: int
+) -> None:
+    """#376: GitHub's rate limit read as "Is the PC online?"."""
+    monkeypatch.setattr(updates.httpx2, "Client", _client_answering(httpx2.Response(status)))
+    with pytest.raises(updates.RateLimited):
+        updates.latest_json(updates.LATEST_URL)

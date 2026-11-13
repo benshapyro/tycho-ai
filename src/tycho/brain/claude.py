@@ -232,6 +232,10 @@ class ClaudeBrain:
                 if not round_.looking:
                     text = " ".join(b.text for b in message.content if b.type == "text")
                     return final_reply(text, turn.credits, str(message.stop_reason))
+                if message.stop_reason == "max_tokens" and _unanswered(message, round_):
+                    # A call cut with no block end never got a result: sent back, Claude
+                    # would refuse the request (400), so it ends here (#287).
+                    return await round_.cut_short("tool call")
                 results = await round_.results()
                 messages.append({"role": "assistant", "content": message.content})
                 content: list[Any] = [*_results(round_.looking, results)]
@@ -317,6 +321,13 @@ def _results(
         {"type": "tool_result", "tool_use_id": use_id, "content": r.content, "is_error": r.is_error}
         for (use_id, _), r in zip(looking, results, strict=True)
     ]
+
+
+def _unanswered(message: Any, round_: Round) -> bool:
+    """Whether the message holds a tool call no look-up or refusal answers: one the
+    output limit cut before its block ended (#287)."""
+    answered = {use_id for use_id, _ in round_.looking}
+    return any(b.type == "tool_use" and b.id not in answered for b in message.content)
 
 
 def _cut_off(name: str, arguments: object, tools: Sequence[ToolParam]) -> bool:

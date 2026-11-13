@@ -474,6 +474,19 @@ def test_other_refusals_are_not_told_as_keys_off() -> None:
     assert speaker.spoken == []
 
 
+def test_with_keys_off_a_reply_isnt_told_as_keys_off_and_leaves_the_telling() -> None:
+    """#348: the test above has no keys-off lists, so ``_keys_off_first`` stopped before
+    it compared the status and the reason. With them, a reply is not the keys-off
+    refusal: it's spoken as itself, and the first real refusal still says why."""
+    speaker = FakeSpeaker()
+    brain = FakeBrain(Reply("Hello there."))
+    r = _conversation(
+        "hi there", "landing gear", speaker=speaker, brain=brain, safety_lists=KEYS_OFF
+    )
+    assert [x.status for x in r.results] == ["replied", "refused"]
+    assert speaker.spoken == ["Hello there.", KEYS_OFF.keys_off]
+
+
 # --- The brain (ADR 14) ------------------------------------------------------------------
 
 
@@ -1402,6 +1415,27 @@ def test_a_web_search_gets_longer_than_the_usual_deadline() -> None:
     )
     assert r.results[0].status == "replied"
     assert speaker.spoken[-1] == "4.11 is on the roadmap."
+
+
+def test_a_web_search_never_shortens_a_long_brain_deadline() -> None:
+    """#314: with a long brain_seconds, a search moved the deadline earlier, to
+    search_seconds from when it started."""
+
+    class EarlySearch(FakeBrain):
+        async def decide(self, request: BrainRequest) -> Decision:
+            if request.waiting is not None:
+                request.waiting()
+            await asyncio.sleep(0.3)  # past search_seconds, inside brain_seconds
+            return Reply("4.11 is on the roadmap.")
+
+    r = _conversation(
+        "whats in the next patch",
+        brain=EarlySearch(),
+        speaker=FakeSpeaker(),
+        brain_seconds=1.0,
+        search_seconds=0.05,
+    )
+    assert r.results[0].status == "replied"
 
 
 class _SlowLookUp(FakeBrain):

@@ -735,6 +735,10 @@ MAX_ACTIONS_SHOWN = 40
 def actions_command(current: Settings, words: list[str]) -> int:
     """``tycho actions``: the game's actions whose name or label has every word given, with
     their keys, so a player (or their agent) can write commands.toml with the right names."""
+    game = built_in(current.game)
+    if game.parts.keybinds is None:  # an advisor pack: no keys to read, or press (#338)
+        print(f"{game.name} has no actions: Tycho presses no keys there, it only answers.")
+        return 1
     try:
         keybinds = KeybindStore.load(find_install(current)).keybinds
     except (FileNotFoundError, GameDataError) as e:

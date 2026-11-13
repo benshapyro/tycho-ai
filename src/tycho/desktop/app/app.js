@@ -78,7 +78,8 @@
       body = `<div class="card frame"><h3>Which game?</h3>
         <div class="seg" role="group" aria-label="Game channel">${s.channels.map((c) => `<button type="button" aria-pressed="${c === s.game.channel}" data-channel="${esc(c)}">${esc(c)}</button>`).join("")}</div>
         ${s.game.found ? `<p class="ok-line">✓ Found ${esc(s.game.name)} ${esc(s.game.channel)} in <span class="num">${esc(s.game.folder)}</span></p>`
-          : `<p class="err">${esc(s.game.problem)}. Choose the folder it's in (the RSI Launcher shows it under Settings, Games, Library Folder).</p>`}
+          : `<p class="err">${esc(s.game.problem)}. Choose the folder it's in (the RSI Launcher shows it under Settings, Games, Library Folder).</p>
+            <p class="note">Playing another game? Choose it under Settings, Game and controls.</p>`}
         <div class="keyrow"><button class="btn frame" type="button" id="folder">Choose the folder…</button><span class="err" id="folderErr"></span></div>
         <p class="note">Tycho reads your keybinds from the game's files and never changes them.</p></div>`;
     } else if (step === 1) {
@@ -93,12 +94,12 @@
         ${micSelect(s.microphone)}
         <div class="keyrow"><button class="btn frame" type="button" id="micTest">Test: say something</button><span class="note" id="micMsg">It listens for a moment and tells you how you sound.</span></div></div>`;
     } else if (step === 3) {
-      body = `<p class="note">An Anthropic key lets Tycho understand anything said your way and answer questions; without one, only the built-in phrases work. ElevenLabs gives Tycho its voice; without it, Tycho answers with sounds and the Tile.</p>${await keysView()}`;
+      body = `<p class="note">An Anthropic key lets Tycho understand anything said your way and answer questions; an OpenRouter key does the same with the brain set to OpenRouter (Settings, Brain), though web search still needs the Anthropic key. Without either, only the built-in phrases work. ElevenLabs gives Tycho its voice; without it, Tycho answers with sounds and the Tile.</p>${await keysView()}`;
     } else {
       ok = s.ready;
       body = `<div class="card frame"><h3>${firstRun ? "Ready" : "All set"}</h3>
         <p>${firstRun ? "Tycho starts listening when you press Start. Its star sits by the clock (if you don't see it, it's under the ^ arrow there): click it to open this window again, or open Tycho from the Start menu." : "Changes apply when Tycho next starts."}</p>
-        <p class="note">Play in Borderless Window mode so the Tile can show over the game. Then hold your button and try “gear down”.</p>
+        <p class="note">${s.game.needed ? "Play in Borderless Window mode so the Tile can show over the game. Then hold your button and try “gear down”." : `Hold your button and ask Tycho something about ${esc(s.game.name)}.`}</p>
         <span class="err" id="finishErr"></span></div>`;
     }
     const last = step === STEPS.length - 1;
@@ -300,7 +301,7 @@
     const auto = data.groups.flatMap((g) => g.rows).find((r) => r.name === "check_for_updates");
     return `<div class="card frame"><h3>You have Tycho <span class="num">${esc($("#ver").textContent)}</span></h3>
         <div class="keyrow"><button class="btn primary frame" type="button" id="checkUpdates">Check for updates</button><span id="updateMsg"></span></div>
-        <div class="keyrow" id="getRow" hidden><button class="btn frame" type="button" id="getUpdate"></button><span class="err" id="getErr"></span></div>
+        <div class="keyrow" id="getRow" ${lastUpdate.state === "newer" ? "" : "hidden"}><button class="btn frame" type="button" id="getUpdate">${lastUpdate.state === "newer" ? `Get Tycho ${esc(lastUpdate.latest)}` : ""}</button><span class="err" id="getErr"></span></div>
         <p class="note">Tycho never updates itself. The release page has the installer: quit Tycho from the tray, run it, and it installs over this version. Your settings and keys stay.</p>
         <p class="note">${auto && auto.value ? "Tycho also checks each time its window opens, and says so at the top." : "Automatic checks are off (Privacy tab), so Tycho only checks when you press the button."}</p></div>`;
   }
@@ -314,19 +315,31 @@
     $("#checkUpdates")?.addEventListener("click", async () => {
       const b = $("#checkUpdates"), msg = $("#updateMsg");
       b.disabled = true; msg.className = "note"; msg.textContent = "Checking…";
-      const u = await api.check_updates(true);
-      b.disabled = false;
-      [msg.textContent, msg.className] = updateWords(u);
-      $("#getRow").hidden = u.state !== "newer";
-      if (u.state === "newer") $("#getUpdate").textContent = `Get Tycho ${u.latest}`;
-      notice(u);
+      try {
+        const u = await api.check_updates(true);
+        [msg.textContent, msg.className] = updateWords(u);
+        $("#getRow").hidden = u.state !== "newer";
+        if (u.state === "newer") $("#getUpdate").textContent = `Get Tycho ${u.latest}`;
+        notice(u);
+      } catch (e) {
+        [msg.textContent, msg.className] = ["Couldn't check.", "err"];  // never stuck on "Checking…" (#376)
+      } finally {
+        b.disabled = false;
+      }
     });
     $("#getUpdate")?.addEventListener("click", async () => {
-      const r = await api.open_release();
-      $("#getErr").textContent = r.ok ? "" : r.problem;
+      try {
+        const r = await api.open_release();
+        $("#getErr").textContent = r.ok ? "" : r.problem;
+      } catch (e) {
+        $("#getErr").textContent = "Couldn't open the release page.";
+      }
     });
   }
+  let lastUpdate = { state: "" };
+  /* The last check's answer: the notice opens the Updates tab with its button (#376). */
   function notice(u) {
+    lastUpdate = u;
     const b = $("#updateNotice");
     b.hidden = u.state !== "newer";
     if (u.state === "newer") b.textContent = `Tycho ${u.latest} is out`;

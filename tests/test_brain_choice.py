@@ -118,6 +118,16 @@ def test_through_openrouter_the_openrouter_key_runs_haiku() -> None:
     _close(brain)
 
 
+def test_a_players_openrouter_brain_is_served_by_anthropic_only() -> None:
+    """#313: no host was pinned, so OpenRouter could serve Claude from Bedrock or Vertex,
+    and the README says the words go to Anthropic."""
+    _store(openrouter=OPENROUTER)
+    brain = _load(Settings(brain_provider="openrouter"))
+    assert isinstance(brain, OpenRouterBrain)
+    assert brain._route == {"order": ["anthropic"], "allow_fallbacks": False}  # pyright: ignore[reportPrivateUsage]
+    _close(brain)
+
+
 def test_an_anthropic_key_alone_doesnt_run_the_openrouter_brain() -> None:
     # The player chose OpenRouter: their words mustn't go to a provider they didn't pick.
     _store(anthropic=ANTHROPIC)
@@ -236,6 +246,16 @@ def test_check_says_when_the_provider_refuses_the_key() -> None:
     assert found["Brain"].level == "warn"
     assert "refused" in found["Brain"].detail
     assert found["Brain"].fix.endswith("key set openrouter")
+
+
+def test_check_says_when_a_working_openrouter_key_has_no_credit() -> None:
+    """#315: OpenRouter's key check answers 200 with no credit left, and every request
+    then fails with 402."""
+    _store(openrouter=OPENROUTER)
+    check = FakeKeyCheck(no_credit="your OpenRouter account has no credit left")
+    found = _findings(Settings(brain_provider="openrouter"), check=check)
+    assert found["Brain"].level == "warn"
+    assert "the key works, but your OpenRouter account has no credit left" in found["Brain"].detail
 
 
 def test_check_asks_for_the_chosen_providers_key() -> None:

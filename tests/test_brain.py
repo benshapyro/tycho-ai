@@ -2,12 +2,15 @@
 
 import asyncio
 import datetime
+import json
 import re
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from typing import Any, cast
 
+import anthropic
+import httpx2
 import pytest
 
 from tests.fakes.fake_lookup import FakeLookup
@@ -1255,3 +1258,99 @@ def test_an_empty_run_actions_with_a_line_is_a_reply_through_the_adapter() -> No
     assert asyncio.run(scenario()) == Reply("Copy.")
     assert cancelled == ["ship_lookup"]
     assert len(requests) == 1  # answered in one call: nothing waited for the look-up
+
+
+# --- Through the real SDK's stream accumulator (#287) -----------------------------------
+
+
+def _sse(*events: dict[str, Any]) -> bytes:
+    return "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in events).encode()
+
+
+def _message_start() -> dict[str, Any]:
+    usage = {"input_tokens": 20, "output_tokens": 1}
+    message: dict[str, Any] = {
+        "id": "msg_1",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-haiku",
+        "content": [],
+        "stop_reason": None,
+        "stop_sequence": None,
+        "usage": usage,
+    }
+    return {"type": "message_start", "message": message}
+
+
+def _tool_block(index: int, use_id: str, name: str, partial: str) -> list[dict[str, Any]]:
+    start: dict[str, Any] = {"type": "tool_use", "id": use_id, "name": name, "input": {}}
+    delta = {"type": "input_json_delta", "partial_json": partial}
+    return [
+        {"type": "content_block_start", "index": index, "content_block": start},
+        {"type": "content_block_delta", "index": index, "delta": delta},
+    ]
+
+
+def _end(stop_reason: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "type": "message_delta",
+            "delta": {"stop_reason": stop_reason, "stop_sequence": None},
+            "usage": {"output_tokens": 2048},
+        },
+        {"type": "message_stop"},
+    ]
+
+
+def _real_client(*bodies: bytes) -> tuple[Any, list[dict[str, Any]]]:
+    """The real ``AsyncAnthropic``, answering each request with the next SSE body."""
+    sent: list[dict[str, Any]] = []
+    script = list(bodies)
+
+    def answer(request: httpx2.Request) -> httpx2.Response:
+        sent.append(json.loads(request.content))
+        headers = {"content-type": "text/event-stream"}
+        return httpx2.Response(200, content=script.pop(0), headers=headers)
+
+    client = anthropic.AsyncAnthropic(
+        api_key="sk-ant-test",
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(answer)),
+        max_retries=0,
+    )
+    return client, sent
+
+
+def test_a_card_cut_mid_field_in_the_real_stream_is_cut_short() -> None:
+    """#287: the SDK reads a cut call's input as far as it goes, dropping the cut field;
+    a missing required field is how the brain tells. Checked here through the SDK's own
+    accumulator, not a faked parsed input."""
+    card = _tool_block(0, "toolu_1", "show_card", '{"say": "Three routes.", "kind": "li')
+    body = _sse(
+        _message_start(),
+        *card,
+        {"type": "content_block_stop", "index": 0},
+        *_end("max_tokens"),
+    )
+    client, _ = _real_client(body)
+    brain = ClaudeBrain(MATCHER, client=client, cards=lambda: True)
+    decision = asyncio.run(brain.decide(BrainRequest("plan me a route", KEYBINDS)))
+    assert decision == Reply(CUT_SHORT)
+
+
+def test_a_call_cut_with_no_block_end_after_a_look_up_ends_the_request() -> None:
+    """#287: with a look-up started earlier in the reply, the cut call went back to
+    Claude with no result, and Claude refuses that request (400)."""
+    look = _tool_block(0, "toolu_1", "ship_lookup", '{"name": "Andromeda"}')
+    card = _tool_block(1, "toolu_2", "show_card", '{"say": "The Andro')
+    body = _sse(
+        _message_start(),
+        *look,
+        {"type": "content_block_stop", "index": 0},
+        *card,  # no content_block_stop: the output limit came first
+        *_end("max_tokens"),
+    )
+    client, sent = _real_client(body)
+    brain = ClaudeBrain(MATCHER, client=client, lookups=[FakeLookup()], cards=lambda: True)
+    decision = asyncio.run(brain.decide(BrainRequest("who makes the Andromeda", KEYBINDS)))
+    assert decision == Reply(CUT_SHORT)
+    assert len(sent) == 1  # never sent back without the cut call's result

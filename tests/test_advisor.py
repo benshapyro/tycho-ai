@@ -262,6 +262,28 @@ def test_with_keys_off_star_citizen_s_own_lines_take_their_advisor_words() -> No
     assert "open the star map if it's listed" in on
 
 
+def test_with_keys_off_star_citizen_s_briefing_has_no_line_about_pressing() -> None:
+    """#347: three lines still talked about pressing: the listed commands, acting on a
+    best reading, and launching missiles. Keys on, they read as before (the pinned hash)."""
+    off, on = instructions(_star_citizen_off()), instructions(built_in())
+    for pressing in (
+        "The player's commands are listed below",
+        "Act on your best reading when the actions are harmless",
+        "Launch missiles only when the player says missiles.",
+    ):
+        assert pressing in on
+        assert pressing not in off
+    assert "though you can't press them" in off
+    assert "Answer on your best reading. Ask only" in off
+    assert "weapons preset).\n" in off
+
+
+def test_with_keys_off_star_citizen_still_looks_things_up_before_a_card() -> None:
+    """#380: advisor.md's tile section dropped the core's "Look things up first", and
+    Star Citizen with keys off still has its look-ups."""
+    assert "Look things up first, as for any answer." in instructions(_star_citizen_off())
+
+
 @pytest.mark.parametrize(
     "line", ["{{keys:only one part}}", "{{keys:a|b|c}}", "{{keys:spans\nlines|b}}"]
 )
