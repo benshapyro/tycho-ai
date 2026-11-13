@@ -19,6 +19,9 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - `brain_seconds` sets how long Tycho waits for the brain before saying it couldn't answer (8 seconds, as before). ([#112](https://github.com/benshapyro/tycho-ai/issues/112))
 
 ### Fixed
+- Long spoken answers no longer stop mid-sentence: Tycho now ends them at the last whole sentence that fits, and keeps "From UEX." on the end. ([#350](https://github.com/benshapyro/tycho-ai/issues/350))
+- "Never mind" (or "cancel") when there's nothing to cancel is now taken as heard, with the done sound, instead of the not-understood one. It also ends the talk so far, so what you say next isn't read as an answer to Tycho's last question. ([#351](https://github.com/benshapyro/tycho-ai/issues/351))
+- Rebinding several keys in the game no longer reloads Tycho's keybinds once per key: it waits until you've finished, then says so once. The new keys still work at once. ([#352](https://github.com/benshapyro/tycho-ai/issues/352))
 - Upgrading while Tycho was running ended in a string of file errors, and the old version stayed. The installer now tells you Tycho is running and waits for you to quit it (right-click its star by the clock, Quit Tycho) before it changes anything. Uninstalling does the same. ([#333](https://github.com/benshapyro/tycho-ai/issues/333))
 
 ## [0.6.0] - 2026-11-12

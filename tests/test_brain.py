@@ -1115,6 +1115,33 @@ def test_a_card_answer_from_uex_names_it() -> None:
     assert decision.card is not None
 
 
+LEVSKI = (
+    "Head down to the Levski hangar level and take the lift up to the main concourse. "
+    "The admin offices are along the upper ring, past the shops and the bar, on the side "
+    "facing the landing pads. Once you're in Levski, the station directory or the map "
+    "will point you the rest of the way if the signs aren't clear, and the security desk "
+    "can confirm where the crime stat terminals are if they've moved since the last patch."
+)
+
+
+def test_a_long_reply_ends_at_a_sentence_not_mid_word() -> None:
+    """#350: replies were cut at 400 characters, wherever that fell ("...or the map")."""
+    assert len(LEVSKI) > 400
+    decision = _ask(_Calls(([], _final(LEVSKI))))
+    assert isinstance(decision, Reply)
+    assert len(decision.text) <= 400
+    assert decision.text.endswith("landing pads.")
+
+
+def test_a_long_credited_reply_keeps_its_credit_within_the_limit() -> None:
+    """#350: the credit went on after the cut, so the voice's own cap could take it."""
+    client = _Calls(_looks_up("commodity_prices"), ([], _final(LEVSKI)))
+    decision = _ask(client, _Credited("commodity_prices"))
+    assert isinstance(decision, Reply)
+    assert len(decision.text) <= 400
+    assert decision.text.endswith("landing pads. From UEX.")
+
+
 def test_a_uex_miss_or_question_back_isnt_credited() -> None:
     """Review of #179: "Where are you starting from? From UEX." after a miss."""
     miss = _Credited("trade_routes", '{"not_found": "no start or commodity"}')

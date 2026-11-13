@@ -77,3 +77,21 @@ def _near(said: str, word: str) -> bool:
     if any(c.isdigit() for c in said + word) or min(len(said), len(word)) < 4:
         return False
     return word.startswith(said) or similarity(said, word) >= 0.8
+
+
+_SENTENCE_END = re.compile(r"[.!?](?=[\"')\]]*(?:\s|$))")
+
+
+def clip_spoken(text: str, limit: int) -> str:
+    """``text`` cut to at most ``limit`` characters at a sentence end, or failing that at
+    a word, so a long line never stops mid-sentence or mid-word (#350). A line that
+    fits comes back as it was."""
+    if len(text) <= limit:
+        return text
+    head = text[: limit + 1]  # the character after the limit says whether a word ends there
+    ends = [m.end() for m in _SENTENCE_END.finditer(head) if m.end() <= limit]
+    if ends and ends[-1] >= limit // 3:
+        return head[: ends[-1]].rstrip()
+    cut = head.rfind(" ", 0, limit)
+    body = (head[:cut] if cut > 0 else head[: limit - 1]).rstrip(" ,;:-")  # room for the stop
+    return f"{body}." if body else body

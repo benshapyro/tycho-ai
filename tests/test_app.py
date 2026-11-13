@@ -403,6 +403,41 @@ def test_a_keybind_change_warms_the_brain_again(monkeypatch: pytest.MonkeyPatch)
     assert warmed == [True]
 
 
+def test_a_run_of_rebinds_warms_the_brain_once(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """#352: the game writes the file once per rebind, and each change warmed the brain."""
+    import asyncio
+
+    monkeypatch.setattr(app, "KEYBIND_REFRESH_SECONDS", 0.0)
+    changes = iter([True, True, True, False])
+    reads: list[bool] = []
+    enough: asyncio.Event | None = None
+
+    def refresh() -> bool:
+        reads.append(True)
+        if len(reads) >= 8 and enough is not None:
+            enough.set()
+        return next(changes, False)
+
+    store = SimpleNamespace(refresh=refresh, last_error=None)
+    warmed: list[bool] = []
+
+    async def scenario() -> None:
+        nonlocal enough
+        enough = asyncio.Event()
+        refresher = asyncio.create_task(
+            app._refresh_keybinds(store, lambda: warmed.append(True))  # pyright: ignore[reportPrivateUsage, reportArgumentType]
+        )
+        await enough.wait()
+        refresher.cancel()
+
+    with caplog.at_level("INFO", logger="tycho"):
+        asyncio.run(asyncio.wait_for(scenario(), 5))
+    assert warmed == [True]
+    assert caplog.text.count("Keybinds changed in game") == 1
+
+
 # --- The voice (#242) ------------------------------------------------------------------
 
 
