@@ -479,12 +479,33 @@ def test_with_keys_off_a_reply_isnt_told_as_keys_off_and_leaves_the_telling() ->
     it compared the status and the reason. With them, a reply is not the keys-off
     refusal: it's spoken as itself, and the first real refusal still says why."""
     speaker = FakeSpeaker()
-    brain = FakeBrain(Reply("Hello there."))
+    brain = FakeBrain(Reply("Hello there."), RunActions(("v_toggle_landing_system",), "Gear."))
     r = _conversation(
         "hi there", "landing gear", speaker=speaker, brain=brain, safety_lists=KEYS_OFF
     )
     assert [x.status for x in r.results] == ["replied", "refused"]
     assert speaker.spoken == ["Hello there.", KEYS_OFF.keys_off]
+
+
+def test_with_keys_off_a_built_in_phrase_goes_to_the_brain_for_advice() -> None:
+    """#384: "night vision" matched a built-in command, so the brain never heard it and
+    the player got only the refusal. With key actions off, the brain says how instead;
+    the gate still refuses anything it picks."""
+    speaker = FakeSpeaker()
+    advice = Reply("I don't press keys with key actions off. Your gear key lowers it.")
+    brain = FakeBrain(advice)
+    r = _conversation("landing gear", speaker=speaker, brain=brain, safety_lists=KEYS_OFF)
+    assert [x.status for x in r.results] == ["replied"]
+    assert [request.text for request in brain.asked] == ["landing gear"]
+    assert speaker.spoken == [advice.text]
+    assert r.keys.events == []
+
+
+def test_with_keys_on_a_built_in_phrase_never_reaches_the_brain() -> None:
+    brain = FakeBrain(Reply("unused"))
+    r = _conversation("landing gear", brain=brain)
+    assert brain.asked == []
+    assert r.results[0].status == "done"
 
 
 # --- The brain (ADR 14) ------------------------------------------------------------------

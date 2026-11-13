@@ -493,6 +493,7 @@ class Session:
             self._matcher,
             tile=self._display is not None and self._display.on,
             brain=self._brain is not None,
+            keys=not (self._safety_lists is not None and self._safety_lists.keys_off),
         )
         trace.mark("match")
         if isinstance(routed, Reserved):

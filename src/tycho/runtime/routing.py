@@ -94,10 +94,19 @@ def reply_to_question(text: str) -> Literal["confirm", "cancel"] | None:
     return None
 
 
-def route(text: str, matcher: CommandMatcher, *, tile: bool = False, brain: bool = True) -> Routed:
+def route(
+    text: str,
+    matcher: CommandMatcher,
+    *,
+    tile: bool = False,
+    brain: bool = True,
+    keys: bool = True,
+) -> Routed:
     """Where ``text`` (already through the lexicon) goes. ``tile``: the Tile is on, so
     its words are the Tile's. ``brain``: there's a brain to ask what the fast path can't
-    match."""
+    match. ``keys``: key actions are on; with them off, what the fast path would press
+    goes to the brain, which says how instead (#384), and the gate still refuses any
+    press. Without a brain it stays a pick, so the player hears the gate's refusal."""
     if tile and (what := tile_command(text)) is not None:
         return Reserved(what)
     if is_say_again(text):
@@ -106,6 +115,8 @@ def route(text: str, matcher: CommandMatcher, *, tile: bool = False, brain: bool
         return Reserved(reply)
     match = matcher.match(text)
     if not isinstance(match, Defer):
+        if not keys and brain:
+            return ToBrain("key actions are off: say how, press nothing")
         return Picked(match.commands)
     return ToBrain(match.reason) if brain else NotUnderstood(match.reason)
 
