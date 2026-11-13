@@ -294,8 +294,8 @@ class Settings(BaseModel):
     )
     check_for_updates: bool = Field(
         default=True,
-        description="When Tycho starts, ask GitHub whether a newer version is out, and say so. "
-        "Tycho never updates itself.",
+        description="When Tycho starts, and when its window opens, ask GitHub whether a newer "
+        "version is out, and say so. Tycho never updates itself.",
         json_schema_extra=_rule("lower_only", how=FILE_OR_APP),
     )
 

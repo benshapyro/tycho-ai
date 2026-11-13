@@ -241,11 +241,12 @@
   async function settingsView() {
     data = await api.settings();
     if (tab === "Game and controls") setupState = await api.setup_state();
-    const names = [...data.groups.map((g) => g.name), "Keys"];
+    const names = [...data.groups.map((g) => g.name), "Keys", "Updates"];
     if (!names.includes(tab)) tab = names[0];
     const tabs = `<div class="tabs" role="tablist">${names.map((n) => `<button type="button" role="tab" aria-selected="${n === tab}" data-tab="${esc(n)}">${esc(n)}</button>`).join("")}</div>`;
     let body;
     if (tab === "Keys") body = await keysView();
+    else if (tab === "Updates") body = updatesView();
     else {
       const group = data.groups.find((g) => g.name === tab);
       const rows = `<div class="rows">${group.rows.map(row).join("")}</div>`;
@@ -258,6 +259,7 @@
     bindSettings();
     if (tab === "The Tile") preview();
     if (tab === "Keys") bindKeys();
+    if (tab === "Updates") bindUpdates();
   }
   async function preview() {
     const img = $("#tilePreview");
@@ -292,6 +294,44 @@
     $("#setFolder")?.addEventListener("click", chooseFolder);
     bindMic();
   }
+
+  /* ---------- updates: checked, never installed (#9) ---------- */
+  function updatesView() {
+    const auto = data.groups.flatMap((g) => g.rows).find((r) => r.name === "check_for_updates");
+    return `<div class="card frame"><h3>You have Tycho <span class="num">${esc($("#ver").textContent)}</span></h3>
+        <div class="keyrow"><button class="btn primary frame" type="button" id="checkUpdates">Check for updates</button><span id="updateMsg"></span></div>
+        <div class="keyrow" id="getRow" hidden><button class="btn frame" type="button" id="getUpdate"></button><span class="err" id="getErr"></span></div>
+        <p class="note">Tycho never updates itself. The release page has the installer: quit Tycho from the tray, run it, and it installs over this version. Your settings and keys stay.</p>
+        <p class="note">${auto && auto.value ? "Tycho also checks each time its window opens, and says so at the top." : "Automatic checks are off (Privacy tab), so Tycho only checks when you press the button."}</p></div>`;
+  }
+  function updateWords(u) {
+    if (u.state === "newer") return [`Tycho ${u.latest} is out.`, "warn-line"];
+    if (u.state === "latest") return [`You have the latest version.`, "ok-line"];
+    if (u.state === "none") return ["No release published yet.", "note"];
+    return [u.problem || "Couldn't check.", "err"];
+  }
+  function bindUpdates() {
+    $("#checkUpdates")?.addEventListener("click", async () => {
+      const b = $("#checkUpdates"), msg = $("#updateMsg");
+      b.disabled = true; msg.className = "note"; msg.textContent = "Checking…";
+      const u = await api.check_updates(true);
+      b.disabled = false;
+      [msg.textContent, msg.className] = updateWords(u);
+      $("#getRow").hidden = u.state !== "newer";
+      if (u.state === "newer") $("#getUpdate").textContent = `Get Tycho ${u.latest}`;
+      notice(u);
+    });
+    $("#getUpdate")?.addEventListener("click", async () => {
+      const r = await api.open_release();
+      $("#getErr").textContent = r.ok ? "" : r.problem;
+    });
+  }
+  function notice(u) {
+    const b = $("#updateNotice");
+    b.hidden = u.state !== "newer";
+    if (u.state === "newer") b.textContent = `Tycho ${u.latest} is out`;
+  }
+  $("#updateNotice").addEventListener("click", () => { view = "settings"; tab = "Updates"; render(); });
 
   /* ---------- keys ---------- */
   async function keysView() {
@@ -417,6 +457,7 @@
     firstRun = Boolean(about.first_run);
     if (firstRun) view = "setup";
     await render();
+    if (!firstRun) notice(await api.check_updates(false));
   }
   if (window.TYCHO_FAKE) start(window.TYCHO_FAKE);
   else if (window.pywebview && window.pywebview.api) start(window.pywebview.api);

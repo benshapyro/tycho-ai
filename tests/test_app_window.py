@@ -7,7 +7,7 @@ import httpx2
 import pytest
 
 from tests.fakes.fake_key_check import FakeKeyCheck
-from tycho import app, credentials, settings
+from tycho import __version__, app, credentials, settings, updates
 from tycho.desktop import window
 from tycho.desktop.bridge import GROUPS, KEYS, Bridge
 from tycho.desktop.keys import ProviderKeyCheck
@@ -332,11 +332,13 @@ def test_nothing_private_is_offered_to_the_page() -> None:
             "add_phrase",
             "cancel_capture",
             "capture_push_to_talk",
+            "check_updates",
             "choose_game_folder",
             "commands",
             "finish_setup",
             "keys",
             "microphone_level",
+            "open_release",
             "remove_phrase",
             "remove_key",
             "set",
@@ -512,3 +514,100 @@ def test_the_window_comes_to_the_front_once_shown(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(window, "importlib", SimpleNamespace(import_module=import_module))
     assert window.AppWindow(SimpleNamespace()).open() is True
     assert raised == ["restore", "show", "on_top=True", "on_top=False"]
+
+
+# --- checking for updates (Ben: 0.4.0 never said 0.5 or 0.6 was out) -------------------
+
+
+NEWER = updates.Release("99.0.0", "https://github.com/benshapyro/tycho-ai/releases/tag/v99.0.0")
+
+
+def _releases(*answers: updates.Release | Exception | None) -> tuple[Any, list[int]]:
+    asked: list[int] = []
+
+    def latest() -> updates.Release | None:
+        asked.append(1)
+        answer = answers[min(len(asked), len(answers)) - 1]
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    return latest, asked
+
+
+def test_check_for_updates_says_a_newer_tycho_is_out(path: Path) -> None:
+    latest, _ = _releases(NEWER)
+    bridge, _ = _bridge(path, latest_release=latest)
+    assert bridge.check_updates() == {"state": "newer", "current": __version__, "latest": "99.0.0"}
+
+
+def test_check_for_updates_says_when_this_is_the_latest(path: Path) -> None:
+    same = updates.Release(__version__, NEWER.url)
+    bridge, _ = _bridge(path, latest_release=_releases(same)[0])
+    assert bridge.check_updates()["state"] == "latest"
+    bridge, _ = _bridge(path, latest_release=_releases(None)[0])
+    assert bridge.check_updates()["state"] == "none"
+
+
+def test_offline_the_check_says_so_in_plain_words(path: Path) -> None:
+    bridge, _ = _bridge(path, latest_release=_releases(updates.UpdateError("timed out"))[0])
+    answer = bridge.check_updates()
+    assert answer["state"] == "error"
+    assert "GitHub" in str(answer["problem"])
+    assert "timed out" not in str(answer["problem"])
+
+
+def test_the_windows_own_check_honours_the_setting_and_the_button_doesnt(path: Path) -> None:
+    latest, asked = _releases(NEWER)
+    bridge, _ = _bridge(path, latest_release=latest)
+    settings.update({"check_for_updates": False}, path)
+    assert bridge.check_updates(False) == {"state": "off", "current": __version__}
+    assert asked == []  # no request to GitHub at all
+    assert bridge.check_updates(True)["state"] == "newer"  # the player asked
+    assert asked == [1]
+
+
+def test_the_windows_own_check_asks_github_once_an_hour(path: Path) -> None:
+    latest, asked = _releases(None, NEWER)
+    bridge, _ = _bridge(path, latest_release=latest)
+    assert bridge.check_updates(False)["state"] == "none"
+    assert bridge.check_updates(False)["state"] == "none"  # kept
+    assert asked == [1]
+    assert bridge.check_updates(True)["state"] == "newer"  # the button always asks
+    assert bridge.check_updates(False)["state"] == "newer"  # and refreshes what's kept
+    assert asked == [1, 1]
+
+
+def test_open_release_opens_only_tychos_own_release_page(path: Path) -> None:
+    opened: list[str] = []
+    elsewhere = updates.Release("99.0.0", "https://example.com/not-tycho")
+    for release, expected in (
+        (NEWER, NEWER.url),
+        (elsewhere, "https://github.com/benshapyro/tycho-ai/releases"),
+    ):
+        bridge, _ = _bridge(path, latest_release=_releases(release)[0], open_page=opened.append)
+        assert bridge.open_release() == {
+            "ok": True,
+            "url": "https://github.com/benshapyro/tycho-ai/releases",
+        }
+        bridge.check_updates()
+        assert bridge.open_release() == {"ok": True, "url": expected}
+    assert opened[-1] == "https://github.com/benshapyro/tycho-ai/releases"
+
+
+def test_a_browser_that_wont_open_says_where_to_go(path: Path) -> None:
+    def broken(_url: str) -> bool:
+        raise OSError("no browser")
+
+    bridge, _ = _bridge(path, latest_release=_releases(NEWER)[0], open_page=broken)
+    bridge.check_updates()
+    answer = bridge.open_release()
+    assert answer["ok"] is False
+    assert NEWER.url in str(answer["problem"])
+
+
+def test_the_page_has_a_check_for_updates_button_and_a_notice() -> None:
+    html = window.page()
+    assert 'id="updateNotice"' in html
+    assert "Check for updates" in html
+    assert "check_updates(false)" in html  # the window's own check when it opens

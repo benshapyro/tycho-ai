@@ -12,6 +12,9 @@ player's own hands, not a sentence that might have been misheard.
 
 Keys never come back out: the page sends one once, and learns only whether one is
 stored and its last four characters.
+
+Updates are checked, never installed: the page learns whether a newer Tycho is out, and
+can ask for its release page to open in the browser. The page never names a web address.
 """
 
 import base64
@@ -21,10 +24,11 @@ import logging
 import threading
 import time
 import typing
+import webbrowser
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
 
-from tycho import __version__, credentials, paths, settings
+from tycho import __version__, credentials, paths, settings, updates
 from tycho.desktop import setup
 from tycho.desktop.commands import Commands
 from tycho.desktop.keys import KeyCheck
@@ -73,6 +77,10 @@ DEVICES_SECONDS = 10.0
 """How long the list of microphones is kept between redraws."""
 KEYBINDS_SECONDS = 30.0
 """How long the keybinds are kept for the Commands page."""
+UPDATE_SECONDS = 3600.0
+"""How long the window's own check for a newer Tycho is kept: each opening of the
+window shouldn't ask GitHub again. The Check for updates button always asks."""
+RELEASES_PAGE = f"https://github.com/{updates.REPO}/releases"
 
 
 type Apply = Callable[[str, object], bool]
@@ -94,6 +102,8 @@ class Bridge:
         finish: Callable[[], None] = lambda: None,
         first_run: bool = False,
         commands: Commands | None = None,
+        latest_release: Callable[[], updates.Release | None] = updates.latest_release,
+        open_page: Callable[[str], object] = webbrowser.open,
         restart: Callable[[], bool] = lambda: False,
     ) -> None:
         """``apply`` changes a setting in the running Tycho (the live callbacks);
@@ -119,6 +129,10 @@ class Bridge:
         self._capture = threading.Event()
         """Set to stop a push-to-talk capture the player has left."""
         self._undo: list[tuple[str, object]] = []
+        self._latest_release = latest_release
+        self._open_page = open_page
+        self._release: updates.Release | None = None
+        """The newer release the last check found: the only page ``open_release`` opens."""
 
     # --- reading ---------------------------------------------------------------------
 
@@ -133,6 +147,55 @@ class Bridge:
         except Exception as e:  # a broken check must not break the page
             log.exception("The status checks failed")
             return [{"level": "fail", "what": "Checks", "detail": f"couldn't run: {e}", "fix": ""}]
+
+    def check_updates(self, asked: object = True) -> dict[str, object]:
+        """Is a newer Tycho out? ``asked`` is the player pressing Check for updates, so
+        GitHub is asked even with ``check_for_updates`` off; the window's own check when
+        it opens (``asked`` false) honours the setting, and is kept for an hour.
+
+        ``state`` is ``newer``, ``latest``, ``none`` (no release yet), ``off`` or
+        ``error``; Tycho never updates itself (#9)."""
+        current = __version__
+        if asked is not True:
+            try:
+                if not settings.load(self._path).check_for_updates:
+                    return {"state": "off", "current": current}
+            except SettingsError:
+                return {"state": "off", "current": current}
+        try:
+            if asked is True:
+                release = self._latest_release()
+                self._cache["updates"] = (time.monotonic() // UPDATE_SECONDS, release)
+            else:
+                key = time.monotonic() // UPDATE_SECONDS
+                release = cast(
+                    updates.Release | None, self._cached("updates", key, self._latest_release)
+                )
+        except updates.UpdateError as e:
+            log.debug("Couldn't check for a newer Tycho: %s", e)
+            return {
+                "state": "error",
+                "current": current,
+                "problem": "Couldn't reach GitHub to check. Is the PC online? Try again later.",
+            }
+        if release is None:
+            return {"state": "none", "current": current}
+        if updates.is_newer(release.version, current):
+            self._release = release
+            return {"state": "newer", "current": current, "latest": release.version}
+        return {"state": "latest", "current": current, "latest": release.version}
+
+    def open_release(self) -> dict[str, object]:
+        """Open the newer release's page (its installer is there) in the player's browser.
+        Only a page of Tycho's own releases: anything else opens the list of releases."""
+        found = self._release.url if self._release is not None else ""
+        url = found if found.startswith(RELEASES_PAGE + "/") else RELEASES_PAGE
+        try:
+            self._open_page(url)
+        except Exception as e:
+            log.warning("Couldn't open the browser: %s", e)
+            return {"ok": False, "problem": f"Couldn't open the browser. The page is {url}"}
+        return {"ok": True, "url": url}
 
     def settings(self) -> dict[str, object]:
         """Every setting the app shows: its group, kind, value, limits, choices and rules."""
