@@ -501,6 +501,17 @@ def test_with_keys_off_a_built_in_phrase_goes_to_the_brain_for_advice() -> None:
     assert r.keys.events == []
 
 
+def test_with_keys_off_a_built_in_phrase_still_says_why_when_the_brain_fails() -> None:
+    """#384 review: offline or timed out, the player still hears why nothing was
+    pressed, not just that the brain couldn't answer."""
+    speaker = FakeSpeaker()
+    brain = FakeBrain(BrainError("no connection"))
+    r = _conversation("landing gear", speaker=speaker, brain=brain, safety_lists=KEYS_OFF)
+    assert [(x.status, x.detail) for x in r.results] == [("refused", KEYS_OFF.keys_off)]
+    assert speaker.spoken == [KEYS_OFF.keys_off]
+    assert r.keys.events == []
+
+
 def test_with_keys_on_a_built_in_phrase_never_reaches_the_brain() -> None:
     brain = FakeBrain(Reply("unused"))
     r = _conversation("landing gear", brain=brain)

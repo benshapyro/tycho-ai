@@ -82,6 +82,7 @@ from tycho.runtime.routing import (
     NotUnderstood,
     Picked,
     Reserved,
+    ToBrain,
     from_brain,
     is_say_again,
     reply_to_question,
@@ -534,6 +535,11 @@ class Session:
             if isinstance(picked, Reply):
                 progress.say, progress.card = picked.text, picked.card
                 return self._result(request, "replied", trace, heard, text, progress=progress)
+            if isinstance(picked, str) and isinstance(routed, ToBrain) and routed.matched:
+                # Key actions are off and the brain failed (#384): the gate's refusal
+                # still says why nothing was pressed, as it did before the brain heard it.
+                picked = Picked(routed.matched)
+                progress.by_brain = False
             if isinstance(picked, str):
                 detail = f"the brain couldn't answer: {picked}"
                 return self._result(

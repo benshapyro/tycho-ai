@@ -61,6 +61,10 @@ class ToBrain:
     """The fast path couldn't match it: the brain decides."""
 
     reason: str
+    matched: tuple[Command, ...] = ()
+    """What the fast path matched, sent to the brain because key actions are off
+    (#384): if the brain can't answer, these are planned, so the gate's refusal says
+    why nothing was pressed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,7 +120,7 @@ def route(
     match = matcher.match(text)
     if not isinstance(match, Defer):
         if not keys and brain:
-            return ToBrain("key actions are off: say how, press nothing")
+            return ToBrain("a built-in command, with key actions off", match.commands)
         return Picked(match.commands)
     return ToBrain(match.reason) if brain else NotUnderstood(match.reason)
 
