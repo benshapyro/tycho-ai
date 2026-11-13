@@ -6,7 +6,7 @@
 
 Tycho turns natural speech into in-game actions, using your own keybinds. Hold push-to-talk and say what you want, the way you'd say it to a crewmate. Tycho presses the right keys, tells you what it did, and asks before doing anything you can't undo. It can also answer Star Citizen questions.
 
-**Status: pre-alpha (0.6).** Common commands run instantly on your PC. Claude handles everything said differently, plus questions, and Tycho answers aloud with an ElevenLabs voice. Anything you can't undo (ejecting, firing) waits for you to say "confirm". Install it with the installer from [Releases](https://github.com/benshapyro/tycho-ai/releases/latest), or from source with a terminal and about 15 minutes.
+**Status: pre-alpha (0.7).** Common commands run instantly on your PC. Claude handles everything said differently, plus questions, and Tycho answers aloud with an ElevenLabs voice. Anything you can't undo (ejecting, firing) waits for you to say "confirm". Install it with the installer from [Releases](https://github.com/benshapyro/tycho-ai/releases/latest), or from source with a terminal and about 15 minutes.
 
 ## Works today
 
@@ -14,13 +14,16 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
 - **Claude for anything said differently,** for multi-step requests, and for questions.
 - **Spoken replies** in an ElevenLabs voice you choose (George, Sarah, Lily, Brian, or one of your own), plus sounds that tell you whether the keys went in. "Say that again" repeats the last thing it said.
 - **Asks before anything you can't undo,** and waits for you to say "confirm". Push-to-talk stops it at any point. When a request is vague ("faster") it asks a quick question instead of guessing, and what you say to your squad on the same button ("break right") presses nothing.
+- **Advisor mode:** turn key actions off and Tycho only answers and advises; say a command and it tells you how to do it yourself.
+- **World of Warcraft: Forever, as an advisor:** pick it in Settings and ask about classes, dungeons, professions and more. Tycho presses no keys there, as Blizzard's rules require.
 - **Answers about the game:**
   - ships, from the current patch's game files;
   - trade prices and routes, live from UEX;
   - where to refine an ore, and where to buy a ship with aUEC, from UEX;
   - where to mine a resource, from the Star Citizen Wiki;
   - weapons, armor, components and crafting;
-  - news and upcoming patches, from RSI's sites.
+  - news and upcoming patches, from RSI's sites;
+  - "where is" and "how do I", from the web, with community answers marked as such.
 - **Knows your fleet,** so "which of my ships is best for mining?" is about your ships.
 - **Settings by voice:** "turn your voice down a bit", "less time to confirm", "stop searching the web". "Undo" puts back the last change.
 - **Calls you what you like:** "Commander" by default, or "call me Ace", or nothing at all. It uses the name sparingly.
@@ -28,14 +31,15 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
 - **Its own window and a tray icon:** a guided first run (the game, your push-to-talk button, a microphone test, your keys), Status, Settings, and Commands, where you see everything you can say and add your own phrases.
 - **A log of every key it pressed.**
 - **Speech recognition on your PC,** on the graphics card when it has room and on the processor otherwise.
-- **An installer, an update notice, and setup by an AI agent.**
+- **Claude through Anthropic or OpenRouter,** with one OpenRouter key if you prefer.
+- **An installer, an update notice in its window, and setup by an AI agent.**
 
 ## Coming
 
 These are plans, not promises. Each links its issue.
 
 - **Your fleet and logs in Tycho's window** ([#12](https://github.com/benshapyro/tycho-ai/issues/12)).
-- **Choose your model** ([#112](https://github.com/benshapyro/tycho-ai/issues/112)): OpenAI and other providers, once they pass Tycho's tests.
+- **More of World of Warcraft:** the Tile over WoW: Forever ([#381](https://github.com/benshapyro/tycho-ai/issues/381)), and packs for modern WoW and Classic ([#379](https://github.com/benshapyro/tycho-ai/issues/379)).
 - **Learns from misses and fixes itself** ([#51](https://github.com/benshapyro/tycho-ai/issues/51)): offers to add phrases you rephrased, and repairs keybinds after a patch, always with your OK.
 - **Reads the game's log** ([#30](https://github.com/benshapyro/tycho-ai/issues/30)): knows which ship you're in and where you are, without being told.
 - **Looks at your screen when you ask** ([#31](https://github.com/benshapyro/tycho-ai/issues/31)): it captures only the game window and keeps nothing.
