@@ -25,8 +25,8 @@ from dataclasses import dataclass
 from typing import Final
 
 from tycho.commands.matcher import Command
-from tycho.game.keybinds import MODIFIERS, Action, Keybinds, KeyInput
 from tycho.input.plan import pressable_input
+from tycho.keybinds import MODIFIERS, Action, Keybinds, KeyInput
 from tycho.packs import Safety, built_in
 
 _DANGER_WORDS = (

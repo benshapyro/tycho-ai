@@ -18,8 +18,8 @@ import hashlib
 from importlib import resources
 
 from tycho.commands import CommandMatcher, resolve
-from tycho.game.keybinds import Keybinds
 from tycho.input.plan import pressable_input
+from tycho.keybinds import Keybinds
 from tycho.packs import GamePack, built_in
 from tycho.packs.pack import KEYS, MARKER
 

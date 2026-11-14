@@ -3,8 +3,8 @@ import threading
 import pytest
 
 from tests.fakes.fake_keys import FakeClock, FakeFocus, FakeKeySender
-from tycho.game.keybinds import Action, ActivationMode, KeyInput
 from tycho.input import NotPressable, Presser, UnsupportedKey, code_for, plan
+from tycho.keybinds import Action, ActivationMode, KeyInput
 
 MODES = {
     "tap": ActivationMode("tap", on_press=False, on_release=True, release_threshold=0.25),

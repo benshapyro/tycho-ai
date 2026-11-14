@@ -27,8 +27,8 @@ from tycho.brain.briefing import (
 )
 from tycho.brain.claude import ClaudeBrain
 from tycho.commands import Command, CommandMatcher, Match
-from tycho.game.keybinds import Action, Keybinds, KeyInput
 from tycho.input import Presser, code_for
+from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.knowledge.web import SITES
 from tycho.lexicon import Lexicon
 from tycho.packs import (

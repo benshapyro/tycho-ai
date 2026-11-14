@@ -31,8 +31,8 @@ from openai.types.chat import ChatCompletionToolParam
 
 from tycho import credentials
 from tycho.game.install import GameInstall
-from tycho.game.keybinds import Keybinds
 from tycho.game.store import KeybindStore
+from tycho.keybinds import Keybinds
 from tycho.lexicon import Lexicon
 
 EXPECTED = Path(__file__).resolve().parents[1] / "spike" / "brain_expected.toml"

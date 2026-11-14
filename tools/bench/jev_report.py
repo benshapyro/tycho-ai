@@ -41,8 +41,8 @@ from tycho import credentials
 from tycho.brain.briefing import command_phrasings
 from tycho.commands.matcher import CommandMatcher
 from tycho.game.install import GameInstall
-from tycho.game.keybinds import Action
 from tycho.game.store import KeybindStore
+from tycho.keybinds import Action
 from tycho.lexicon import Lexicon
 
 ENDPOINT = "https://api.typesafe.ai/v1/systemone"

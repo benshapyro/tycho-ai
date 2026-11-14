@@ -32,7 +32,7 @@ from tomlkit.items import AoT, Array, Table
 from tycho.commands import Command, CommandFileError, CommandMatcher, resolve
 from tycho.commands.matcher import built_in_commands
 from tycho.commands.reserved import USES, reserved_for
-from tycho.game.keybinds import Keybinds, key_text
+from tycho.keybinds import Keybinds, key_text
 from tycho.packs import GamePack, Safety
 from tycho.packs import built_in as built_in_pack
 from tycho.safety import is_confirm_grade

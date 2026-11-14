@@ -17,7 +17,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal, Protocol
 
-from tycho.game.keybinds import Keybinds
+from tycho.keybinds import Keybinds
 
 type Kind = Literal["install", "keybinds", "game_state", "lookups"]
 

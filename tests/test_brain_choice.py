@@ -15,7 +15,7 @@ from tycho.brain.claude import MODEL, ClaudeBrain
 from tycho.brain.openrouter import OpenRouterBrain
 from tycho.brain.providers import ANTHROPIC_HAIKU, OFFERED, OPENROUTER_HAIKU, choose
 from tycho.commands import CommandMatcher
-from tycho.game.keybinds import Action, Keybinds, KeyInput
+from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.knowledge.web import SearchNeedsAnthropic, WebSearch
 from tycho.runtime.planning import Questions, plan_request
 from tycho.runtime.routing import Picked, from_brain

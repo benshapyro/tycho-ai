@@ -8,8 +8,8 @@ import numpy as np
 import pytest
 
 from tycho import app, brain_choice, logs, settings
-from tycho.game.keybinds import Action, Keybinds, KeyInput
 from tycho.input import code_for
+from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.ptt.binding import Binding, DeviceKind
 from tycho.ptt.conflicts import conflicts, game_code
 

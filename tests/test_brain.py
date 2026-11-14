@@ -43,7 +43,7 @@ from tycho.brain.rounds import (
     spoken,
 )
 from tycho.commands import CommandMatcher
-from tycho.game.keybinds import Action, Keybinds, KeyInput
+from tycho.keybinds import Action, Keybinds, KeyInput
 
 MATCHER = CommandMatcher.default()
 ACTIONS = {"v_toggle_landing_system", "v_eject", "v_toggle_qdrive_engagement", "v_lights"}

@@ -18,8 +18,8 @@ from tycho import app, settings
 from tycho.desktop import bridge as bridge_module
 from tycho.desktop.bridge import Bridge
 from tycho.desktop.host import Host
-from tycho.game.keybinds import Keybinds
 from tycho.game.store import GameDataError
+from tycho.keybinds import Keybinds
 from tycho.packs import GamePack, built_in
 from tycho.settings import Settings
 

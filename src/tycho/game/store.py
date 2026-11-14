@@ -19,14 +19,12 @@ from tycho.game import cryxml, localization
 from tycho.game.install import GameInstall
 from tycho.game.keybinds import (
     DEFAULTS_P4K_PATH,
-    Action,
-    ActivationMode,
-    Keybinds,
     apply_profile,
     parse_activation_modes,
     parse_defaults,
 )
 from tycho.game.p4k import P4kArchive
+from tycho.keybinds import Action, ActivationMode, Keybinds
 
 type _Stamp = tuple[int, int] | None
 
