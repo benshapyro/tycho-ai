@@ -6,6 +6,7 @@ import asyncio
 import json
 import re
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -86,6 +87,30 @@ def test_an_act_ends_the_line_at_the_act(tmp_path: Path) -> None:
     assert call["stop"] == "act"  # the stream was left there, so no usage came
     assert call["first_ms"] is not None
     assert call["tools"][0]["name"] == "run_actions"
+    # The output count never arrives, so the trace says how much was written (#387).
+    assert call["output_chars"] == len(json.dumps(gear))
+    assert call["tokens"] == {"input": 20, "cache_read": 3000, "cache_write": 0}
+
+
+def test_an_act_after_some_text_counts_the_text_it_wrote_too(tmp_path: Path) -> None:
+    traces = TraceFile(tmp_path / FILE)
+    said = SimpleNamespace(
+        type="content_block_stop", content_block=SimpleNamespace(type="text", text="On it.")
+    )
+    gear = {"actions": ["v_toggle_landing_system"], "say": "Gear."}
+    client = claude_fakes._Client([said, claude_fakes._tool_stop("run_actions", gear)])
+    asyncio.run(_claude(client, traces).decide(BrainRequest("gear", KEYBINDS)))
+    ((call,),) = [line["calls"] for line in _lines(traces)]
+    assert call["output_chars"] == len("On it.") + len(json.dumps(gear))
+
+
+def test_a_call_that_ends_with_its_usage_has_no_output_chars(tmp_path: Path) -> None:
+    traces = TraceFile(tmp_path / FILE)
+    client = claude_fakes._Calls(([], claude_fakes._final("Hi.")))
+    asyncio.run(_claude(client, traces).decide(BrainRequest("hello", KEYBINDS)))
+    ((call,),) = [line["calls"] for line in _lines(traces)]
+    assert call["output_chars"] is None
+    assert call["tokens"]["output"] == 8
 
 
 def test_a_failed_request_is_traced_too(tmp_path: Path) -> None:
@@ -111,6 +136,7 @@ def test_the_openrouter_brain_writes_the_same_lines(tmp_path: Path) -> None:
     assert line["model"] == openrouter_fakes.MODEL
     assert line["outcome"] == "actions"
     assert line["calls"][0]["host"] == "Cerebras"
+    assert line["calls"][0]["output_chars"] == len(json.dumps(openrouter_fakes.GEAR))
 
 
 def test_no_key_or_absolute_path_reaches_a_line(tmp_path: Path) -> None:

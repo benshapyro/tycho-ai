@@ -75,6 +75,18 @@ def is_voice(text: str) -> bool:
     return _key(text) in SHORTLIST or VOICE_ID.fullmatch(text.strip()) is not None
 
 
+def by_voice(said: str) -> Voice | None:
+    """The shortlist voice a player named aloud ("switch to Sarah"), or None. Only the
+    ones every key can use: a voice ID can't be said, and The Ship's Mind works only
+    with its owner's key (#355)."""
+    voice = SHORTLIST.get(_key(said))
+    return voice if voice is not None and not voice.own_account else None
+
+
+SPOKEN = tuple(v.name for v in SHORTLIST.values() if not v.own_account)
+"""The voices a player can pick aloud: George, Sarah, Lily and Brian."""
+
+
 MODEL_SETTINGS = {"v4 turbo": TURBO, "flash": FLASH}
 """``voice_model``'s choices; any other (the voice's own) keeps the voice's model."""
 

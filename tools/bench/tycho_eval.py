@@ -95,7 +95,7 @@ from tycho.lexicon import Lexicon
 from tycho.packs import STAR_CITIZEN, GamePack, Safety, as_run, built_in
 from tycho.runtime import routing
 from tycho.runtime.planning import Questions, Refusal, Steps, plan_request
-from tycho.runtime.routing import NotUnderstood, Picked, Reserved, from_brain
+from tycho.runtime.routing import NotUnderstood, Picked, Reserved, from_brain, own_keys
 from tycho.spoken_settings import SettingsTool
 
 PACKS = Path(__file__).resolve().parents[2] / "src" / "tycho" / "packs"
@@ -439,8 +439,11 @@ async def run_case(
         def searching() -> None:
             outcome.searched = True
 
+        # As the session does (#386): with key actions off, a built-in phrase reaches
+        # the brain with the player's own keys for it.
+        keys = own_keys(routed.matched, keybinds) if routed.matched else ""
         decision = await brain.decide(
-            BrainRequest(text, keybinds, tuple(recent), waiting=searching)
+            BrainRequest(text, keybinds, tuple(recent), keys, waiting=searching)
         )
     except BrainError as e:
         outcome.kind, outcome.notes = "error", [str(e)]

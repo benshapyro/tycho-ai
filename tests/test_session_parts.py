@@ -24,6 +24,7 @@ from tycho.runtime.routing import (
     Reserved,
     ToBrain,
     from_brain,
+    own_keys,
     route,
     tile_command,
 )
@@ -64,6 +65,49 @@ def test_with_key_actions_off_a_built_in_phrase_goes_to_the_brain() -> None:
     assert [command.id for command in routed.matched] == [
         command.id for command in _commands("landing gear")
     ]
+
+
+def test_own_keys_name_the_player_s_key_in_the_game_s_words() -> None:
+    # #386: "Night Vision on Right Alt + N", not "your night vision key, if bound".
+    action = Action(
+        "v_toggle_night_vision",
+        "spaceship_general",
+        "Night Vision (Toggle)",
+        (KeyInput("n", ("ralt",)),),
+    )
+    command = Command("night_vision", ("night vision",), ("v_toggle_night_vision",))
+    assert own_keys((command,), Keybinds([action])) == "Night Vision on Right Alt + N"
+
+
+def test_own_keys_say_when_a_command_has_no_key() -> None:
+    other = Action("v_lights", "spaceship_general", "Lights", (KeyInput("l"),))
+    command = Command("night_vision", ("night vision",), ("v_toggle_night_vision",))
+    # Tycho sees only keyboard and mouse keys: it may be on the player's stick.
+    assert (
+        own_keys((command,), Keybinds([other]))
+        == "night vision: no keyboard or mouse key Tycho can see"
+    )
+
+
+def test_own_keys_name_each_step_of_a_sequence() -> None:
+    # #386 review: a sequence has no actions of its own, only steps.
+    keys = own_keys(_commands("prepare to land"), KEYBINDS)
+    assert keys == "v_atc_request on Left Alt + N; v_toggle_landing_system on N"
+
+
+def test_own_keys_name_the_mode_switch_first() -> None:
+    switch = Action("v_mode_scm", "spaceship_general", "SCM Mode", (KeyInput("b"),))
+    main = Action("v_boost", "spaceship_general", "Boost", (KeyInput("lshift"),))
+    command = Command("boost", ("boost",), ("v_boost",), setup=("v_mode_scm",))
+    assert own_keys((command,), Keybinds([switch, main])) == (
+        "SCM Mode on B, first; Boost on Left Shift"
+    )
+
+
+def test_own_keys_are_empty_when_tycho_reads_no_keybinds_for_the_game() -> None:
+    # An advisor pack such as WoW: Forever: Tycho can't see its keys, so says nothing.
+    command = Command("night_vision", ("night vision",), ("v_toggle_night_vision",))
+    assert own_keys((command,), Keybinds([])) == ""
 
 
 def test_with_key_actions_off_and_no_brain_a_built_in_phrase_stays_a_pick() -> None:

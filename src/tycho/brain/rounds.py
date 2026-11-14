@@ -182,6 +182,12 @@ class Round:
         if self.turn.trace is not None:
             self.turn.trace.used(tokens, cost, stop, host, priced)
 
+    def left(self, output_chars: int, tokens: Mapping[str, int] | None = None) -> None:
+        """The caller left this call's stream at an act: how much the model had written
+        by then, and the tokens known so far, for the trace (#387)."""
+        if self.turn.trace is not None:
+            self.turn.trace.left(output_chars, tokens)
+
     async def tool_call(self, use_id: str, name: str, arguments: object) -> Decision | None:
         """A complete tool call. Returns the act to take, which ends the request (the
         caller leaves the stream there, so only the first act in a reply is pressed),

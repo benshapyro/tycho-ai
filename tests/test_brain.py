@@ -281,6 +281,19 @@ class _Stream:
     async def get_final_message(self) -> Any:
         return self._final
 
+    @property
+    def current_message_snapshot(self) -> Any:
+        """The message so far, as the SDK builds it: every block streamed, and the
+        usage from the call's start (the output count only comes at its end)."""
+        blocks = [e.content_block for e in self._events if e.type == "content_block_stop"]
+        usage = SimpleNamespace(
+            input_tokens=20,
+            output_tokens=1,
+            cache_read_input_tokens=3000,
+            cache_creation_input_tokens=None,
+        )
+        return SimpleNamespace(content=blocks, usage=usage)
+
 
 class _Client:
     def __init__(self, events: list[Any], final: Any = None) -> None:

@@ -237,3 +237,35 @@ def _default_inputs(action: ET.Element, device: str) -> list[str]:
     if (single := child.get("input")) is not None:
         return [single]
     return [data.get("input", "") for data in child.iter("inputdata")]
+
+
+def key_text(key: KeyInput) -> str:
+    """A key as the player knows it: "Right Alt + O", "Numpad 8", "Mouse 4"."""
+    parts = [_MODIFIERS.get(m, m.capitalize()) for m in key.modifiers]
+    parts.append(_key_name(key.key))
+    return " + ".join(parts)
+
+
+_MODIFIERS = {
+    "lalt": "Left Alt",
+    "ralt": "Right Alt",
+    "lctrl": "Left Ctrl",
+    "rctrl": "Right Ctrl",
+    "lshift": "Left Shift",
+    "rshift": "Right Shift",
+}
+
+
+def _key_name(key: str) -> str:
+    if key in _MODIFIERS:
+        return _MODIFIERS[key]
+    if key.startswith("np_"):
+        return "Numpad " + key[3:].replace("_", " ").title()
+    if key.startswith("mouse") and key[5:].isdigit():
+        return f"Mouse {key[5:]}"
+    if len(key) == 1 or (key[0] == "f" and key[1:].isdigit()):
+        return key.upper()  # "O", "5", "F5"
+    return _NAMES.get(key, key.replace("_", " ").title())
+
+
+_NAMES = {"esc": "Esc", "pgup": "Page Up", "pgdn": "Page Down", "ins": "Insert", "del": "Delete"}

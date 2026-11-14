@@ -35,6 +35,7 @@ from pydantic import ValidationError
 from tycho import settings
 from tycho.brain.lookups import LookupResult, failure
 from tycho.settings import Settings, SettingsError
+from tycho.voice import voices
 
 log = logging.getLogger(__name__)
 
@@ -62,7 +63,8 @@ _STEPS = {
 
 DESCRIPTION = """\
 Read or change Tycho's own settings, when the player asks about or for a change to \
-how Tycho works: its voice and sound volumes, how long they have to say "confirm", \
+how Tycho works: its voice (George, Sarah, Lily or Brian) and sound volumes, how \
+long they have to say "confirm", \
 web search, keeping transcripts, update checks, game channel, speech recognition \
 device. action "get" reads them all, with which can change by voice. action "set" \
 changes the ones named; a value can be relative ("-10%" for a bit quieter, "+2" \
@@ -97,6 +99,15 @@ def parse(name: str, said: str, current: object) -> Parsed:
         raise Refused(f"{name} isn't a setting")
     text = said.strip().lower()
     kind = field.annotation
+    if name == "voice":
+        voice = voices.by_voice(said)
+        if voice is None:
+            spoken = ", ".join(voices.SPOKEN[:-1]) + " or " + voices.SPOKEN[-1]
+            raise Refused(
+                f"by voice, Tycho's voice is one of {spoken}; any other voice is chosen "
+                "in the app's Settings, under Voice and sounds"
+            )
+        return Parsed(voice.name)
     if kind is bool:
         if text in _TRUE:
             return Parsed(True)
