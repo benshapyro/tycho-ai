@@ -112,7 +112,7 @@ Small PRs, each green on Windows CI, each changing nothing a player can notice, 
 | 5 | The registry builds parts; `assemble.py` and `doctor.py` ask it | The wiring stops naming Star Citizen |
 | 6 | `games/star_citizen/`: move `game/` and Star Citizen's look-ups, with its checks and install questions | Now a move only, since nothing outside names the modules |
 | 7 | Split `app.py` into `cli/`, `start/`, `doctor.py` and `desktop/shell.py`; the entry point changes | Last of the big ones, once its pieces have homes |
-| 8 | Split `runtime/session.py` and `desktop/bridge.py` | Independent of the rest; can run beside 6 and 7 |
+| [#399](https://github.com/benshapyro/tycho-ai/issues/399) | Split `runtime/session.py` and `desktop/bridge.py` | Independent of the rest; can run beside 6 and 7 |
 
 Tests patch `app` functions in 63 places; each PR moves those patches to the function's new home and renames the test file to match. No shims are left behind: an old import path that still works hides a missed move.
 
@@ -143,11 +143,11 @@ Tests patch `app` functions in 63 places; each PR moves those patches to the fun
 
 | # | Issue | Feeds |
 |---|---|---|
-| 1 | Size and import-rule tests, with today's breaks listed | D3 |
-| 2 | Move the general keybind types to `tycho/keybinds.py` | D3 |
-| 3 | Make the pack a required argument everywhere; no pack loaded on import | D3 |
-| 4 | #298: one Win32 module (exists) | D3, D4 |
-| 5 | Parts registry builds parts; `start/assemble.py`; `doctor.py` | D3, #364, #196 |
-| 6 | `games/star_citizen/`: Star Citizen's code in one folder | D3 |
-| 7 | Split `app.py` (closes the rest of #61) | D3 |
-| 8 | Split `runtime/session.py` and `desktop/bridge.py` | D3 |
+| [#393](https://github.com/benshapyro/tycho-ai/issues/393) | Size and import-rule tests, with today's breaks listed | D3 |
+| [#394](https://github.com/benshapyro/tycho-ai/issues/394) | Move the general keybind types to `tycho/keybinds.py` | D3 |
+| [#395](https://github.com/benshapyro/tycho-ai/issues/395) | Make the pack a required argument everywhere; no pack loaded on import | D3 |
+| [#298](https://github.com/benshapyro/tycho-ai/issues/298) | One Win32 module | D3, D4 |
+| [#396](https://github.com/benshapyro/tycho-ai/issues/396) | Parts registry builds parts; `start/assemble.py`; `doctor.py` | D3, #364, #196 |
+| [#397](https://github.com/benshapyro/tycho-ai/issues/397) | `games/star_citizen/`: Star Citizen's code in one folder | D3 |
+| [#398](https://github.com/benshapyro/tycho-ai/issues/398) | Split `app.py` (closes the rest of #61) | D3 |
+| [#399](https://github.com/benshapyro/tycho-ai/issues/399) | Split `runtime/session.py` and `desktop/bridge.py` | D3 |
