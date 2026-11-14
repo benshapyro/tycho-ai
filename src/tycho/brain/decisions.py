@@ -65,6 +65,9 @@ class BrainRequest:
     keybinds: Keybinds
     recent: tuple[Exchange, ...] = ()
     """Earlier exchanges, oldest first, for follow-ups like "do that again"."""
+    own_keys: str = ""
+    """With key actions off, the player's own keys for the built-in command they said
+    ("Night Vision on Right Alt + N"), so the advice can name them (#386)."""
     waiting: Callable[[], None] | None = field(default=None, compare=False)
     """Called once if the answer will be slow (a web search has started), so the
     player hears a short line instead of silence (ADR 15)."""

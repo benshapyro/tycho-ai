@@ -856,6 +856,27 @@ def test_a_press_case_passes_on_a_plain_reply_with_keys_off() -> None:
     assert e.grade(claimed, rule, set(), keys_off=True).startswith("claimed a press")
 
 
+def test_with_keys_off_the_eval_tells_the_brain_the_player_s_own_key() -> None:
+    # #386 review: the eval grades the path players take, so it sends own_keys too.
+    from tycho.brain import Reply
+    from tycho.lexicon import Lexicon
+    from tycho.packs import as_run, built_in
+
+    e = _eval()
+    asked: list[Any] = []
+
+    class Brain:
+        async def decide(self, request: Any) -> Any:
+            asked.append(request)
+            return Reply("I don't press keys here.")
+
+    lists = as_run(built_in("star-citizen"), key_actions=False).safety
+    rule = {"heard": "landing gear", "expect": ["reply"]}
+    asyncio.run(e.run_case(rule, Lexicon.default(), Brain(), _keybinds(), lists=lists))
+    (request,) = asked
+    assert request.own_keys.endswith(" on N")
+
+
 def test_keys_off_runs_the_pack_as_advisor() -> None:
     e = _eval()
     args = e._arguments(["--keys-off", "--no-web"])

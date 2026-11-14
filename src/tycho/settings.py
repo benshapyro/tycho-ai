@@ -134,7 +134,8 @@ class Settings(BaseModel):
         description="Tycho's ElevenLabs voice: George, Sarah, Lily, Brian, or a voice ID "
         "from your ElevenLabs account. A voice you designed works only with your own key. "
         "If your key can't use it, Tycho speaks as George and says so.",
-        json_schema_extra=_rule("no", how=FILE_OR_APP),
+        # By voice, only the four names every key can use; an ID needs the app (#355).
+        json_schema_extra=_rule("yes", how=FILE_OR_APP),
     )
     voice_model: VoiceModel = Field(
         default="the voice's own",

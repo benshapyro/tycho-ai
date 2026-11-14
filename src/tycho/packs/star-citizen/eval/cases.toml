@@ -1053,6 +1053,14 @@ settings_after = { voice_volume = 0.4 }
 tag = "settings"
 
 [[case]]
+heard = "Tycho, are you able to change the voice that's being used to Sarah?"
+mode = "settings"
+expect = ["reply"]
+settings_after = { voice = "Sarah" }
+tag = "settings"
+# #355: from a play session; it used to say only volumes change by voice.
+
+[[case]]
 heard = "make the beeps quieter"
 mode = "settings"
 expect = ["reply"]

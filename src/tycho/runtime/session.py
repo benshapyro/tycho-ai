@@ -84,6 +84,7 @@ from tycho.runtime.routing import (
     Reserved,
     from_brain,
     is_say_again,
+    own_keys,
     reply_to_question,
     route,
     tile_command,
@@ -529,7 +530,8 @@ class Session:
         else:
             confirmed = False
             progress.by_brain = True
-            picked = await self._ask_brain(text)
+            keys = own_keys(routed.matched, self._keybinds()) if routed.matched else ""
+            picked = await self._ask_brain(text, keys)
             trace.mark("brain")
             if isinstance(picked, Reply):
                 progress.say, progress.card = picked.text, picked.card
@@ -600,9 +602,10 @@ class Session:
         trace.mark("press")
         return end("done")
 
-    async def _ask_brain(self, text: str) -> Picked | Reply | str:
+    async def _ask_brain(self, text: str, own_keys: str = "") -> Picked | Reply | str:
         """What the brain decides, within its time (ADR 14, #150, #169): commands, a
-        reply, or why it couldn't answer."""
+        reply, or why it couldn't answer. ``own_keys`` names the player's keys for a
+        built-in command said with key actions off (#386)."""
         assert self._brain is not None  # noqa: S101 - only routed here with a brain
         loop = asyncio.get_running_loop()
         self._warm_speaker()  # while the brain thinks, so speech starts sooner
@@ -631,6 +634,7 @@ class Session:
                         text,
                         self._keybinds(),
                         self._conversation.follow_ups(),
+                        own_keys,
                         waiting=searching,
                         looking=looking,
                         checking=lambda: self._fill(self._checking),

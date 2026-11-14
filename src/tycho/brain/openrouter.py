@@ -382,7 +382,7 @@ class OpenRouterBrain:
     async def _decide(self, request: BrainRequest, turn: Turn) -> Decision:
         started = time.perf_counter()
         about = await asyncio.to_thread(self._about)
-        messages = _messages(request.recent, request.text, self._today(), about)
+        messages = _messages(request.recent, request.text, self._today(), about, request.own_keys)
         for call in range(MAX_CALLS):
             decided, message, round_ = await self._call(messages, started, turn)
             if decided is not None:
@@ -461,6 +461,7 @@ class OpenRouterBrain:
     ) -> Decision | None:
         decided = await round_.tool_call(call.id, call.name, call.parsed())
         if decided is not None:
+            round_.left(len(message.text) + sum(len(c.arguments) for c in message.calls))
             # The call ends here, so its usage never arrives: the eval looks its cost
             # up by the generation's id.
             log.debug(
@@ -592,10 +593,10 @@ def _function(spec: Mapping[str, object]) -> dict[str, object]:
 
 
 def _messages(
-    recent: Sequence[Exchange], text: str, today: datetime.date, about: str
+    recent: Sequence[Exchange], text: str, today: datetime.date, about: str, own_keys: str = ""
 ) -> list[dict[str, Any]]:
     """The same turns ``ClaudeBrain`` sends: its text parts are OpenAI's shape too."""
-    return [dict(m) for m in history(recent, text, today, about)]
+    return [dict(m) for m in history(recent, text, today, about, own_keys)]
 
 
 def _error_text(error: object) -> str:
