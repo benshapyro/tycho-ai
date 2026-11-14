@@ -8,6 +8,12 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ## [Unreleased]
 
+### Added
+- Change Tycho's voice by asking: "switch your voice to Sarah". By voice you can pick George, Sarah, Lily or Brian; any other voice is still chosen in Tycho's window (Settings, Voice and sounds) or `settings.toml`. The new voice is used from the next start, and Tycho says so. ([#355](https://github.com/benshapyro/tycho-ai/issues/355))
+
+### Changed
+- With key actions off in Star Citizen, Tycho now names your own key when you say a built-in command: "I don't press keys here. Your night vision is on Right Alt + N", instead of "your night vision key, if you've bound one". If the action has no key, it says so. ([#386](https://github.com/benshapyro/tycho-ai/issues/386))
+
 ## [0.7.0] - 2026-11-13
 
 ### Added

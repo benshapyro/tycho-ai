@@ -136,6 +136,24 @@ def test_a_change_is_saved_and_said_in_percent(tmp_path: Path) -> None:
     assert settings.load(path).voice_volume == 0.4
 
 
+def test_the_voice_changes_by_name_and_says_it_takes_a_restart(tmp_path: Path) -> None:
+    # #355: "can you change the voice to Sarah?" got "only volumes by voice".
+    path = _file(tmp_path)
+    error, result = _run(SettingsTool(path), "set", ("voice", "sarah"))
+    assert not error
+    assert result["changed"] == [
+        {"name": "voice", "from": "George", "to": "Sarah", "takes_effect": "when Tycho restarts"}
+    ]
+    assert settings.load(path).voice == "Sarah"
+
+
+@pytest.mark.parametrize("said", ["The Ship's Mind", "JBFqnCBsd6RMkjVDRZzb", "Morgan Freeman"])
+def test_by_voice_only_the_four_public_voices_are_offered(said: str) -> None:
+    # An ID can't be said aloud, and The Ship's Mind works only with its owner's key.
+    with pytest.raises(Refused, match="George, Sarah, Lily or Brian"):
+        parse("voice", said, "George")
+
+
 def test_a_now_setting_changes_the_running_session(tmp_path: Path) -> None:
     applied: list[object] = []
     tool = SettingsTool(_file(tmp_path), live={"voice_volume": applied.append})

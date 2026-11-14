@@ -39,7 +39,7 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
 These are plans, not promises. Each links its issue.
 
 - **Your fleet and logs in Tycho's window** ([#12](https://github.com/benshapyro/tycho-ai/issues/12)).
-- **More of World of Warcraft:** the Tile over WoW: Forever ([#381](https://github.com/benshapyro/tycho-ai/issues/381)), and packs for modern WoW and Classic ([#379](https://github.com/benshapyro/tycho-ai/issues/379)).
+- **The Tile over World of Warcraft: Forever** ([#381](https://github.com/benshapyro/tycho-ai/issues/381)): cards over the game, as in Star Citizen.
 - **Learns from misses and fixes itself** ([#51](https://github.com/benshapyro/tycho-ai/issues/51)): offers to add phrases you rephrased, and repairs keybinds after a patch, always with your OK.
 - **Reads the game's log** ([#30](https://github.com/benshapyro/tycho-ai/issues/30)): knows which ship you're in and where you are, without being told.
 - **Looks at your screen when you ask** ([#31](https://github.com/benshapyro/tycho-ai/issues/31)): it captures only the game window and keeps nothing.

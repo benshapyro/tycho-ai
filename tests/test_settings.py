@@ -149,17 +149,22 @@ def test_changes_from_two_threads_at_once_are_both_kept(tmp_path: Path) -> None:
     assert all(getattr(saved, n) == values[n] for n in names)
 
 
-def test_the_voice_is_george_unless_set_and_never_changes_by_voice() -> None:
+def test_the_voice_is_george_unless_set_and_its_model_never_changes_by_voice() -> None:
     # ADR 9, amended 8 November 2026 (#242): George on Flash, the player's own choice after.
     assert Settings().voice == "George"
     assert Settings().voice_model == "the voice's own"
     assert Settings(voice=" The Ship's Mind ").voice == "The Ship's Mind"
-    for name in ("voice", "voice_model"):
-        assert settings.rule(name) == {
-            "voice": "no",
-            "applies": "restart",
-            "how": settings.FILE_OR_APP,
-        }
+    assert settings.rule("voice_model") == {
+        "voice": "no",
+        "applies": "restart",
+        "how": settings.FILE_OR_APP,
+    }
+    # The voice itself changes by voice, by name only (#355; spoken_settings.parse).
+    assert settings.rule("voice") == {
+        "voice": "yes",
+        "applies": "restart",
+        "how": settings.FILE_OR_APP,
+    }
 
 
 def test_a_file_with_the_old_world_of_warcraft_id_gets_world_of_warcraft_forever(
