@@ -58,7 +58,7 @@ Tycho should work for any Star Citizen player, not just its author. Players diff
 - **Scrubbed before it leaves.** Every report passes one scrubber in Tycho before sending, and tests check each "never sent" item against it with planted values. If the scrubber fails, the report is dropped, not sent raw.
 - **Turned off means off.** A report waiting to be sent is deleted when the player says no, and nothing is sent from a run that started with reports off.
 - **Usage counts are not part of this.** Counting features or setup steps (#199's analytics) needs its own amendment and the maintainer's yes, likely with the business model (#195).
-- **The service.** Sentry, or a self-hosted GlitchTip, chosen in the PR that builds it, under these rules. Its SDK is set so it sends nothing on its own (no default personal data, breadcrumbs, sessions, performance traces or IP).
+- **The service is Sentry** (the maintainer's choice, 14 November 2026), on Tycho's own Sentry project. Its SDK (MIT) is set so it sends nothing on its own: no default personal data, breadcrumbs, sessions, performance traces or IP. If Sentry's terms or price stop fitting, a self-hosted GlitchTip takes the same reports, under these same rules.
 - **Diagnostics bundles stay as they are:** the player reviews them before sharing.
 
 **Consequences.**
