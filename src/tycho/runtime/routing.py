@@ -25,8 +25,8 @@ from tycho.commands.reserved import (
     SAY_AGAIN_WORDS,
     TILE_WORDS,
 )
-from tycho.game.keybinds import Action, Keybinds, key_text
 from tycho.input.plan import pressable_input
+from tycho.keybinds import Action, Keybinds, key_text
 from tycho.packs import Safety
 from tycho.safety import spoken_name
 from tycho.text import normalize

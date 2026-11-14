@@ -19,7 +19,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from tycho.game.keybinds import Action, KeyInput
+from tycho.keybinds import Action, KeyInput
 
 _JOYSTICK = re.compile(r"^js(\d+)_")
 

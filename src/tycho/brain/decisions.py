@@ -11,7 +11,7 @@ from dataclasses import dataclass, field, replace
 
 from tycho import safety
 from tycho.commands import Command, CommandMatcher
-from tycho.game.keybinds import Keybinds
+from tycho.keybinds import Keybinds
 from tycho.packs import Safety
 from tycho.tile import Card, from_tool
 

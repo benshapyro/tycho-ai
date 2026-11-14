@@ -9,8 +9,8 @@ from the game yet, so joystick push-to-talk isn't checked.
 
 from collections.abc import Callable
 
-from tycho.game.keybinds import Action, Keybinds
 from tycho.input.keys import Code, UnsupportedKey, code_for
+from tycho.keybinds import Action, Keybinds
 from tycho.ptt.binding import Binding, DeviceKind
 
 _MOUSE_BUTTONS = {0x01: 1, 0x02: 2, 0x04: 3, 0x05: 4, 0x06: 5}

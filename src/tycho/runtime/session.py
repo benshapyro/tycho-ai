@@ -47,8 +47,8 @@ from tycho.commands.reserved import (
     SAY_AGAIN_WORDS,
     TILE_WORDS,
 )
-from tycho.game.keybinds import Keybinds
 from tycho.input import Presser
+from tycho.keybinds import Keybinds
 from tycho.lexicon import Lexicon
 from tycho.packs import Safety
 from tycho.ptt.monitor import Edge, PushToTalk

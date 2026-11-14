@@ -1,7 +1,7 @@
 import pytest
 
 from tycho.commands import Command, CommandMatcher, Defer, Match, resolve
-from tycho.game.keybinds import Action, Keybinds, KeyInput
+from tycho.keybinds import Action, Keybinds, KeyInput
 
 MATCHER = CommandMatcher.default()
 

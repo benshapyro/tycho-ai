@@ -23,8 +23,8 @@ from tycho.brain.decisions import Decision, UnboundAction
 from tycho.brain.openrouter import OpenRouterBrain
 from tycho.brain.rounds import Round, Turn
 from tycho.commands import CommandMatcher, Match
-from tycho.game.keybinds import Action, Keybinds, KeyInput
 from tycho.input import Presser, plan
+from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.packs import YOU_TURNED_THEM_OFF, GamePack, PackError, as_run, built_in, load_pack
 from tycho.runtime.planning import Refusal, plan_request
 from tycho.settings import Settings

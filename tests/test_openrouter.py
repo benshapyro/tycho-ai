@@ -27,7 +27,7 @@ from tycho.brain.openrouter import (
 )
 from tycho.brain.rounds import CUT_SHORT, LAST_CALL, MAX_CALLS, NO_PRESS_AFTER_SEARCH
 from tycho.commands import CommandMatcher
-from tycho.game.keybinds import Action, Keybinds, KeyInput
+from tycho.keybinds import Action, Keybinds, KeyInput
 
 MATCHER = CommandMatcher.default()
 MODEL = "anthropic/claude-haiku-5.5"

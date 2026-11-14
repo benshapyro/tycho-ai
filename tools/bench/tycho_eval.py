@@ -82,8 +82,8 @@ from tycho.brain.rounds import NO_PRESS_AFTER_SEARCH
 from tycho.brain.traces import TraceFile
 from tycho.brain_choice import anthropic_key, openrouter_key
 from tycho.commands import Command, CommandMatcher, resolve
-from tycho.game.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.game.store import KeybindStore
+from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.knowledge import ShipLookup, UexApi, WikiApi
 from tycho.knowledge.fleet import Fleet, FleetUpdate
 from tycho.knowledge.item_lookup import ItemLookup

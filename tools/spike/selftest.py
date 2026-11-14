@@ -45,9 +45,9 @@ from tycho import app, settings
 from tycho.audio.clip import ClipBuffer, Samples
 from tycho.commands import CommandMatcher, resolve
 from tycho.feedback import SoundDevicePlayer, SoundFeedback
-from tycho.game.keybinds import Keybinds
 from tycho.input import plan
 from tycho.input.windows import WindowsFocusCheck, WindowsKeySender, foreground_executable
+from tycho.keybinds import Keybinds
 from tycho.ptt.binding import Binding, DeviceKind
 from tycho.runtime import Result
 

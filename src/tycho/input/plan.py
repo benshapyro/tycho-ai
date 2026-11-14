@@ -11,8 +11,8 @@ F6 tapped is "Engines - Increase"; F6 held is "Engines - Set to Max".
 
 from dataclasses import dataclass
 
-from tycho.game.keybinds import Action, ActivationMode, KeyInput
 from tycho.input.keys import Code, code_for
+from tycho.keybinds import Action, ActivationMode, KeyInput
 
 TAP_SECONDS = 0.06
 """How long a plain press or tap is held: long enough to register, short of any threshold."""

@@ -22,9 +22,9 @@ from tycho import paths
 from tycho.commands import CommandMatcher
 from tycho.eval.wer import score_clip
 from tycho.game.install import GameInstall
-from tycho.game.keybinds import Keybinds
 from tycho.game.store import GameDataError, KeybindStore
 from tycho.input import Presser
+from tycho.keybinds import Keybinds
 from tycho.lexicon import Lexicon
 from tycho.ptt.binding import Binding
 from tycho.ptt.monitor import Edge, PushToTalk

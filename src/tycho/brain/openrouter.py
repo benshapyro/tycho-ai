@@ -53,7 +53,7 @@ from tycho.brain.rounds import (
 )
 from tycho.brain.traces import TraceFile, briefing_hash
 from tycho.commands import CommandMatcher
-from tycho.game.keybinds import Keybinds
+from tycho.keybinds import Keybinds
 from tycho.packs import GamePack
 from tycho.tile.cards import TOOL_DESCRIPTION, TOOL_SCHEMA
 

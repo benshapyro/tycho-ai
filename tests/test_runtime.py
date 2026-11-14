@@ -29,8 +29,8 @@ from tycho import safety
 from tycho.brain import BrainError, BrainRequest, Decision, Reply, RunActions, RunSequence
 from tycho.commands import CommandMatcher
 from tycho.game.gamelog import QUANTUM_ROUTE
-from tycho.game.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.input import Presser, code_for
+from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.lexicon import Lexicon
 from tycho.packs import Safety, as_run, built_in
 from tycho.ptt.binding import Binding

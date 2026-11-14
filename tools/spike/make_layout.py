@@ -20,9 +20,10 @@ from datetime import date
 from pathlib import Path
 
 from tycho.game.install import GameInstall
-from tycho.game.keybinds import Keybinds, KeyInput, apply_profile
+from tycho.game.keybinds import apply_profile
 from tycho.game.layout import Addition, LayoutError, already_bound, build, outstanding, write
 from tycho.game.store import KeybindStore
+from tycho.keybinds import Keybinds, KeyInput
 
 HERE = Path(__file__).resolve().parent
 REVIEW = HERE.parents[1] / "recordings" / "layouts"  # gitignored

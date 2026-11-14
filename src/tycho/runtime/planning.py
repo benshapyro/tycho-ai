@@ -18,8 +18,8 @@ from typing import Literal
 
 from tycho import safety
 from tycho.commands import Command, resolve
-from tycho.game.keybinds import Action, Keybinds
 from tycho.input import NotPressable, Press, UnsupportedKey, plan
+from tycho.keybinds import Action, Keybinds
 from tycho.packs import Safety
 
 CHAIN_BEAT_SECONDS = 0.15

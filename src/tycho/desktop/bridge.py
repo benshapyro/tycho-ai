@@ -32,7 +32,7 @@ from tycho import __version__, credentials, paths, settings, updates
 from tycho.desktop import setup
 from tycho.desktop.commands import Commands
 from tycho.desktop.keys import KeyCheck
-from tycho.game.keybinds import Keybinds
+from tycho.keybinds import Keybinds
 from tycho.packs import GamePack, PackError, as_run, built_in, installed
 from tycho.settings import Settings, SettingsError
 

@@ -449,7 +449,7 @@ def test_each_result_says_which_host_served_it() -> None:
     from tests.fakes.fake_chat import FakeChat, text, tool_call
     from tycho.brain.openrouter import OpenRouterBrain
     from tycho.commands import CommandMatcher
-    from tycho.game.keybinds import Keybinds
+    from tycho.keybinds import Keybinds
     from tycho.lexicon import Lexicon
 
     def served(host: str, chunks: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -622,7 +622,7 @@ def test_the_adapter_check_says_far_apart(verdicts: list[str], calls: int) -> No
 
 
 def test_keybinds_go_through_a_file_unchanged(tmp_path: Path) -> None:
-    from tycho.game.keybinds import Action, ActivationMode, Keybinds, KeyInput
+    from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput
 
     e = _eval()
     keybinds = Keybinds(
@@ -746,7 +746,7 @@ def _act(actions: tuple[str, ...], keybinds: object, heard: str = "xyzzy plugh f
 
 def _with(*actions: tuple[str, str]) -> object:
     from tests.test_runtime import KEYBINDS, MODES, _action  # pyright: ignore[reportPrivateUsage]
-    from tycho.game.keybinds import Keybinds
+    from tycho.keybinds import Keybinds
 
     return Keybinds([*KEYBINDS, *(_action(n, k) for n, k in actions)], MODES)
 

@@ -6,7 +6,7 @@ import pytest
 
 from tycho.commands import CommandMatcher
 from tycho.desktop.commands import Commands, key_text
-from tycho.game.keybinds import Action, Keybinds, KeyInput
+from tycho.keybinds import Action, Keybinds, KeyInput
 
 
 def _action(name: str, key: str | None, label: str) -> Action:
