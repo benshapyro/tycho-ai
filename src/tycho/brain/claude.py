@@ -83,11 +83,16 @@ def _tools(
 
 
 def history(
-    recent: Sequence[Exchange], text: str, today: datetime.date | None = None, about: str = ""
+    recent: Sequence[Exchange],
+    text: str,
+    today: datetime.date | None = None,
+    about: str = "",
+    own_keys: str = "",
 ) -> list[MessageParam]:
-    """Earlier exchanges as turns, then this request, headed by today's date and what
-    Tycho knows about the player (``about``: their ships). Both live here, not in the
-    briefing, so the cached briefing never changes."""
+    """Earlier exchanges as turns, then this request, headed by today's date, what
+    Tycho knows about the player (``about``: their ships) and, with key actions off,
+    their own keys for what they asked (#386). All live here, not in the briefing, so
+    the cached briefing never changes."""
     messages: list[MessageParam] = []
     for exchange in recent:
         messages.append({"role": "user", "content": exchange.said})
@@ -96,6 +101,8 @@ def history(
         messages.append({"role": "user", "content": text})
     else:
         header = f"[{today.day} {today:%B %Y}]" + (f"\n{about}" if about else "")
+        if own_keys:
+            header += f"\n[The player's own keys for this: {own_keys}]"
         messages.append(
             {
                 "role": "user",
@@ -215,7 +222,7 @@ class ClaudeBrain:
         started = time.perf_counter()
         # The fleet line matches ship names, which is too slow for the event loop.
         about = await asyncio.to_thread(self._about)
-        messages = history(request.recent, request.text, self._today(), about)
+        messages = history(request.recent, request.text, self._today(), about, request.own_keys)
         try:
             for call in range(MAX_CALLS):
                 decided, message, round_ = await self._call(messages, started, turn)

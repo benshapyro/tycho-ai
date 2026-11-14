@@ -32,7 +32,7 @@ from tomlkit.items import AoT, Array, Table
 from tycho.commands import Command, CommandFileError, CommandMatcher, resolve
 from tycho.commands.matcher import built_in_commands
 from tycho.commands.reserved import USES, reserved_for
-from tycho.game.keybinds import Keybinds, KeyInput
+from tycho.game.keybinds import Keybinds, key_text
 from tycho.packs import GamePack, Safety
 from tycho.packs import built_in as built_in_pack
 from tycho.safety import is_confirm_grade
@@ -299,38 +299,6 @@ class Commands:
             if os.path.exists(temp):
                 os.remove(temp)
         return {"ok": True, "applies": "restart"}
-
-
-def key_text(key: KeyInput) -> str:
-    """A key as the player knows it: "Right Alt + O", "Numpad 8", "Mouse 4"."""
-    parts = [_MODIFIERS.get(m, m.capitalize()) for m in key.modifiers]
-    parts.append(_key_name(key.key))
-    return " + ".join(parts)
-
-
-_MODIFIERS = {
-    "lalt": "Left Alt",
-    "ralt": "Right Alt",
-    "lctrl": "Left Ctrl",
-    "rctrl": "Right Ctrl",
-    "lshift": "Left Shift",
-    "rshift": "Right Shift",
-}
-
-
-def _key_name(key: str) -> str:
-    if key in _MODIFIERS:
-        return _MODIFIERS[key]
-    if key.startswith("np_"):
-        return "Numpad " + key[3:].replace("_", " ").title()
-    if key.startswith("mouse") and key[5:].isdigit():
-        return f"Mouse {key[5:]}"
-    if len(key) == 1 or (key[0] == "f" and key[1:].isdigit()):
-        return key.upper()  # "O", "5", "F5"
-    return _NAMES.get(key, key.replace("_", " ").title())
-
-
-_NAMES = {"esc": "Esc", "pgup": "Page Up", "pgdn": "Page Down", "ins": "Insert", "del": "Delete"}
 
 
 def _label(command_id: str, actions: tuple[str, ...], keybinds: Keybinds | None) -> str:

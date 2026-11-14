@@ -24,6 +24,7 @@ from tycho.runtime.routing import (
     Reserved,
     ToBrain,
     from_brain,
+    own_keys,
     route,
     tile_command,
 )
@@ -64,6 +65,30 @@ def test_with_key_actions_off_a_built_in_phrase_goes_to_the_brain() -> None:
     assert [command.id for command in routed.matched] == [
         command.id for command in _commands("landing gear")
     ]
+
+
+def test_own_keys_name_the_player_s_key_in_the_game_s_words() -> None:
+    # #386: "Night Vision on Right Alt + N", not "your night vision key, if bound".
+    action = Action(
+        "v_toggle_night_vision",
+        "spaceship_general",
+        "Night Vision (Toggle)",
+        (KeyInput("n", ("ralt",)),),
+    )
+    command = Command("night_vision", ("night vision",), ("v_toggle_night_vision",))
+    assert own_keys((command,), Keybinds([action])) == "Night Vision on Right Alt + N"
+
+
+def test_own_keys_say_when_a_command_has_no_key() -> None:
+    other = Action("v_lights", "spaceship_general", "Lights", (KeyInput("l"),))
+    command = Command("night_vision", ("night vision",), ("v_toggle_night_vision",))
+    assert own_keys((command,), Keybinds([other])) == "night vision has no key"
+
+
+def test_own_keys_are_empty_when_tycho_reads_no_keybinds_for_the_game() -> None:
+    # An advisor pack such as WoW: Forever: Tycho can't see its keys, so says nothing.
+    command = Command("night_vision", ("night vision",), ("v_toggle_night_vision",))
+    assert own_keys((command,), Keybinds([])) == ""
 
 
 def test_with_key_actions_off_and_no_brain_a_built_in_phrase_stays_a_pick() -> None:

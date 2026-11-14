@@ -18,14 +18,17 @@ from dataclasses import dataclass
 from typing import Literal
 
 from tycho.brain import Decision, Reply, commands_for
-from tycho.commands import Command, CommandMatcher, Defer
+from tycho.commands import Command, CommandMatcher, Defer, resolve
 from tycho.commands.reserved import (
     CANCEL_WORDS,
     CONFIRM_WORDS,
     SAY_AGAIN_WORDS,
     TILE_WORDS,
 )
+from tycho.game.keybinds import Keybinds, key_text
+from tycho.input.plan import pressable_input
 from tycho.packs import Safety
+from tycho.safety import spoken_name
 from tycho.text import normalize
 
 type TileWord = Literal["pin", "clear", "again", "show"]
@@ -133,3 +136,23 @@ def from_brain(
     if isinstance(decision, Reply):
         return decision
     return Picked(commands_for(decision, matcher, lists), by_brain=True, say=decision.say)
+
+
+def own_keys(matched: tuple[Command, ...], keybinds: Keybinds) -> str:
+    """The player's own keys for built-in commands said with key actions off, for the
+    brain's advice to name ("Night Vision on Right Alt + N"), or "" when Tycho can't
+    read this game's keybinds (#386). A command with no key says so, so the advice
+    never guesses one."""
+    if not len(keybinds):
+        return ""
+    keys: list[str] = []
+    for command in matched:
+        found = resolve(command, keybinds)
+        said = command.id.replace("_", " ")
+        if found.action is None or (key := pressable_input(found.action)) is None:
+            keys.append(f"{said} has no key")
+        else:
+            # The game's own name for it when the keybinds have one ("Night Vision").
+            name = spoken_name(found.action) if found.action.label.strip() else said
+            keys.append(f"{name} on {key_text(key)}")
+    return "; ".join(keys)

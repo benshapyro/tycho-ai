@@ -501,6 +501,22 @@ def test_with_keys_off_a_built_in_phrase_goes_to_the_brain_for_advice() -> None:
     assert r.keys.events == []
 
 
+def test_with_keys_off_the_brain_is_told_the_player_s_own_key() -> None:
+    """#386: Tycho reads the player's keybinds, so the advice can name the real key
+    instead of "your gear key, if you've bound one"."""
+    brain = FakeBrain(Reply("I don't press keys here. Your landing gear is on N."))
+    _conversation("landing gear", brain=brain, safety_lists=KEYS_OFF)
+    (asked,) = brain.asked
+    assert asked.own_keys.endswith(" on N")  # the gear key in these keybinds
+
+
+def test_with_keys_on_the_brain_is_told_no_keys() -> None:
+    brain = FakeBrain(RunActions(("v_toggle_landing_system",), "Gear down."))
+    _conversation("put the wheels out would you", brain=brain)
+    (asked,) = brain.asked
+    assert asked.own_keys == ""
+
+
 def test_with_keys_off_a_built_in_phrase_still_says_why_when_the_brain_fails() -> None:
     """#384 review: offline or timed out, the player still hears why nothing was
     pressed, not just that the brain couldn't answer."""
