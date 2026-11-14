@@ -5,10 +5,13 @@ from typing import Any
 import pytest
 from PIL import Image
 
+from tycho.packs import STAR_CITIZEN, built_in
 from tycho.tile import Board, Card, Row
 from tycho.tile.cards import ALL_KINDS, BODY, confirm, long_answer, notice
 from tycho.tile.design import CORE, accent_for
 from tycho.tile.draw import MAX_CARD, WIDTH, Look, draw, rgba
+
+SC = built_in(STAR_CITIZEN)
 
 LIST = Card(
     "list",
@@ -72,7 +75,7 @@ def test_high_contrast_is_solid() -> None:
 
 
 def test_the_accent_follows_the_ship() -> None:
-    drake = accent_for("DRAK_Cutlass_Black")
+    drake = accent_for("DRAK_Cutlass_Black", tile=SC.tile)
     assert _near(_tile(look=Look(accent=drake)), drake) > 50
     assert _near(_tile(), drake) == 0
 

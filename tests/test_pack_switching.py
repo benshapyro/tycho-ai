@@ -13,7 +13,7 @@ from tycho import app, settings
 from tycho.desktop.bridge import Bridge
 from tycho.desktop.commands import Commands
 from tycho.desktop.host import Host
-from tycho.packs import YOU_TURNED_THEM_OFF, as_run, built_in
+from tycho.packs import STAR_CITIZEN, YOU_TURNED_THEM_OFF, as_run, built_in
 from tycho.settings import Settings
 
 
@@ -157,4 +157,4 @@ def test_with_key_actions_off_the_commands_page_says_they_press_nothing(path: Pa
     data = Bridge(settings_path=path).commands()
     assert data["game_name"] == "Star Citizen"
     assert data["keys_off"] == f"Tycho doesn't press keys in Star Citizen. {YOU_TURNED_THEM_OFF}"
-    assert data["keys_off"] == as_run(built_in(), key_actions=False).safety.keys_off
+    assert data["keys_off"] == as_run(built_in(STAR_CITIZEN), key_actions=False).safety.keys_off

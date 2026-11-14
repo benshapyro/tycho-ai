@@ -16,6 +16,7 @@ from typing import Any
 
 from tycho.eval import ClipScore, score_clip
 from tycho.lexicon import Lexicon
+from tycho.packs import STAR_CITIZEN, built_in
 
 # Game words a generic model is likely to get wrong. Matched ignoring spaces and case.
 GAME_TERMS = frozenset(
@@ -89,7 +90,7 @@ def main() -> None:
     parser.add_argument("--misses", action="store_true", help="list every imperfect transcript")
     args = parser.parse_args()
 
-    lexicon = Lexicon.default()
+    lexicon = Lexicon.default(built_in(STAR_CITIZEN))
     loaded = [load(p, lexicon) for p in sorted((args.session / "results").glob("*.jsonl"))]
     results = [r for r in loaded if r.clips]  # skip runs that are still going or crashed
     results.sort(key=lambda r: (r.wer(lex=True), r.latency(0.5)))

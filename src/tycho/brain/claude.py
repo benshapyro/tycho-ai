@@ -126,7 +126,7 @@ class ClaudeBrain:
         about: Callable[[], str] = lambda: "",
         cards: Callable[[], bool] = lambda: False,
         traces: TraceFile | None = None,
-        pack: GamePack | None = None,
+        pack: GamePack,
     ) -> None:
         """``reference`` is extra text for the end of the cached briefing, such as
         the ship table being measured against the ship look-up (ADR 15). ``about``
@@ -140,10 +140,10 @@ class ClaudeBrain:
         )
         self._matcher = matcher
         self._pack = pack
-        """The game the briefing is for (Star Citizen when None, ADR 18)."""
+        """The game the briefing is for (ADR 18)."""
         self._model = model
         self._today = today
-        self._keys = pack is None or pack.mode == "keys"
+        self._keys = pack.mode == "keys"
         """Whether the brain may press: in advisor mode it has no tool to (#191)."""
         self._sequences = (
             sorted(c.id for c in matcher.commands if c.is_sequence) if self._keys else []

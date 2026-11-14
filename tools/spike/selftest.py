@@ -48,6 +48,7 @@ from tycho.feedback import SoundDevicePlayer, SoundFeedback
 from tycho.input import plan
 from tycho.input.windows import WindowsFocusCheck, WindowsKeySender, foreground_executable
 from tycho.keybinds import Keybinds
+from tycho.packs import STAR_CITIZEN, built_in
 from tycho.ptt.binding import Binding, DeviceKind
 from tycho.runtime import Result
 
@@ -238,7 +239,7 @@ def read_wav(path: Path) -> Samples:
 
 
 def expected_keys(command_ids: tuple[str, ...], keybinds: Keybinds) -> list[tuple[str, int, bool]]:
-    commands = {c.id: c for c in CommandMatcher.default().commands}
+    commands = {c.id: c for c in CommandMatcher.default(pack=built_in(STAR_CITIZEN)).commands}
     events: list[tuple[str, int, bool]] = []
     for command_id in command_ids:
         action = resolve(commands[command_id], keybinds).action
@@ -289,6 +290,7 @@ async def run_tests(
         focus=focus,
         feedback=speaker,
         on_result=results.put_nowait,  # called on the loop, so no thread hand-over needed
+        pack=built_in(STAR_CITIZEN),
     )
     # Windows only lets a program take the foreground after it has sent input,
     # so tap F24 once before Tycho is listening.

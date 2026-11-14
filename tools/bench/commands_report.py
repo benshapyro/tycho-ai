@@ -17,6 +17,7 @@ from tycho.commands import CommandMatcher, Defer, Match, resolve
 from tycho.game.install import GameInstall
 from tycho.game.store import KeybindStore
 from tycho.lexicon import Lexicon
+from tycho.packs import STAR_CITIZEN, built_in
 
 EXPECTED = Path(__file__).resolve().parents[1] / "spike" / "expected.toml"
 
@@ -41,7 +42,8 @@ def main() -> None:
     args = parser.parse_args()
 
     expected: dict[str, list[str]] = tomllib.loads(EXPECTED.read_text("utf-8"))
-    lexicon, matcher = Lexicon.default(), CommandMatcher.default()
+    pack = built_in(STAR_CITIZEN)
+    lexicon, matcher = Lexicon.default(pack), CommandMatcher.default(pack=pack)
 
     sources: dict[str, dict[str, str]] = {"phrases as written": {p: p for p in expected}}
     for path in sorted((args.session / "results").glob("*.jsonl")):

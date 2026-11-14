@@ -17,11 +17,14 @@ from tycho.brain.providers import ANTHROPIC_HAIKU, OFFERED, OPENROUTER_HAIKU, ch
 from tycho.commands import CommandMatcher
 from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.knowledge.web import SearchNeedsAnthropic, WebSearch
+from tycho.packs import STAR_CITIZEN, built_in
 from tycho.runtime.planning import Questions, plan_request
 from tycho.runtime.routing import Picked, from_brain
 from tycho.settings import Settings, SettingsError
 
-MATCHER = CommandMatcher.default()
+SC = built_in(STAR_CITIZEN)
+
+MATCHER = CommandMatcher.default(pack=SC)
 ANTHROPIC = "sk-ant-api03-" + "a" * 40
 OPENROUTER = "sk-or-v1-" + "b" * 60
 
@@ -101,7 +104,7 @@ def test_the_setting_is_written_to_the_file_with_its_description(tmp_path: Path)
 
 
 def _load(current: Settings) -> ClaudeBrain | OpenRouterBrain | None:
-    brain = brain_choice.load_brain(MATCHER, current)
+    brain = brain_choice.load_brain(MATCHER, current, pack=SC)
     assert brain is None or isinstance(brain, ClaudeBrain | OpenRouterBrain)
     return brain
 
@@ -212,12 +215,12 @@ def test_a_confirm_grade_pick_through_openrouter_still_asks_first() -> None:
     # picks is asked about, never pressed straight away.
     keybinds = Keybinds([_action("v_eject", "ralt+y", "Eject")])
     client = FakeChat(tool_call("run_actions", {"actions": ["v_eject"], "say": "Ejecting."}))
-    brain = OpenRouterBrain(MATCHER, model=OPENROUTER_HAIKU, client=client)
+    brain = OpenRouterBrain(MATCHER, model=OPENROUTER_HAIKU, client=client, pack=SC)
     decision = asyncio.run(brain.decide(BrainRequest("get me out of here", keybinds)))
     assert decision == RunActions(("v_eject",), "Ejecting.")
-    picked = from_brain(decision, MATCHER)
+    picked = from_brain(decision, MATCHER, lists=SC.safety)
     assert isinstance(picked, Picked)
-    assert isinstance(plan_request(picked.commands, keybinds), Questions)
+    assert isinstance(plan_request(picked.commands, keybinds, lists=SC.safety), Questions)
 
 
 # --- tycho check ------------------------------------------------------------------------------

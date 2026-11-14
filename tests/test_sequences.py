@@ -5,8 +5,11 @@ from pathlib import Path
 import pytest
 
 from tycho.commands import CommandFileError, CommandMatcher, Match
+from tycho.packs import STAR_CITIZEN, built_in
 
-DEFAULT = CommandMatcher.default()
+SC = built_in(STAR_CITIZEN)
+
+DEFAULT = CommandMatcher.default(pack=SC)
 
 
 def _ids(matcher: CommandMatcher, text: str) -> list[str]:
@@ -52,11 +55,11 @@ def test_a_command_expands_to_itself() -> None:
 def _user(tmp_path: Path, text: str) -> CommandMatcher:
     file = tmp_path / "commands.toml"
     file.write_text(text, "utf-8")
-    return CommandMatcher.default(file)
+    return CommandMatcher.default(file, pack=SC)
 
 
 def test_no_user_file_means_the_built_in_commands(tmp_path: Path) -> None:
-    matcher = CommandMatcher.default(tmp_path / "missing.toml")
+    matcher = CommandMatcher.default(tmp_path / "missing.toml", pack=SC)
     assert [c.id for c in matcher.commands] == [c.id for c in DEFAULT.commands]
 
 
@@ -313,8 +316,8 @@ def test_a_phrase_the_lexicon_turns_into_the_sessions_own_words_is_warned_about(
     from tycho.commands import reserved
     from tycho.lexicon import Lexicon
 
-    monkeypatch.setattr(reserved, "_lexicon", lambda: Lexicon(["Confirmed"]))
-    assert reserved.reserved_for("konfirmed") == "question"
+    monkeypatch.setattr(reserved, "_lexicon", lambda terms: Lexicon(["Confirmed"]))
+    assert reserved.reserved_for("konfirmed", SC.terms) == "question"
     matcher = _user(
         tmp_path,
         """
@@ -331,6 +334,6 @@ say = ["konfirmed", "wheels down"]
 def test_the_shipped_lexicon_leaves_ordinary_phrases_alone() -> None:
     from tycho.commands.reserved import reserved_for
 
-    assert reserved_for("landing gear") is None
-    assert reserved_for("quantum drive") is None
-    assert reserved_for("Repeat that.") == "say_again"
+    assert reserved_for("landing gear", SC.terms) is None
+    assert reserved_for("quantum drive", SC.terms) is None
+    assert reserved_for("Repeat that.", SC.terms) == "say_again"

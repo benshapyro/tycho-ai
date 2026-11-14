@@ -29,7 +29,6 @@ from tycho.brain.claude import ClaudeBrain
 from tycho.commands import Command, CommandMatcher, Match
 from tycho.input import Presser, code_for
 from tycho.keybinds import Action, Keybinds, KeyInput
-from tycho.knowledge.web import SITES
 from tycho.lexicon import Lexicon
 from tycho.packs import (
     BUILT_IN,
@@ -46,7 +45,9 @@ from tycho.runtime.planning import Planned, Questions, Refusal, Steps, plan_requ
 from tycho.runtime.routing import Picked, from_brain
 from tycho.settings import Game, Settings
 from tycho.settings import rule as settings_rule
-from tycho.tile.design import MAKER_ACCENTS, accent_for, accent_for_maker
+from tycho.tile.design import accent_for, accent_for_maker
+
+SC = built_in(STAR_CITIZEN)
 
 STAR_CITIZEN_INSTRUCTIONS = "86743244daab1c496f16613c424a808f7d90914898b527d4bce46530788bab02"
 """The SHA-256 of Star Citizen's fixed briefing text: as it was before packs (main at
@@ -61,11 +62,11 @@ change the text on purpose, update this, and expect the cache to refill."""
 def test_star_citizens_briefing_is_byte_for_byte_what_it_was_before_packs() -> None:
     text = instructions(built_in(STAR_CITIZEN))
     assert hashlib.sha256(text.encode()).hexdigest() == STAR_CITIZEN_INSTRUCTIONS
-    assert instructions() == text  # no pack named: Star Citizen
+    assert instructions(pack=SC) == text  # no pack named: Star Citizen
 
 
 def test_star_citizen_is_the_pack_tycho_ships() -> None:
-    pack = built_in()
+    pack = built_in(STAR_CITIZEN)
     assert installed() == ("star-citizen", "wow-forever")
     assert (pack.id, pack.name, pack.version, pack.format) == (
         "star-citizen",
@@ -81,16 +82,15 @@ def test_star_citizen_is_the_pack_tycho_ships() -> None:
 
 
 def test_star_citizens_data_reaches_the_parts_that_used_it() -> None:
-    pack = built_in()
-    assert pack.web_sites == SITES
-    assert "robertsspaceindustries.com" in SITES
-    assert pack.tile.accents == MAKER_ACCENTS
-    assert accent_for("DRAK_Cutlass_Black") == "#f5901e"
-    assert accent_for_maker("Drake Interplanetary") == "#f5901e"
-    assert game_facts() == pack.facts
+    pack = built_in(STAR_CITIZEN)
+    assert "robertsspaceindustries.com" in pack.web_sites
+    assert pack.tile.accents["DRAK"] == "#f5901e"
+    assert accent_for("DRAK_Cutlass_Black", tile=SC.tile) == "#f5901e"
+    assert accent_for_maker("Drake Interplanetary", tile=SC.tile) == "#f5901e"
+    assert game_facts(pack=SC) == pack.facts
     assert pack.facts
-    assert len(Lexicon.default()) == len(pack.terms) > 100
-    assert CommandMatcher.default().get("landing_gear") is not None
+    assert len(Lexicon.default(pack=SC)) == len(pack.terms) > 100
+    assert CommandMatcher.default(pack=SC).get("landing_gear") is not None
 
 
 def test_the_core_of_the_briefing_has_every_section_a_pack_must_place() -> None:
@@ -131,7 +131,7 @@ def test_the_seam_presses_keys_for_a_game_that_isnt_star_citizen() -> None:
     assert planned.actions == ("shield_raise", "hatch_open")
 
     sender, clock = FakeKeySender(), FakeClock()
-    presser = Presser(sender, FakeFocus(True), sleep=clock.sleep, clock=clock)
+    presser = Presser(sender, FakeFocus(True), sleep=clock.sleep, clock=clock, game="Star Citizen")
     for _, press in planned.presses:
         assert presser.press(press).done
     downs = [code for event, code in sender.events if event == "down"]
@@ -302,8 +302,7 @@ def _plan(pack: GamePack, said: str, keybinds: Keybinds | None = None) -> Planne
 
 
 def test_star_citizens_lists_are_exactly_what_they_were_before_packs() -> None:
-    lists = built_in().safety
-    assert lists == safety.STAR_CITIZEN
+    lists = built_in(STAR_CITIZEN).safety
     # Every entry, so a deleted line can't pass unnoticed (the values on main at 6645025).
     assert lists.confirm == {
         *("v_eject", "v_emergency_exit", "v_self_destruct", "v_jettison_volatile_cargo"),
@@ -325,7 +324,7 @@ def test_star_citizens_lists_are_exactly_what_they_were_before_packs() -> None:
     assert {"v_eject", "v_self_destruct", "attack1"} <= lists.confirm
     assert lists.travel == {"v_toggle_qdrive_engagement", "v_toggle_jump_request"}
     assert lists.mode_guards["v_master_mode_set_nav"] == {"spaceship_weapons", "spaceship_missiles"}
-    assert safety.known_facts() == {"quantum_route_set"}
+    assert safety.known_facts(lists=SC.safety) == {"quantum_route_set"}
 
 
 def test_a_packs_confirm_list_adds_danger() -> None:
@@ -333,7 +332,9 @@ def test_a_packs_confirm_list_adds_danger() -> None:
     assert isinstance(planned, Questions)
     assert planned.asking_about == ("Open Hatch",)
     # Star Citizen's lists don't know the hatch: without the pack's, it would just press.
-    assert isinstance(plan_request(planned_commands("open the hatch"), _keys()), Steps)
+    assert isinstance(
+        plan_request(planned_commands("open the hatch"), _keys(), lists=SC.safety), Steps
+    )
 
 
 def test_eject_left_off_the_confirm_list_still_asks_by_the_backstop() -> None:
@@ -462,7 +463,7 @@ def test_the_players_own_commands_are_per_game() -> None:
     matcher = load_commands(fake_pack())
     assert isinstance(matcher.match("brace yourself"), Match)
     # Star Citizen doesn't read Fake Game's file.
-    assert not isinstance(load_commands().match("brace yourself"), Match)
+    assert not isinstance(load_commands(pack=SC).match("brace yourself"), Match)
 
 
 def test_tycho_check_names_the_game_and_its_pack_version() -> None:
@@ -486,7 +487,7 @@ def test_travel_the_brain_picks_asks_first_by_the_packs_list() -> None:
     picked = from_brain(RunActions(("warp_jump",), "Jumping."), matcher, pack.safety)
     assert isinstance(picked, Picked)
     assert picked.commands[0].confirm
-    star_citizen = from_brain(RunActions(("warp_jump",), "Jumping."), matcher)
+    star_citizen = from_brain(RunActions(("warp_jump",), "Jumping."), matcher, lists=SC.safety)
     assert isinstance(star_citizen, Picked)
     assert not star_citizen.commands[0].confirm
 
@@ -523,4 +524,4 @@ def test_a_packs_commands_are_checked_against_its_own_facts(tmp_path: Path) -> N
 
 def test_a_packs_lists_cant_be_changed_once_loaded() -> None:
     with pytest.raises(TypeError):
-        built_in().safety.mode_guards["v_eject"] = frozenset()  # pyright: ignore[reportIndexIssue]
+        built_in(STAR_CITIZEN).safety.mode_guards["v_eject"] = frozenset()  # pyright: ignore[reportIndexIssue]

@@ -10,8 +10,11 @@ import pytest
 from tycho import app, brain_choice, logs, settings
 from tycho.input import code_for
 from tycho.keybinds import Action, Keybinds, KeyInput
+from tycho.packs import STAR_CITIZEN, built_in
 from tycho.ptt.binding import Binding, DeviceKind
 from tycho.ptt.conflicts import conflicts, game_code
+
+SC = built_in(STAR_CITIZEN)
 
 # --- Logging never leaks a key -------------------------------------------------------
 
@@ -177,7 +180,7 @@ def test_a_broken_commands_file_never_stops_tycho_starting(
     monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path))
     (tmp_path / "commands.toml").write_text("[[sequence]\n", "utf-8")
     with caplog.at_level(logging.WARNING, logger="tycho"):
-        matcher = app.load_commands()
+        matcher = app.load_commands(pack=SC)
     assert matcher.get("startup") is not None  # the built-in commands still load
     assert "commands file can't be used" in caplog.text
 
@@ -187,7 +190,7 @@ def test_the_players_commands_file_is_used(tmp_path: Path, monkeypatch: pytest.M
     (tmp_path / "commands.toml").write_text(
         '[[sequence]]\nid = "wake"\nsay = ["wake up"]\nsteps = ["flight_ready"]\n', "utf-8"
     )
-    assert app.load_commands().get("wake") is not None
+    assert app.load_commands(pack=SC).get("wake") is not None
 
 
 def test_an_unknown_setting_is_a_note_not_a_stop(
@@ -217,7 +220,7 @@ def test_a_commands_file_with_a_byte_order_mark_is_used(
     monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path))
     text = '[[sequence]]\nid = "wake"\nsay = ["wake up"]\nsteps = ["flight_ready"]\n'
     (tmp_path / "commands.toml").write_text(text, "utf-8-sig")
-    assert app.load_commands().get("wake") is not None
+    assert app.load_commands(pack=SC).get("wake") is not None
 
 
 def test_check_warns_about_broken_player_files_without_failing(

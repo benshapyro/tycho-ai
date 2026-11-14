@@ -136,7 +136,7 @@ def parse_tool_call(
 
 
 def commands_for(
-    decision: RunActions | RunSequence, matcher: CommandMatcher, lists: Safety | None = None
+    decision: RunActions | RunSequence, matcher: CommandMatcher, lists: Safety
 ) -> tuple[Command, ...]:
     """The commands to plan for what the brain picked.
 
@@ -147,8 +147,7 @@ def commands_for(
     does the pick.
     A bare action counts as announced if an announced command uses it, so Tycho
     doesn't talk over the game. Travel the brain picked always asks first (the
-    author's call, 2026-10-31): the game pack's ``travel`` list (``lists``, Star
-    Citizen's when None).
+    author's call, 2026-10-31): the game pack's ``travel`` list (``lists``).
     """
     if isinstance(decision, RunSequence):
         sequence = matcher.get(decision.name)
@@ -186,7 +185,7 @@ def _strictest(command: Command, using: list[Command]) -> Command:
     return replace(command, confirm=confirm, requires=requires)
 
 
-def _ask_before_travel(command: Command, lists: Safety | None = None) -> Command:
+def _ask_before_travel(command: Command, lists: Safety) -> Command:
     if safety.is_travel(command, lists) and not command.confirm:
         return replace(command, confirm=True)
     return command

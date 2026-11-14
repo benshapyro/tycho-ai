@@ -20,7 +20,7 @@ from importlib import resources
 from tycho.commands import CommandMatcher, resolve
 from tycho.input.plan import pressable_input
 from tycho.keybinds import Keybinds
-from tycho.packs import GamePack, built_in
+from tycho.packs import GamePack
 from tycho.packs.pack import KEYS, MARKER
 
 
@@ -42,13 +42,12 @@ def advisor_sections(keys_off: str) -> dict[str, str]:
     }
 
 
-def instructions(pack: GamePack | None = None) -> str:
+def instructions(pack: GamePack) -> str:
     """The briefing's fixed text: the pack's part, with the core sections in their places.
     For Star Citizen it's byte for byte the text from before packs (a test pins it), so
     the prompt cache and eval scores carry over. In advisor mode, the tool rules say
     Tycho presses nothing, and why (#191), and the pack's ``{{keys:...|...}}`` lines take
     their advisor words (#325)."""
-    pack = pack or built_in()
     core = core_sections()
     off = bool(pack.safety.keys_off)
     if off:
@@ -58,16 +57,15 @@ def instructions(pack: GamePack | None = None) -> str:
     return MARKER.sub(lambda found: core[found.group(1)], game)
 
 
-def briefed(action_name: str, actionmap: str, pack: GamePack | None = None) -> bool:
+def briefed(action_name: str, actionmap: str, pack: GamePack) -> bool:
     """Whether the brain is offered an action at all."""
-    pack = pack or built_in()
     if actionmap in pack.unbriefed_actionmaps:
         return False
     return pack.continuous is None or not pack.continuous.fullmatch(action_name)
 
 
 def bound_actions(
-    keybinds: Keybinds, keep: frozenset[str] = frozenset(), pack: GamePack | None = None
+    keybinds: Keybinds, pack: GamePack, keep: frozenset[str] = frozenset()
 ) -> dict[str, str]:
     """Every action Tycho could press for the player, with its line in the briefing.
     Actions in ``keep`` (those a command presses) are offered even if they'd be left out."""
@@ -83,12 +81,10 @@ def bound_actions(
     return lines
 
 
-def offered_actions(
-    keybinds: Keybinds, matcher: CommandMatcher, pack: GamePack | None = None
-) -> dict[str, str]:
+def offered_actions(keybinds: Keybinds, matcher: CommandMatcher, pack: GamePack) -> dict[str, str]:
     """The actions the brain may pick: what the briefing lists, and nothing else."""
     keep = frozenset(line.split(" | ", 1)[0] for line in command_phrasings(keybinds, matcher))
-    return bound_actions(keybinds, keep, pack)
+    return bound_actions(keybinds, pack, keep)
 
 
 BRIEFED_PHRASES = 3
@@ -137,16 +133,16 @@ def _examples(say: tuple[str, ...]) -> list[str]:
     return [*say[:1], *rest]
 
 
-def game_facts(pack: GamePack | None = None) -> str:
+def game_facts(pack: GamePack) -> str:
     """The hand-kept sheet of what's true in the current patch (the pack's facts.md)."""
-    return (pack or built_in()).facts
+    return pack.facts
 
 
-def briefing(keybinds: Keybinds, matcher: CommandMatcher, pack: GamePack | None = None) -> str:
-    """The whole briefing, for the pack's game (Star Citizen when none is given). In
+def briefing(keybinds: Keybinds, matcher: CommandMatcher, pack: GamePack) -> str:
+    """The whole briefing, for the pack's game. In
     advisor mode (#191) it lists no commands, sequences or actions: there's nothing the
     brain could press."""
-    if pack is not None and pack.safety.keys_off:
+    if pack.safety.keys_off:
         return instructions(pack) + "\nGame facts:\n" + game_facts(pack) + "\n"
     actions = offered_actions(keybinds, matcher, pack)
     sequences = sorted(
@@ -170,7 +166,7 @@ def briefing(keybinds: Keybinds, matcher: CommandMatcher, pack: GamePack | None 
     )
 
 
-def instructions_hash(pack: GamePack | None = None) -> str:
+def instructions_hash(pack: GamePack) -> str:
     """A short hash of the pack's fixed briefing text, for the log and traces: which
     briefing a score or a bug report came from (ADR 18)."""
     return hashlib.sha256(instructions(pack).encode()).hexdigest()[:12]

@@ -33,7 +33,7 @@ from tycho.desktop import setup
 from tycho.desktop.commands import Commands
 from tycho.desktop.keys import KeyCheck
 from tycho.keybinds import Keybinds
-from tycho.packs import GamePack, PackError, as_run, built_in, installed
+from tycho.packs import STAR_CITIZEN, GamePack, PackError, as_run, built_in, installed
 from tycho.settings import Settings, SettingsError
 
 log = logging.getLogger(__name__)
@@ -419,7 +419,7 @@ class Bridge:
             return as_run(built_in(current.game), key_actions=current.key_actions)
         except PackError:  # tycho check and the status page say why
             log.exception("The chosen game's pack didn't load")
-            return as_run(built_in(), key_actions=current.key_actions)
+            return as_run(built_in(STAR_CITIZEN), key_actions=current.key_actions)
 
     # --- setup: the choices made with their own controls -------------------------------
 

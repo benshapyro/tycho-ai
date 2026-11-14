@@ -26,11 +26,14 @@ from tycho.game.store import GameDataError, KeybindStore
 from tycho.input import Presser
 from tycho.keybinds import Keybinds
 from tycho.lexicon import Lexicon
+from tycho.packs import STAR_CITIZEN, built_in
 from tycho.ptt.binding import Binding
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime import Result, Session
 from tycho.stt import PARAKEET_V2, ModelStore, choose_device, cuda_available, gpu_free_mb
 from tycho.stt.parakeet import SAMPLERATE, ParakeetTranscriber
+
+SC = built_in(STAR_CITIZEN)
 
 sf = pytest.importorskip("soundfile")  # the bench group; the suite must run without it
 
@@ -129,11 +132,12 @@ async def _replay(
             audio=audio,
             push_to_talk=PushToTalk(Binding.parse("mouse:0x06"), []),
             transcriber=transcriber,
-            lexicon=Lexicon.default(),
-            matcher=CommandMatcher.default(),
+            lexicon=Lexicon.default(pack=SC),
+            matcher=CommandMatcher.default(pack=SC),
             keybinds=lambda: keybinds,
-            presser=Presser(FakeKeySender(), FakeFocus(True)),
+            presser=Presser(FakeKeySender(), FakeFocus(True), game="Star Citizen"),
             feedback=FakeFeedback(),
+            safety_lists=SC.safety,
         )
         loop.handle(Edge.PRESSED)
         audio.hear(_audio(session / clip["file"]))

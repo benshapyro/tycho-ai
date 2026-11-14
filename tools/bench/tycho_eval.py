@@ -407,15 +407,14 @@ async def run_case(
     matcher: CommandMatcher | None = None,
     *,
     tile: bool = True,
-    lists: Safety | None = None,
+    lists: Safety,
 ) -> Outcome:
-    """One case through Tycho's path. ``lists`` are the pack's safety lists (Star
-    Citizen's when None)."""
+    """One case through Tycho's path. ``lists`` are the pack's safety lists."""
     outcome = Outcome(rule["heard"], str(rule.get("tag", "")))
     text = lexicon.correct(rule["heard"]).text
     matcher = matcher or MATCHER
     # The session's own routing (#55), so the eval grades the path the words really take.
-    routed = routing.route(text, matcher, tile=tile, keys=not (lists and lists.keys_off))
+    routed = routing.route(text, matcher, tile=tile, keys=not lists.keys_off)
     if isinstance(routed, Reserved):  # the session answers these itself ("say that again", #222)
         outcome.route, outcome.kind = "session", routed.word
         return outcome
@@ -483,7 +482,7 @@ def _plan(
     outcome: Outcome,
     commands: tuple[Command, ...],
     keybinds: Keybinds,
-    lists: Safety | None = None,
+    lists: Safety,
 ) -> None:
     """What Tycho would press for these commands, through the session's own planning and
     safety gate (#55): after "confirm" if the gate asks first, with every fact the game
@@ -505,7 +504,7 @@ def _plan(
         outcome.notes.append(f"Tycho would press nothing ({outcome.refused})")
 
 
-MATCHER = load_commands()
+MATCHER = load_commands(built_in(STAR_CITIZEN))
 LIVE: dict[str, Callable[[object], None]] = {
     name: lambda _value: None
     for name in settings.Settings.model_fields
@@ -627,14 +626,14 @@ def _export(path: Path) -> None:
     print(", with your own commands." if commands else ".")
 
 
-def _matcher(commands: str, pack: GamePack | None = None) -> CommandMatcher:
+def _matcher(commands: str, pack: GamePack) -> CommandMatcher:
     """The fast path with a keybinds file's own commands, as on the player's PC."""
     if not commands:
         return CommandMatcher.default(pack=pack)
     with tempfile.TemporaryDirectory() as folder:
         own = Path(folder) / "commands.toml"
         own.write_text(commands, "utf-8")
-        return CommandMatcher.default(own, pack)
+        return CommandMatcher.default(own, pack=pack)
 
 
 def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
@@ -816,7 +815,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     elif provider == "openrouter" and not args.no_web:
         print("Web search: not offered. The OpenRouter brain has none (it's Anthropic's tool).")
     elif not args.no_web:
-        web = [WebSearch(anthropic.AsyncAnthropic(api_key=key))]
+        web = [WebSearch(anthropic.AsyncAnthropic(api_key=key), sites=pack.web_sites)]
     if not web:
         rules, left_out = without_search(rules)
         if left_out:

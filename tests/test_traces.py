@@ -21,6 +21,9 @@ from tycho.brain import BrainError, BrainRequest, Reply, RunActions
 from tycho.brain.claude import ClaudeBrain
 from tycho.brain.openrouter import Prices
 from tycho.brain.traces import ENV, FILE, TraceFile
+from tycho.packs import STAR_CITIZEN, built_in
+
+SC = built_in(STAR_CITIZEN)
 
 KEYBINDS = claude_fakes.KEYBINDS
 
@@ -34,7 +37,7 @@ def _lines(traces: TraceFile) -> list[dict[str, Any]]:
 
 def _claude(client: object, traces: TraceFile | None, *lookups: FakeLookup) -> ClaudeBrain:
     return ClaudeBrain(
-        claude_fakes.MATCHER, client=cast(Any, client), lookups=lookups, traces=traces
+        claude_fakes.MATCHER, client=cast(Any, client), lookups=lookups, traces=traces, pack=SC
     )
 
 

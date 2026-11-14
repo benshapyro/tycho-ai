@@ -74,7 +74,7 @@ class Presser:
         *,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
-        game: str = "Star Citizen",
+        game: str,
     ) -> None:
         """``game`` is the game's name, for "isn't focused" (the game pack's)."""
         self._sender = sender

@@ -28,17 +28,12 @@ from typing import Any
 import anthropic
 
 from tycho.brain.lookups import LookupResult, failure
-from tycho.packs import built_in
 
 log = logging.getLogger(__name__)
 
 MODEL = "claude-haiku-5-5"
 WEB_SEARCH = "web_search_20250305"
 """Haiku 5.5 has the version without dynamic filtering."""
-SITES = built_in().web_sites
-"""The sites a search asks first, and the only ones without the fallback: the game
-pack's (``[web]`` in its pack.toml). For Star Citizen, RSI's own, the community wiki and
-the community tools (2026-11-02): the open web alone brought fan sites and leaked dates."""
 PRICES = (0.10, 0.50)
 """Haiku 5.5 per million tokens, input and output."""
 SEARCH_PRICE = 0.01
@@ -209,12 +204,16 @@ class WebSearch:
         model: str = MODEL,
         today: Callable[[], datetime.date] = datetime.date.today,
         log_queries: bool = False,
-        sites: Sequence[str] = SITES,
+        sites: Sequence[str],
         open_web: bool = False,
         fallback: bool = False,
     ) -> None:
         """``log_queries``: put the query (the player's question, reworded) in the log
-        file. Only with ``keep_transcripts`` (audit, 2026-11-03). ``open_web``: any site
+        file. Only with ``keep_transcripts`` (audit, 2026-11-03). ``sites`` are the sites a
+        search asks first, and the only ones without the fallback: the game pack's
+        (``[web]`` in its pack.toml). For Star Citizen, RSI's own, the community wiki and
+        the community tools (2026-11-02): the open web alone brought fan sites and leaked
+        dates. ``open_web``: any site
         and page reads, every time (the benchmark's "open"). ``fallback``: the game's
         sites first, then the open web only when they had no clear answer
         (``web_search_open``, #354)."""
