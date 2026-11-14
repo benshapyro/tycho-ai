@@ -1,6 +1,6 @@
 # Code layout audit: modules, sizes and coupling
 
-Audited 2026-11-14, on `main` at 0cc5be9 (0.7.0), for [#362](https://github.com/benshapyro/tycho-ai/issues/362) (refactor the app end to end) and what's left of [#61](https://github.com/benshapyro/tycho-ai/issues/61) (split `app.py`). The decisions it leads to are in [ADR 19](../adr/0019-code-layout.md) (proposed).
+Audited 2026-11-14, on `main` at 0cc5be9 (0.7.0), for [#362](https://github.com/benshapyro/tycho-ai/issues/362) (refactor the app end to end) and what's left of [#61](https://github.com/benshapyro/tycho-ai/issues/61) (split `app.py`). The decisions it leads to are in [ADR 19](../adr/0019-code-layout.md) (accepted 14 November 2026).
 
 This is a reference doc, not a spec. Everything here was read from the code. It follows the [modularity audit](modularity-audit.md) of 11 November, which settled game packs (ADR 18); this one looks at how the code is laid out now that packs exist.
 

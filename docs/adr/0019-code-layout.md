@@ -1,6 +1,6 @@
 # 19. Code layout: a thin entry point, game code behind its parts, and a size limit
 
-Date: 2026-11-14 · Status: **proposed** (waiting on the maintainer). Answers the audit step of [#362](https://github.com/benshapyro/tycho-ai/issues/362), and plans what's left of [#61](https://github.com/benshapyro/tycho-ai/issues/61) and [#298](https://github.com/benshapyro/tycho-ai/issues/298). Builds on [ADR 18](0018-game-packs.md).
+Date: 2026-11-14 · Status: accepted (the maintainer, 14 November 2026). Answers the audit step of [#362](https://github.com/benshapyro/tycho-ai/issues/362), and plans what's left of [#61](https://github.com/benshapyro/tycho-ai/issues/61) and [#298](https://github.com/benshapyro/tycho-ai/issues/298). Builds on [ADR 18](0018-game-packs.md).
 
 ## Context
 
