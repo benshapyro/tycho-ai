@@ -461,6 +461,7 @@ class OpenRouterBrain:
     ) -> Decision | None:
         decided = await round_.tool_call(call.id, call.name, call.parsed())
         if decided is not None:
+            round_.left(len(message.text) + sum(len(c.arguments) for c in message.calls))
             # The call ends here, so its usage never arrives: the eval looks its cost
             # up by the generation's id.
             log.debug(

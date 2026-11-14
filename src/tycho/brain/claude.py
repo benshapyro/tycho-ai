@@ -22,6 +22,7 @@ request at startup writes it, so the first real request is fast too.
 import asyncio
 import contextlib
 import datetime
+import json
 import logging
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -277,9 +278,11 @@ class ClaudeBrain:
                     ):
                         block = event.content_block
                         if _cut_off(block.name, block.input, tools):
+                            round_.left(*_written(stream.current_message_snapshot))
                             return await round_.cut_short(block.name), None, round_
                         decided = await round_.tool_call(block.id, block.name, block.input)
                         if decided is not None:
+                            round_.left(*_written(stream.current_message_snapshot))
                             return decided, None, round_
                 message = await stream.get_final_message()
             round_.finished()
@@ -352,6 +355,25 @@ TOOL_CHOICE: Any = {"type": "auto"}
 """Several tools in one reply (#149, #156): look-ups at once instead of one call
 after another, and a fleet or settings note alongside an act. Only the first act in
 a reply is pressed (the stream is left there), and every act is still checked."""
+
+
+def _written(message: Any) -> tuple[int, dict[str, int]]:
+    """What a call left at an act had written, in characters, and its input and cache
+    tokens: Claude sends those as the call starts, but the output count only at its end,
+    which Tycho never reads (#387)."""
+    chars = 0
+    for block in message.content:
+        if block.type == "text":
+            chars += len(block.text)
+        elif block.type == "tool_use":
+            chars += len(json.dumps(block.input, ensure_ascii=False))
+    usage = message.usage
+    tokens = {
+        "input": usage.input_tokens,
+        "cache_read": usage.cache_read_input_tokens or 0,
+        "cache_write": usage.cache_creation_input_tokens or 0,
+    }
+    return chars, tokens
 
 
 def _log_usage(
