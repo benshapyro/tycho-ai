@@ -57,10 +57,10 @@ MAY_IMPORT_STAR_CITIZEN = ("tycho.games",)
 TOP = ("tycho.app", "tycho.cli", "tycho.start")
 MAY_IMPORT_TOP = ("tycho.__main__", "tycho.cli")
 
-# Anything that loads a DLL. Only tycho.win32 may (#298).
-DLL_LOADERS = frozenset(
-    {"WinDLL", "windll", "CDLL", "cdll", "OleDLL", "oledll", "PyDLL", "pydll", "LibraryLoader"}
-)
+# Loading a DLL: calling one of these, or reading one of the loaders. Only tycho.win32
+# may (#298). A type hint such as ``-> ctypes.WinDLL`` loads nothing, so it's allowed.
+DLL_CLASSES = frozenset({"WinDLL", "CDLL", "OleDLL", "PyDLL", "LibraryLoader"})
+DLL_LOADERS = frozenset({"windll", "cdll", "oledll", "pydll"})
 
 # Today's breaks: (the importing module, what it imports). Remove an entry when you fix it.
 STAR_CITIZEN_BREAKS = {
@@ -71,8 +71,11 @@ STAR_CITIZEN_BREAKS = {
     ("tycho.brain_choice", "tycho.knowledge.fleet"),
     ("tycho.brain_choice", "tycho.knowledge.item_lookup"),
     ("tycho.brain_choice", "tycho.knowledge.mining"),
+    ("tycho.brain_choice", "tycho.knowledge.ship_lookup"),
     ("tycho.brain_choice", "tycho.knowledge.ships"),
     ("tycho.brain_choice", "tycho.knowledge.trade_lookup"),
+    ("tycho.brain_choice", "tycho.knowledge.uex"),
+    ("tycho.brain_choice", "tycho.knowledge.wiki"),
     ("tycho.desktop.bridge", "tycho.game.store"),
     ("tycho.desktop.setup", "tycho.game.install"),
     ("tycho.desktop.setup", "tycho.game.store"),
@@ -129,7 +132,25 @@ def _imports(name: str, tree: ast.Module) -> Iterator[str]:
             for alias in node.names:
                 # `from tycho.knowledge import ships` imports a module; `from x import f` doesn't.
                 full = f"{base}.{alias.name}"
-                yield full if full in MODULES else base
+                yield full if full in MODULES else _origin(base, alias.name)
+
+
+def _origin(package: str, name: str) -> str:
+    """Where a name imported from ``package`` comes from: the module its ``__init__``
+    took it from (``from tycho.knowledge import UexApi`` reaches ``tycho.knowledge.uex``),
+    or the package itself."""
+    path = MODULES.get(package)
+    if path is None or path.name != "__init__.py":
+        return package
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if (
+            isinstance(node, ast.ImportFrom)
+            and node.module
+            and not node.level
+            and any((alias.asname or alias.name) == name for alias in node.names)
+        ):
+            return node.module
+    return package
 
 
 def _trees() -> Iterator[tuple[str, ast.Module]]:
@@ -187,12 +208,17 @@ def _top_breaks() -> set[tuple[str, str]]:
 
 def _loads_a_dll(tree: ast.Module) -> bool:
     for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            called = node.func
+            name = called.attr if isinstance(called, ast.Attribute) else getattr(called, "id", "")
+            if name in DLL_CLASSES:
+                return True
         if isinstance(node, ast.Attribute) and node.attr in DLL_LOADERS:
             return True
         if (
             isinstance(node, ast.ImportFrom)
             and node.module == "ctypes"
-            and any(alias.name in DLL_LOADERS for alias in node.names)
+            and any(alias.name in DLL_LOADERS | {"*"} for alias in node.names)
         ):
             return True
     return False
@@ -240,3 +266,7 @@ def test_the_checks_see_a_break() -> None:
     assert "tycho.app" in imports
     assert _loads_a_dll(tree)
     assert not _loads_a_dll(ast.parse("import ctypes\nx = ctypes.sizeof(ctypes.c_int)\n"))
+    assert not _loads_a_dll(ast.parse("import ctypes\nu: ctypes.WinDLL = win32.user32()\n"))
+    assert _loads_a_dll(ast.parse("import ctypes\nctypes.windll.user32.MessageBoxW()\n"))
+    # A name re-exported by a package is traced to the module it comes from.
+    assert _origin("tycho.knowledge", "UexApi") == "tycho.knowledge.uex"
