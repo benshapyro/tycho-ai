@@ -212,9 +212,10 @@
         <button class="btn primary frame" type="button" id="packUse">Use ${esc(p.name)}</button></div>`;
     $("#packBack").addEventListener("click", () => { view = packFrom; packFrom = "settings"; render(); });
     $("#packUse").addEventListener("click", async () => {
-      view = packFrom === "setup" ? "status" : "settings";
+      const from = packFrom;
+      view = from === "setup" ? "status" : "settings";
       packFrom = "settings";
-      await change("game", p.id, `Game: ${p.name}`);
+      await change("game", p.id, `Game: ${p.name}`, from); // a refusal goes back where it came from
     });
   }
   function micSelect(mic) {
@@ -419,9 +420,9 @@
     const width = Math.round(img.getBoundingClientRect().width * (window.devicePixelRatio || 1)) || 720;
     img.src = await api.tile_preview(width);
   }
-  async function change(name, value, words) {
+  async function change(name, value, words, failed = null) {
     const r = await api.set(name, value);
-    if (!r.ok) { toast(r.problem); await render(); return; }
+    if (!r.ok) { if (failed) view = failed; toast(r.problem); await render(); return; }
     if (!r.changed) return;
     const when = { now: "", restarting: " Tycho restarts with it now." }[r.applies] ?? " Applies when Tycho restarts.";
     toast(`${words}.${when}`, true);
@@ -578,7 +579,7 @@
     page.innerHTML = `<h1>What to say</h1>
       <p class="lede">What you can say, what it does in the game, and your key for it. Built-in phrases are instant; anything else goes to Claude. Your phrases are saved to <span class="num">${esc(d.file)}</span> and apply when Tycho restarts.</p>
       ${d.problem ? `<p class="err">${esc(d.problem)}</p>` : ""}${d.warnings.map((w) => `<p class="warn-line">${esc(w)}</p>`).join("")}
-      ${d.keys_off ? `<p class="warn-line">Key actions are off. ${esc(d.keys_off)} These commands press nothing.</p>` : d.game ? "" : `<p class="warn-line">${esc(d.game_name)} wasn't found, so keys can't be shown. Set the game folder in Settings.</p>`}
+      ${d.keys_off ? `<p class="warn-line">Key actions are off. ${esc(d.keys_off)} These commands press nothing.</p>` : d.game ? "" : `<p class="warn-line">${esc(d.game_name)} wasn't found, so keys can't be shown. Set the game folder in Settings, Advanced.</p>`}
       <div class="toolbar"><input class="input" id="cmdSearch" type="search" placeholder="Search by what you say or what it does" value="${esc(cmdQuery)}" aria-label="Search commands">
         <div class="seg" role="group" aria-label="Show">${filters.map(([k, l]) => `<button type="button" aria-pressed="${cmdFilter === k}" data-filter="${k}">${l} ${counts[k]}</button>`).join("")}</div></div>
       <div class="tablewrap"><table><thead><tr><th>Command</th><th>Say it</th><th>Your key</th><th>Notes</th></tr></thead><tbody>
@@ -637,6 +638,7 @@
     // The first run has the window to itself; run again, the places stay, so Home is a
     // click away even while something is still missing (#453 review).
     document.body.classList.toggle("solo", firstRun && view === "setup");
+    document.body.classList.toggle("insetup", view === "setup");
     try {
       if (!document.body.classList.contains("solo")) await gameBox();
       if (view === "status") await status();

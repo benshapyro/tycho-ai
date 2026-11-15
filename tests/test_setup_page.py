@@ -426,6 +426,8 @@ def test_a_game_tycho_only_advises_in_has_no_empty_pages(
     page.get_by_role("button", name="Settings", exact=True).click()
     page.get_by_role("tab", name="Game and controls").click()
     expect(page.locator(".set", has_text="Push-to-talk")).to_have_count(1)
+    page.get_by_role("tab", name="Advanced").click()
+    expect(page.locator(".set", has_text="Brain model")).to_have_count(1)
     expect(page.locator(".set", has_text="Game folder")).to_have_count(0)
     expect(page.locator(".set", has_text="Game channel")).to_have_count(0)
     names = [r["name"] for g in setup.bridge.settings()["groups"] for r in g["rows"]]  # type: ignore[index,union-attr]
