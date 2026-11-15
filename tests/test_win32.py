@@ -98,6 +98,9 @@ def _bound(nodes: list[ast.AST]) -> set[str]:
     }
 
 
+SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+
+
 def _hidden(tree: ast.Module) -> list[int]:
     """Lines where a DLL is used out of the check's sight: one kept anywhere but a plain
     name (on ``self``, handed to a helper, #407), or a name bound to one and then used
@@ -115,27 +118,40 @@ def _hidden(tree: ast.Module) -> list[int]:
             and all(isinstance(t, ast.Name | ast.Tuple) for t in parent.targets)
         ):
             lines.append(node.lineno)
-    scope = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-    top = [s for s in tree.body if not isinstance(s, scope)]
-    module_bound = _bound([n for statement in top for n in ast.walk(statement)])
-    inner: list[list[ast.stmt]] = [
-        n.body
-        for n in ast.walk(tree)
-        if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
-    ]
-    for statements in (top, *inner):
-        own = [n for s in statements if not isinstance(s, scope) for n in ast.walk(s)]
-        # A function sees the module's names too; a class body's own names are its own.
-        body = own if statements is top else [n for s in statements for n in ast.walk(s)]
-        bound = module_bound | _bound(own)
+
+    def own(statements: list[ast.stmt]) -> tuple[list[ast.AST], list[ast.AST]]:
+        """A scope's own nodes, and the scopes directly inside it."""
+        nodes: list[ast.AST] = []
+        inner: list[ast.AST] = []
+        todo: list[ast.AST] = list(statements)
+        while todo:
+            node = todo.pop()
+            if isinstance(node, SCOPES):
+                inner.append(node)
+                continue
+            nodes.append(node)
+            todo.extend(ast.iter_child_nodes(node))
+        return nodes, inner
+
+    def visit(statements: list[ast.stmt], visible: set[str], *, in_class: bool) -> None:
+        nodes, inner = own(statements)
+        bound = visible | _bound(nodes)
         lines.extend(
             node.lineno
-            for node in body
+            for node in nodes
             if isinstance(node, ast.Name)
             and isinstance(node.ctx, ast.Load)
             and node.id in bound
             and not isinstance(parents[node], ast.Attribute)
         )
+        for scope in inner:
+            assert isinstance(scope, SCOPES)
+            # A scope sees the names around it, but a class body's own names aren't seen
+            # by its methods: they see only what the class saw.
+            seen = visible if in_class else bound
+            visit(scope.body, seen, in_class=isinstance(scope, ast.ClassDef))
+
+    visit(tree.body, set(), in_class=False)
     return sorted(set(lines))
 
 
@@ -167,5 +183,15 @@ def test_the_check_sees_a_dll_out_of_sight() -> None:
         "async def later(g):\n"
         "    a = win32.user32()\n"
         "    g(a)\n"
+        "class B:\n"
+        "    b = win32.user32()\n"
+        "    def m(self, b):\n"
+        "        return b\n"
+        "def outer(g):\n"
+        "    o = win32.user32()\n"
+        "    def inner():\n"
+        "        g(o)\n"
     )
-    assert _hidden(ast.parse(seen)) == [6, 9, 14, 17]
+    # Line 21 is a method's own argument, not the class's DLL: unseen. Line 25 uses the
+    # outer function's DLL: seen, once.
+    assert _hidden(ast.parse(seen)) == [6, 9, 14, 17, 25]
