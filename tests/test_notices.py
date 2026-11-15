@@ -96,3 +96,11 @@ def test_a_package_naming_no_licence_is_read_from_its_licence_file() -> None:
     terms = notices.licence(distribution("clr_loader"))
     assert terms == "MIT (from its licence file)"
     assert notices.allowed(terms)
+
+
+def test_the_bundled_fonts_licence_is_in_the_notices(tmp_path: Path) -> None:
+    assert notices.write(tmp_path) == []
+    text = (tmp_path / "THIRD-PARTY-NOTICES.txt").read_text("utf-8")
+    assert "The Saira Project Authors" in text
+    assert "Carrois Type Design" in text
+    assert "SIL OPEN FONT LICENSE Version 1.1" in text

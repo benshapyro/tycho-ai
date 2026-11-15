@@ -22,10 +22,11 @@ datas = [
     # `tycho --version` the real version.
     *copy_metadata("onnx-asr"),
     *copy_metadata("tycho-ai"),
-    # The app window's page (ADR 17) is HTML, CSS and JavaScript.
+    # The app window's page (ADR 17) is HTML, CSS and JavaScript; the window and the Tile
+    # draw with the bundled fonts (tycho/fonts, SIL OFL).
     *collect_data_files(
         "tycho",
-        includes=["**/*.toml", "**/*.txt", "**/*.md", "**/*.html", "**/*.css", "**/*.js"],
+        includes=["**/*.toml", "**/*.txt", "**/*.md", "**/*.html", "**/*.css", "**/*.js", "**/*.ttf"],
         # Guides for coding agents, and the packs' eval cases: not for players' installs.
         excludes=["**/AGENTS.md", "packs/*/eval/*"],
     ),

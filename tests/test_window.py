@@ -708,3 +708,13 @@ def test_the_page_has_a_check_for_updates_button_and_a_notice() -> None:
     assert 'id="updateNotice"' in html
     assert "Check for updates" in html
     assert "check_updates(false)" in html  # the window's own check when it opens
+
+
+def test_the_page_carries_its_own_fonts() -> None:
+    """ADR 17 (amended): the fonts ship with Tycho and sit inside the page, so it fetches
+    nothing and looks the same on every PC, not only where Bahnschrift is installed."""
+    html = window.page()
+    for family in ("Saira Semi Condensed", "Tycho Label", "Share Tech Mono"):
+        assert f'font-family: "{family}"' in html
+    assert html.count("url(data:font/ttf;base64,") == len(window.FACES)
+    assert "url(http" not in html  # nothing fetched

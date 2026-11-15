@@ -15,9 +15,10 @@
   --acc: #9fd8ff;
   --acc-line: color-mix(in srgb, var(--acc) 55%, transparent);
   --acc-soft: color-mix(in srgb, var(--acc) 13%, transparent);
-  --f-label: "Bahnschrift SemiBold Condensed", "Bahnschrift Condensed", "Bahnschrift", "Arial Narrow", sans-serif;
-  --f-text: "Bahnschrift SemiLight SemiConde", "Bahnschrift", "Segoe UI", sans-serif;
-  --f-num: "Cascadia Mono", Consolas, monospace;
+  /* Bundled (tycho.fonts, SIL OFL) and put inline by window.page(); Windows' own after. */
+  --f-label: "Tycho Label", "Bahnschrift SemiBold Condensed", "Bahnschrift", "Arial Narrow", sans-serif;
+  --f-text: "Saira Semi Condensed", "Bahnschrift", "Segoe UI", sans-serif;
+  --f-num: "Share Tech Mono", "Cascadia Mono", Consolas, monospace;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }

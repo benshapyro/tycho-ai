@@ -10,11 +10,13 @@ image is kept until it changes: only the timer bar, the countdown and the talk l
 are drawn again frame by frame.
 
 Sizes are for medium text on a 1080-pixel-high screen; ``Look.scale`` grows them.
-The fonts are Windows' own (Bahnschrift, Consolas), on every Windows 10 and 11 PC.
+The fonts ship with Tycho (``tycho.fonts``), with Windows' own (Bahnschrift, Consolas)
+as the fallback.
 """
 
 import contextlib
 import functools
+import io
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -22,6 +24,7 @@ from typing import Literal
 
 from PIL import Image, ImageDraw, ImageFont
 
+from tycho import fonts
 from tycho.tile.board import Shown
 from tycho.tile.cards import Card
 from tycho.tile.design import CORE, TYCHO_ACCENT
@@ -65,18 +68,29 @@ def rgba(hex_colour: str, alpha: float = 1.0) -> Rgba:
 # --- fonts ----------------------------------------------------------------------
 
 type Face = Literal["label", "text", "strong", "number"]
-_FACES: dict[Face, tuple[str, str | None]] = {
+_BUNDLED: dict[Face, str] = {
+    "label": "condensed",
+    "text": "text",
+    "strong": "label",
+    "number": "number",
+}
+"""Each face's bundled font (``tycho.fonts``), the same files the window uses."""
+
+_WINDOWS: dict[Face, tuple[str, str | None]] = {
     "label": ("bahnschrift.ttf", "SemiBold Condensed"),
     "text": ("bahnschrift.ttf", "SemiLight SemiCondensed"),
     "strong": ("bahnschrift.ttf", "SemiBold SemiCondensed"),
     "number": ("consola.ttf", None),
 }
+"""Windows' own, if a bundled file is missing."""
 
 
 @functools.cache
 def font(face: Face, size: int) -> Font:
-    """A Windows font at ``size`` pixels, or Pillow's own if it's missing."""
-    file, style = _FACES[face]
+    """The bundled font at ``size`` pixels, else Windows' own, else Pillow's."""
+    with contextlib.suppress(OSError):
+        return ImageFont.truetype(io.BytesIO(fonts.path(_BUNDLED[face]).read_bytes()), size)
+    file, style = _WINDOWS[face]
     try:
         loaded = ImageFont.truetype(file, size)
     except OSError:

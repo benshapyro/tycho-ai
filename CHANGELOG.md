@@ -18,6 +18,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - **Quit Tycho** is now a button in Tycho's window too (Settings, Updates). Before, the only Quit was on the icon by the clock, which Windows can hide and which can stop working. ([#424](https://github.com/benshapyro/tycho-ai/issues/424))
 
 ### Changed
+- Tycho's window and the Tile now use their own fonts, so they look the same on every PC.
 - Settings are in plainer groups: Voice, Game and controls, Safety, Privacy, Keys and Updates. What most players never change (the brain's provider and model, the voice model, the game's channel and folder, and where speech is recognised) is under Advanced, at the end.
 - Setup is five steps now: Game, Keys, Talk and listen (your push-to-talk button, microphone and Tycho's voice on one page), Privacy, and Try it. Running setup again and picking another game shows what Tycho does there first, instead of switching at once and closing the window. A message from setup no longer covers its Next button. ([#435](https://github.com/benshapyro/tycho-ai/issues/435))
 - Tycho's window has its places down the left now: Home, What to say, The Tile and Settings, with your game and a Switch game button under them. Home says in one line whether Tycho is ready and shows the one thing to fix first; all the checks are a click away. Setup has the whole window to itself. ([#200](https://github.com/benshapyro/tycho-ai/issues/200))

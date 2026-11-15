@@ -194,3 +194,13 @@ def test_a_strip_is_a_thin_line_with_the_title() -> None:
     assert strip.strip
     alone = draw((strip,), Look(), now=clock.now)
     assert alone.height < 70
+
+
+def test_the_tile_draws_with_the_bundled_fonts() -> None:
+    """The Tile draws with the same files as the window (ADR 17), not Windows' own."""
+    from tycho.tile.draw import font
+
+    assert font("label", 20).getname() == ("Saira Condensed", "SemiBold")
+    assert font("text", 20).getname()[0] == "Saira SemiCondensed"
+    assert font("strong", 20).getname() == ("Saira SemiCondensed", "SemiBold")
+    assert font("number", 20).getname()[0] == "Share Tech Mono"
