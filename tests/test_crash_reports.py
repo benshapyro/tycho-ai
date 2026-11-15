@@ -191,6 +191,7 @@ def hooks() -> Iterator[None]:
     before = sys.excepthook, threading.excepthook
     yield
     sys.excepthook, threading.excepthook = before
+    crash_reports._keep_crash = None  # pyright: ignore[reportPrivateUsage]
 
 
 @pytest.mark.parametrize("setting", [None, False])
@@ -266,3 +267,88 @@ def test_the_app_shows_crash_reports_as_a_privacy_switch(tmp_path: Path) -> None
     assert row["kind"] == "switch"
     assert row["value"] is None
     assert row["voice"] == "lower_only"
+
+
+# --- From #425's review (#429) ---------------------------------------------------------------
+
+
+def test_a_crash_caught_on_its_way_out_is_kept_too(hooks: None) -> None:
+    """The Start menu's Tycho catches every error to show a message box, so the hook
+    never sees it: it hands the error over instead."""
+    crash_reports.keep_crash(_crash())  # not installed: nothing
+    assert not paths.crash_reports_dir().exists()
+    crash_reports.install(lambda: True, CONTEXT, [NAME])
+    crash_reports.keep_crash(_crash())
+    assert len(list(paths.crash_reports_dir().glob("*.json"))) == 1
+
+
+def test_tycho_frames_keep_their_line_when_the_code_s_file_name_is_relative() -> None:
+    """PyInstaller makes co_filename relative (tycho\\runtime\\x.py): the module's own
+    __file__ still says it's Tycho's."""
+    code = compile("def boom():\n    raise ValueError('x')\n", r"tycho\fake.py", "exec")
+    space: dict[str, Any] = {"__name__": "tycho.fake", "__file__": crash_reports.__file__}
+    exec(code, space)  # noqa: S102
+    with pytest.raises(ValueError, match="x") as raised:
+        space["boom"]()
+    frames = build(raised.value, CONTEXT)["frames"]
+    assert {"module": "tycho.fake", "function": "boom", "line": 2} in frames
+
+
+def test_a_short_user_name_inside_a_longer_word_keeps_the_report(report: dict[str, Any]) -> None:
+    benched = {**report, "frames": [{"module": "tycho.bench", "function": "sample", "line": 1}]}
+    assert scrub(benched, ["ben", "sam"]) is not None
+    named = {**report, "frames": [{"module": "tycho.ben", "function": "f", "line": 1}]}
+    assert scrub(named, ["ben"]) is None
+
+
+def test_saying_no_by_voice_deletes_what_waits(waiting: Path, tmp_path: Path) -> None:
+    import asyncio
+
+    from tycho.spoken_settings import SettingsTool
+
+    path = tmp_path / "settings.toml"
+    settings.save(Settings(crash_reports=True), path)
+    tool = SettingsTool(path)
+    asyncio.run(tool.run({"action": "set", "changes": [{"name": "crash_reports", "value": "off"}]}))
+    assert settings.load(path).crash_reports is False
+    assert not list(waiting.glob("*.json"))
+
+
+# --- From #431's review (#432) ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", ["田中", "Влад", "Zoë"])
+def test_names_outside_ascii_are_checked_too(report: dict[str, Any], name: str) -> None:
+    named = {**report, "frames": [{"module": "tycho.x", "function": name, "line": 1}]}
+    assert scrub(named, [name]) is None
+    assert scrub(report, [name]) is not None
+
+
+def test_the_start_menu_app_keeps_a_report_of_the_crash_it_shows(
+    hooks: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import ctypes
+    import sys
+
+    from tests.test_start_menu import _entry_point  # pyright: ignore[reportPrivateUsage]
+    from tycho import cli
+    from tycho.start import run as start_run
+
+    def crashes(_argv: list[str]) -> int:
+        raise _crash()
+
+    class User32:
+        @staticmethod
+        def MessageBoxW(_owner: object, _text: str, _title: str, _flags: int) -> int:
+            return 1
+
+    crash_reports.install(lambda: True, CONTEXT, [NAME])
+    monkeypatch.setattr(cli, "main", crashes)
+    monkeypatch.setattr(start_run, "WINDOWED", False)
+    monkeypatch.setattr(ctypes, "windll", type("Windll", (), {"user32": User32})(), raising=False)
+    monkeypatch.setattr(sys, "stdout", sys.stdout)
+    monkeypatch.setattr(sys, "stderr", sys.stderr)
+    assert _entry_point().windowed([]) == 1
+    kept = list(paths.crash_reports_dir().glob("*.json"))
+    assert len(kept) == 1
+    assert "tycho.settings.SettingsError" in kept[0].read_text("utf-8")

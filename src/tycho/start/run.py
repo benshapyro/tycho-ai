@@ -46,10 +46,10 @@ def run_command(current: Settings, *, verbose: bool = False, window: bool = True
     from tycho.runtime.instance import OpenRequests, ask_to_open
 
     log_file = logs.setup(verbose=verbose)
-    _crash_reports(current)
     window = window and sys.platform == "win32"
     try:
         with SingleInstance():
+            _crash_reports(current)  # one Tycho sends what waits, never two at once (#429)
             if not window:
                 return _run(current, log_file, window=False)
             # Starting Tycho again (the Start menu) shows this one's window (#146).

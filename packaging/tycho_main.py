@@ -121,6 +121,9 @@ def windowed(argv: list[str]) -> int:
             with contextlib.suppress(OSError):  # if logging was what failed, the box still shows
                 logs.setup()
         logging.getLogger("tycho").exception("Tycho stopped")
+        from tycho import crash_reports
+
+        crash_reports.keep_crash(e)  # only if the player said yes (ADR 4, #429)
         code = 1
     else:
         lines = _last_lines(tail.text)
