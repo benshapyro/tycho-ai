@@ -30,9 +30,10 @@ from importlib.resources.abc import Traversable
 from types import MappingProxyType
 from typing import Literal, cast
 
-from tycho.packs import onboarding
+from tycho.packs import onboarding, tiles
 from tycho.packs.onboarding import Setup
 from tycho.packs.parts import Registry
+from tycho.packs.tiles import Tile
 
 FORMATS = frozenset({1})
 """The folder formats this Tycho reads."""
@@ -83,14 +84,6 @@ class Parts:
     keybinds: str | None = None
     game_state: str | None = None
     lookups: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class Tile:
-    accents: Mapping[str, str] = field(default_factory=dict[str, str])
-    """The Tile's accent by the maker prefix of a ship's game name (``DRAK``)."""
-    makers: Mapping[str, str] = field(default_factory=dict[str, str])
-    """A maker's name, by its first word, to its prefix (``drake`` to ``DRAK``)."""
 
 
 LOOSENING = ("not_danger", "mode_guards", "state_guards", "accepted_risks")
@@ -408,20 +401,10 @@ def _terms(text: str) -> tuple[str, ...]:
 
 
 def _tile(table: Mapping[str, object], name: str) -> Tile:
-    where = f"{name}/tile.toml"
-    accents = _table(table, "accents", where)
-    makers = _table(table, "makers", where)
-    # Each value's type first: a list as a maker's accent can't be looked up (#319).
-    if bad := [k for k, v in accents.items() if not (isinstance(v, str) and _COLOUR.fullmatch(v))]:
-        raise PackError(f"{where}: accents must be colours like #4fb3ff: {', '.join(bad)}")
-    if bad := [k for k, v in makers.items() if not isinstance(v, str)]:
-        raise PackError(f"{where}: each maker must name an accent: {', '.join(bad)}")
-    if bad := [k for k, v in makers.items() if v not in accents]:
-        raise PackError(f"{where}: makers with no accent: {', '.join(bad)}")
-    return Tile(
-        MappingProxyType(cast(dict[str, str], accents)),
-        MappingProxyType(cast(dict[str, str], makers)),
-    )
+    try:
+        return tiles.read(table, f"{name}/tile.toml")
+    except ValueError as e:
+        raise PackError(str(e)) from e
 
 
 def _check_briefing(text: str, where: str) -> None:

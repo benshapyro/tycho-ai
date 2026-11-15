@@ -7,6 +7,7 @@ from typing import Any
 
 from tycho import settings
 from tycho.desktop.bridge.state import State
+from tycho.packs import PackError, Sample, built_in
 
 
 class TilePage(State):
@@ -25,17 +26,14 @@ class TilePage(State):
         current = settings.load(self._path)
         screen = Screen(0, 0, 2560, 1440)
         board = Board(clock=lambda: 0.0)
+        sample = _sample(current.game) or OWN_SAMPLE
         board.show(
             Card(
                 "list",
-                title="Best places to sell",
-                label="Sell · Laranite",
-                source="UEX",
-                rows=(
-                    Row("Everus Harbor", "Hurston", "3,048"),
-                    Row("Area18 TDD", "ArcCorp", "3,012"),
-                    Row("Port Tressler", "microTech", "2,987"),
-                ),
+                title=sample.title,
+                label=sample.label,
+                source=sample.source,
+                rows=tuple(Row(*row) for row in sample.rows),
             )
         )
         try:
@@ -55,6 +53,25 @@ class TilePage(State):
         buffer = io.BytesIO()
         small.convert("RGB").save(buffer, "PNG")
         return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+OWN_SAMPLE = Sample(
+    "Getting started",
+    "Tycho",
+    rows=(
+        ("Hold your button", "and ask", "1"),
+        ("Let go", "Tycho answers", "2"),
+        ("Ask for more", "or say cancel", "3"),
+    ),
+)
+"""The preview's card for a game whose pack has none: no game's words (#422)."""
+
+
+def _sample(game: str) -> Sample | None:
+    try:
+        return built_in(game).tile.sample
+    except PackError:
+        return None
 
 
 def _cockpit(width: int, height: int) -> Any:

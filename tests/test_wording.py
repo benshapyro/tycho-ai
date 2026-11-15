@@ -33,7 +33,7 @@ KNOWN: dict[str, set[str]] = {
     # The product's own description, the credits, and Star Citizen's own settings.
     "cli/__init__.py": {"star citizen"},
     "cli/commands.py": {"star citizen", "uex"},
-    "settings.py": {"commander", "flying", "rsi", "ship", "star citizen", "wow"},
+    "settings.py": {"commander", "rsi", "ship", "star citizen", "wow"},
     # Not a game's words: a voice's name (The Ship's Mind), a look-up's id, and "a
     # pack that ships inside Tycho".
     "voice/voices.py": {"ship", "ships"},
@@ -48,10 +48,6 @@ KNOWN: dict[str, set[str]] = {
     "brain/core.md": {"commander", "flying", "quantum"},
     "tile/cards.py": {"laranite", "scu", "ship", "ships", "uex"},
     "knowledge/web.py": {"flying", "rsi", "ships", "star citizen", "uex"},
-    # The Tile's sample card, and its colour from the ship being flown (#422).
-    "desktop/bridge/tile_page.py": {"laranite", "uex"},
-    "tile/display.py": {"ship"},
-    "tile/draw.py": {"ship"},
 }
 """Today's breaks, by file: this list only shrinks. When you fix one, take it off."""
 
@@ -111,8 +107,8 @@ def test_the_core_s_words_name_no_game() -> None:
 def test_a_setting_s_description_names_a_game_only_when_it_s_that_game_s_setting() -> None:
     """Every description is shown in the window's Settings and written to settings.toml,
     whichever game is chosen."""
-    # tile_colour and tile_hidden_cards name the ship cards and colour: #422.
-    theirs = {"game", "game_root", "game_channel", "tile_colour", "tile_hidden_cards"}
+    # tile_hidden_cards names the ship cards (#422).
+    theirs = {"game", "game_root", "game_channel", "tile_hidden_cards"}
     for name, field in settings.Settings.model_fields.items():
         said = GAME_WORDS.search(field.description or "")
         assert name in theirs or not said, f"{name}: {said and said.group(0)!r}"

@@ -47,7 +47,7 @@ type HowOften = Literal["sparingly", "often"]
 type TileSize = Literal["small", "medium", "large", "extra large"]
 type Corner = Literal["top right", "top left", "bottom right", "bottom left"]
 type TileColour = Literal[
-    "ship", "tycho", "orange", "amber", "green", "teal", "blue", "white", "red", "pink"
+    "game", "tycho", "orange", "amber", "green", "teal", "blue", "white", "red", "pink"
 ]
 type CardsAtOnce = Literal["one", "two"]
 type CardsStay = Literal["shorter", "normal", "longer"]
@@ -254,9 +254,10 @@ class Settings(BaseModel):
         json_schema_extra=_rule("yes", "now"),
     )
     tile_colour: TileColour = Field(
-        default="ship",
-        description="The Tile's highlight colour: ship (in Star Citizen, the ship you said "
-        "you're flying), Tycho's, or one you pick. Warnings keep their own colours.",
+        default="game",
+        description="The Tile's highlight colour: game (the game's own, or in a game where "
+        "Tycho knows what you're in, its colour), Tycho's, or one you pick. Warnings keep "
+        "their own colours.",
         json_schema_extra=_rule("yes", "now"),
     )
     tile_see_through: float = Field(
@@ -317,6 +318,12 @@ class Settings(BaseModel):
     @classmethod
     def _renamed_game(cls, value: object) -> object:
         return RENAMED_GAMES.get(value, value) if isinstance(value, str) else value
+
+    @field_validator("tile_colour", mode="before")
+    @classmethod
+    def _renamed_colour(cls, value: object) -> object:
+        """``ship`` was the game's colour's old name (#422): an older settings file keeps it."""
+        return "game" if value == "ship" else value
 
     @field_validator("push_to_talk")
     @classmethod

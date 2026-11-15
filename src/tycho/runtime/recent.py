@@ -47,8 +47,11 @@ def exchange(result: Result, at: float) -> Exchange | None:
         did = result.question or "Asked you to confirm."
     elif result.status in ("done", "replied"):
         did = result.say or ("Done." if result.status == "done" else "")
+    elif result.status == "refused":
+        did = result.detail or _WORDS["refused"]  # the safety gate's own words, for players
     else:
-        did = result.detail or _WORDS.get(result.status, "")
+        # Other details are for the log: action ids and error text (review of #459).
+        did = _WORDS.get(result.status, "")
     return Exchange(at, " ".join(result.text.split()), " ".join(did.split()), ok)
 
 

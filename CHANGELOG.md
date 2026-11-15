@@ -19,6 +19,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - **Quit Tycho** is now a button in Tycho's window too (Settings, Updates). Before, the only Quit was on the icon by the clock, which Windows can hide and which can stop working. ([#424](https://github.com/benshapyro/tycho-ai/issues/424))
 
 ### Changed
+- The Tile's preview in Tycho's window shows a card in your game's own words: World of Warcraft: Forever no longer shows a Star Citizen trade card. The Tile's colour choice that follows the game is now called `game` (it was `ship`; an older `settings.toml` still works). ([#422](https://github.com/benshapyro/tycho-ai/issues/422))
 - Tycho's window and the Tile now use their own fonts, so they look the same on every PC.
 - In World of Warcraft: Forever, Tycho's window and the Tile are gold instead of blue, so you can tell at a glance which game Tycho is set for. A ship's own colour on the Tile, or a colour you picked, still comes first.
 - Settings are in plainer groups: Voice, Game and controls, Safety, Privacy, Keys and Updates. What most players never change (the brain's provider and model, the voice model, the game's channel and folder, and where speech is recognised) is under Advanced, at the end.

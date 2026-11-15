@@ -44,3 +44,14 @@ origin = "ORIG"
 roberts = "RSI"
 rsi = "RSI"
 tumbril = "TMBL"
+
+# The card the window's Tile preview shows (#422): Star Citizen's own words.
+[sample]
+title = "Best places to sell"
+label = "Sell · Laranite"
+source = "UEX"
+rows = [
+    ["Everus Harbor", "Hurston", "3,048"],
+    ["Area18 TDD", "ArcCorp", "3,012"],
+    ["Port Tressler", "microTech", "2,987"],
+]

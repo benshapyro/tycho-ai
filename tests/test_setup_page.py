@@ -568,11 +568,9 @@ def test_home_says_its_listening_and_shows_the_last_exchanges_from_memory(
     expect(page.locator("#recent li")).to_have_count(2, timeout=6000)
     expect(page.locator("#recent li").first).to_contain_text("The game wasn't in front")
     expect(page.locator("#recent li.no")).to_have_count(1)
-    # Paused from the tray: Home says so.
+    # Paused from the tray while Home is open: Home says so without a click.
     setup.listening = False
-    page.get_by_role("button", name="Settings", exact=True).click()
-    page.get_by_role("button", name="Home").click()
-    expect(page.locator("#homeState h1")).to_have_text("Paused")
+    expect(page.locator("#homeState h1")).to_have_text("Paused", timeout=6000)
     setup.close()
 
 

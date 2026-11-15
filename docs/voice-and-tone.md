@@ -61,7 +61,7 @@ Worked through on 15 November 2026 (Tycho 0.7.0 plus the 0.8 changes so far).
 ### Still to do
 
 - #421: what the brain is sent in every game still carries Star Citizen's examples. It needs Star Citizen's eval, on the maintainer's PC.
-- #422: the Tile's preview and colour settings assume a ship.
+- #422: the hidden-cards list still names the ship and fleet cards in every game. The preview and the colour choice are done.
 - #364: setup's game step (onboarding).
 - #359: whether short stray utterances get a reply at all.
 - Star Citizen's eval now has `say_words = 15` and `never_say`; they're first measured on its next run.

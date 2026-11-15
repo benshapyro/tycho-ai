@@ -23,7 +23,7 @@ from typing import Literal
 from PIL import Image, ImageDraw
 
 from tycho.tile.board import Shown
-from tycho.tile.cards import Card
+from tycho.tile.cards import SPECS, Card
 from tycho.tile.design import CORE, TYCHO_ACCENT
 from tycho.tile.faces import Font, font
 
@@ -410,7 +410,7 @@ class _Pen:
             self.recipe()
         elif kind == "route":
             self.route()
-        elif kind == "ship":
+        elif kind == SPECS:
             self.specs()
         elif kind == "steps":
             self.steps()

@@ -15,7 +15,6 @@ from tycho.packs.pack import (
     PackError,
     Parts,
     Safety,
-    Tile,
     as_run,
     built_in,
     installed,
@@ -31,6 +30,7 @@ from tycho.packs.parts import (
     Registry,
     Workshop,
 )
+from tycho.packs.tiles import Sample, Tile
 
 __all__ = [
     "CORE_SECTIONS",
@@ -49,6 +49,7 @@ __all__ = [
     "Parts",
     "Registry",
     "Safety",
+    "Sample",
     "Setup",
     "Tile",
     "Workshop",

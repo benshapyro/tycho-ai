@@ -41,6 +41,8 @@ BRAIN_KINDS: tuple[Kind, ...] = (
 )
 """The kinds Claude may show. The rest come from Tycho itself."""
 ALL_KINDS: tuple[Kind, ...] = cast(tuple[Kind, ...], get_args(Kind.__value__))
+SPECS: Kind = "ship"
+"""The specs card's kind: its id, which the brain uses, names Star Citizen's ships."""
 
 type Tone = Literal["normal", "caution", "danger"]
 
