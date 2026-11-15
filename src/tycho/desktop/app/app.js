@@ -28,20 +28,32 @@
     await render();
   });
 
-  /* ---------- status ---------- */
+  /* ---------- home: how Tycho is, at most one thing to fix, the checks one click away ---------- */
+  let allChecks = false;
   async function status() {
-    page.innerHTML = `<h1>Status</h1><p class="lede">Checking…</p>`;
+    page.innerHTML = `<h1>Home</h1><p class="lede">Checking…</p>`;
     const findings = await api.status();
-    const bad = findings.filter((f) => f.level !== "ok").length;
-    badge(bad);
+    const bad = findings.filter((f) => f.level !== "ok");
+    const stuck = bad.some((f) => f.level === "fail");
+    badge(bad.length);
     const mark = { ok: "✓", warn: "!", fail: "✕" };
-    page.innerHTML = `<h1>Status</h1>
-      <p class="lede">${bad ? `${bad} thing${bad > 1 ? "s" : ""} to look at.` : "Everything is working."} The same checks as <span class="num">tycho check</span>.</p>
-      <div class="checks">${findings.map((f) => `<div class="check ${esc(f.level)}"><span class="mark">${mark[f.level] || "·"}</span>
+    const first = bad.find((f) => f.level === "fail") || bad[0];
+    const fix = first
+      ? `<h2 class="label">${bad.length > 1 ? `One of ${bad.length} things to look at` : "One thing to look at"}</h2>
+        <div class="onefix ${esc(first.level)}" id="oneFix"><div><b>${esc(first.what)}</b><small>${esc(first.detail)}</small>${first.fix ? `<span class="fix">${esc(first.fix)}</span>` : ""}</div>
+        <button class="btn frame" type="button" id="again">Check again</button></div>`
+      : "";
+    page.innerHTML = `<div class="state frame ${stuck ? "stuck" : ""}" id="homeState"><div class="light"></div>
+        <div><h1>${stuck ? "Not ready yet" : "Ready"}</h1><p>${stuck ? "Tycho can't do everything yet: the first thing to fix is below." : "Hold your push-to-talk button and talk. Tycho listens while this window is closed, too."}</p></div></div>
+      ${fix}
+      <h2 class="label">Checks</h2>
+      <div class="bar" style="margin-top:0"><button class="link" type="button" id="showChecks" aria-expanded="${allChecks}">${allChecks ? "Hide the checks" : `Show all ${findings.length} checks`}</button>
+        <span class="keyrow"><button class="btn frame" type="button" id="redo">Run setup again</button>${first ? "" : `<button class="btn frame" type="button" id="again">Check again</button>`}</span></div>
+      <div class="checks" id="checks" ${allChecks ? "" : "hidden"} style="margin-top:10px">${findings.map((f) => `<div class="check ${esc(f.level)}"><span class="mark">${mark[f.level] || "·"}</span>
         <span><b>${esc(f.what)}</b><small>${esc(f.detail)}</small>${f.fix ? `<span class="fix">${esc(f.fix)}</span>` : ""}</span></div>`).join("")}</div>
-      <div class="bar"><span class="dim" style="font-size:13px">Tycho also checks each time it starts.</span>
-        <span class="keyrow"><button class="btn frame" type="button" id="redo">Run setup again</button><button class="btn frame" type="button" id="again">Check again</button></span></div>`;
+      <p class="note" style="margin-top:10px">The same checks as <span class="num">tycho check</span>. Tycho also checks each time it starts.</p>`;
     $("#again").addEventListener("click", status);
+    $("#showChecks").addEventListener("click", () => { allChecks = !allChecks; status(); });
     $("#redo").addEventListener("click", () => { view = "setup"; step = 0; render(); });
   }
 
@@ -117,7 +129,7 @@
     if (name === "Game") {
       body = `<div class="card frame"><h3>Which game?</h3>
         <div class="packs" role="group" aria-label="Game">${s.packs.map((g) => `<button type="button" class="pack frame" aria-pressed="${g.id === s.pack.id}" data-game="${esc(g.id)}" data-name="${esc(g.name)}"><b>${esc(g.name)}</b><span class="note">${modeLine(g)}</span></button>`).join("")}</div>
-        <p class="note">One game at a time. You can switch later under Settings, Game and controls.</p></div>
+        <p class="note">One game at a time. You can switch later with Switch game, at the side of this window.</p></div>
         ${packCard(s.pack, { ...s.game, channels: s.channels }, true)}`;
     } else if (name === "Keys") {
       body = `<div class="card frame"><h3>Your keys, and what they cost</h3>
@@ -170,7 +182,7 @@
         ${s.todo.length ? `<div id="todo"><p class="warn-line">Tycho still needs:</p>${s.todo.map((t) => `<div class="keyrow"><span>${esc(t.what)}</span><button class="btn frame" type="button" data-goto="${esc(t.step)}">Go to ${esc(t.step)}</button></div>`).join("")}
           <p class="note">Or close this window and finish later: what you've chosen is kept.</p></div>` : ""}
         ${say.length ? `<div class="field"><label>Hold your button and say</label>${list(say.map((e) => `“${e}”`), "say")}</div>` : `<p>Hold your button and ask Tycho something about ${esc(s.pack.name)}.</p>`}
-        ${brainKey(s) ? "" : `<p class="warn-line" id="noBrain">${s.pack.can_press ? "With no Anthropic or OpenRouter key, only the built-in phrases work: the Commands page lists them." : `With no Anthropic or OpenRouter key, Tycho can't answer in ${esc(s.pack.name)}. Add one in the Keys step.`}</p>`}
+        ${brainKey(s) ? "" : `<p class="warn-line" id="noBrain">${s.pack.can_press ? "With no Anthropic or OpenRouter key, only the built-in phrases work: What to say lists them." : `With no Anthropic or OpenRouter key, Tycho can't answer in ${esc(s.pack.name)}. Add one in the Keys step.`}</p>`}
         ${list(s.pack.tips, "tips")}
         <p class="note">${firstRun ? "Tycho starts listening when you press Start. Its star sits by the clock (if you don't see it, it's under the ^ arrow there): click it to open this window again, or open Tycho from the Start menu." : "Changes apply when Tycho next starts."}</p>
         <span class="err" id="finishErr"></span></div>`;
@@ -364,7 +376,7 @@
   async function settingsView() {
     data = await api.settings();
     if (tab === "Game and controls") setupState = await api.setup_state();
-    const names = [...data.groups.map((g) => g.name), "Keys", "Updates"];
+    const names = [...data.groups.map((g) => g.name).filter((n) => n !== TILE), "Keys", "Updates"];
     if (!names.includes(tab)) tab = names[0];
     const tabs = `<div class="tabs" role="tablist">${names.map((n) => `<button type="button" role="tab" aria-selected="${n === tab}" data-tab="${esc(n)}">${esc(n)}</button>`).join("")}</div>`;
     let body;
@@ -373,16 +385,23 @@
     else {
       const group = data.groups.find((g) => g.name === tab);
       const rows = `<div class="rows">${group.rows.map(row).join("")}</div>`;
-      body = tab === "The Tile"
-        ? `<div class="tilepage">${rows}<div class="preview"><img id="tilePreview" alt="The Tile as it's set now, over a cockpit"><span class="caption">Preview · drawn by the Tile itself · 2560 × 1440</span></div></div>`
-        : rows;
+      body = rows;
     }
     page.innerHTML = `<h1>Settings</h1><p class="lede">Changes apply at once and are saved to settings.toml. Most can also be said to Tycho; each says how.</p>${tabs}${body}`;
     page.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; render(); }));
     bindSettings();
-    if (tab === "The Tile") preview();
     if (tab === "Keys") bindKeys();
     if (tab === "Updates") bindUpdates();
+  }
+  // The Tile's own place: its settings beside a preview drawn by the Tile itself.
+  const TILE = "The Tile";
+  async function tileView() {
+    data = await api.settings();
+    const group = data.groups.find((g) => g.name === TILE);
+    page.innerHTML = `<h1>The Tile</h1><p class="lede">A small card over your game when there's something worth seeing, like a list of prices. It never takes a click away from the game.</p>
+      <div class="tilepage"><div class="rows">${group ? group.rows.map(row).join("") : ""}</div><div class="preview"><img id="tilePreview" alt="The Tile as it's set now, over a cockpit"><span class="caption">Preview · drawn by the Tile itself · 2560 × 1440</span></div></div>`;
+    bindSettings();
+    preview();
   }
   async function preview() {
     const img = $("#tilePreview");
@@ -429,7 +448,7 @@
         <div class="keyrow"><button class="btn ${lastUpdate.state === "newer" ? "" : "primary "}frame" type="button" id="checkUpdates">Check for updates</button><span id="updateMsg"></span></div>
         <div class="keyrow" id="getRow" ${lastUpdate.state === "newer" ? "" : "hidden"}><button class="btn primary frame" type="button" id="getUpdate">${lastUpdate.state === "newer" ? `Get Tycho ${esc(lastUpdate.latest)}` : ""}</button><span class="err" id="getErr"></span></div>
         <p class="note">Tycho never updates itself. The release page has the installer: quit Tycho (below, or from its icon by the clock), run it, and it installs over this version. Your settings and keys stay.</p>
-        <p class="note">${auto && auto.value ? "Tycho also checks each time its window opens, and says so at the top." : "Automatic checks are off (Privacy tab), so Tycho only checks when you press the button."}</p></div>
+        <p class="note">${auto && auto.value ? "Tycho also checks each time its window opens, and says so at the side." : "Automatic checks are off (Privacy tab), so Tycho only checks when you press the button."}</p></div>
       ${canQuit ? `<div class="card frame"><h3>Quit Tycho</h3>
         <div class="keyrow"><button class="btn frame" type="button" id="quitTycho">Quit Tycho</button><span class="err" id="quitErr"></span></div>
         <p class="note">Stops listening and closes Tycho, the same as Quit on its icon by the clock. Closing this window alone leaves Tycho listening.</p></div>` : ""}`;
@@ -528,7 +547,7 @@
     if (!rows.length && d.keys_off && !d.problem) {
       // A game Tycho presses nothing in has no commands to list: say what to do instead.
       $("#noKeyBadge").textContent = "";
-      page.innerHTML = `<h1>Commands</h1>
+      page.innerHTML = `<h1>What to say</h1>
         <p class="lede">There are no commands to list for ${esc(d.game_name)}.</p>
         <div class="card frame" id="noCommands"><h3>Just ask</h3>
           <p>${esc(d.keys_off)}</p>
@@ -546,7 +565,7 @@
     });
     const counts = { all: rows.length, nokey: noKey, mine: rows.filter((r) => r.mine.length).length, sequences: rows.filter((r) => r.sequence).length };
     const filters = [["all", "All"], ["nokey", "No key"], ["mine", "Yours"], ["sequences", "Sequences"]];
-    page.innerHTML = `<h1>Commands</h1>
+    page.innerHTML = `<h1>What to say</h1>
       <p class="lede">What you can say, what it does in the game, and your key for it. Built-in phrases are instant; anything else goes to Claude. Your phrases are saved to <span class="num">${esc(d.file)}</span> and apply when Tycho restarts.</p>
       ${d.problem ? `<p class="err">${esc(d.problem)}</p>` : ""}${d.warnings.map((w) => `<p class="warn-line">${esc(w)}</p>`).join("")}
       ${d.keys_off ? `<p class="warn-line">Key actions are off. ${esc(d.keys_off)} These commands press nothing.</p>` : d.game ? "" : `<p class="warn-line">${esc(d.game_name)} wasn't found, so keys can't be shown. Set the game folder in Settings.</p>`}
@@ -605,8 +624,13 @@
     if (askingCrash && (view !== "setup" || STEPS[step] !== "Privacy")) askingCrash = false;
     if (capturing) api.cancel_capture();
     document.querySelectorAll("nav [data-view]").forEach((b) => b.setAttribute("aria-current", b.dataset.view === view ? "page" : "false"));
+    // The first run has the window to itself; run again, the places stay, so Home is a
+    // click away even while something is still missing (#453 review).
+    document.body.classList.toggle("solo", firstRun && view === "setup");
     try {
+      if (!document.body.classList.contains("solo")) await gameBox();
       if (view === "status") await status();
+      else if (view === "tile") await tileView();
       else if (view === "setup") await setupView();
       else if (view === "pack") await packView();
       else if (view === "commands") await commandsView();
@@ -616,6 +640,20 @@
     }
   }
   document.querySelectorAll("nav [data-view]").forEach((b) => b.addEventListener("click", () => { view = b.dataset.view; render(); }));
+  // The chosen game under the places, and the way to another one (Settings, where the
+  // other game's own setup shows first, #364).
+  async function gameBox() {
+    const rows = (await api.settings()).groups.flatMap((g) => g.rows);
+    const game = rows.find((r) => r.name === "game");
+    const pressing = rows.find((r) => r.name === "key_actions")?.value !== false;
+    const p = game && game.packs && game.packs.find((x) => x.id === game.value);
+    const box = $("#gameBox");
+    box.hidden = !p;
+    if (!p) return;
+    box.innerHTML = `<span class="label">Game</span><b>${esc(p.name)}</b><span>${p.mode === "advisor" || !pressing ? "Tycho only talks" : "Tycho presses your keys"}</span>
+      ${game.packs.length > 1 ? `<button class="link" type="button" id="switchGame">Switch game</button>` : ""}`;
+    $("#switchGame")?.addEventListener("click", () => { view = "settings"; tab = "Game and controls"; render(); });
+  }
 
   async function start(bridge) {
     api = bridge;

@@ -22,7 +22,9 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; background: var(--void); color: var(--text); }
-body { font-family: var(--f-text); font-size: 15px; line-height: 1.5; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+body { font-family: var(--f-text); font-size: 15px; line-height: 1.5; display: grid; grid-template-columns: 200px minmax(0, 1fr); }
+body.solo { grid-template-columns: minmax(0, 1fr); }
+body.solo .side { display: none; }
 button, input, select { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
 .num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
@@ -36,18 +38,24 @@ button, input, select { font: inherit; color: inherit; }
     var(--fill, var(--panel));
 }
 
-header { display: flex; align-items: stretch; gap: 10px; padding: 0 18px; min-height: 50px; border-bottom: 1px solid var(--rule); background: var(--hull); flex-wrap: wrap; }
-.brand { display: flex; align-items: center; gap: 10px; font-family: var(--f-label); letter-spacing: .16em; text-transform: uppercase; font-size: 15px; }
+/* The places down the left (ADR 17, amended 15 Nov 2026: direction B of the design review). */
+.side { display: flex; flex-direction: column; gap: 2px; padding: 18px 0 14px; background: var(--hull); border-right: 1px solid var(--rule); min-height: 0; overflow: auto; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 0 20px 16px; font-family: var(--f-label); letter-spacing: .16em; text-transform: uppercase; font-size: 16px; }
 .brand svg { width: 16px; height: 16px; color: var(--acc); }
-nav { display: flex; margin-left: 14px; }
-nav button { white-space: nowrap; display: flex; align-items: center; gap: 8px; padding: 0 14px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--dim); cursor: pointer; font-family: var(--f-label); letter-spacing: .1em; text-transform: uppercase; font-size: 14px; }
+nav { display: flex; flex-direction: column; }
+nav button { white-space: nowrap; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 20px; background: none; border: 0; border-left: 2px solid transparent; color: var(--dim); cursor: pointer; font-family: var(--f-label); letter-spacing: .1em; text-transform: uppercase; font-size: 14px; text-align: left; }
 nav button:hover { color: var(--text); background: var(--well); }
-nav button[aria-current="page"] { color: var(--acc); border-bottom-color: var(--acc); background: var(--acc-soft); }
+nav button[aria-current="page"] { color: var(--acc); border-left-color: var(--acc); background: var(--acc-soft); }
 nav .badge { font-family: var(--f-num); font-size: 11px; color: var(--caution); letter-spacing: 0; }
 .grow { flex: 1; }
-.update { align-self: center; font: inherit; font-size: 12px; color: var(--caution); background: none; border: 1px solid color-mix(in srgb, var(--caution) 50%, transparent); padding: 2px 8px; cursor: pointer; }
+.gamebox { margin: 0 14px; padding: 12px; background: var(--well); font-size: 13px; color: var(--dim); display: grid; gap: 2px; }
+.gamebox .label { font-family: var(--f-label); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
+.gamebox b { color: var(--text); font-size: 15px; font-weight: 600; }
+.link { background: none; border: 0; padding: 0; cursor: pointer; justify-self: start; color: var(--acc); font-family: var(--f-label); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+.link:hover { text-decoration: underline; }
+.update { margin: 10px 14px 0; font: inherit; font-size: 12px; color: var(--caution); background: none; border: 1px solid color-mix(in srgb, var(--caution) 50%, transparent); padding: 4px 8px; cursor: pointer; text-align: left; }
 .update:hover { background: color-mix(in srgb, var(--caution) 12%, transparent); }
-.ver { align-self: center; font-size: 12px; color: var(--dim); border: 1px solid var(--rule); padding: 2px 8px; }
+.ver { padding: 10px 20px 0; font-size: 12px; color: var(--dim); }
 
 main { overflow: auto; padding: 22px 26px 40px; }
 h1 { margin: 0 0 4px; font-family: var(--f-label); font-weight: 600; font-size: 24px; letter-spacing: .08em; text-transform: uppercase; }
@@ -123,6 +131,23 @@ input[type="range"] { width: 150px; accent-color: var(--acc); }
   .tilepage { grid-template-columns: minmax(0, 1fr); }
   main { padding: 18px 14px; }
 }
+@media (max-width: 900px) {
+  body { grid-template-columns: 168px minmax(0, 1fr); }
+  nav button { padding: 9px 14px; font-size: 13px; }
+  .brand { padding: 0 14px 14px; }
+}
+/* Home: one line on how Tycho is, at most one thing to fix, the rest one click away. */
+.state { --fill: var(--panel); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; padding: 20px 22px; max-width: 860px; }
+.light { width: 16px; height: 16px; background: var(--good); transform: rotate(45deg); box-shadow: 0 0 16px color-mix(in srgb, var(--good) 60%, transparent); }
+.state.stuck .light { background: var(--caution); box-shadow: 0 0 16px color-mix(in srgb, var(--caution) 55%, transparent); }
+.state h1 { margin: 0; }
+.state p { margin: 2px 0 0; color: var(--dim); }
+.state p b { color: var(--acc); font-family: var(--f-num); font-weight: 400; }
+h2.label { margin: 22px 0 8px; font-family: var(--f-label); font-weight: 600; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+.onefix { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 16px; background: var(--well); border-left: 2px solid var(--caution); max-width: 860px; }
+.onefix.fail { border-left-color: var(--danger); }
+.onefix small { display: block; color: var(--dim); font-size: 13px; overflow-wrap: anywhere; }
+.onefix .fix { display: block; margin-top: 2px; font-family: var(--f-num); font-size: 12px; color: var(--acc); overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
 /* Setup (ADR 17): the steps, from the approved mockup. */
