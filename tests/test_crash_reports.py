@@ -312,3 +312,43 @@ def test_saying_no_by_voice_deletes_what_waits(waiting: Path, tmp_path: Path) ->
     asyncio.run(tool.run({"action": "set", "changes": [{"name": "crash_reports", "value": "off"}]}))
     assert settings.load(path).crash_reports is False
     assert not list(waiting.glob("*.json"))
+
+
+# --- From #431's review (#432) ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", ["田中", "Влад", "Zoë"])
+def test_names_outside_ascii_are_checked_too(report: dict[str, Any], name: str) -> None:
+    named = {**report, "frames": [{"module": "tycho.x", "function": name, "line": 1}]}
+    assert scrub(named, [name]) is None
+    assert scrub(report, [name]) is not None
+
+
+def test_the_start_menu_app_keeps_a_report_of_the_crash_it_shows(
+    hooks: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import ctypes
+    import sys
+
+    from tests.test_start_menu import _entry_point  # pyright: ignore[reportPrivateUsage]
+    from tycho import cli
+    from tycho.start import run as start_run
+
+    def crashes(_argv: list[str]) -> int:
+        raise _crash()
+
+    class User32:
+        @staticmethod
+        def MessageBoxW(_owner: object, _text: str, _title: str, _flags: int) -> int:
+            return 1
+
+    crash_reports.install(lambda: True, CONTEXT, [NAME])
+    monkeypatch.setattr(cli, "main", crashes)
+    monkeypatch.setattr(start_run, "WINDOWED", False)
+    monkeypatch.setattr(ctypes, "windll", type("Windll", (), {"user32": User32})(), raising=False)
+    monkeypatch.setattr(sys, "stdout", sys.stdout)
+    monkeypatch.setattr(sys, "stderr", sys.stderr)
+    assert _entry_point().windowed([]) == 1
+    kept = list(paths.crash_reports_dir().glob("*.json"))
+    assert len(kept) == 1
+    assert "tycho.settings.SettingsError" in kept[0].read_text("utf-8")
