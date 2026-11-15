@@ -15,6 +15,26 @@ keybinds = "star-citizen"   # Data.p4k defaults plus actionmaps.xml
 game_state = "star-citizen" # Game.log
 lookups = ["ships", "fleet", "items", "mining", "trade", "settings", "web"]
 
+# What setup says about Star Citizen (#364): the game's words live here, not in the page.
+[setup]
+intro = "Tycho presses your own Star Citizen keybinds when you ask, tells you what it did, and answers questions about ships, trade, mining and the game."
+lookups = [
+    "Ships, from the current patch's game files and the Star Citizen Wiki",
+    "Trade prices and routes, where to refine an ore and where to buy a ship, live from UEX",
+    "Where to mine a resource, weapons, armor, components and crafting, from the Star Citizen Wiki",
+    "Your own fleet, kept on your PC",
+    "News, upcoming patches, and where things are, from RSI's sites and the web",
+]
+sends = [
+    "Ship lists are downloaded from the Star Citizen Wiki API and UEX Corp on first run and after each patch. Nothing about you is sent.",
+    "A trade question sends the commodity or trading place you named to UEX Corp.",
+    "A question about a weapon, armor, a component or crafting sends the item's name to the Star Citizen Wiki API.",
+]
+# The first two are built-in commands: they work at once, with no key.
+examples = ["gear down", "lights on", "how much cargo does the Caterpillar hold?"]
+tips = ["Play in Borderless Window mode so the Tile can show over the game."]
+folder = "The RSI Launcher shows it under Settings, Games, Library Folder."
+
 [web]
 # The sites web search asks first (2026-11-02): RSI's own (patch notes, roadmap,
 # Comm-Links, Spectrum, support), the community wiki and the community tools. The open

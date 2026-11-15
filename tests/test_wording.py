@@ -39,8 +39,8 @@ KNOWN: dict[str, set[str]] = {
     "voice/voices.py": {"ship", "ships"},
     "games/__init__.py": {"ships"},
     "packs/pack.py": {"ships"},
-    # Setup's game step: the onboarding work rewrites it (#364).
-    "desktop/app/app.js": {"cockpit", "rsi"},
+    # The Tile preview's caption. Setup's own game words went to the packs (#364).
+    "desktop/app/app.js": {"cockpit"},
     "desktop/setup.py": {"star citizen"},
     # What the brain is sent in every game. Rewording these changes Star Citizen's
     # prompt, so it needs Star Citizen's eval, on the maintainer's PC (#421).

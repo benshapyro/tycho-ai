@@ -84,7 +84,8 @@ class WindowsPC:
             install = find_install(current)
         except FileNotFoundError:
             channel = current.game_channel
-            return Game(False, channel, problem=f"Star Citizen {channel} wasn't found")
+            name = built_in(current.game).name  # the game's name is its pack's (#364)
+            return Game(False, channel, problem=f"{name} {channel} wasn't found")
         return Game(True, current.game_channel, str(install.folder))
 
     def root(self, folder: str, channel: str) -> str | None:

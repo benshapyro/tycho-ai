@@ -163,6 +163,16 @@ td.key { white-space: nowrap; font-family: var(--f-num); }
 .plus:hover { color: var(--acc); border-color: var(--acc-line); }
 .addp { display: flex; gap: 6px; margin-top: 6px; }
 .addp .input { padding: 4px 8px; font-size: 13px; flex: 1 1 200px; }
+/* Setup's steps (#364): the pack's lists, what to say first, what leaves the PC. */
+.card ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.card .set { padding: 10px 12px; }
+ul.say { list-style: none; padding: 0; font-size: 17px; color: var(--acc); }
+ul.costs li b { color: var(--text); }
+ul.costs, ul.tips { color: var(--dim); font-size: 14px; }
+.leaves { font-size: 13px; min-width: 0; }
+.card .seg { justify-self: start; }
+.seg.big button { padding: 8px 26px; font-size: 15px; color: var(--text); }
+.leaves td { vertical-align: top; }
 .steps-line { color: var(--dim); font-size: 13px; }
 .chip.bad { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, transparent); }
 
