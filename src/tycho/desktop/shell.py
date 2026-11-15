@@ -132,8 +132,8 @@ def serve_with_tray(
 
 
 def _try_it(session: Session, on: bool) -> bool:
-    log.info("Try it %s", "on: nothing is sent to the game" if on else "off")
-    session.try_it(on)
+    if session.try_it(on):  # closing the window always says off: logged only if it was on
+        log.info("Try it %s", "on: nothing is sent to the game" if on else "off")
     return True
 
 

@@ -75,6 +75,9 @@ class SettingsPage(State):
                 for name in names
                 if name not in hidden
             ]
+            for row in rows:
+                if row["name"] == "tile_hidden_cards":  # a switch for each kind (#422)
+                    row["kind"], row["cards"] = "cards", card_kinds(current.game)
             groups.append({"name": group, "rows": rows})
         return {"groups": groups, "can_undo": bool(self._undo)}
 
@@ -230,6 +233,19 @@ def _shown(name: str, value: object) -> object:
 
 FOLDER_SETTINGS = frozenset({"game_channel", "game_root"})
 """Where a game is installed: shown only for a game Tycho reads something from."""
+
+
+def card_kinds(game: str) -> list[dict[str, str]]:
+    """The kinds of card the Tile can show in ``game``, each with its name: the ones
+    every game has, and the game's own from its pack (#422)."""
+    from tycho.tile.cards import ALL_KINDS, NAMES
+
+    try:
+        own = built_in(game).tile.cards
+    except PackError:
+        own = {}
+    names = {**NAMES, **own}
+    return [{"kind": k, "name": names[k]} for k in ALL_KINDS if k in names]
 
 
 def _not_for(game: str) -> frozenset[str]:

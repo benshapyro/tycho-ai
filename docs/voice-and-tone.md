@@ -45,7 +45,7 @@ Worked through on 15 November 2026 (Tycho 0.7.0 plus the 0.8 changes so far).
 | **Fixed spoken lines from the brain's rules** ("I looked that up online, so I won't press anything for it.", "That answer ran too long for me.") | `brain/rounds.py` | Fine. |
 | **Why a request failed** (the log, the window, the action log) | `runtime/asking.py`, `runtime/session.py`, `brain/claude.py`, `brain/openrouter.py`, `voice/elevenlabs.py` | Each gives a cause. Not spoken: the player hears the not-done sound. |
 | **What look-ups tell the brain when they miss** | `brain/lookups.py`, `games/star_citizen/*_lookup.py`, `knowledge/web.py` | Fine: each says what to do instead ("answer without it"). |
-| **Settings: names and descriptions** (the window's Settings, `settings.toml`, the settings tool) | `settings.py`, `desktop/bridge/state.py` (labels), `desktop/bridge/settings_page.py` (tabs) | Fixed here: web search and the Tile's nudge no longer name Star Citizen or a ship; Star Citizen's own settings say so. The Tile's `ship` colour and card kinds: #422. |
+| **Settings: names and descriptions** (the window's Settings, `settings.toml`, the settings tool) | `settings.py`, `desktop/bridge/state.py` (labels), `desktop/bridge/settings_page.py` (tabs) | Fixed here: web search and the Tile's nudge no longer name Star Citizen or a ship; Star Citizen's own settings say so. The Tile's card kinds are named by each pack (#422). |
 | **Settings by voice** ("Voice at 40%. Say undo to put it back.") | `spoken_settings.py`, `tile/display.py` | Fine. |
 | **The window's pages** | `desktop/app/app.js`, `index.html`, and the bridge modules in `desktop/bridge/` | Fixed here: the Commands search box. Setup's game step still assumes Star Citizen: the onboarding work, #364. The Tile's preview card: #422. |
 | **The tray** | `desktop/menu.py`, `desktop/tray.py`, `desktop/shell.py` | Fine. |
@@ -61,7 +61,6 @@ Worked through on 15 November 2026 (Tycho 0.7.0 plus the 0.8 changes so far).
 ### Still to do
 
 - #421: what the brain is sent in every game still carries Star Citizen's examples. It needs Star Citizen's eval, on the maintainer's PC.
-- #422: the hidden-cards list still names the ship and fleet cards in every game. The preview and the colour choice are done.
 - #364: setup's game step (onboarding).
 - #359: whether short stray utterances get a reply at all.
 - Star Citizen's eval now has `say_words = 15` and `never_say`; they're first measured on its next run.

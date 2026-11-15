@@ -29,6 +29,9 @@ class Tile:
     """The Tile's accent by the maker prefix of a ship's game name (``DRAK``)."""
     makers: Mapping[str, str] = field(default_factory=dict[str, str])
     """A maker's name, by its first word, to its prefix (``drake`` to ``DRAK``)."""
+    cards: Mapping[str, str] = field(default_factory=dict[str, str])
+    """This game's own kinds of card, by the names the window gives them (#422). The
+    kinds every game has are named by Tycho (``tile.cards.NAMES``)."""
 
 
 def read(table: Mapping[str, object], where: str) -> Tile:
@@ -46,7 +49,21 @@ def read(table: Mapping[str, object], where: str) -> Tile:
         _sample(_table(table, "sample", where), where),
         MappingProxyType(cast(dict[str, str], accents)),
         MappingProxyType(cast(dict[str, str], makers)),
+        MappingProxyType(_cards(_table(table, "cards", where), where)),
     )
+
+
+def _cards(table: Mapping[str, object], where: str) -> dict[str, str]:
+    from tycho.tile.cards import BRAIN_KINDS, NAMES
+
+    own = [k for k in BRAIN_KINDS if k not in NAMES]
+    if bad := [k for k in table if k not in own]:
+        raise ValueError(
+            f"{where}: [cards] names only a game's own kinds ({', '.join(own)}): {', '.join(bad)}"
+        )
+    if bad := [k for k, v in table.items() if not (isinstance(v, str) and v.strip())]:
+        raise ValueError(f"{where}: each card needs a name: {', '.join(bad)}")
+    return cast(dict[str, str], dict(table))
 
 
 def _sample(table: Mapping[str, object], where: str) -> Sample | None:

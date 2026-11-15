@@ -539,3 +539,16 @@ def test_a_pack_s_sample_card_is_checked(tmp_path: Path) -> None:
     assert sample is not None
     assert sample.rows == (("a", "b", "1"),)
     assert built_in("wow-forever").tile.sample is not None
+
+
+def test_a_pack_names_only_its_own_kinds_of_card(tmp_path: Path) -> None:
+    """#422: the kinds every game has are named by Tycho; a pack names its own."""
+    folder = _copy(tmp_path)
+    (folder / "tile.toml").write_text('[cards]\nlist = "Lists"\n', "utf-8")
+    with pytest.raises(PackError, match="only a game's own kinds"):
+        load_pack(folder, built_in=False, registry=REGISTRY)
+    (folder / "tile.toml").write_text('[cards]\nship = ""\n', "utf-8")
+    with pytest.raises(PackError, match="each card needs a name"):
+        load_pack(folder, built_in=False, registry=REGISTRY)
+    assert dict(built_in(STAR_CITIZEN).tile.cards) == {"ship": "Ship specs", "fleet": "Your fleet"}
+    assert dict(built_in("wow-forever").tile.cards) == {}

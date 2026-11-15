@@ -107,8 +107,7 @@ def test_the_core_s_words_name_no_game() -> None:
 def test_a_setting_s_description_names_a_game_only_when_it_s_that_game_s_setting() -> None:
     """Every description is shown in the window's Settings and written to settings.toml,
     whichever game is chosen."""
-    # tile_hidden_cards names the ship cards (#422).
-    theirs = {"game", "game_root", "game_channel", "tile_hidden_cards"}
+    theirs = {"game", "game_root", "game_channel"}
     for name, field in settings.Settings.model_fields.items():
         said = GAME_WORDS.search(field.description or "")
         assert name in theirs or not said, f"{name}: {said and said.group(0)!r}"

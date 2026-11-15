@@ -41,6 +41,18 @@ BRAIN_KINDS: tuple[Kind, ...] = (
 )
 """The kinds Claude may show. The rest come from Tycho itself."""
 ALL_KINDS: tuple[Kind, ...] = cast(tuple[Kind, ...], get_args(Kind.__value__))
+NAMES: Mapping[Kind, str] = {
+    "list": "Lists",
+    "route": "Routes",
+    "recipe": "Recipes",
+    "steps": "Steps",
+    "headlines": "Headlines",
+    "warning": "Warnings",
+    "long": "Long answers",
+    "notice": "Notices from Tycho",
+}
+"""The kinds every game has, by the names the window's Tile page gives them. A game's
+own kinds are named by its pack (``tile.toml``'s ``[cards]``, #422)."""
 SPECS: Kind = "ship"
 """The specs card's kind: its id, which the brain uses, names Star Citizen's ships."""
 

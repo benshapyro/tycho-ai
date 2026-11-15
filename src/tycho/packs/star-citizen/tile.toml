@@ -45,6 +45,11 @@ roberts = "RSI"
 rsi = "RSI"
 tumbril = "TMBL"
 
+# Star Citizen's own kinds of card, by the names the window's Tile page gives them (#422).
+[cards]
+ship = "Ship specs"
+fleet = "Your fleet"
+
 # The card the window's Tile preview shows (#422): Star Citizen's own words.
 [sample]
 title = "Best places to sell"

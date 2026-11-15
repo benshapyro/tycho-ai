@@ -662,6 +662,38 @@ def test_a_first_runs_try_it_says_the_window_comes_back(setup: Setup) -> None:
     assert setup.trying == []
 
 
+@pytest.mark.parametrize(
+    ("game", "own"), [("star-citizen", ["Ship specs", "Your fleet"]), ("wow-forever", [])]
+)
+def test_the_tile_page_lists_the_games_own_kinds_of_card(
+    browser: Browser, path: Path, vault: dict[str, str], game: str, own: list[str]
+) -> None:
+    """#422: the hidden-cards list named Star Citizen's ship and fleet cards in every
+    game. Now each kind is a switch, and a game's own come from its pack."""
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, game=game, game_root=None),
+        path,
+    )
+    setup = Setup(browser, path, first_run=False)
+    page = setup.page
+    page.locator("nav [data-view='tile']").click()
+    cards = page.locator("[data-card]")
+    expect(cards.first).to_be_visible()
+    names = cards.all_inner_texts()
+    assert [n for n in names if n in ("Ship specs", "Your fleet")] == own
+    assert "Lists" in names
+    assert "Notices from Tycho" in names
+    lists = page.locator("[data-card='list']")
+    expect(lists).to_have_attribute("aria-pressed", "true")
+    lists.click()
+    expect(page.locator("[data-card='list']")).to_have_attribute("aria-pressed", "false")
+    assert setup.saved().tile_hidden_cards == "list"
+    page.locator("[data-card='list']").click()
+    expect(page.locator("[data-card='list']")).to_have_attribute("aria-pressed", "true")
+    assert setup.saved().tile_hidden_cards == ""
+    setup.close()
+
+
 def test_home_has_no_exchanges_list_while_tycho_isnt_running(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
