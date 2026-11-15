@@ -8,7 +8,7 @@
   const page = $("#page");
   let api = null;
   let view = "status";
-  let tab = "Voice and sounds";
+  let tab = "Voice";
   let data = null;
 
   /* ---------- toast with undo ---------- */
@@ -139,7 +139,7 @@
         <p>Tycho is free and runs on your own accounts. Each key is optional, and you can add one later under Settings, Keys.</p>
         <ul class="costs">
           <li><b>Anthropic (Claude)</b>: lets Tycho understand anything said your way and answer questions. About $0.0002 a request, plus about $0.002 each time Tycho starts: an evening of play is usually a few cents.</li>
-          <li><b>OpenRouter</b>, instead of Anthropic: the same Claude through one OpenRouter key (set Who runs the brain under Settings, Brain). About what Anthropic charges, on your OpenRouter credit. Web search still needs the Anthropic key.</li>
+          <li><b>OpenRouter</b>, instead of Anthropic: the same Claude through one OpenRouter key (set Who runs the brain under Settings, Advanced). About what Anthropic charges, on your OpenRouter credit. Web search still needs the Anthropic key.</li>
           <li><b>ElevenLabs</b>: gives Tycho its voice. About 0.5 credits a character: a chatty hour is about 4,000 credits. Without it, Tycho answers with sounds.</li>
         </ul>
         <p class="${s.pack.can_press ? "note" : "warn-line"}">${s.pack.can_press ? "Without an Anthropic or OpenRouter key, only the built-in phrases work." : `Tycho needs an Anthropic or OpenRouter key to answer in ${esc(s.pack.name)}: it has no built-in phrases there.`}</p></div>${await keysView()}`;
@@ -161,7 +161,7 @@
           : `<p class="warn-line" id="noVoice">No ElevenLabs key yet, so Tycho answers with sounds. Add one in the Keys step to hear a voice; what you pick here is kept.</p>`}
         <div class="seg" role="group" aria-label="Voice">${v.names.map((n) => `<button type="button" aria-pressed="${n === mine}" data-voice="${esc(n)}">${esc(n)}</button>`).join("")}</div>
         ${mine ? "" : `<p class="note" id="voiceNow">Now: ${esc(v.setting)}. Pick one of these to change it.</p>`}
-        <p class="note">Its volume, and what Tycho calls you, are under Settings, Voice and sounds.</p></div>`;
+        <p class="note">Its volume, and what Tycho calls you, are under Settings, Voice.</p></div>`;
       body = ptt + mic + voice;
     } else if (name === "Privacy") {
       const leaves = `<div class="card frame"><h3>What leaves your PC</h3>
@@ -384,7 +384,8 @@
   async function settingsView() {
     data = await api.settings();
     if (tab === "Game and controls") setupState = await api.setup_state();
-    const names = [...data.groups.map((g) => g.name).filter((n) => n !== TILE), "Keys", "Updates"];
+    // Advanced last: what most players never need to change.
+    const names = [...data.groups.map((g) => g.name).filter((n) => n !== TILE && n !== ADVANCED), "Keys", "Updates", ADVANCED];
     if (!names.includes(tab)) tab = names[0];
     const tabs = `<div class="tabs" role="tablist">${names.map((n) => `<button type="button" role="tab" aria-selected="${n === tab}" data-tab="${esc(n)}">${esc(n)}</button>`).join("")}</div>`;
     let body;
@@ -393,7 +394,7 @@
     else {
       const group = data.groups.find((g) => g.name === tab);
       const rows = `<div class="rows">${group.rows.map(row).join("")}</div>`;
-      body = rows;
+      body = tab === ADVANCED ? `<p class="note" style="margin:0 0 10px">Most people never need these.</p>${rows}` : rows;
     }
     page.innerHTML = `<h1>Settings</h1><p class="lede">Changes apply at once and are saved to settings.toml. Most can also be said to Tycho; each says how.</p>${tabs}${body}`;
     page.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; render(); }));
@@ -403,6 +404,7 @@
   }
   // The Tile's own place: its settings beside a preview drawn by the Tile itself.
   const TILE = "The Tile";
+  const ADVANCED = "Advanced";
   async function tileView() {
     data = await api.settings();
     const group = data.groups.find((g) => g.name === TILE);

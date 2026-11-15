@@ -436,7 +436,7 @@ def test_a_game_tycho_only_advises_in_has_no_empty_pages(
     settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
     there = Setup(browser, path, first_run=False)
     there.page.get_by_role("button", name="Settings", exact=True).click()
-    there.page.get_by_role("tab", name="Game and controls").click()
+    there.page.get_by_role("tab", name="Advanced").click()
     expect(there.page.locator(".set", has_text="Game folder")).to_have_count(1)
     there.close()
 
@@ -496,6 +496,9 @@ def test_the_places_are_down_the_side_and_home_shows_one_thing_to_fix(
     expect(page.locator("#tilePreview")).to_have_attribute("src", re.compile("^data:image"))
     page.get_by_role("button", name="Settings", exact=True).click()
     expect(page.get_by_role("tab", name="The Tile")).to_have_count(0)
+    expect(page.get_by_role("tab")).to_have_text(
+        ["Voice", "Game and controls", "Safety", "Privacy", "Keys", "Updates", "Advanced"]
+    )
     # Switch game opens the game choice in Settings.
     page.locator("#switchGame").click()
     expect(page.get_by_role("tab", name="Game and controls")).to_have_attribute(

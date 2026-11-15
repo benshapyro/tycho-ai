@@ -231,14 +231,14 @@ def test_an_openrouter_key_is_checked_and_stored_from_the_window(
     assert bridge.keys()["openrouter"]["label"] == "OpenRouter"
 
 
-def test_the_brain_settings_are_on_their_own_tab(path: Path) -> None:
+def test_the_brain_settings_are_under_advanced(path: Path) -> None:
     bridge, _ = _bridge(path)
-    assert GROUPS["Brain"] == ("brain_provider", "brain_model", "brain_seconds")
+    assert GROUPS["Advanced"][:3] == ("brain_provider", "brain_model", "brain_seconds")
     rows = {r["name"]: r for g in bridge.settings()["groups"] for r in g["rows"]}  # type: ignore[union-attr]
     assert rows["brain_provider"]["choices"] == ["anthropic", "openrouter"]
     assert rows["brain_model"]["choices"] == ["Claude Haiku 5.5"]
     assert rows["brain_seconds"]["kind"] == "number"
-    for name in GROUPS["Brain"]:
+    for name in GROUPS["Advanced"][:3]:
         assert rows[name]["voice"] == "no"
     assert bridge.set("brain_provider", "openrouter")["applies"] == "restart"
 
