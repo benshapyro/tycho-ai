@@ -15,7 +15,6 @@ import pytest
 
 import tycho.desktop.setup
 from tycho import cli, settings
-from tycho.desktop import bridge as bridge_module
 from tycho.desktop import shell
 from tycho.desktop.bridge import Bridge
 from tycho.desktop.host import Host
@@ -183,7 +182,7 @@ def test_the_commands_page_reads_the_new_game_s_keybinds_at_once(
     def find_install(current: Settings) -> Settings:
         return current
 
-    monkeypatch.setattr(bridge_module.settings, "load", load)
+    monkeypatch.setattr(settings, "load", load)
     monkeypatch.setattr(bridge, "_game_pack", star_citizen)
     monkeypatch.setattr("tycho.games.find_install", find_install)
     monkeypatch.setattr("tycho.games.star_citizen.store.KeybindStore.load", read)

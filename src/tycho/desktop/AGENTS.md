@@ -4,7 +4,7 @@ One Tycho process: the voice loop on its own thread (`host.py`), the tray icon o
 
 ## Rules
 
-- **The page's only way into Python is `bridge.py`.** It checks everything it's given. Keys go in and never come out: no method returns a key.
+- **The page's only way into Python is the `bridge` package**: one `Bridge` object, its calls in a module per page (`settings_page`, `setup_page`, `commands_page`, `updates_page`, `tile_page`) over the shared `state`. Every public name on it is a call the page can make, and `tests/test_bridge_pages.py` checks they're exactly the ones the page uses. It checks everything it's given. Keys go in and never come out: no method returns a key.
 - **No local server.** The page loads from memory; pywebview's `js_api` is the bridge.
 - **The window must run on the main thread**, so the voice loop runs in `Host`. Live setting changes reach the loop through `Host.run_now`.
 - **pystray is LGPL:** the tray is our own Win32 code. Never add an LGPL or GPL dependency.
