@@ -25,7 +25,17 @@ class UpdatesPage(State):
             "version": __version__,
             "first_run": self._first_run,
             "ask_crash_reports": unasked and not self._first_run,
+            "can_quit": self._quit is not None,
         }
+
+    def quit(self) -> dict[str, object]:
+        """Stop Tycho, as Quit on the tray's menu does (#424): the icon can be hidden
+        among Windows' other icons, or gone. Any held key is let go first."""
+        if self._quit is None:
+            return {"ok": False, "problem": "Tycho isn't listening yet, so close this window."}
+        log.info("Quit from the window")
+        self._quit()
+        return {"ok": True}
 
     def status(self) -> list[Mapping[str, str]]:
         """The same checks as ``tycho check``, quick ones only."""

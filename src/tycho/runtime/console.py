@@ -22,8 +22,16 @@ WAIT_SECONDS = 4.0
 class CloseGuard:
     """While active, closing the window, logging off or Ctrl+Break stop Tycho safely."""
 
-    def __init__(self, request_stop: Callable[[], None], wait: float = WAIT_SECONDS) -> None:
+    def __init__(
+        self,
+        request_stop: Callable[[], None],
+        wait: float = WAIT_SECONDS,
+        ending: Callable[[], None] = lambda: None,
+    ) -> None:
+        """``ending`` is called last, just before Windows ends the process: nothing
+        Python registered to run at exit will (#428)."""
         self._request_stop = request_stop
+        self._ending = ending
         self._wait = wait
         self._finished = threading.Event()
         self._handler = win32.HANDLER_ROUTINE(self.on_event)  # kept referenced while installed
@@ -47,6 +55,7 @@ class CloseGuard:
             return False
         self._request_stop()
         self._finished.wait(self._wait)
+        self._ending()
         return True
 
 

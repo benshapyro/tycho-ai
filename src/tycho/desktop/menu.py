@@ -33,6 +33,11 @@ class HasTile(Protocol):
     @property
     def on(self) -> bool: ...
 
+    @property
+    def stopped(self) -> bool:
+        """Its window stopped while Tycho ran (#297): nothing can turn it back on."""
+        ...
+
 
 class TrayMenu:
     def __init__(
@@ -66,7 +71,10 @@ class TrayMenu:
         paused = self._session.paused
         items = [Item("open", "Open Tycho", default=True)] if self._window else []
         items.append(Item("pause", "Resume listening" if paused else "Pause listening"))
-        if self._display is not None:
+        if self._display is not None and self._display.stopped:
+            # Ticking it would do nothing (#428): say why, greyed out.
+            items.append(Item("tile", "The Tile stopped (start Tycho again)", enabled=False))
+        elif self._display is not None:
             items.append(Item("tile", "Show the Tile", checked=self._display.on))
         return [*items, SEPARATOR, Item("logs", "Open the logs folder"), Item("quit", "Quit Tycho")]
 
@@ -82,7 +90,7 @@ class TrayMenu:
 
             self._host.call(apply)
             log.info("Listening %s from the tray", "paused" if paused else "resumed")
-        elif key == "tile" and self._display is not None:
+        elif key == "tile" and self._display is not None and not self._display.stopped:
             on = not self._display.on
             try:
                 self._save({"tile": on})

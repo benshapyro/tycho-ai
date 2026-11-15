@@ -18,11 +18,15 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - Picking another game under Settings, Game and controls, now shows what Tycho does in that game before you switch, with a Back button. Before, one click restarted Tycho with it. ([#364](https://github.com/benshapyro/tycho-ai/issues/364))
 - If Tycho ever vanishes without a word (a crash deep inside Windows, the speech model or the sound system, which no error message can catch), it now leaves a record of what it was doing in its logs folder. The next time it starts, it tells you on the Tile that it stopped unexpectedly and where that file is, and `tycho check` and the window's status say so for a few days. Nothing is sent anywhere: the file stays on your PC, and holds no keys and nothing you said. ([#296](https://github.com/benshapyro/tycho-ai/issues/296))
 - If the Tile or Tycho's icon by the clock stops working while you play, Tycho now tells you once, and keeps listening. A lost icon is a card on the Tile (or spoken, if the Tile is off); a lost Tile is spoken, and from then on Tycho says its answers instead of putting them on a Tile you can't see. Before, both went silently. ([#297](https://github.com/benshapyro/tycho-ai/issues/297))
+- **Quit Tycho** is now a button in Tycho's window too (Settings, Updates). Before, the only Quit was on the icon by the clock, which Windows can hide and which can stop working. ([#424](https://github.com/benshapyro/tycho-ai/issues/424))
 
 ### Changed
 - Tycho's wording was gone through line by line, so one game's words don't turn up in another. `tycho check` now asks you to switch to the game you chose (it said Star Citizen whatever the game), and skips that test where Tycho presses no keys. The descriptions of the web search and Tile settings no longer talk about Star Citizen or a ship, and the ones that are Star Citizen's say so. In World of Warcraft: Forever, and in Star Citizen with key actions off, simple questions get shorter answers. ([#363](https://github.com/benshapyro/tycho-ai/issues/363))
 - With key actions off in Star Citizen, Tycho now names your own key when you say a built-in command ("night vision" gets "it's on Right Alt + N" if that's your key), instead of "your night vision key, if you've bound one". If the action has no key, it says so. ([#386](https://github.com/benshapyro/tycho-ai/issues/386))
 - With key actions off in Star Citizen, Tycho now names your own key however you ask, not only for the exact built-in phrases: "hit the brakes", "flashlight" and "can you get the lights" get your key instead of "check your keybinds". To do it, your key bindings (what each key does, nothing else) are now part of what Tycho sends to its brain when key actions are off. ([#392](https://github.com/benshapyro/tycho-ai/issues/392))
+
+### Fixed
+- Shutting down or signing out of Windows while Tycho runs, or closing its console window, no longer makes the next start say Tycho stopped unexpectedly. ([#428](https://github.com/benshapyro/tycho-ai/issues/428))
 
 ## [0.7.0] - 2026-11-13
 

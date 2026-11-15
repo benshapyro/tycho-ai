@@ -74,7 +74,6 @@ def test_with_no_tile_and_no_voice_its_the_not_done_sound_and_the_log(
 def test_the_session_still_answers_afterwards() -> None:
     async def test() -> Rig:
         r = rig("landing gear", display=FakeDisplay())
-        r.session.tell(SAID)  # before it runs: logged, and nothing breaks
         r.say()
         await r.session.idle()
         await r.session.close()
@@ -83,6 +82,67 @@ def test_the_session_still_answers_afterwards() -> None:
 
     r = run(test)
     assert [x.status for x in r.results] == ["done"]
+
+
+def test_what_is_told_before_the_voice_loop_runs_is_told_once_it_does() -> None:
+    # #428: the Tile's and the crash notice's words are set before the loop starts, and
+    # were only logged if they came then.
+    speaker = FakeSpeaker()
+    r = rig(speaker=speaker)
+    r.session.tell("Tycho stopped unexpectedly last time.")
+
+    async def test() -> None:
+        stop = asyncio.Event()
+        running = asyncio.create_task(r.session.run(stop))
+        await asyncio.sleep(0.05)
+        stop.set()
+        await running
+
+    run(test)
+    assert speaker.spoken == ["Tycho stopped unexpectedly last time."]
+
+
+def test_a_notice_waits_for_the_line_being_said() -> None:
+    # #428: it cut off an answer or a confirm question, which was never said again.
+    speaker = FakeSpeaker(seconds=0.05)
+    r = rig(speaker=speaker)
+
+    async def test() -> None:
+        stop = asyncio.Event()
+        running = asyncio.create_task(r.session.run(stop))
+        await asyncio.sleep(0.01)
+        r.session._voice.start(speaker, "Gear down.", lambda: None)  # pyright: ignore[reportPrivateUsage]
+        await asyncio.sleep(0.01)
+        r.session.tell(SAID)
+        await asyncio.sleep(0.2)
+        stop.set()
+        await running
+
+    run(test)
+    assert speaker.spoken == ["Gear down.", SAID]
+    assert speaker.stopped == []  # neither line was cut off
+
+
+def test_push_to_talk_stops_a_notice_and_the_line_before_it() -> None:
+    speaker = FakeSpeaker(hold=True)
+    r = rig(speaker=speaker)
+
+    async def test() -> None:
+        stop = asyncio.Event()
+        running = asyncio.create_task(r.session.run(stop))
+        await asyncio.sleep(0.01)
+        r.session._voice.start(speaker, "Gear down.", lambda: None)  # pyright: ignore[reportPrivateUsage]
+        await asyncio.sleep(0.01)
+        r.session.tell(SAID)
+        await asyncio.sleep(0.01)
+        r.session._voice.stop()  # pyright: ignore[reportPrivateUsage]
+        await asyncio.sleep(0.01)
+        stop.set()
+        await running
+
+    run(test)
+    assert speaker.spoken == ["Gear down."]
+    assert speaker.stopped == ["Gear down."]
 
 
 # --- The Tile ---------------------------------------------------------------------------
@@ -114,6 +174,7 @@ def test_a_tile_whose_window_stopped_is_off_and_says_so_once() -> None:
 
     assert whys == ["OSError: gone"]
     assert not display.on
+    assert display.stopped
     # The session then says an answer instead of showing a card nobody would see.
     assert not display.show(Card("notice", body=("Hello again.",)))
     assert display.frame(Screen(0, 0, 1920, 1080)) is None
@@ -362,3 +423,65 @@ def test_tycho_tells_the_player_the_tray_stopped_and_keeps_serving(
     assert outcome == "stopped"
     assert told == [shell.TRAY_STOPPED]
     assert served == ["still serving"]
+
+
+def test_windows_shutting_down_is_a_clean_stop_for_the_crash_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # #428: with Tycho in the tray at shutdown, nothing removed the crash file, so
+    # whatever a handled Windows exception had written read as a crash at the next start.
+    import tycho.desktop.host
+    import tycho.desktop.tray
+    from tycho import crashes
+
+    class Host:
+        restarting = False
+
+        def __init__(self, _voice: object) -> None:
+            self.on_quit: Any = None
+
+        def restart(self) -> bool:
+            return False
+
+        def ask(self, _request: str) -> None:
+            pass
+
+        def run(self, _open: object) -> None:
+            pass
+
+    window = SimpleNamespace(close=lambda: None, focus=lambda: None, open=lambda: True)
+
+    def app_window(**_options: object) -> SimpleNamespace:
+        return window
+
+    monkeypatch.setattr(tycho.desktop.tray, "TrayIcon", _Tray)
+    monkeypatch.setattr(tycho.desktop.host, "Host", Host)
+    monkeypatch.setattr(shell, "app_window", app_window)
+
+    async def serve(_stop: asyncio.Event | None) -> None:
+        raise AssertionError("the fake host never runs it")
+
+    def tell(_said: str) -> None:
+        pass
+
+    session = SimpleNamespace(paused=False, tell=tell)
+    shell.serve_with_tray(session, {}, None, serve=serve)  # type: ignore[arg-type]
+    assert _Tray.made.on_end_session == crashes.stop
+
+
+def test_the_tray_passes_the_end_of_the_session_on_and_survives_a_failure(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    ended: list[str] = []
+    tray = TrayIcon(lambda: "Tycho", list, lambda _key: None)
+    tray._end_session()  # nobody listening: nothing happens  # pyright: ignore[reportPrivateUsage]
+    tray.on_end_session = lambda: ended.append("ended")
+    tray._end_session()  # pyright: ignore[reportPrivateUsage]
+    assert ended == ["ended"]
+
+    def fails() -> None:
+        raise OSError("the disk is gone")
+
+    tray.on_end_session = fails
+    tray._end_session()  # pyright: ignore[reportPrivateUsage]
+    assert "Couldn't finish up" in caplog.text

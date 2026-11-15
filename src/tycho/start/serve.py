@@ -6,6 +6,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from tycho import crashes
 from tycho.packs import GameKeys
 
 if TYPE_CHECKING:
@@ -33,7 +34,8 @@ async def serve(
     def request_stop() -> None:
         loop.call_soon_threadsafe(stop.set)
 
-    with CloseGuard(request_stop):
+    # The window closing or Windows shutting down is a clean stop, not a crash (#428).
+    with CloseGuard(request_stop, ending=crashes.stop):
         try:
             await session.run(stop)
         finally:
