@@ -57,6 +57,7 @@ _FIELDS: Mapping[str, re.Pattern[str]] = {
     "time": re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ"),
 }
 _WINDOWS_ONLY = re.compile(r"[^\w .()-]")
+_WORD = re.compile(r"[a-z0-9]+")
 _MODULE = re.compile(r"[A-Za-z_][\w.]{0,120}")
 _FUNCTION = re.compile(r"[<>\w.]{1,120}")
 
@@ -93,14 +94,18 @@ def _frames(tb: TracebackType | None) -> Iterable[dict[str, object]]:
     so a path or a script name outside Tycho never goes in."""
     for frame, line in traceback.walk_tb(tb):
         module = str(frame.f_globals.get("__name__", ""))
-        if _is_tycho(frame.f_code.co_filename) and module.startswith("tycho"):
+        if module.startswith("tycho") and _is_tycho(frame.f_globals.get("__file__")):
             yield {"module": module, "function": frame.f_code.co_name, "line": line}
         else:
             package = module.split(".")[0]
             yield {"module": package if _MODULE.fullmatch(package) else "other"}
 
 
-def _is_tycho(filename: str) -> bool:
+def _is_tycho(filename: object) -> bool:
+    """Whether a frame's module file is inside Tycho. The module's ``__file__``, not the
+    code's ``co_filename``, which PyInstaller makes relative in the installed build."""
+    if not isinstance(filename, str):
+        return False
     try:
         return Path(filename).resolve().is_relative_to(_TYCHO)
     except OSError, ValueError:
@@ -117,9 +122,10 @@ def scrub(report: Mapping[str, Any], never: Iterable[str]) -> dict[str, Any] | N
     text = json.dumps(clean, ensure_ascii=False).lower()
     if logs.redact(text) != text:
         return None
+    words = set(_WORD.findall(text))
     for value in never:
-        value = value.strip().lower()
-        if len(value) >= 3 and value in text:
+        # Whole words, so the user name "ben" doesn't drop a report naming "bench".
+        if any(len(w) >= 3 and w in words for w in _WORD.findall(value.lower())):
             return None
     return clean
 
@@ -160,9 +166,9 @@ def _checked_frame(raw: object) -> dict[str, object]:
 
 
 def never_sent(call_me: Iterable[str] = ()) -> list[str]:
-    """Values that must never be in a report: the Windows user name, the home folder
-    and what Tycho calls the player. Stored keys are caught by ``logs.redact``."""
-    values = [os.environ.get("USERNAME", ""), os.environ.get("USER", ""), str(Path.home())]
+    """Values that must never be in a report: the Windows user name and what Tycho calls
+    the player. Stored keys are caught by ``logs.redact``; paths can't pass the patterns."""
+    values = [os.environ.get("USERNAME", ""), os.environ.get("USER", "")]
     return [v for v in (*values, *call_me) if v]
 
 
@@ -299,8 +305,21 @@ def install(
         if args.exc_value is not None and not isinstance(args.exc_value, SystemExit):
             kept(args.exc_value)
 
+    global _keep_crash
+    _keep_crash = kept
     sys.excepthook = hook
     threading.excepthook = thread_hook
+
+
+_keep_crash: Callable[[BaseException], None] | None = None
+
+
+def keep_crash(error: BaseException) -> None:
+    """Keep a report of a crash that something caught on its way out, such as the Start
+    menu's Tycho, which shows it in a message box (#429). Does nothing unless reports
+    were on when this Tycho started."""
+    if _keep_crash is not None and not isinstance(error, KeyboardInterrupt | SystemExit):
+        _keep_crash(error)
 
 
 def start(
