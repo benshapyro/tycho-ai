@@ -16,7 +16,7 @@ from pydantic import ValidationError
 from tests.fakes.fake_keys import FakeClock, FakeFocus, FakeKeySender
 from tests.fakes.fake_pack import FOLDER, REGISTRY, FakeGameKeybinds, fake_pack
 from tycho import paths, safety, settings
-from tycho.app import _checks, game_pack, load_commands  # pyright: ignore[reportPrivateUsage]
+from tycho.app import game_pack, load_commands
 from tycho.brain import RunActions
 from tycho.brain.briefing import (
     bound_actions,
@@ -27,6 +27,7 @@ from tycho.brain.briefing import (
 )
 from tycho.brain.claude import ClaudeBrain
 from tycho.commands import Command, CommandMatcher, Match
+from tycho.doctor import checks
 from tycho.games import BUILT_IN
 from tycho.input import Presser, code_for
 from tycho.keybinds import Action, Keybinds, KeyInput
@@ -466,7 +467,7 @@ def test_the_players_own_commands_are_per_game() -> None:
 
 
 def test_tycho_check_names_the_game_and_its_pack_version() -> None:
-    found = next(f for f in _checks(Settings(), quick=True, ask=False) if f.what == "Game")
+    found = next(f for f in checks(Settings(), quick=True, ask=False) if f.what == "Game")
     assert (found.level, found.detail) == ("ok", "Star Citizen (game pack 1.0.0)")
 
 

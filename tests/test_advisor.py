@@ -16,13 +16,14 @@ import pytest
 from tests.fakes.fake_keys import FakeFocus, FakeKeySender
 from tests.fakes.fake_pack import ADVISOR, REGISTRY, FakeGameKeybinds, advisor_pack, fake_pack
 from tycho import safety, settings
-from tycho.app import _checks, game_pack  # pyright: ignore[reportPrivateUsage]
+from tycho.app import game_pack
 from tycho.brain.briefing import briefing, core_sections, instructions
 from tycho.brain.claude import ClaudeBrain
 from tycho.brain.decisions import Decision, UnboundAction
 from tycho.brain.openrouter import OpenRouterBrain
 from tycho.brain.rounds import Round, Turn
 from tycho.commands import CommandMatcher, Match
+from tycho.doctor import checks
 from tycho.input import Presser, plan
 from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.packs import (
@@ -310,13 +311,13 @@ def test_a_keys_marker_that_isn_t_whole_is_refused(tmp_path: Path, line: str) ->
 
 
 def test_tycho_check_says_key_actions_are_on_for_star_citizen() -> None:
-    found = next(f for f in _checks(Settings(), quick=True, ask=False) if f.what == "Key actions")
+    found = next(f for f in checks(Settings(), quick=True, ask=False) if f.what == "Key actions")
     assert (found.level, found.detail) == ("ok", "on in Star Citizen: Tycho presses your keys")
 
 
 def test_tycho_check_says_key_actions_are_off_and_why() -> None:
     current = Settings(key_actions=False)
-    found = next(f for f in _checks(current, quick=True, ask=False) if f.what == "Key actions")
+    found = next(f for f in checks(current, quick=True, ask=False) if f.what == "Key actions")
     assert found.level == "ok"
     assert found.detail.startswith("off in Star Citizen, so Tycho answers")
     assert found.detail.endswith(YOU_TURNED_THEM_OFF)

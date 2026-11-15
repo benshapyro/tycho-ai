@@ -5,7 +5,7 @@ from typing import Any
 import httpx2
 import pytest
 
-from tycho import app, updates
+from tycho import doctor, updates
 from tycho.updates import Release, UpdateError
 
 URL = "https://github.com/benshapyro/tycho-ai/releases/tag/v1.2.0"
@@ -122,17 +122,17 @@ def test_latest_json_over_http(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_check_reports_a_newer_version(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(app, "__version__", "1.0.0")
-    finding = app.update_finding(answer(RELEASE))
+    monkeypatch.setattr(doctor, "__version__", "1.0.0")
+    finding = doctor.update_finding(answer(RELEASE))
     assert finding.level == "warn"
     assert "1.2.0" in finding.detail
-    assert app.update_finding(answer(RELEASE | {"tag_name": "v1.0.0"})).detail == (
+    assert doctor.update_finding(answer(RELEASE | {"tag_name": "v1.0.0"})).detail == (
         "1.0.0 is the latest"
     )
-    none_yet = app.update_finding(answer(None))
+    none_yet = doctor.update_finding(answer(None))
     assert none_yet.level == "ok"
     assert "no release published yet" in none_yet.detail
-    offline = app.update_finding(fail)
+    offline = doctor.update_finding(fail)
     assert offline.level == "ok"
     assert "couldn't check" in offline.detail
 
