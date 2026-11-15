@@ -60,8 +60,8 @@
   }
 
   // What the player said and what Tycho did, newest first: from memory, never saved.
-  function recentList(exchanges) {
-    if (!exchanges.length) return `<p class="note">Nothing yet. What you say and what Tycho did shows here until Tycho quits. It's never saved.</p>`;
+  function recentList(exchanges, empty = "Nothing yet. What you say and what Tycho did shows here until Tycho quits. It's never saved.") {
+    if (!exchanges.length) return `<p class="note">${esc(empty)}</p>`;
     const time = (at) => new Date(at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     return `<ol class="recent">${exchanges.map((e) => `<li class="${e.ok ? "ok" : "no"}"><span class="num">${esc(time(e.at))}</span>
       <span><b>“${esc(e.said)}”</b>${e.did ? `<small>${esc(e.did)}</small>` : ""}</span></li>`).join("")}</ol>`;
@@ -101,6 +101,11 @@
   let step = 0;
   let firstRun = false;
   let canQuit = false;
+  // Setup's Try it (ADR 17): while it's open, the running Tycho sends no keys. When it
+  // was turned on (seconds since 1970), so only what was said since shows; null: off.
+  let trying = null;
+  const TRIED_EMPTY = "Nothing yet. Hold your button, say something, and let go.";
+  const tried = (live) => live.exchanges.filter((e) => e.at >= trying);
   let askingCrash = false; // set up before crash reports existed: ask once (ADR 4)
   // A step is ticked when what it asks for is there, not when it was walked past: a
   // skipped one keeps its number, marked as still to do.
@@ -215,13 +220,24 @@
     } else {
       ok = s.ready;
       const say = s.pack.examples;
-      body = `<div class="card frame"><h3>${s.ready ? "Ready" : "Almost there"}</h3>
+      let tryCard = "";
+      if (!firstRun) {
+        if (trying === null) { const t = await api.try_it(true); trying = t.ok ? t.since : null; }
+        const live = trying === null ? null : await api.recent(false);
+        if (live) tryCard = `<div class="card frame" id="tryCard"><h3>Try it now</h3>
+          ${live.listening === false ? `<p class="warn-line">Tycho is paused. Resume it from its icon by the clock, then try.</p>`
+            : `<p>Tycho is listening. Hold <b>${esc(s.push_to_talk.name || "your button")}</b>, say something, and let go: what it heard and what it would do shows here.</p>`}
+          <p class="ok-line">✓ Nothing reaches the game while this step is open: Tycho shows the keys it would press instead.</p>
+          <div id="tried">${recentList(tried(live), TRIED_EMPTY)}</div>
+          <p class="note">Tycho tries with the settings it started with. Changes you made here apply when it restarts.</p></div>`;
+      }
+      body = tryCard + `<div class="card frame"><h3>${s.ready ? "Ready" : "Almost there"}</h3>
         ${s.todo.length ? `<div id="todo"><p class="warn-line">Tycho still needs:</p>${s.todo.map((t) => `<div class="keyrow"><span>${esc(t.what)}</span><button class="btn frame" type="button" data-goto="${esc(t.step)}">Go to ${esc(STEP_OF[t.step] || t.step)}</button></div>`).join("")}
           <p class="note">Or close this window and finish later: what you've chosen is kept.</p></div>` : ""}
         ${say.length ? `<div class="field"><label>Hold your button and say</label>${list(say.map((e) => `“${e}”`), "say")}</div>` : `<p>Hold your button and ask Tycho something about ${esc(s.pack.name)}.</p>`}
         ${brainKey(s) ? "" : `<p class="warn-line" id="noBrain">${s.pack.can_press ? "With no Anthropic or OpenRouter key, only the built-in phrases work: What to say lists them." : `With no Anthropic or OpenRouter key, Tycho can't answer in ${esc(s.pack.name)}. Add one in the Keys step.`}</p>`}
         ${list(s.pack.tips, "tips")}
-        <p class="note">${firstRun ? "Tycho starts listening when you press Start. Its star sits by the clock (if you don't see it, it's under the ^ arrow there): click it to open this window again, or open Tycho from the Start menu." : "Changes apply when Tycho next starts."}</p>
+        <p class="note">${firstRun ? "Press Start Tycho. Once it's listening, this window opens again here so you can try it, with nothing sent to the game. Its star sits by the clock (if you don't see it, it's under the ^ arrow there): click it to open this window again, or open Tycho from the Start menu." : "Changes apply when Tycho next starts."}</p>
         <span class="err" id="finishErr"></span></div>`;
     }
     const last = step === STEPS.length - 1;
@@ -268,7 +284,7 @@
         const r = await api.finish_setup();
         if (!r.ok) { $("#finishErr").textContent = r.problem; b.disabled = false; return; }
         if (!firstRun) { view = "status"; render(); }
-        else page.innerHTML = `<h1>Starting Tycho…</h1><p class="lede">This window closes in a moment. Tycho's star appears by the clock, or under the ^ arrow there. To open this window again, click the star or open Tycho from the Start menu.</p>`;
+        else page.innerHTML = `<h1>Starting Tycho…</h1><p class="lede">This window closes in a moment, and opens again here once Tycho is listening, so you can try it. The first start downloads the speech model, which can take a few minutes: Tycho's star by the clock (or under the ^ arrow there) says how it's going.</p>`;
         return;
       }
       step = Math.max(0, Math.min(STEPS.length - 1, step + delta));
@@ -667,6 +683,8 @@
   async function render() {
     // Left the question without answering: setup is as usual from here (#442).
     if (askingCrash && (view !== "setup" || STEPS[step] !== "Privacy")) askingCrash = false;
+    // Left Try it: Tycho presses keys again.
+    if (trying !== null && (view !== "setup" || STEPS[step] !== "Try it")) { trying = null; await api.try_it(false); }
     if (capturing) api.cancel_capture();
     document.querySelectorAll("nav [data-view]").forEach((b) => b.setAttribute("aria-current", b.dataset.view === view ? "page" : "false"));
     // The first run has the window to itself; run again, the places stay, so Home is a
@@ -710,11 +728,20 @@
     firstRun = Boolean(about.first_run);
     canQuit = Boolean(about.can_quit);
     if (firstRun) view = "setup";
+    else if (about.opening === "try_it") { view = "setup"; step = STEPS.indexOf("Try it"); }
     else if (about.ask_crash_reports) { askingCrash = true; view = "setup"; step = STEPS.indexOf("Privacy"); }
     await render();
     if (!firstRun) notice(await api.check_updates(false));
   }
   setInterval(() => { if (api) refreshRecent().catch(() => {}); }, 3000);
+  // Try it shows what was heard soon after the button is let go.
+  async function refreshTried() {
+    if (trying === null || !$("#tried") || document.hidden) return;
+    const live = await api.recent(false);
+    const box = $("#tried");
+    if (box && trying !== null) box.innerHTML = recentList(tried(live), TRIED_EMPTY);
+  }
+  setInterval(() => { if (api) refreshTried().catch(() => {}); }, 1000);
   if (window.TYCHO_FAKE) start(window.TYCHO_FAKE);
   else if (window.pywebview && window.pywebview.api) start(window.pywebview.api);
   else window.addEventListener("pywebviewready", () => start(window.pywebview.api));

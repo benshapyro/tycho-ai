@@ -57,6 +57,7 @@ def serve_with_tray(
     reopen: bool = False,
     windowed: bool = False,
     recent: Callable[[], Sequence[Exchange]] = lambda: [],
+    try_it: bool = False,
 ) -> Literal["stopped", "restart", "failed"]:
     """Run the session with Tycho's tray icon (ADR 17): pause, the Tile, the logs, quit.
     Without a tray (it couldn't start), the terminal only, as before; with no terminal
@@ -64,7 +65,8 @@ def serve_with_tray(
     the window picked a new game (#295), so the caller starts everything again;
     ``reopen`` opens the window at once, as it was before that restart. ``serve`` runs
     the session until the event it's given is set (``tycho.start.serve``); ``windowed``:
-    the Start menu's Tycho, with no terminal."""
+    the Start menu's Tycho, with no terminal. ``try_it``: a first run's setup just
+    finished, so the window opens at once on setup's Try it (ADR 17)."""
 
     from tycho.desktop.host import Host
     from tycho.desktop.menu import TrayMenu
@@ -85,6 +87,8 @@ def serve_with_tray(
         quit_tycho=lambda: host.ask("quit"),
         recent=recent,
         listening=lambda: not session.paused,
+        trying=lambda on: _try_it(session, on),
+        opening="try_it" if try_it else "",
     )
     host.on_quit = window.close
     host.window_open = lambda: window.is_open
@@ -114,7 +118,7 @@ def serve_with_tray(
         return "stopped"
     if requests is not None:
         requests.target = lambda: host.ask("open")
-    if reopen:
+    if reopen or try_it:
         host.ask("open")  # the window asked for the restart: it's back, on the new loop
     elif _crash_reports_unasked():
         host.ask("open")  # set up before crash reports: the window asks, once (ADR 4, #442)
@@ -125,6 +129,12 @@ def serve_with_tray(
             requests.target = lambda: None
         tray.close()
     return "restart" if host.restarting else "stopped"
+
+
+def _try_it(session: Session, on: bool) -> bool:
+    log.info("Try it %s", "on: nothing is sent to the game" if on else "off")
+    session.trying = on
+    return True
 
 
 def _crash_reports_unasked() -> bool:
@@ -146,6 +156,8 @@ def app_window(
     quit_tycho: Callable[[], None] | None = None,
     recent: Callable[[], Sequence[Exchange]] = lambda: [],
     listening: Callable[[], bool | None] = lambda: None,
+    trying: Callable[[bool], bool] = lambda _on: False,
+    opening: str = "",
 ) -> AppWindow:
     """Tycho's window and its bridge, for the first run and for the tray alike."""
     import dataclasses
@@ -172,6 +184,8 @@ def app_window(
         quit_tycho=quit_tycho,
         recent=recent,
         listening=listening,
+        trying=trying,
+        opening=opening,
     )
     window = AppWindow(bridge)
     return window

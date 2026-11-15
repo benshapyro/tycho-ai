@@ -9,6 +9,7 @@ pywebview in the app: each call it makes is a call on the ``Bridge``.
 import os
 import re
 import sys
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -78,9 +79,12 @@ class Setup:
         findings: list[dict[str, str]] | None = None,
         recent: Recent | None = None,
         listening: bool | None = None,
+        opening: str = "",
     ) -> None:
         self.path = path
         self.listening = listening
+        self.trying: list[bool] = []
+        """Try it turned on and off in the running Tycho, in order (ADR 17)."""
         self.pc = FakeSetupPC()
         self.finished: list[bool] = []
         self.restarts: list[bool] = []
@@ -96,6 +100,8 @@ class Setup:
             findings=lambda: findings or [],
             recent=recent.exchanges if recent is not None else list,
             listening=lambda: self.listening,
+            trying=lambda on: self.listening is not None and not self.trying.append(on),
+            opening=opening,
         )
         self.page: Page = browser.new_page()
         self.errors: list[str] = []
@@ -568,10 +574,68 @@ def test_home_says_its_listening_and_shows_the_last_exchanges_from_memory(
     expect(page.locator("#recent li")).to_have_count(2, timeout=6000)
     expect(page.locator("#recent li").first).to_contain_text("The game wasn't in front")
     expect(page.locator("#recent li.no")).to_have_count(1)
-    # Paused from the tray while Home is open: Home says so without a click.
+    # Paused from the tray while Home is open: Home says so without a click, and
+    # redraws only that line, not the checks (review of #463).
+    page.evaluate("document.getElementById('checks').dataset.kept = 'yes'")
     setup.listening = False
     expect(page.locator("#homeState h1")).to_have_text("Paused", timeout=6000)
+    expect(page.locator("#checks")).to_have_attribute("data-kept", "yes")
     setup.close()
+
+
+def test_after_a_first_run_try_it_is_real_and_sends_nothing(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """ADR 17: once Tycho listens after a first run, the window opens on setup's Try
+    it. What the player says shows there with what Tycho would press, and nothing
+    reaches the game until they leave the step."""
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    recent = Recent()
+    recent.add(Result(1, "done", text="from before", say="Old."))
+    setup = Setup(browser, path, first_run=False, recent=recent, listening=True, opening="try_it")
+    page = setup.page
+    setup.at("Try it")
+    card = page.locator("#tryCard")
+    expect(card).to_contain_text("Hold Mouse side (forward), say something")
+    expect(card).to_contain_text("Nothing reaches the game while this step is open")
+    expect(card.locator("#tried")).to_contain_text("Nothing yet")  # not what came before
+    assert setup.trying == [True]
+    time.sleep(0.05)  # what's said now is after Try it began
+    recent.add(Result(2, "done", text="gear down", would_press=("Landing System (N)",)))
+    expect(card.locator("#tried li")).to_have_count(1, timeout=4000)
+    expect(card.locator("#tried li")).to_contain_text("Would press Landing System (N).")
+    # Off to Home: Tycho presses keys again.
+    page.locator("nav [data-view='status']").click()
+    expect(page.locator("#homeState")).to_be_visible()
+    assert setup.trying == [True, False]
+    setup.close()
+
+
+def test_try_it_ends_when_the_player_goes_back_a_step(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    setup = Setup(browser, path, first_run=False, listening=True, opening="try_it")
+    setup.at("Try it")
+    expect(setup.page.locator("#tryCard")).to_be_visible()
+    setup.page.get_by_role("button", name="Back", exact=True).click()
+    setup.at("Privacy")
+    expect(setup.page.locator("#tryCard")).to_have_count(0)
+    assert setup.trying == [True, False]
+    setup.close()
+
+
+def test_a_first_runs_try_it_says_the_window_comes_back(setup: Setup) -> None:
+    """No Tycho is listening during a first run's setup: Try it says it opens again
+    once Tycho starts, rather than a test that hears nothing."""
+    page = setup.page
+    page.locator(".steps li").last.wait_for()
+    for _ in range(4):
+        setup.next()
+    setup.at("Try it")
+    expect(page.locator("#tryCard")).to_have_count(0)
+    expect(page.get_by_text("this window opens again here so you can try it")).to_be_visible()
+    assert setup.trying == []
 
 
 def test_home_has_no_exchanges_list_while_tycho_isnt_running(

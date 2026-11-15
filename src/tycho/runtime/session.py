@@ -168,6 +168,8 @@ class Session:
         self._keys = ThreadPoolExecutor(1, thread_name_prefix="tycho-keys")
         self._closed = False
         self._paused = False
+        self.trying = False
+        """Setup's Try it is open (ADR 17): plan every press as usual, send none."""
 
     def pause(self, paused: bool) -> None:
         """Paused, push-to-talk does nothing, from the next press (the tray, ADR 17).
@@ -434,6 +436,7 @@ class Session:
             sleep=self._sleep,
             progress=progress,
             trace=trace,
+            trying=self.trying,
         )
         return end(status, detail)
 

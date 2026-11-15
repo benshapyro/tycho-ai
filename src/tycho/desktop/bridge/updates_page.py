@@ -16,16 +16,20 @@ class UpdatesPage(State):
     def about(self) -> dict[str, object]:
         """``first_run``: Tycho is waiting for setup before it starts listening.
         ``ask_crash_reports``: set up before crash reports existed and never asked, so the
-        window opens on setup's Privacy step until the player answers (ADR 4, #199)."""
+        window opens on setup's Privacy step until the player answers (ADR 4, #199).
+        ``opening``: "try_it" the first time the window opens after a first run's
+        setup, so it opens on setup's Try it, now that Tycho is listening (ADR 17)."""
         try:
             unasked = settings.load(self._path).crash_reports is None
         except SettingsError:
             unasked = False  # the window says what's wrong with the file instead
+        opening, self._opening = self._opening, ""  # once: reopened later, it's Home
         return {
             "version": __version__,
             "first_run": self._first_run,
             "ask_crash_reports": unasked and not self._first_run,
             "can_quit": self._quit is not None,
+            "opening": opening,
         }
 
     def quit(self) -> dict[str, object]:

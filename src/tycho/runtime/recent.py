@@ -43,7 +43,11 @@ def exchange(result: Result, at: float) -> Exchange | None:
     if not result.text.strip() or result.status in ("empty", "cancelled"):
         return None
     ok = result.status in ("done", "replied", "asking")
-    if result.status == "asking":
+    if result.would_press:  # setup's Try it: nothing reached the game (ADR 17)
+        did = f"Would press {_joined(result.would_press)}."
+        if result.say:
+            did = f"{result.say} ({did})"
+    elif result.status == "asking":
         did = result.question or "Asked you to confirm."
     elif result.status in ("done", "replied"):
         did = result.say or ("Done." if result.status == "done" else "")
@@ -53,6 +57,11 @@ def exchange(result: Result, at: float) -> Exchange | None:
         # Other details are for the log: action ids and error text (review of #459).
         did = _WORDS.get(result.status, "")
     return Exchange(at, " ".join(result.text.split()), " ".join(did.split()), ok)
+
+
+def _joined(names: tuple[str, ...]) -> str:
+    """ "A", "A and B", "A, B and C"."""
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
 
 
 class Recent:

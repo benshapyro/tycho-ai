@@ -705,6 +705,46 @@ def test_without_game_focus_tycho_listens_but_does_not_press() -> None:
     assert r.feedback.played == ["not_done"]
 
 
+def test_during_setups_try_it_nothing_is_sent_and_tycho_says_what_it_would_press() -> None:
+    """ADR 17: every press is planned through the safety gate as usual, then reported
+    as "would press", never sent. The game needn't be in front."""
+
+    async def scenario() -> Rig:
+        r = rig("gear down and request landing", "eject", focus=FakeFocus(False))
+        r.session.trying = True
+        r.say()
+        await r.session.idle()
+        r.say()  # still asks first: the gate is the same
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert r.keys.events == []
+    tried, asked = r.results
+    assert tried.status == "done"
+    assert tried.pressed == ()
+    assert tried.would_press == ("v_toggle_landing_system (N)", "v_atc_request (Left Alt + N)")
+    assert tried.detail == "Try it: nothing was sent to the game"
+    assert asked.status == "asking"
+    assert r.actions.entries[0]["pressed"] == []
+
+
+def test_after_try_it_tycho_presses_again() -> None:
+    async def scenario() -> Rig:
+        r = rig("landing gear")
+        r.session.trying = True
+        r.session.trying = False
+        r.say()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert r.pressed() == _down_up("n")
+    assert r.results[0].would_press == ()
+
+
 def test_a_slip_of_the_finger_is_ignored_without_transcribing() -> None:
     async def scenario() -> Rig:
         r = rig("landing gear")

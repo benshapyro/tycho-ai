@@ -12,7 +12,7 @@ F6 tapped is "Engines - Increase"; F6 held is "Engines - Set to Max".
 from dataclasses import dataclass
 
 from tycho.input.keys import Code, code_for
-from tycho.keybinds import Action, ActivationMode, KeyInput
+from tycho.keybinds import Action, ActivationMode, KeyInput, key_text
 
 TAP_SECONDS = 0.06
 """How long a plain press or tap is held: long enough to register, short of any threshold."""
@@ -43,6 +43,8 @@ class Press:
     taps: int = 1
     gap_seconds: float = TAP_GAP_SECONDS
     label: str = ""
+    key: str = ""
+    """The key as the player knows it ("Left Alt + N"), for setup's Try it (ADR 17)."""
     min_hold_seconds: float = 0.0
     """A cancel lets go no sooner than this. For a hold past the tap window, letting go
     inside it would count as a tap, which on many keys is another action: mouse1 tapped
@@ -71,6 +73,7 @@ def plan(
         hold_seconds=hold,
         taps=action.taps,
         label=action.label,
+        key=key_text(key),
         min_hold_seconds=min(hold, SAFE_RELEASE_SECONDS) if hold > TAP_WINDOW_SECONDS else 0.0,
     )
 
