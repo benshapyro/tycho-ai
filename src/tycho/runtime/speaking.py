@@ -6,12 +6,15 @@ Everything here runs on the event loop.
 """
 
 import asyncio
+import contextlib
 import itertools
 import logging
 from collections.abc import Callable, Iterator
 
 from tycho.runtime.messages import Result
-from tycho.runtime.ports import Feedback, Speaker
+from tycho.runtime.ports import Display, Feedback, Speaker
+from tycho.safety import Safety
+from tycho.tile.cards import notice
 from tycho.voice import SpeechError
 
 log = logging.getLogger(__name__)
@@ -32,6 +35,36 @@ def log_failure(task: asyncio.Task[None]) -> None:
     """Put a background warm-up's failure in Tycho's log, not asyncio's stderr warning."""
     if not task.cancelled() and (e := task.exception()) is not None:
         log.error("Warming up failed: %s", e, exc_info=e)
+
+
+def refused_keys_off(result: Result, lists: Safety) -> bool:
+    """Whether a press was refused because key actions are off: the first one in a
+    session is told why (#327)."""
+    return bool(lists.keys_off) and result.status == "refused" and result.detail == lists.keys_off
+
+
+def tell_player(
+    loop: asyncio.AbstractEventLoop,
+    said: str,
+    display: Display | None,
+    voice: Speaking,
+    feedback: Feedback,
+) -> None:
+    """From any thread: something the player must know that no request asked for, as
+    the Tile or the tray icon stopping (#297). On the voice loop: a notice card if the
+    Tile can show one, otherwise said aloud, and with no voice either, the not-done
+    sound (the words are in the log)."""
+
+    def tell() -> None:
+        if voice.closed or (display is not None and display.show(notice(said))):
+            return
+        if voice.speaker is not None:
+            voice.start(voice.speaker, said, feedback.not_done)
+        else:
+            feedback.not_done()
+
+    with contextlib.suppress(RuntimeError):  # the loop closed: Tycho is stopping
+        loop.call_soon_threadsafe(tell)
 
 
 class Speaking:

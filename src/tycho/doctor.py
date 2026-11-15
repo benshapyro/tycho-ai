@@ -14,7 +14,7 @@ from typing import Any
 
 import numpy as np
 
-from tycho import __version__, paths, settings, updates
+from tycho import __version__, crashes, paths, settings, updates
 from tycho.audio.source import AudioError, microphone_device
 from tycho.brain_choice import brain_findings
 from tycho.commands import CommandFileError, CommandMatcher
@@ -169,6 +169,8 @@ def checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Finding
             fix=MODEL_HELP,
         )
     yield speech_finding(current)
+    if crashed := crashes.finding():  # a native crash in the last few days (#296)
+        yield crashed
 
     if not quick:
         yield from live_checks(current, pack)

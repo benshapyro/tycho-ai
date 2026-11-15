@@ -622,10 +622,13 @@ def test_the_windows_own_check_is_kept_an_hour_from_when_it_asked(
     path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """#376: it was kept per clock hour, so a check at 10:59 asked again at 11:00."""
-    import time
+    from types import SimpleNamespace
+
+    from tycho.desktop.bridge import updates_page
 
     now = [3599.0]
-    monkeypatch.setattr(time, "monotonic", lambda: now[0])
+    # Only the Updates page's clock (#420), not the whole process's.
+    monkeypatch.setattr(updates_page, "time", SimpleNamespace(monotonic=lambda: now[0]))
     latest, asked = _releases(None, NEWER)
     bridge, _ = _bridge(path, latest_release=latest)
     assert bridge.check_updates(False)["state"] == "none"
