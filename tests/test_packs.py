@@ -552,3 +552,13 @@ def test_a_pack_names_only_its_own_kinds_of_card(tmp_path: Path) -> None:
         load_pack(folder, built_in=False, registry=REGISTRY)
     assert dict(built_in(STAR_CITIZEN).tile.cards) == {"ship": "Ship specs", "fleet": "Your fleet"}
     assert dict(built_in("wow-forever").tile.cards) == {}
+
+
+def test_every_kind_of_card_has_a_name_or_is_a_games_own() -> None:
+    """Review of #466: a kind with no name would have no switch on the Tile page."""
+    from tycho.tile.cards import ALL_KINDS, BRAIN_KINDS, NAMES
+
+    for kind in ALL_KINDS:
+        assert kind == "confirm" or kind in NAMES or kind in BRAIN_KINDS, kind
+    games_own = {k for k in BRAIN_KINDS if k not in NAMES}
+    assert games_own <= set(built_in(STAR_CITIZEN).tile.cards)

@@ -303,8 +303,7 @@ class Settings(BaseModel):
         default="",
         description="Kinds of card not to show while the Tile is on, separated by commas "
         "(to hide the whole Tile, turn tile off), such as list, steps, warning, notice "
-        "or long. The window's Tile page lists your game's. Tycho still says them. "
-        "Questions waiting on you always show.",
+        "or long. Tycho still says them. Questions waiting on you always show.",
         json_schema_extra=_rule("yes", "now"),
     )
     crash_reports: bool | None = Field(
