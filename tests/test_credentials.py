@@ -7,7 +7,7 @@ import keyring.errors
 import pytest
 
 from tests.fakes.fake_keyring import MemoryKeyring
-from tycho import credentials
+from tycho import cli, credentials
 
 
 @pytest.fixture
@@ -93,21 +93,20 @@ def test_a_chosen_backend_is_left_alone(memory: MemoryKeyring) -> None:
 def test_tycho_key_stores_and_checks_a_key(
     memory: MemoryKeyring, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    from tycho import app
 
     def typed(prompt: str = "") -> str:
         return "sk-ant-test-123456789"
 
     monkeypatch.setattr(credentials.getpass, "getpass", typed)
     monkeypatch.setattr(credentials, "_interactive", lambda: True)
-    assert app.main(["key", "set", "anthropic"]) == 0
+    assert cli.main(["key", "set", "anthropic"]) == 0
     assert memory.store == {("tycho", "anthropic"): "sk-ant-test-123456789"}
-    assert app.main(["key", "check", "anthropic"]) == 0
+    assert cli.main(["key", "check", "anthropic"]) == 0
     out = capsys.readouterr().out
     assert "sk-ant-" in out
     assert "123456789" not in out  # only ever masked
-    assert app.main(["key", "delete", "anthropic"]) == 0
-    assert app.main(["key", "check", "anthropic"]) == 1
+    assert cli.main(["key", "delete", "anthropic"]) == 0
+    assert cli.main(["key", "check", "anthropic"]) == 1
 
 
 def test_tycho_key_check_says_a_stored_key_with_a_hidden_character_is_unusable(
@@ -181,11 +180,10 @@ def test_tycho_key_set_refuses_a_key_with_a_hidden_character(
     key: str,
 ) -> None:
     # It can't go in a request header, so it would stop Tycho starting (#246).
-    from tycho import app
 
     monkeypatch.setattr(credentials.getpass, "getpass", lambda prompt="": key)
     monkeypatch.setattr(credentials, "_interactive", lambda: True)
-    assert app.main(["key", "set", name]) == 1
+    assert cli.main(["key", "set", name]) == 1
     assert memory.store == {}
     assert "invisible" in capsys.readouterr().err
 
@@ -194,9 +192,8 @@ def test_tycho_key_set_refuses_a_key_with_a_hidden_character(
 
 
 def test_players_are_offered_only_the_keys_tycho_uses() -> None:
-    from tycho import app
 
-    parser = app.build_parser()
+    parser = cli.build_parser()
     assert parser.parse_args(["key", "set", "anthropic"]).name == "anthropic"
     assert parser.parse_args(["key", "check", "elevenlabs"]).name == "elevenlabs"
     # The brain's other provider (#112).
@@ -232,12 +229,11 @@ def test_a_bench_key_is_pointed_at_the_command_that_takes_it(
 
 
 def test_every_key_s_set_command_is_one_that_takes_it() -> None:
-    from tycho import app
 
     for name in credentials.PRODUCT:
         command = credentials.set_command(name).split()
         assert command[:3] == ["tycho", "key", "set"]
-        assert app.build_parser().parse_args(command[1:]).name == name
+        assert cli.build_parser().parse_args(command[1:]).name == name
     for name in credentials.BENCH:
         command = credentials.set_command(name).split()
         assert command[:5] == ["uv", "run", "python", "-m", "tycho.credentials"]

@@ -31,9 +31,9 @@ STAR_CITIZEN = ("tycho.games.star_citizen",)
 MAY_IMPORT_STAR_CITIZEN = ("tycho.games",)
 
 # The top of the program: the command line and starting Tycho. Only __main__ and the
-# command line import them. tycho.app is today's of both; step 7 (#398) splits it.
-TOP = ("tycho.app", "tycho.cli", "tycho.start")
-MAY_IMPORT_TOP = ("tycho.__main__", "tycho.cli", "tycho.app")  # app: until it becomes cli
+# command line import them.
+TOP = ("tycho.cli", "tycho.start")
+MAY_IMPORT_TOP = ("tycho.__main__", "tycho.cli")
 
 # Loading a DLL: calling one of these, or reading one of the loaders. Only tycho.win32
 # may (#298). A type hint such as ``-> ctypes.WinDLL`` loads nothing, so it's allowed.
@@ -211,12 +211,12 @@ def test_the_checks_see_a_break() -> None:
         "import ctypes\n"
         "from tycho.games.star_citizen.keybinds import Action\n"
         "def f():\n"
-        "    from tycho import app\n"
+        "    from tycho import cli\n"
         "    return ctypes.WinDLL('user32')\n"
     )
     imports = set(_imports("tycho.safety", tree))
     assert "tycho.games.star_citizen.keybinds" in imports
-    assert "tycho.app" in imports
+    assert "tycho.cli" in imports
     assert _loads_a_dll(tree)
     assert not _loads_a_dll(ast.parse("import ctypes\nx = ctypes.sizeof(ctypes.c_int)\n"))
     assert not _loads_a_dll(ast.parse("import ctypes\nu: ctypes.WinDLL = win32.user32()\n"))

@@ -15,7 +15,7 @@ from typing import Any, ClassVar
 
 import pytest
 
-from tycho import app, logs, win32
+from tycho import cli, logs, win32
 from tycho.desktop import shell
 from tycho.runtime import AlreadyRunning
 from tycho.runtime.instance import OpenRequests, ask_to_open
@@ -151,7 +151,7 @@ def test_with_no_terminal_no_button_is_explained(
     import tycho.desktop.setup
 
     monkeypatch.setattr(tycho.desktop.setup, "needs_setup", lambda _current: False)
-    monkeypatch.setattr(app.settings, "load", lambda: Settings())
+    monkeypatch.setattr(cli.settings, "load", lambda: Settings())
     assert start_run._run(Settings(), tmp_path / "log") == 1  # pyright: ignore[reportPrivateUsage]
     assert "push-to-talk" in capsys.readouterr().err
 
@@ -197,7 +197,7 @@ def test_the_windowed_app_shows_a_problem_in_a_message_box(
             shown.append(f"{title}: {text}")
             return 1
 
-    monkeypatch.setattr(app, "main", fails)
+    monkeypatch.setattr(cli, "main", fails)
     monkeypatch.setattr(start_run, "WINDOWED", False)  # windowed() sets it: put it back after
     monkeypatch.setattr(ctypes, "windll", type("Windll", (), {"user32": User32})())
     monkeypatch.setattr(sys, "stdout", sys.stdout)  # restored after the test
@@ -216,7 +216,7 @@ def test_the_windowed_app_is_quiet_when_tycho_quits_normally(
 
     entry = _entry_point()
     shown: list[str] = []
-    monkeypatch.setattr(app, "main", lambda _argv: 0)
+    monkeypatch.setattr(cli, "main", lambda _argv: 0)
     monkeypatch.setattr(start_run, "WINDOWED", False)
     monkeypatch.setattr(
         ctypes,
@@ -309,7 +309,7 @@ def test_while_starting_the_star_says_what_its_doing_and_a_second_start_says_wai
         lambda text, title, flags: User32.MessageBoxW(None, text, title, flags),
     )
     requests = _Requests()
-    starting = shell.Starting(requests)  # type: ignore[arg-type]  # pyright: ignore[reportPrivateUsage]
+    starting = shell.Starting(requests)  # type: ignore[arg-type]
     starting.doing("Getting the speech model (2.5 GB, once): 42%")
     assert _Tray.made[-1].tip() == "Tycho: Getting the speech model (2.5 GB, once): 42%…"
     requests.target()
@@ -321,7 +321,7 @@ def test_while_starting_the_star_says_what_its_doing_and_a_second_start_says_wai
 
 def test_download_progress_reaches_the_star() -> None:
     seen: list[str] = []
-    show = assemble.download_progress(doing=seen.append)  # pyright: ignore[reportPrivateUsage]
+    show = assemble.download_progress(doing=seen.append)
     show("encoder-model.onnx.data", 1_200_000_000, 2_400_000_000)
     show("vocab.txt", 10, 20)  # a small file isn't the wait
     assert seen == ["Getting the speech model (2.5 GB, once): 50%"]
@@ -349,7 +349,7 @@ def test_a_crash_box_shows_tycho_s_last_words_not_the_traceback(
             shown.append(text)
             return 1
 
-    monkeypatch.setattr(app, "main", crashes)
+    monkeypatch.setattr(cli, "main", crashes)
     monkeypatch.setattr(start_run, "WINDOWED", False)
     monkeypatch.setattr(ctypes, "windll", type("Windll", (), {"user32": User32})())
     monkeypatch.setattr(sys, "stdout", sys.stdout)
@@ -371,7 +371,7 @@ def test_tycho_can_be_quit_while_it_starts(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(tycho.desktop.tray, "TrayIcon", _Tray)
     quit_with: list[int] = []
     monkeypatch.setattr(shell.os, "_exit", quit_with.append)
-    starting = shell.Starting(None)  # pyright: ignore[reportPrivateUsage]
+    starting = shell.Starting(None)
     keys = [item.key for item in _Tray.made[-1].menu()]
     assert "quit" in keys
     _Tray.made[-1].chosen("quit")  # as the tray calls it (review of #180)
@@ -397,7 +397,7 @@ def test_the_still_starting_message_comes_to_the_front(monkeypatch: pytest.Monke
         "message_box",
         lambda text, title, flags: User32.MessageBoxW(None, text, title, flags),
     )
-    starting = shell.Starting(None)  # pyright: ignore[reportPrivateUsage]
+    starting = shell.Starting(None)
     starting.say()
     starting.close()
     assert flags[0] & 0x10000  # MB_SETFOREGROUND

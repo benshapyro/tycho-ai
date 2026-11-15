@@ -11,7 +11,8 @@ from typing import Any
 
 import pytest
 
-from tycho import app
+from tycho import cli
+from tycho.cli import commands
 from tycho.start import assemble
 from tycho.stt import ModelError, choice, cuda, models
 from tycho.stt.cuda import CudaLibraries, Wheel
@@ -138,7 +139,7 @@ def gpu(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     import importlib.util
 
     state = SimpleNamespace(driver=617)
-    monkeypatch.setattr(app.paths, "cuda_dir", lambda: tmp_path / "cuda")
+    monkeypatch.setattr(commands.paths, "cuda_dir", lambda: tmp_path / "cuda")
     monkeypatch.setattr("tycho.stt.nvidia_driver", lambda: state.driver)
     real = importlib.util.find_spec
 
@@ -152,9 +153,9 @@ def gpu(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
 def test_tycho_gpu_status_and_remove(
     gpu: SimpleNamespace, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert app.gpu_command("status") == 1
+    assert cli.gpu_command("status") == 1
     assert "Not installed (1.2 GB" in capsys.readouterr().out
-    assert app.gpu_command("remove") == 0
+    assert cli.gpu_command("remove") == 0
     assert "Nothing to remove" in capsys.readouterr().out
 
 
@@ -163,7 +164,7 @@ def test_tycho_gpu_install_needs_an_nvidia_card_and_driver(
     gpu: SimpleNamespace, driver: int | None, says: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     gpu.driver = driver
-    assert app.gpu_command("install") == 1
+    assert cli.gpu_command("install") == 1
     assert says in capsys.readouterr().out
 
 
@@ -209,7 +210,7 @@ def test_the_hint_fires_when_cuda_is_missing_and_not_when_memory_is_short(
     def no_cuda(current: Settings) -> DeviceChoice:
         return DeviceChoice("cpu", "CUDA isn't available")
 
-    monkeypatch.setattr(app.ModelStore, "ensure", present)
+    monkeypatch.setattr(commands.ModelStore, "ensure", present)
     monkeypatch.setattr(ParakeetTranscriber, "load", loaded)
     monkeypatch.setattr(assemble, "device_choice", no_cuda)
     caplog.set_level(logging.INFO)
@@ -234,12 +235,12 @@ def test_removing_while_tycho_runs_is_refused(
 
     libraries = CudaLibraries(tmp_path / "cuda", FakeDownloader(wheels))
     libraries.ensure()
-    monkeypatch.setattr(app.paths, "cuda_dir", lambda: tmp_path / "cuda")
+    monkeypatch.setattr(commands.paths, "cuda_dir", lambda: tmp_path / "cuda")
     with SingleInstance():  # this test plays the running Tycho
-        assert app.gpu_command("remove") == 2
+        assert cli.gpu_command("remove") == 2
     assert "Close it first" in capsys.readouterr().err
     assert libraries.ready()
-    assert app.gpu_command("remove") == 0
+    assert cli.gpu_command("remove") == 0
     assert not libraries.ready()
 
 

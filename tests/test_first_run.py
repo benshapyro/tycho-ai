@@ -360,7 +360,7 @@ def test_the_level_test_and_a_rescan_never_overlap(monkeypatch: pytest.MonkeyPat
 
     import numpy as np
 
-    importlib.import_module("tycho.app")  # up front, so the threads race on PortAudio alone
+    importlib.import_module("tycho.cli")  # up front, so the threads race on PortAudio alone
     from tycho.audio import microphone
 
     open_streams: list[str] = []

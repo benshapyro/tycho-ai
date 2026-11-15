@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tycho import app, doctor, settings
+from tycho import cli, doctor, settings
 from tycho.games.star_citizen import checks
 from tycho.games.star_citizen import install as found
 from tycho.games.star_citizen.install import GameInstall, launcher_roots, root_from, search_roots
@@ -79,9 +79,9 @@ def test_the_channel_setting_picks_ptu(tmp_path: Path, monkeypatch: pytest.Monke
     root = _game(_game(tmp_path), "PTU")
     monkeypatch.setattr(checks, "search_roots", lambda: ())
     current = Settings(game_root=root, game_channel="PTU")
-    assert app.find_install(current).folder == root / "PTU"
+    assert checks.find_install(current).folder == root / "PTU"
     with pytest.raises(FileNotFoundError, match="No Star Citizen EPTU"):
-        app.find_install(current.model_copy(update={"game_channel": "EPTU"}))
+        checks.find_install(current.model_copy(update={"game_channel": "EPTU"}))
 
 
 def test_any_level_of_folder_will_do(tmp_path: Path) -> None:
@@ -114,7 +114,7 @@ def test_check_saves_the_folder_it_was_given(
     root = _game(tmp_path / "StarCitizen")
     monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path / "config"))
     monkeypatch.setattr(checks, "search_roots", lambda: ())
-    monkeypatch.setattr(app.sys, "stdin", SimpleNamespace(isatty=lambda: True))
+    monkeypatch.setattr(cli.sys, "stdin", SimpleNamespace(isatty=lambda: True))
 
     def answer(channel: str) -> Path:
         return root
