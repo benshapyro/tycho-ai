@@ -15,7 +15,7 @@ from typing import Any, ClassVar
 
 import pytest
 
-from tycho import cli, logs, win32
+from tycho import cli, logs, settings, win32
 from tycho.desktop import shell
 from tycho.runtime import AlreadyRunning
 from tycho.runtime.instance import OpenRequests, ask_to_open
@@ -433,8 +433,46 @@ def test_once_listening_a_second_start_opens_the_trays_window(
     monkeypatch.setattr(tycho.desktop.tray, "TrayIcon", _Tray)
     monkeypatch.setattr(tycho.desktop.host, "Host", Host)
     monkeypatch.setattr(shell, "app_window", lambda **_options: _Window(_Requests()))
+    settings.save(Settings(crash_reports=False))  # asked already: no window at start
     requests = _Requests()
     session = SimpleNamespace(paused=False)
     outcome = shell.serve_with_tray(session, {}, None, requests, serve=_serve)  # type: ignore[arg-type]
     assert outcome == "stopped"
     assert asked == ["open"]
+
+
+@pytest.mark.parametrize(("answer", "opens"), [(None, ["open"]), (False, []), (True, [])])
+def test_a_player_never_asked_about_crash_reports_gets_the_window_at_start(
+    monkeypatch: pytest.MonkeyPatch, answer: bool | None, opens: list[str]
+) -> None:
+    """#442: set up before crash reports existed, the window opens once at start to ask,
+    even for a player who only uses the tray (ADR 4)."""
+    from types import SimpleNamespace
+
+    import tycho.desktop.host
+    import tycho.desktop.tray
+
+    asked: list[str] = []
+
+    class Host:
+        restarting = False
+
+        def __init__(self, _voice: object) -> None:
+            self.on_quit: Any = None
+
+        def ask(self, request: str) -> None:
+            asked.append(request)
+
+        def restart(self) -> bool:
+            return False
+
+        def run(self, _open: object) -> None:
+            pass
+
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=answer))
+    monkeypatch.setattr(tycho.desktop.tray, "TrayIcon", _Tray)
+    monkeypatch.setattr(tycho.desktop.host, "Host", Host)
+    monkeypatch.setattr(shell, "app_window", lambda **_options: _Window(_Requests()))
+    session = SimpleNamespace(paused=False)
+    shell.serve_with_tray(session, {}, None, serve=_serve)  # type: ignore[arg-type]
+    assert asked == opens

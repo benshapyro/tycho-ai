@@ -126,8 +126,11 @@ def scrub(report: Mapping[str, Any], never: Iterable[str]) -> dict[str, Any] | N
     words = set(_WORD.findall(text))
     for value in never:
         # Whole words, so the user name "ben" doesn't drop a report naming "bench".
-        if any(_long(w) and w in words for w in _WORD.findall(value.lower())):
-            return None
+        for word in _WORD.findall(value.lower()):
+            # Outside ASCII, scripts written without spaces ("田中さん") hide a name inside
+            # a longer word, so those are looked for anywhere in the text (#434).
+            if _long(word) and (word in words or (not word.isascii() and word in text)):
+                return None
     return clean
 
 

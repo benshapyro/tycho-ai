@@ -11,6 +11,7 @@ import pytest
 from tests.fakes.fake_display import FakeDisplay
 from tests.fakes.fake_speaker import FakeSpeaker
 from tests.test_runtime import Rig, rig, run
+from tycho import settings
 from tycho.desktop import shell
 from tycho.desktop.tray import TrayIcon
 from tycho.settings import Settings
@@ -351,6 +352,7 @@ def test_tycho_tells_the_player_the_tray_stopped_and_keeps_serving(
 
     monkeypatch.setattr(shell, "app_window", app_window)
     session = SimpleNamespace(paused=False, tell=told.append)
+    settings.save(Settings(crash_reports=False))  # asked already: the window stays shut
 
     async def serve(_stop: asyncio.Event | None) -> None:
         raise AssertionError("the fake host never runs it")
