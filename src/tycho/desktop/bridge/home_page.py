@@ -2,6 +2,7 @@
 last exchanges, read only. The exchanges come from memory (``runtime.recent``): the
 bridge hands them to the page and nowhere else."""
 
+import time
 from dataclasses import asdict
 
 from tycho import settings
@@ -27,3 +28,12 @@ class HomePage(State):
             "button": name or "",
             "exchanges": [asdict(e) for e in self._recent()],
         }
+
+    def try_it(self, on: object) -> dict[str, object]:
+        """Setup's Try it (ADR 17): on, the running Tycho plans every press as usual
+        and sends none, and Home's exchanges say what it would have pressed. ``ok``:
+        False while no Tycho is running (a first run's setup). ``since``: from when,
+        in seconds since 1970, so the page shows only what was said while trying."""
+        if not isinstance(on, bool):
+            return {"ok": False, "problem": "Try it is on or off."}
+        return {"ok": self._trying(on), "since": time.time()}

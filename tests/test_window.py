@@ -365,6 +365,10 @@ def test_the_tile_preview_shows_the_games_own_sample_card(path: Path) -> None:
     assert len(card.title) <= 40
     assert len(card.rows) == 6
     assert card.rows[0].text == "a b"
+    # A row with no text left is dropped, as the brain's is (review of #463).
+    blank = tile_page.Sample("t", rows=(("", "d", "1"), ("\x07", "", ""), ("kept", "", "2")))
+    shown = tile_page._card(blank).rows  # pyright: ignore[reportPrivateUsage]
+    assert [r.text for r in shown] == ["kept"]
     assert not any(
         word in tile_page.OWN_SAMPLE.title + str(tile_page.OWN_SAMPLE.rows)
         for word in ("ship", "Laranite", "Azeroth")
@@ -421,6 +425,7 @@ def test_nothing_private_is_offered_to_the_page() -> None:
             "status",
             "store_key",
             "tile_preview",
+            "try_it",
             "undo",
         ]
     )
@@ -511,15 +516,23 @@ def test_the_windows_checks_never_ask_in_the_terminal(monkeypatch: pytest.Monkey
 
 
 @pytest.mark.parametrize("starts", [True, False])
-def test_closing_the_window_stops_a_capture(monkeypatch: pytest.MonkeyPatch, starts: bool) -> None:
+def test_closing_the_window_stops_a_capture_and_try_it(
+    monkeypatch: pytest.MonkeyPatch, starts: bool
+) -> None:
+    """Closed on setup's Try it, Tycho presses keys again (ADR 17)."""
     from types import SimpleNamespace
 
     class Page:
         def __init__(self) -> None:
             self.cancelled = 0
+            self.trying: list[object] = []
 
         def cancel_capture(self) -> dict[str, object]:
             self.cancelled += 1
+            return {"ok": True}
+
+        def try_it(self, on: object) -> dict[str, object]:
+            self.trying.append(on)
             return {"ok": True}
 
     def start(**_options: object) -> None:
@@ -537,6 +550,7 @@ def test_closing_the_window_stops_a_capture(monkeypatch: pytest.MonkeyPatch, sta
     page = Page()
     assert window.AppWindow(page).open() is starts
     assert page.cancelled == 1
+    assert page.trying == [False]
 
 
 def test_the_window_comes_to_the_front_once_shown(monkeypatch: pytest.MonkeyPatch) -> None:

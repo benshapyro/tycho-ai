@@ -100,6 +100,10 @@ class AppWindow:
             cancel: Callable[[], object] | None = getattr(self._bridge, "cancel_capture", None)
             if cancel is not None:
                 cancel()
+            # Closed on setup's Try it: Tycho presses keys again (ADR 17).
+            trying: Callable[[bool], object] | None = getattr(self._bridge, "try_it", None)
+            if trying is not None:
+                trying(False)
         return True
 
     @property

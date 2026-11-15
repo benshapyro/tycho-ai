@@ -70,6 +70,9 @@ class Result:
     """The details of a reply, for the Tile (#2)."""
     confirmed: bool = False
     """The player said "confirm" to a question Tycho asked about this request."""
+    would_press: tuple[str, ...] = ()
+    """Setup's Try it (ADR 17): each key Tycho would have pressed, as the player knows
+    it ("Landing System (N)"). Nothing was sent: ``pressed`` stays empty."""
     timings: dict[str, float] = field(default_factory=dict[str, float])
     total_ms: float = 0.0
     keydown_ms: float | None = None
@@ -94,6 +97,7 @@ class Progress:
     question: str = ""
     keydown_ms: float | None = None
     card: Card | None = None
+    would_press: list[str] = field(default_factory=list[str])
 
     def result(
         self,
@@ -122,4 +126,5 @@ class Progress:
             timings=dict(trace.stages),
             total_ms=trace.total_ms,
             keydown_ms=self.keydown_ms,
+            would_press=tuple(self.would_press),
         )

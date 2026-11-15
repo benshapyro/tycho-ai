@@ -76,10 +76,12 @@ def _card(sample: Sample) -> Card:
         clean,
     )
 
+    # A row with no text left is dropped, as ``cards`` drops one from the brain.
     rows = tuple(
-        Row(clean(text, TEXT), clean(detail, DETAIL), clean(value, VALUE))
-        for text, detail, value in sample.rows[:DEFAULT_ROWS]
-    )
+        Row(shown, clean(detail, DETAIL), clean(value, VALUE))
+        for text, detail, value in sample.rows
+        if (shown := clean(text, TEXT))
+    )[:DEFAULT_ROWS]
     return Card(
         "list",
         title=clean(sample.title, TITLE),

@@ -81,3 +81,44 @@ def test_homes_poll_doesnt_read_the_settings_file(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(settings, "load", no_reading)
     bridge = Bridge(listening=lambda: True, latest_release=lambda: None)
     assert bridge.recent(False) == {"listening": True, "button": "", "exchanges": []}
+
+
+# --- setup's Try it (ADR 17) -----------------------------------------------------------
+
+
+def test_try_it_says_what_tycho_would_have_pressed() -> None:
+    one = Result(1, "done", text="gear down", would_press=("Landing System (N)",))
+    assert exchange(one, 0.0) == Exchange(0.0, "gear down", "Would press Landing System (N).", True)
+    chain = Result(
+        1,
+        "done",
+        text="gear and lights",
+        say="Gear down, lights on.",
+        would_press=("Landing System (N)", "Lights (L)", "Doors (K)"),
+    )
+    assert exchange(chain, 0.0) == Exchange(
+        0.0,
+        "gear and lights",
+        "Gear down, lights on. (Would press Landing System (N), Lights (L) and Doors (K).)",
+        True,
+    )
+
+
+def test_the_bridge_turns_try_it_on_and_off_in_the_running_tycho() -> None:
+    turned: list[bool] = []
+    bridge = Bridge(trying=lambda on: bool(turned.append(on)) or True, latest_release=lambda: None)
+    assert bridge.try_it(True)["ok"] is True
+    assert bridge.try_it(False)["ok"] is True
+    assert turned == [True, False]
+    assert bridge.try_it("yes") == {"ok": False, "problem": "Try it is on or off."}
+    assert turned == [True, False]
+    # No Tycho running (a first run's setup): nothing to try with.
+    assert Bridge(latest_release=lambda: None).try_it(True)["ok"] is False
+
+
+def test_after_a_first_run_the_window_opens_once_on_try_it(tmp_path: Path) -> None:
+    path = tmp_path / "settings.toml"
+    settings.save(settings.Settings(crash_reports=False), path)
+    bridge = Bridge(settings_path=path, opening="try_it", latest_release=lambda: None)
+    assert bridge.about()["opening"] == "try_it"
+    assert bridge.about()["opening"] == ""  # opened again from the tray: Home

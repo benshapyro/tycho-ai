@@ -98,6 +98,8 @@ def _run(
     # this start finds the last run's, if it crashed, and says so.
     crashed = crashes.watch(log_file.parent)
     start_update_check(current)
+    try_it = False
+    """A first run was set up in the window: it opens again on setup's Try it (ADR 17)."""
     if window and sys.platform == "win32":
         from tycho.desktop.setup import needs_setup
 
@@ -114,6 +116,7 @@ def _run(
             if outcome == "no_window":
                 # No window on this PC (no WebView2): set up in the terminal, as before.
                 print("Tycho's window can't open on this PC, so setup is here in the terminal.")
+            try_it = outcome == "done"
             current = settings.load()
     # The star while it starts, for a terminal `tycho run` too: a second start then
     # says it's still starting rather than nothing (review of #157).
@@ -134,6 +137,7 @@ def _run(
                 starting=starting,
                 reopen=reopen,
                 notices=notices,
+                try_it=try_it,
             )
         except GAME_ERRORS as e:
             if previous is None or previous.game == current.game:
@@ -151,7 +155,7 @@ def _run(
         # A new game was picked in the window (#295): everything loaded at start, again.
         log.info("Restarting with the settings as saved")
         previous, current, notices = current, settings.load(), []
-        reopen = True
+        reopen, try_it = True, False
         if previous.game != current.game and window and sys.platform == "win32":
             from tycho.desktop.setup import needs_setup
 
@@ -191,11 +195,13 @@ def _start(
     starting: shell.Starting | None,
     reopen: bool = False,
     notices: Sequence[str] = (),
+    try_it: bool = False,
 ) -> int:
     """Everything after setup: the speech model, the keybinds, the Tile, the
     microphone, then listening. ``RESTART`` if the window asked to start again;
     ``reopen`` opens the window once listening, as it was before a restart. ``notices``
-    are shown on the Tile once it's up (why a new game didn't start, #329)."""
+    are shown on the Tile once it's up (why a new game didn't start, #329). ``try_it``
+    opens the window once listening, on setup's Try it (ADR 17)."""
     from tycho.address import Address, Pronouncing
     from tycho.audio.microphone import Microphone
     from tycho.feedback import SoundDevicePlayer, SoundFeedback
@@ -299,6 +305,7 @@ def _start(
                     reopen=reopen,
                     windowed=WINDOWED,
                     recent=recent.exchanges,
+                    try_it=try_it,
                 )
                 if outcome == "failed":
                     return 1
