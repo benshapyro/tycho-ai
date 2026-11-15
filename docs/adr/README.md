@@ -20,6 +20,6 @@ Each record explains one decision: the context, what was decided, and what follo
 | [14](0014-the-brain-voice-and-sequences.md) | The brain, its voice, and sequences | Accepted |
 | [15](0015-knowledge.md) | Knowledge: look-ups, sources and the player's fleet | Accepted; amended after the source checks |
 | [16](0016-the-tile.md) | The Tile: a panel over the game, drawn by Tycho | Accepted; in-game checks to do |
-| [17](0017-the-app.md) | The app: one Tycho, a tray icon and a window | Accepted |
+| [17](0017-the-app.md) | The app: one Tycho, a tray icon and a window | Accepted; amended 15 Nov 2026 (the window's second layout) |
 | [18](0018-game-packs.md) | Game packs: data folders, built-in readers, and a hardened Windows app | Accepted |
 | [19](0019-code-layout.md) | Code layout: a thin entry point, game code behind its parts, and a size limit | Accepted |
