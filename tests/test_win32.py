@@ -84,3 +84,25 @@ def test_the_check_sees_the_calls() -> None:
     assert ("kernel32", "GetDriveTypeW") in called  # kernel32 = win32.kernel32()
     assert ("user32", "MessageBoxW") in called  # inside win32.py
     assert ("kernel32", "OpenProcess") in called  # user32, kernel32 = (..., ...)
+
+
+def test_a_dll_is_used_where_the_check_can_see_it() -> None:
+    # #407: the check above follows a DLL called inline or bound to a plain name. One
+    # kept on ``self`` or handed to a helper would hide its calls from it.
+    hidden: list[str] = []
+    for path in sorted(SRC.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.expr) or not _dll(node):
+                continue
+            parent = parents[node]
+            if isinstance(parent, ast.Tuple):
+                parent = parents[parent]
+            if isinstance(parent, ast.Attribute) or (
+                isinstance(parent, ast.Assign)
+                and all(isinstance(t, ast.Name | ast.Tuple) for t in parent.targets)
+            ):
+                continue
+            hidden.append(f"{path.relative_to(SRC).as_posix()}:{node.lineno}")
+    assert not hidden, f"call the DLL inline or bind it to a plain name: {hidden}"
