@@ -191,6 +191,7 @@ def hooks() -> Iterator[None]:
     before = sys.excepthook, threading.excepthook
     yield
     sys.excepthook, threading.excepthook = before
+    crash_reports._keep_crash = None  # pyright: ignore[reportPrivateUsage]
 
 
 @pytest.mark.parametrize("setting", [None, False])
@@ -266,3 +267,48 @@ def test_the_app_shows_crash_reports_as_a_privacy_switch(tmp_path: Path) -> None
     assert row["kind"] == "switch"
     assert row["value"] is None
     assert row["voice"] == "lower_only"
+
+
+# --- From #425's review (#429) ---------------------------------------------------------------
+
+
+def test_a_crash_caught_on_its_way_out_is_kept_too(hooks: None) -> None:
+    """The Start menu's Tycho catches every error to show a message box, so the hook
+    never sees it: it hands the error over instead."""
+    crash_reports.keep_crash(_crash())  # not installed: nothing
+    assert not paths.crash_reports_dir().exists()
+    crash_reports.install(lambda: True, CONTEXT, [NAME])
+    crash_reports.keep_crash(_crash())
+    assert len(list(paths.crash_reports_dir().glob("*.json"))) == 1
+
+
+def test_tycho_frames_keep_their_line_when_the_code_s_file_name_is_relative() -> None:
+    """PyInstaller makes co_filename relative (tycho\\runtime\\x.py): the module's own
+    __file__ still says it's Tycho's."""
+    code = compile("def boom():\n    raise ValueError('x')\n", r"tycho\fake.py", "exec")
+    space: dict[str, Any] = {"__name__": "tycho.fake", "__file__": crash_reports.__file__}
+    exec(code, space)  # noqa: S102
+    with pytest.raises(ValueError, match="x") as raised:
+        space["boom"]()
+    frames = build(raised.value, CONTEXT)["frames"]
+    assert {"module": "tycho.fake", "function": "boom", "line": 2} in frames
+
+
+def test_a_short_user_name_inside_a_longer_word_keeps_the_report(report: dict[str, Any]) -> None:
+    benched = {**report, "frames": [{"module": "tycho.bench", "function": "sample", "line": 1}]}
+    assert scrub(benched, ["ben", "sam"]) is not None
+    named = {**report, "frames": [{"module": "tycho.ben", "function": "f", "line": 1}]}
+    assert scrub(named, ["ben"]) is None
+
+
+def test_saying_no_by_voice_deletes_what_waits(waiting: Path, tmp_path: Path) -> None:
+    import asyncio
+
+    from tycho.spoken_settings import SettingsTool
+
+    path = tmp_path / "settings.toml"
+    settings.save(Settings(crash_reports=True), path)
+    tool = SettingsTool(path)
+    asyncio.run(tool.run({"action": "set", "changes": [{"name": "crash_reports", "value": "off"}]}))
+    assert settings.load(path).crash_reports is False
+    assert not list(waiting.glob("*.json"))
