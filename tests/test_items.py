@@ -10,7 +10,7 @@ import pytest
 
 from tests.fakes.fake_items import FakeItemsWiki, item
 from tests.fakes.fake_wiki import search_answer
-from tycho.games.star_citizen import WikiApi, WikiError, items
+from tycho.games.star_citizen import items
 from tycho.games.star_citizen.item_lookup import ItemLookup
 from tycho.games.star_citizen.items import (
     Found,
@@ -24,7 +24,7 @@ from tycho.games.star_citizen.items import (
     spoken,
     swapped,
 )
-from tycho.games.star_citizen.wiki import Hit, search
+from tycho.games.star_citizen.wiki import Hit, WikiApi, WikiError, search
 
 # --- Names --------------------------------------------------------------------------------------
 

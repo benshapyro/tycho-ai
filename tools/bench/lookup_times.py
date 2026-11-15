@@ -20,10 +20,11 @@ import time
 from collections.abc import Mapping
 
 from tycho.brain.lookups import Lookup, run_lookup
-from tycho.games.star_citizen import UexApi, WikiApi
 from tycho.games.star_citizen.item_lookup import ItemLookup
 from tycho.games.star_citizen.mining import MiningLookup
 from tycho.games.star_citizen.trade_lookup import trade_lookups
+from tycho.games.star_citizen.uex import UexApi
+from tycho.games.star_citizen.wiki import WikiApi
 
 QUESTIONS: list[tuple[str, str, Mapping[str, object]]] = [
     # "I'm in Pyro at Obituary", after "best route for refined gold" (play session, #150)

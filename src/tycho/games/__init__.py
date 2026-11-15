@@ -100,7 +100,9 @@ def _game_log(folder: Path) -> GameState:
 
 def _ship_lookup(workshop: Workshop) -> ShipLookup:
     from tycho import paths
-    from tycho.games.star_citizen import ShipLookup, UexApi, WikiApi
+    from tycho.games.star_citizen.ship_lookup import ShipLookup
+    from tycho.games.star_citizen.uex import UexApi
+    from tycho.games.star_citizen.wiki import WikiApi
 
     return workshop.shared(
         "ship_lookup",
@@ -127,22 +129,22 @@ def _fleet(workshop: Workshop) -> Built:
 
 
 def _items(_: Workshop) -> Built:
-    from tycho.games.star_citizen import WikiApi
     from tycho.games.star_citizen.item_lookup import ItemLookup
+    from tycho.games.star_citizen.wiki import WikiApi
 
     return Built((ItemLookup(WikiApi()),))
 
 
 def _mining(_: Workshop) -> Built:
-    from tycho.games.star_citizen import WikiApi
     from tycho.games.star_citizen.mining import MiningLookup
+    from tycho.games.star_citizen.wiki import WikiApi
 
     return Built((MiningLookup(WikiApi()),))
 
 
 def _trade(_: Workshop) -> Built:
-    from tycho.games.star_citizen import UexApi
     from tycho.games.star_citizen.trade_lookup import trade_lookups
+    from tycho.games.star_citizen.uex import UexApi
 
     return Built(tuple(trade_lookups(UexApi())))
 

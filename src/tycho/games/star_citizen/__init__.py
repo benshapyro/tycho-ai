@@ -6,25 +6,7 @@ Only ``tycho.games`` imports this package (the layout test checks it). Each sour
 a boundary (``WikiSource``) with a fake in tests, and each look-up satisfies
 ``tycho.brain.lookups.Lookup``. Data from outside is untrusted: it only ever shapes
 what Tycho says, never what it presses.
+
+Nothing is imported here: import a module (``star_citizen.ship_lookup``), so loading
+one part never loads the rest (#411).
 """
-
-from tycho.games.star_citizen.ship_lookup import ShipLookup
-from tycho.games.star_citizen.ships import Ambiguous, NotFound, Ship, ShipLibrary
-from tycho.games.star_citizen.trade_lookup import CommodityPrices, TradeRoutes, trade_lookups
-from tycho.games.star_citizen.uex import UexApi
-from tycho.games.star_citizen.wiki import WikiApi, WikiError, WikiSource
-
-__all__ = [
-    "Ambiguous",
-    "CommodityPrices",
-    "NotFound",
-    "Ship",
-    "ShipLibrary",
-    "ShipLookup",
-    "TradeRoutes",
-    "UexApi",
-    "WikiApi",
-    "WikiError",
-    "WikiSource",
-    "trade_lookups",
-]

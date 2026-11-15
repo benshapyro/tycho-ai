@@ -226,4 +226,4 @@ def test_the_checks_see_a_break() -> None:
     assert not _loads_a_dll(ast.parse("import ctypes\nu: ctypes.WinDLL = win32.user32()\n"))
     assert _loads_a_dll(ast.parse("import ctypes\nctypes.windll.user32.MessageBoxW()\n"))
     # A name re-exported by a package is traced to the module it comes from.
-    assert _origin("tycho.games.star_citizen", "UexApi") == "tycho.games.star_citizen.uex"
+    assert _origin("tycho.packs", "GamePack") == "tycho.packs.pack"

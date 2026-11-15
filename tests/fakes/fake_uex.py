@@ -4,7 +4,7 @@ commodities, terminals, prices and routes shaped like the real API's."""
 from collections.abc import Mapping
 from typing import Any
 
-from tycho.games.star_citizen import WikiError
+from tycho.games.star_citizen.wiki import WikiError
 
 NOW = 1_793_650_000
 """When the fake's prices were "reported" (a Unix time on 2 November 2026)."""

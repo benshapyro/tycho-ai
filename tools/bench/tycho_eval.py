@@ -82,14 +82,16 @@ from tycho.brain.rounds import NO_PRESS_AFTER_SEARCH
 from tycho.brain.traces import TraceFile
 from tycho.brain_choice import anthropic_key, openrouter_key
 from tycho.commands import Command, CommandMatcher, resolve
-from tycho.games.star_citizen import ShipLookup, UexApi, WikiApi
 from tycho.games.star_citizen.checks import find_install
 from tycho.games.star_citizen.data import ensure
 from tycho.games.star_citizen.fleet import Fleet, FleetUpdate
 from tycho.games.star_citizen.item_lookup import ItemLookup
 from tycho.games.star_citizen.mining import MiningLookup
+from tycho.games.star_citizen.ship_lookup import ShipLookup
 from tycho.games.star_citizen.store import KeybindStore
 from tycho.games.star_citizen.trade_lookup import trade_lookups
+from tycho.games.star_citizen.uex import UexApi
+from tycho.games.star_citizen.wiki import WikiApi
 from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.knowledge.web import WebSearch
 from tycho.lexicon import Lexicon
