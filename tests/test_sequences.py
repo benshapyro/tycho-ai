@@ -316,7 +316,10 @@ def test_a_phrase_the_lexicon_turns_into_the_sessions_own_words_is_warned_about(
     from tycho.commands import reserved
     from tycho.lexicon import Lexicon
 
-    monkeypatch.setattr(reserved, "_lexicon", lambda terms: Lexicon(["Confirmed"]))
+    def confirmed(_terms: tuple[str, ...]) -> Lexicon:
+        return Lexicon(["Confirmed"])
+
+    monkeypatch.setattr(reserved, "_lexicon", confirmed)
     assert reserved.reserved_for("konfirmed", SC.terms) == "question"
     matcher = _user(
         tmp_path,

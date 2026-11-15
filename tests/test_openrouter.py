@@ -52,13 +52,14 @@ GEAR = {"actions": ["v_toggle_landing_system"], "say": "Gear."}
 
 
 def _brain(client: FakeChat, *lookups: FakeLookup, **kwargs: Any) -> OpenRouterBrain:
+    kwargs.setdefault("pack", SC)
     return OpenRouterBrain(
         MATCHER,
         model=MODEL,
         client=client,
         lookups=lookups,
         today=lambda: datetime.date(2026, 11, 9),
-        **{"pack": SC, **kwargs},
+        **kwargs,
     )
 
 
