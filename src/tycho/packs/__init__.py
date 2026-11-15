@@ -4,6 +4,7 @@ Star Citizen is the first pack (``packs/star-citizen``). Its code (reading
 ``Data.p4k``, ``Game.log``, UEX and the Wiki) stays built in and is named by id.
 """
 
+from tycho.packs.onboarding import Setup
 from tycho.packs.pack import (
     CORE_SECTIONS,
     FORMATS,
@@ -48,6 +49,7 @@ __all__ = [
     "Parts",
     "Registry",
     "Safety",
+    "Setup",
     "Tile",
     "Workshop",
     "as_run",

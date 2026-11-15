@@ -155,7 +155,7 @@ def test_setup_can_finish_only_with_a_game_and_a_button(path: Path) -> None:
     bridge = _bridge(path, finish=lambda: finished.append("start"), first_run=True)
     assert bridge.finish_setup() == {
         "ok": False,
-        "problem": "Tycho still needs the game and a push-to-talk button.",
+        "problem": "Tycho still needs Star Citizen's folder and a push-to-talk button.",
     }
     bridge.set_channel("PTU")  # found, in the stand-in
     bridge.capture_push_to_talk()
@@ -472,12 +472,93 @@ def test_push_to_talk_conflicts_are_star_citizens_only_when_it_is_the_game(
     assert setup.WindowsPC().conflicts("mouse:0x06", Settings(game="wow-forever")) == []
 
 
-def test_the_setup_page_points_other_games_to_settings_and_leaves_gear_down_to_star_citizen() -> (
-    None
-):
-    """#341: a WoW-only PC saw only "Star Citizen wasn't found" and the folder button, and
-    the last step said to try "gear down" whatever the game."""
-    page = (Path(__file__).parents[1] / "src/tycho/desktop/app/app.js").read_text("utf-8")
-    assert "Playing another game? Choose it under Settings, Game and controls." in page
-    assert 's.game.needed ? "Play in Borderless Window mode' in page
-    assert "ask Tycho something about ${esc(s.game.name)}" in page
+def test_setup_starts_with_the_games_and_the_chosen_ones_own_words(path: Path) -> None:
+    """#364: setup named Star Citizen itself. Now the page gets the games to choose from
+    and the chosen pack's text, and says what Tycho still needs."""
+    bridge = _bridge(path, first_run=True)
+    state: Any = bridge.setup_state()
+    assert [p["id"] for p in state["packs"]] == ["star-citizen", "wow-forever"]
+    assert state["pack"]["id"] == "star-citizen"
+    assert state["pack"]["can_press"] is True
+    assert state["pack"]["examples"][0] == "gear down"
+    assert state["pack"]["folder_help"].startswith("The RSI Launcher")
+    assert state["todo"] == [
+        {"step": "Game", "what": "Star Citizen's folder"},
+        {"step": "Push-to-talk", "what": "a push-to-talk button"},
+    ]
+    assert state["ready"] is False
+    assert state["voice"] == {
+        "setting": "George",
+        "names": ["George", "Sarah", "Lily", "Brian"],
+        "key": False,
+    }
+
+    # Choosing another game on a first run saves it; nothing is running to restart.
+    assert bridge.set("game", "wow-forever")["applies"] == "restart"
+    state = bridge.setup_state()
+    assert state["pack"]["name"] == "World of Warcraft: Forever"
+    assert state["pack"]["can_press"] is False
+    assert "Blizzard" in state["pack"]["why"]
+    assert state["pack"]["folder_help"] == ""
+    assert state["game"]["needed"] is False
+    assert state["todo"] == [{"step": "Push-to-talk", "what": "a push-to-talk button"}]
+
+
+def test_what_leaves_the_pc_follows_the_game_and_the_settings(path: Path) -> None:
+    bridge = _bridge(path)
+    leaves: Any = bridge.setup_state()["leaves"]
+    to = [row["to"] for row in leaves]
+    assert to[:3] == ["Anthropic (Claude)", "ElevenLabs", "Anthropic (web search)"]
+    assert to[-2:] == ["GitHub", "Hugging Face"]
+    assert "bound actions" in leaves[0]["what"]
+    assert "On now" in leaves[2]["when"]
+    assert any("UEX Corp" in row["what"] for row in leaves if row["to"] == "Star Citizen look-ups")
+
+    settings.update({"web_search": False, "brain_provider": "openrouter"}, path)
+    leaves = bridge.setup_state()["leaves"]
+    assert leaves[0]["to"] == "OpenRouter, then Anthropic"
+    assert "Off now" in leaves[2]["when"]
+
+    # An advisor game with no look-ups: no keybinds to send, no search, no game services.
+    settings.update({"game": "wow-forever"}, path)
+    leaves = bridge.setup_state()["leaves"]
+    assert [row["to"] for row in leaves] == [
+        "OpenRouter, then Anthropic",
+        "ElevenLabs",
+        "GitHub",
+        "Hugging Face",
+    ]
+    assert "bound actions" not in leaves[0]["what"]
+
+
+def test_a_game_about_to_be_picked_shows_its_own_setup_and_changes_nothing(path: Path) -> None:
+    """#364: picking a game in Settings switched at once, with no word on what Tycho
+    does there."""
+    settings.update({"push_to_talk": "mouse:0x06", "game_channel": "PTU"}, path)
+    bridge = _bridge(path)
+    shown: Any = bridge.pack_setup("wow-forever")
+    assert shown["ok"] is True
+    assert shown["chosen"] is False
+    assert shown["pack"]["name"] == "World of Warcraft: Forever"
+    assert len(shown["pack"]["examples"]) == 3
+    assert shown["game"]["needed"] is False
+    assert settings.load(path).game == "star-citizen"
+    here: Any = bridge.pack_setup("star-citizen")
+    assert here["chosen"] is True
+    assert here["game"]["found"] is True
+    for bad in ("no-such-game", "../star-citizen", 7, None):
+        assert bridge.pack_setup(bad) == {
+            "ok": False,
+            "problem": "Tycho has no game pack by that name.",
+        }
+
+
+def test_a_missing_game_is_named_by_its_pack(monkeypatch: pytest.MonkeyPatch) -> None:
+    import tycho.games
+
+    def install(current: Settings) -> object:
+        raise FileNotFoundError
+
+    monkeypatch.setattr(tycho.games, "find_install", install)
+    found = setup.WindowsPC().game(Settings(game_channel="PTU"))
+    assert found.problem == "Star Citizen PTU wasn't found"

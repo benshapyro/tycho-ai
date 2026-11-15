@@ -13,6 +13,8 @@ plain message (``PackError``). What a pack may hold:
     safety.toml    the safety gate's lists: what asks first, and what a mode switches off
     eval/cases.toml  the pack's own brain eval cases (tools/bench/tycho_eval.py --pack)
 
+The manifest's ``[setup]`` table is what setup says about the game (``onboarding``, #364).
+
 Packs load only from inside Tycho for now (``built_in``): a folder a player adds isn't
 loaded until ADR 8's trust questions are answered. ``built_in`` on the pack records
 where it came from, because some lists may only come from a pack Tycho ships.
@@ -28,6 +30,8 @@ from importlib.resources.abc import Traversable
 from types import MappingProxyType
 from typing import Literal, cast
 
+from tycho.packs import onboarding
+from tycho.packs.onboarding import Setup
 from tycho.packs.parts import Registry
 
 FORMATS = frozenset({1})
@@ -62,7 +66,7 @@ _FILES = frozenset(
 )
 _TOP = frozenset(
     {"id", "name", "version", "format", "mode", "why", "window", "parts", "web", "briefing"}
-    | {"call_me"}
+    | {"call_me", "setup"}
 )
 _PARTS = frozenset({"install", "keybinds", "game_state", "lookups"})
 
@@ -154,6 +158,8 @@ class GamePack:
     """What Tycho calls the player in this game while they keep Tycho's default name
     (#349): "Commander" is Star Citizen's, so World of Warcraft: Forever has "" (nothing).
     None keeps Tycho's default. A name the player chose always wins (``address``)."""
+    setup: Setup = field(default_factory=Setup)
+    """What setup says about this game: the pack's own words (#364)."""
 
 
 def load_pack(folder: Traversable, *, built_in: bool, registry: Registry | None = None) -> GamePack:
@@ -231,6 +237,12 @@ def load_pack(folder: Traversable, *, built_in: bool, registry: Registry | None 
             f"{where}: call_me must be a name of up to 40 letters, digits, spaces, "
             'apostrophes, hyphens or full stops, or "" for none'
         )
+    try:
+        setup = onboarding.read(
+            manifest.get("setup", {}), where, has_folder=parts.install is not None
+        )
+    except ValueError as e:
+        raise PackError(str(e)) from e
     return GamePack(
         id=pack_id,
         name=name,
@@ -251,6 +263,7 @@ def load_pack(folder: Traversable, *, built_in: bool, registry: Registry | None 
         continuous=_pattern(filters.get("continuous"), where),
         built_in=built_in,
         call_me=" ".join(call_me.split()) if call_me is not None else None,
+        setup=setup,
     )
 
 

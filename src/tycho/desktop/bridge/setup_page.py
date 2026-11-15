@@ -1,5 +1,9 @@
 """Setup: the choices made with their own controls (the game's folder, a button press,
-a microphone), saved as they're made; on a first run, finishing starts Tycho."""
+a microphone), saved as they're made; on a first run, finishing starts Tycho.
+
+Setup starts with the game (#364), and everything it says about a game is that game
+pack's own text (``packs.onboarding``): nothing here names one.
+"""
 
 import dataclasses
 import logging
@@ -10,21 +14,46 @@ from typing import cast
 from tycho import settings
 from tycho.desktop import setup
 from tycho.desktop.bridge.commands_page import CommandsPage
-from tycho.desktop.bridge.settings_page import SettingsPage
+from tycho.desktop.bridge.settings_page import SettingsPage, shown_packs
 from tycho.desktop.bridge.state import DEVICES_SECONDS, UNDO_DEPTH, plain_error, setting_choices
+from tycho.packs import STAR_CITIZEN, GamePack, PackError, built_in
 from tycho.settings import Settings, SettingsError
+from tycho.voice import voices
 
 log = logging.getLogger(__name__)
 
 
 class SetupPage(SettingsPage, CommandsPage):
     def setup_state(self) -> dict[str, object]:
-        """Everything setup shows: the game, push-to-talk, the microphone, the keys."""
+        """Everything setup shows: the games and the chosen one's own words, its folder,
+        the keys, push-to-talk, the microphone, the voice, what leaves the PC, and what
+        Tycho still needs before it can start."""
         current = settings.load(self._path)
         game = self._game(current)
         ptt = current.push_to_talk
+        pack = self._shipped_pack(current)
+        keys = self.keys()
+        todo = [
+            {"step": step, "what": what}
+            for step, what, ok in (
+                ("Game", f"{game.name}'s folder", game.found),
+                ("Push-to-talk", "a push-to-talk button", ptt is not None),
+            )
+            if not ok
+        ]
         return {
             "game": dataclasses.asdict(game),
+            "packs": shown_packs(),
+            "pack": _pack_shown(pack, current),
+            "voice": {
+                "setting": current.voice,
+                "names": [v.name for v in voices.SHORTLIST.values() if not v.own_account],
+                "key": bool(keys["elevenlabs"].get("stored"))
+                and not keys["elevenlabs"].get("unusable"),
+            },
+            "leaves": _leaves(pack, current),
+            "crash_reports": current.crash_reports,  # None: not asked yet (ADR 4)
+            "todo": todo,
             "channels": list(setting_choices(Settings.model_fields["game_channel"].annotation)),
             "push_to_talk": {
                 "set": ptt is not None,
@@ -32,8 +61,26 @@ class SetupPage(SettingsPage, CommandsPage):
                 "conflicts": self._conflicts(ptt, current) if ptt else [],
             },
             "microphone": {"setting": current.microphone or "", "devices": self._devices()},
-            "keys": self.keys(),
-            "ready": ptt is not None and game.found,
+            "keys": keys,
+            "ready": not todo,
+        }
+
+    def pack_setup(self, pack_id: object) -> dict[str, object]:
+        """A game the player is about to switch to (#364): its pack's own words, and
+        whether its folder is found, before anything changes."""
+        try:
+            pack = built_in(pack_id) if isinstance(pack_id, str) else None
+        except PackError:
+            pack = None
+        if pack is None:
+            return {"ok": False, "problem": "Tycho has no game pack by that name."}
+        current = settings.load(self._path)
+        there = current.model_copy(update={"game": pack.id})
+        return {
+            "ok": True,
+            "pack": _pack_shown(pack, current),
+            "game": dataclasses.asdict(setup.game(there, self._pc, pack)),
+            "chosen": current.game == pack.id,
         }
 
     def set_channel(self, channel: object) -> dict[str, object]:
@@ -101,10 +148,11 @@ class SetupPage(SettingsPage, CommandsPage):
     def finish_setup(self) -> dict[str, object]:
         """Setup is done: on a first run, Tycho starts."""
         current = settings.load(self._path)
+        game = self._game(current)
         missing = [
             what
             for what, ok in (
-                ("the game", self._game(current).found),
+                (f"{game.name}'s folder", game.found),
                 ("a push-to-talk button", current.push_to_talk is not None),
             )
             if not ok
@@ -127,6 +175,15 @@ class SetupPage(SettingsPage, CommandsPage):
             self._undo = [*self._undo, (name, before)][-UNDO_DEPTH:]
         return {"ok": True, "applies": "start" if self._first_run else "restart"}, current
 
+    def _shipped_pack(self, current: Settings) -> GamePack:
+        """The chosen game's pack as it ships: its own mode and why, whatever the
+        player's ``key_actions`` (setup shows both)."""
+        try:
+            return built_in(current.game)
+        except PackError:  # tycho check and the status page say why
+            log.exception("The chosen game's pack didn't load")
+            return built_in(STAR_CITIZEN)
+
     # Slow look-ups, kept while their inputs are the same.
 
     def _game(self, current: Settings) -> setup.Game:
@@ -142,3 +199,72 @@ class SetupPage(SettingsPage, CommandsPage):
         # Microphones come and go, so a new list each time setup is shown, not each click.
         key = time.monotonic() // DEVICES_SECONDS if not fresh else time.monotonic()
         return list(cast(list[str], self._cached("devices", key, self._pc.microphones)))
+
+
+def _pack_shown(pack: GamePack, current: Settings) -> dict[str, object]:
+    """A game pack as setup shows it: its own words, and whether Tycho presses keys there."""
+    return {
+        "id": pack.id,
+        "name": pack.name,
+        "can_press": pack.mode == "keys",
+        "key_actions": current.key_actions,
+        "why": pack.why,
+        "intro": pack.setup.intro,
+        "lookups": list(pack.setup.lookups),
+        "examples": list(pack.setup.examples),
+        "tips": list(pack.setup.tips),
+        "folder_help": pack.setup.folder,
+    }
+
+
+def _leaves(pack: GamePack, current: Settings) -> list[dict[str, str]]:
+    """What leaves the PC with this game and these settings, for setup's privacy step:
+    who gets it, what, and when. The game's own look-ups are in its pack's words."""
+    brain = {"anthropic": "Anthropic (Claude)", "openrouter": "OpenRouter, then Anthropic"}[
+        current.brain_provider
+    ]
+    said = "What you said, as text, and your last few requests with what Tycho did"
+    if pack.parts.keybinds is not None:
+        said += "; your bound actions with their keys, and your commands"
+    rows = [
+        {
+            "to": brain,
+            "what": said,
+            "when": "Requests the built-in phrases don't handle, and one warm-up request "
+            "when Tycho starts. Never without your key.",
+        },
+        {
+            "to": "ElevenLabs",
+            "what": "The text Tycho speaks",
+            "when": "When Tycho speaks. Never without your key.",
+        },
+    ]
+    if "web" in pack.parts.lookups:
+        rows.append(
+            {
+                "to": "Anthropic (web search)",
+                "what": "A short search query Claude writes from your question",
+                "when": "Questions Tycho's look-ups don't cover. "
+                + ("On now" if current.web_search else "Off now")
+                + ": Settings, Privacy.",
+            }
+        )
+    lookups = f"{pack.name} look-ups"
+    rows += [{"to": lookups, "what": line, "when": ""} for line in pack.setup.sends]
+    rows.append(
+        {
+            "to": "GitHub",
+            "what": "Nothing about you: Tycho asks whether a newer version is out",
+            "when": "When Tycho starts and when this window opens. "
+            + ("On now" if current.check_for_updates else "Off now")
+            + ": Settings, Privacy.",
+        }
+    )
+    rows.append(
+        {
+            "to": "Hugging Face",
+            "what": "Nothing about you: Tycho downloads its speech model",
+            "when": "Once, the first time Tycho starts.",
+        }
+    )
+    return rows
