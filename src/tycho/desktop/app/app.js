@@ -49,6 +49,7 @@
   const STEPS = ["Game", "Push-to-talk", "Microphone", "Keys", "Done"];
   let step = 0;
   let firstRun = false;
+  let canQuit = false;
   function stepper() {
     return `<ol class="steps">${STEPS.map((s, i) => `<li class="${i < step ? "done" : i === step ? "now" : ""}"><b>${i < step ? "✓" : i === STEPS.length - 1 ? "✦" : i + 1}</b>${esc(s)}</li>`).join("")}</ol>`;
   }
@@ -302,8 +303,11 @@
     return `<div class="card frame"><h3>You have Tycho <span class="num">${esc($("#ver").textContent)}</span></h3>
         <div class="keyrow"><button class="btn primary frame" type="button" id="checkUpdates">Check for updates</button><span id="updateMsg"></span></div>
         <div class="keyrow" id="getRow" ${lastUpdate.state === "newer" ? "" : "hidden"}><button class="btn frame" type="button" id="getUpdate">${lastUpdate.state === "newer" ? `Get Tycho ${esc(lastUpdate.latest)}` : ""}</button><span class="err" id="getErr"></span></div>
-        <p class="note">Tycho never updates itself. The release page has the installer: quit Tycho from the tray, run it, and it installs over this version. Your settings and keys stay.</p>
-        <p class="note">${auto && auto.value ? "Tycho also checks each time its window opens, and says so at the top." : "Automatic checks are off (Privacy tab), so Tycho only checks when you press the button."}</p></div>`;
+        <p class="note">Tycho never updates itself. The release page has the installer: quit Tycho (below, or from its icon by the clock), run it, and it installs over this version. Your settings and keys stay.</p>
+        <p class="note">${auto && auto.value ? "Tycho also checks each time its window opens, and says so at the top." : "Automatic checks are off (Privacy tab), so Tycho only checks when you press the button."}</p></div>
+      ${canQuit ? `<div class="card frame"><h3>Quit Tycho</h3>
+        <div class="keyrow"><button class="btn frame" type="button" id="quitTycho">Quit Tycho</button><span class="err" id="quitErr"></span></div>
+        <p class="note">Stops listening and closes Tycho, the same as Quit on its icon by the clock. Closing this window alone leaves Tycho listening.</p></div>` : ""}`;
   }
   function updateWords(u) {
     if (u.state === "newer") return [`Tycho ${u.latest} is out.`, "warn-line"];
@@ -312,6 +316,17 @@
     return [u.problem || "Couldn't check.", "err"];
   }
   function bindUpdates() {
+    $("#quitTycho")?.addEventListener("click", async () => {
+      const b = $("#quitTycho");
+      b.disabled = true;
+      try {
+        const r = await api.quit();
+        if (!r.ok) { $("#quitErr").textContent = r.problem; b.disabled = false; }
+      } catch (e) {
+        $("#quitErr").textContent = "Couldn't quit. Use Quit on Tycho's icon by the clock.";
+        b.disabled = false;
+      }
+    });
     $("#checkUpdates")?.addEventListener("click", async () => {
       const b = $("#checkUpdates"), msg = $("#updateMsg");
       b.disabled = true; msg.className = "note"; msg.textContent = "Checking…";
@@ -468,6 +483,7 @@
     const about = await api.about();
     $("#ver").textContent = about.version;
     firstRun = Boolean(about.first_run);
+    canQuit = Boolean(about.can_quit);
     if (firstRun) view = "setup";
     await render();
     if (!firstRun) notice(await api.check_updates(false));

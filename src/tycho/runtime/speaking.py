@@ -9,6 +9,7 @@ import asyncio
 import contextlib
 import itertools
 import logging
+import threading
 from collections.abc import Callable, Iterator
 
 from tycho.runtime.messages import Result
@@ -43,28 +44,45 @@ def refused_keys_off(result: Result, lists: Safety) -> bool:
     return bool(lists.keys_off) and result.status == "refused" and result.detail == lists.keys_off
 
 
-def tell_player(
-    loop: asyncio.AbstractEventLoop,
-    said: str,
-    display: Display | None,
-    voice: Speaking,
-    feedback: Feedback,
-) -> None:
-    """From any thread: something the player must know that no request asked for, as
-    the Tile or the tray icon stopping (#297). On the voice loop: a notice card if the
-    Tile can show one, otherwise said aloud, and with no voice either, the not-done
-    sound (the words are in the log)."""
+class Telling:
+    """Things the player must know that no request asked for: the Tile or the tray icon
+    stopped (#297), or the last run crashed (#296). ``tell`` is safe from any thread.
+    On the voice loop each becomes a notice card if the Tile can show one, otherwise
+    it's said aloud, after the line being said, and with no voice either, the not-done
+    sound (the words are in the log). What's told before the loop runs waits for it
+    (#428)."""
 
-    def tell() -> None:
-        if voice.closed or (display is not None and display.show(notice(said))):
+    def __init__(self, display: Display | None, voice: Speaking, feedback: Feedback) -> None:
+        self._display, self._voice, self._feedback = display, voice, feedback
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._waiting: list[str] = []
+        self._lock = threading.Lock()
+
+    def tell(self, said: str) -> None:
+        log.warning("%s", said)
+        with self._lock:
+            if self._loop is None:
+                self._waiting.append(said)
+                return
+            loop = self._loop
+        with contextlib.suppress(RuntimeError):  # the loop closed: Tycho is stopping
+            loop.call_soon_threadsafe(self._tell, said)
+
+    def start(self, loop: asyncio.AbstractEventLoop) -> None:
+        """The voice loop is running: say what was waiting for it. On the loop."""
+        with self._lock:
+            self._loop, waiting, self._waiting = loop, self._waiting, []
+        for said in waiting:
+            self._tell(said)
+
+    def _tell(self, said: str) -> None:
+        voice = self._voice
+        if voice.closed or (self._display is not None and self._display.show(notice(said))):
             return
         if voice.speaker is not None:
-            voice.start(voice.speaker, said, feedback.not_done)
+            voice.then(voice.speaker, said, self._feedback.not_done)
         else:
-            feedback.not_done()
-
-    with contextlib.suppress(RuntimeError):  # the loop closed: Tycho is stopping
-        loop.call_soon_threadsafe(tell)
+            self._feedback.not_done()
 
 
 class Speaking:
@@ -93,6 +111,14 @@ class Speaking:
         self.speech = asyncio.create_task(
             self._speak(speaker, text, instead, keep=keep, after=filler)
         )
+
+    def then(self, speaker: Speaker, text: str, instead: Callable[[], None]) -> None:
+        """Say ``text`` once the line being said has ended, not in its place (#428): a
+        notice mustn't cut off an answer or a confirm question. Push-to-talk still
+        stops both."""
+        current = self.speech if self.speech is not None and not self.speech.done() else None
+        self._filling = None
+        self.speech = asyncio.create_task(self._speak(speaker, text, instead, after=current))
 
     def tell(self, result: Result, feedback: Feedback, *, speak: bool, keys_off: bool) -> None:
         """Who speaks when (ADR 14): the line about how a request ended, or its sound.

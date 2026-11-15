@@ -40,3 +40,14 @@ def test_the_wait_is_bounded() -> None:
     started = time.monotonic()
     assert guard.on_event(CTRL_CLOSE)  # shutdown never finished, but Windows isn't held forever
     assert time.monotonic() - started < 1
+
+
+def test_the_end_of_the_process_is_announced_after_the_wait() -> None:
+    # #428: Windows ends the process when the handler returns, so nothing registered
+    # to run at exit does. The crash record's clean stop is called from here.
+    order: list[str] = []
+    guard = CloseGuard(lambda: order.append("stop"), wait=0.05, ending=lambda: order.append("end"))
+    assert guard.on_event(CTRL_CLOSE)
+    assert order == ["stop", "end"]
+    assert not guard.on_event(CTRL_C)
+    assert order == ["stop", "end"]  # Ctrl+C is Python's: it stops cleanly by itself

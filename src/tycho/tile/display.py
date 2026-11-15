@@ -78,6 +78,11 @@ class TileDisplay:
     def on(self) -> bool:
         return self._settings.tile and not self._stopped
 
+    @property
+    def stopped(self) -> bool:
+        """The window stopped while Tycho ran (#297): the Tile is off until a restart."""
+        return self._stopped
+
     def _window_stopped(self, why: str) -> None:
         self._stopped = True
         self.on_stopped(why)

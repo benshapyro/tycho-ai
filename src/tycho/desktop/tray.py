@@ -26,6 +26,7 @@ from tycho import win32
 log = logging.getLogger(__name__)
 
 _WM_DESTROY, _WM_CLOSE, _WM_COMMAND, _WM_NULL = 0x0002, 0x0010, 0x0111, 0x0000
+_WM_ENDSESSION = 0x0016
 _WM_LBUTTONUP, _WM_RBUTTONUP = 0x0202, 0x0205
 _WM_APP_TRAY = 0x8000 + 1
 _NIM_ADD, _NIM_MODIFY, _NIM_DELETE = 0, 1, 2
@@ -102,6 +103,10 @@ class TrayIcon:
         self.on_stopped: Callable[[str], None] | None = None
         """Called once, on the tray's thread, if the icon stops while Tycho runs (#297):
         with it go Quit and the way to the window, so the player must be told."""
+        self.on_end_session: Callable[[], None] | None = None
+        """Called on the tray's thread when Windows is shutting down or signing the
+        player out: the process ends right after, and nothing registered to run at exit
+        will (#428)."""
 
     def start(self) -> bool:
         """Show the icon. False, with ``failed`` saying why, if it can't."""
@@ -173,6 +178,10 @@ class TrayIcon:
             if msg == taskbar_created and taskbar_created:
                 self._notify(_NIM_ADD)  # Explorer restarted: the icon was lost
                 return 0
+            if msg == _WM_ENDSESSION:
+                if wparam:  # the session really is ending, not a shutdown someone refused
+                    self._end_session()
+                return 0
             if msg == _WM_CLOSE:
                 self._notify(_NIM_DELETE)
                 user32.DestroyWindow(hwnd)
@@ -215,6 +224,13 @@ class TrayIcon:
             user32.DestroyIcon(self._icon)
         user32.UnregisterClassW(name, instance)
         _ = proc  # kept alive until the loop ends
+
+    def _end_session(self) -> None:
+        if self.on_end_session is not None:
+            try:
+                self.on_end_session()
+            except Exception:
+                log.exception("Couldn't finish up as Windows shut down")
 
     def _notify(self, action: int) -> bool:
         data = win32.NOTIFYICONDATAW()

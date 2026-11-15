@@ -150,6 +150,7 @@ class FakeHost:
 class FakeTile:
     def __init__(self) -> None:
         self.on = True
+        self.stopped = False
 
 
 def _menu(**options: object) -> tuple[TrayMenu, FakeSession, FakeHost]:
@@ -305,3 +306,18 @@ def test_ctrl_c_reaches_tycho_even_while_the_window_is_open() -> None:
     assert guard.on_event(CTRL_C) is False  # Python still gets it too
     assert guard.on_event(CTRL_BREAK) is False
     assert quits == ["quit"]
+
+
+def test_a_tile_that_stopped_is_greyed_out_and_says_why() -> None:
+    # #428: "Show the Tile" stayed in the menu, unticked, and ticking it did nothing.
+    tile = FakeTile()
+    saved: list[object] = []
+    applied: list[bool] = []
+    menu, _, _ = _menu(display=tile, save=saved.append, apply_tile=applied.append)
+    tile.on, tile.stopped = False, True
+    item = next(i for i in menu.items() if i.key == "tile")
+    assert not item.enabled
+    assert item.label == "The Tile stopped (start Tycho again)"
+    menu.chosen("tile")
+    assert saved == []
+    assert applied == []

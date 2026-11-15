@@ -50,13 +50,15 @@ class State:
         latest_release: Callable[[], updates.Release | None] = updates.latest_release,
         open_page: Callable[[str], object] = webbrowser.open,
         restart: Callable[[], bool] = lambda: False,
+        quit_tycho: Callable[[], None] | None = None,
     ) -> None:
         """``apply`` changes a setting in the running Tycho (the live callbacks);
         ``findings`` are the checks ``tycho check`` makes; ``key_check`` tries a key
         with its provider; ``ship_accent`` is the colour of the ship being flown.
         ``restart`` restarts the voice loop with the settings as saved (#295); False if
-        nothing is running to restart. ``commands`` is for tests: otherwise the Commands
-        page is the chosen game's."""
+        nothing is running to restart. ``quit_tycho`` stops Tycho, as Quit on the tray
+        does (#424); None while there's no running Tycho to stop (setup). ``commands``
+        is for tests: otherwise the Commands page is the chosen game's."""
         self._apply = apply
         self._findings = findings
         self._path = settings_path
@@ -71,6 +73,7 @@ class State:
         self._first_run = first_run
         self._given_commands = commands
         self._restart = restart
+        self._quit = quit_tycho
         self._capture = threading.Event()
         """Set to stop a push-to-talk capture the player has left."""
         self._undo: list[tuple[str, object]] = []

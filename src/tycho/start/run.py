@@ -225,8 +225,8 @@ def _start(
     log.info("Action log: %s", action_log.path)
     feedback = SoundFeedback(SoundDevicePlayer(), current.feedback_volume)
     told: list[str] = list(notices)
-    """The voice fell back to George (#242), or a game didn't start: shown on the Tile
-    once it's up."""
+    """The voice fell back to George (#242), a game didn't start, or the last run
+    crashed (#296): shown on the Tile once it's up."""
 
     def voice_fell_back(said: str) -> None:
         if display is None:
@@ -249,10 +249,11 @@ def _start(
         live[name] = lambda v, name=name: address.set(name, v)
     # The Tile (ADR 16): a window of its own, never anything in the game.
     tile = TileDisplay(current)
+    unseen = told
+    """What the Tile couldn't show (it's off, or didn't open): said aloud instead (#428)."""
     if tile.start():
         display = tile
-        for said in told:
-            display.show(notice(said))
+        unseen = [said for said in told if not tile.show(notice(said))]
         for name in Settings.model_fields:
             if name == "tile" or name.startswith("tile_"):
                 live[name] = lambda v, name=name: tile.change(name, v)
@@ -278,6 +279,8 @@ def _start(
         )
         live["confirm_seconds"] = lambda v: session.set_confirm_seconds(_float(v))
         tile.on_stopped = lambda _why: session.tell(TILE_STOPPED)  # said, once (#297)
+        for said in unseen:  # the Tile is off or didn't open: said aloud once listening
+            session.tell(said)
         log.info("Listening. Hold %s and speak; press Ctrl+C to stop.", describe(binding))
         if starting is not None:
             starting.close()  # the tray's own star takes its place

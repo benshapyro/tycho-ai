@@ -79,7 +79,7 @@ from tycho.runtime.routing import (
     own_keys,
     route,
 )
-from tycho.runtime.speaking import Speaking, log_failure, refused_keys_off, tell_player
+from tycho.runtime.speaking import Speaking, Telling, log_failure, refused_keys_off
 from tycho.runtime.tiling import tile_word, to_tile
 from tycho.tile.cards import notice
 
@@ -144,6 +144,7 @@ class Session:
         )
         self._speaker = speaker
         self._voice = Speaking(speaker)
+        self._telling = Telling(display, self._voice, feedback)
         self._told_keys_off = False
         """Whether this session has said why a press was refused with key actions off."""
         self._brain_warming: asyncio.Task[None] | None = None
@@ -167,7 +168,6 @@ class Session:
         self._keys = ThreadPoolExecutor(1, thread_name_prefix="tycho-keys")
         self._closed = False
         self._paused = False
-        self._loop: asyncio.AbstractEventLoop | None = None
 
     def pause(self, paused: bool) -> None:
         """Paused, push-to-talk does nothing, from the next press (the tray, ADR 17).
@@ -187,7 +187,8 @@ class Session:
 
     async def run(self, stop: asyncio.Event) -> None:
         """Listen for push-to-talk until ``stop`` is set, then shut down safely."""
-        self._loop = loop = asyncio.get_running_loop()
+        loop = asyncio.get_running_loop()
+        self._telling.start(loop)
         halt = threading.Event()
         poller = threading.Thread(
             target=poll,
@@ -492,7 +493,5 @@ class Session:
 
     def tell(self, said: str) -> None:
         """From any thread: something the player must know that no request asked for,
-        as the Tile or the tray icon stopping (#297; ``speaking.tell_player``)."""
-        log.warning("%s", said)
-        if self._loop is not None:
-            tell_player(self._loop, said, self._display, self._voice, self._feedback)
+        as the Tile or the tray icon stopping (#297; ``speaking.Telling``)."""
+        self._telling.tell(said)

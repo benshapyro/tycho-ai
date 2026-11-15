@@ -35,7 +35,7 @@ NO_WINDOW = (
 
 TRAY_STOPPED = (
     "Tycho's icon by the clock stopped working. Tycho is still listening. Starting "
-    "Tycho again from the Start menu opens its window."
+    "Tycho again from the Start menu opens its window, which has Quit in Settings."
 )
 """Shown on the Tile, or said, when the tray icon stops while Tycho runs (#297)."""
 
@@ -80,6 +80,7 @@ def serve_with_tray(
         apply=apply,
         ship_accent=display.ship_accent if display is not None else lambda: None,
         restart=host.restart,
+        quit_tycho=lambda: host.ask("quit"),
     )
     host.on_quit = window.close
     host.window_open = lambda: window.is_open
@@ -98,6 +99,7 @@ def serve_with_tray(
     # The icon stopping later mustn't go unsaid (#297): the player hears it once, and
     # Tycho keeps listening.
     tray.on_stopped = lambda _why: session.tell(TRAY_STOPPED)
+    tray.on_end_session = crashes.stop  # Windows shutting down is a clean stop (#428)
     if not tray.start():
         if windowed:
             log.error("No tray icon (%s), and no terminal: stopping", tray.failed)
@@ -126,6 +128,7 @@ def app_window(
     first_run: bool = False,
     finish: Callable[[], None] = lambda: None,
     restart: Callable[[], bool] = lambda: False,
+    quit_tycho: Callable[[], None] | None = None,
 ) -> AppWindow:
     """Tycho's window and its bridge, for the first run and for the tray alike."""
     import dataclasses
@@ -149,6 +152,7 @@ def app_window(
         finish=finish,
         first_run=first_run,
         restart=restart,
+        quit_tycho=quit_tycho,
     )
     window = AppWindow(bridge)
     return window
@@ -172,6 +176,7 @@ class Starting:
             ],
             self._chosen,
         )
+        self._tray.on_end_session = crashes.stop
         if not self._tray.start():
             self._tray = None
         self._requests = requests

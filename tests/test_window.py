@@ -376,6 +376,7 @@ def test_nothing_private_is_offered_to_the_page() -> None:
             "keys",
             "microphone_level",
             "open_release",
+            "quit",
             "remove_phrase",
             "remove_key",
             "set",
@@ -572,6 +573,22 @@ def _releases(*answers: updates.Release | Exception | None) -> tuple[Any, list[i
         return answer
 
     return latest, asked
+
+
+def test_quit_in_the_window_stops_tycho_as_the_tray_does(path: Path) -> None:
+    asked: list[str] = []
+    bridge, _ = _bridge(path, quit_tycho=lambda: asked.append("quit"))
+    assert bridge.about()["can_quit"] is True
+    assert bridge.quit() == {"ok": True}
+    assert asked == ["quit"]
+
+
+def test_a_window_with_nothing_to_stop_offers_no_quit(path: Path) -> None:
+    bridge, _ = _bridge(path)  # setup, before Tycho listens: closing the window is enough
+    assert bridge.about()["can_quit"] is False
+    answer = bridge.quit()
+    assert answer["ok"] is False
+    assert "close this window" in str(answer["problem"])
 
 
 def test_check_for_updates_says_a_newer_tycho_is_out(path: Path) -> None:
