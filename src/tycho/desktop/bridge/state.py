@@ -11,6 +11,7 @@ from tycho import updates
 from tycho.desktop import setup
 from tycho.desktop.commands import Commands
 from tycho.desktop.keys import KeyCheck
+from tycho.runtime.recent import Exchange
 from tycho.settings import Settings
 
 SETUP_CHOICES = frozenset({"game_root", "push_to_talk", "microphone"})
@@ -51,6 +52,8 @@ class State:
         open_page: Callable[[str], object] = webbrowser.open,
         restart: Callable[[], bool] = lambda: False,
         quit_tycho: Callable[[], None] | None = None,
+        recent: Callable[[], Sequence[Exchange]] = lambda: [],
+        listening: Callable[[], bool | None] = lambda: None,
     ) -> None:
         """``apply`` changes a setting in the running Tycho (the live callbacks);
         ``findings`` are the checks ``tycho check`` makes; ``key_check`` tries a key
@@ -58,7 +61,9 @@ class State:
         ``restart`` restarts the voice loop with the settings as saved (#295); False if
         nothing is running to restart. ``quit_tycho`` stops Tycho, as Quit on the tray
         does (#424); None while there's no running Tycho to stop (setup). ``commands``
-        is for tests: otherwise the Commands page is the chosen game's."""
+        is for tests: otherwise the Commands page is the chosen game's. ``recent`` is
+        the last exchanges, from memory (``runtime.recent``); ``listening`` is whether
+        the running Tycho is listening (False: paused), None while none is running."""
         self._apply = apply
         self._findings = findings
         self._path = settings_path
@@ -74,6 +79,8 @@ class State:
         self._given_commands = commands
         self._restart = restart
         self._quit = quit_tycho
+        self._recent = recent
+        self._listening = listening
         self._capture = threading.Event()
         """Set to stop a push-to-talk capture the player has left."""
         self._undo: list[tuple[str, object]] = []

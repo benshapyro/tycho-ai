@@ -32,7 +32,7 @@
   let allChecks = false;
   async function status() {
     page.innerHTML = `<h1>Home</h1><p class="lede">Checking…</p>`;
-    const findings = await api.status();
+    const [findings, live] = await Promise.all([api.status(), api.recent()]);
     const bad = findings.filter((f) => f.level !== "ok");
     const stuck = bad.some((f) => f.level === "fail");
     badge(bad.length);
@@ -43,9 +43,15 @@
         <div class="onefix ${esc(first.level)}" id="oneFix"><div><b>${esc(first.what)}</b><small>${esc(first.detail)}</small>${first.fix ? `<span class="fix">${esc(first.fix)}</span>` : ""}</div>
         <button class="btn frame" type="button" id="again">Check again</button></div>`
       : "";
-    page.innerHTML = `<div class="state frame ${stuck ? "stuck" : ""}" id="homeState"><div class="light"></div>
-        <div><h1>${stuck ? "Not ready yet" : "Ready"}</h1><p>${stuck ? "Tycho can't do everything yet: the first thing to fix is below." : "Hold your push-to-talk button and talk. Tycho listens while this window is closed, too."}</p></div></div>
+    const paused = live.listening === false;
+    const hold = live.button ? `Hold <b>${esc(live.button)}</b> and talk.` : "Hold your push-to-talk button and talk.";
+    const [title, line] = stuck ? ["Not ready yet", "Tycho can't do everything yet: the first thing to fix is below."]
+      : paused ? ["Paused", "Tycho isn't listening. Resume from Tycho's icon by the clock."]
+      : [live.listening ? "Listening" : "Ready", `${hold} Tycho listens while this window is closed, too.`];
+    page.innerHTML = `<div class="state frame ${stuck || paused ? "stuck" : ""}" id="homeState"><div class="light"></div>
+        <div><h1>${title}</h1><p>${line}</p></div></div>
       ${fix}
+      ${live.listening == null ? "" : `<h2 class="label">Last said</h2><div id="recent">${recentList(live.exchanges)}</div>`}
       <h2 class="label">Checks</h2>
       <div class="bar" style="margin-top:0"><button class="link" type="button" id="showChecks" aria-expanded="${allChecks}">${allChecks ? "Hide the checks" : `Show all ${findings.length} checks`}</button>
         <span class="keyrow"><button class="btn frame" type="button" id="redo">Run setup again</button>${first ? "" : `<button class="btn frame" type="button" id="again">Check again</button>`}</span></div>
@@ -55,6 +61,20 @@
     $("#again").addEventListener("click", status);
     $("#showChecks").addEventListener("click", () => { allChecks = !allChecks; status(); });
     $("#redo").addEventListener("click", () => { view = "setup"; step = 0; render(); });
+  }
+
+  // What the player said and what Tycho did, newest first: from memory, never saved.
+  function recentList(exchanges) {
+    if (!exchanges.length) return `<p class="note">Nothing yet. What you say and what Tycho did shows here until Tycho quits. It's never saved.</p>`;
+    const time = (at) => new Date(at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return `<ol class="recent">${exchanges.map((e) => `<li class="${e.ok ? "ok" : "no"}"><span class="num">${esc(time(e.at))}</span>
+      <span><b>“${esc(e.said)}”</b>${e.did ? `<small>${esc(e.did)}</small>` : ""}</span></li>`).join("")}</ol>`;
+  }
+  async function refreshRecent() {
+    if (view !== "status" || !$("#recent") || document.hidden) return;
+    const live = await api.recent();
+    const box = $("#recent");
+    if (box) box.innerHTML = recentList(live.exchanges);
   }
 
   /* ---------- setup: the first run, or again from Status (#364) ----------
@@ -680,6 +700,7 @@
     await render();
     if (!firstRun) notice(await api.check_updates(false));
   }
+  setInterval(() => { if (api) refreshRecent().catch(() => {}); }, 3000);
   if (window.TYCHO_FAKE) start(window.TYCHO_FAKE);
   else if (window.pywebview && window.pywebview.api) start(window.pywebview.api);
   else window.addEventListener("pywebviewready", () => start(window.pywebview.api));

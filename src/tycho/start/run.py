@@ -16,6 +16,7 @@ from tycho.doctor import start_update_check
 from tycho.findings import TYCHO
 from tycho.packs import GameDataError, built_in
 from tycho.ptt.devices import describe, input_sources
+from tycho.runtime.recent import Recent
 from tycho.settings import Settings, SettingsError
 from tycho.start.assemble import build_session, game_pack, load_keybinds, load_transcriber
 from tycho.start.serve import serve
@@ -257,6 +258,7 @@ def _start(
         for name in Settings.model_fields:
             if name == "tile" or name.startswith("tile_"):
                 live[name] = lambda v, name=name: tile.change(name, v)
+    recent = Recent()  # Home's last exchanges: memory only (ADR 17)
     with Microphone(device=microphone_device(current.microphone)) as mic:
         log.info("Microphone: %s", mic.name)
         session = build_session(
@@ -276,6 +278,7 @@ def _start(
             address=address,
             display=display,
             pack=pack,
+            on_result=recent.add,
         )
         live["confirm_seconds"] = lambda v: session.set_confirm_seconds(_float(v))
         tile.on_stopped = lambda _why: session.tell(TILE_STOPPED)  # said, once (#297)
@@ -295,6 +298,7 @@ def _start(
                     serve=lambda stop: serve(session, store, stop),
                     reopen=reopen,
                     windowed=WINDOWED,
+                    recent=recent.exchanges,
                 )
                 if outcome == "failed":
                     return 1
