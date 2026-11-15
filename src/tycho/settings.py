@@ -295,8 +295,8 @@ class Settings(BaseModel):
     tile_hidden_cards: str = Field(
         default="",
         description="Kinds of card not to show while the Tile is on, separated by commas "
-        "(to hide the whole Tile, turn tile off): list, route, recipe, "
-        "ship, fleet, steps, headlines, warning, notice, long. Tycho still says them. "
+        "(to hide the whole Tile, turn tile off), such as list, steps, warning, notice "
+        "or long. The window's Tile page lists your game's. Tycho still says them. "
         "Questions waiting on you always show.",
         json_schema_extra=_rule("yes", "now"),
     )

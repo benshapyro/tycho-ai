@@ -169,10 +169,12 @@ class Session:
         self._paused = False
         self._trying = False
 
-    def try_it(self, on: bool) -> None:
-        """Setup's Try it (ADR 17): plan every press as usual, send none. Turned on or
-        off, an open question is dropped, so a test is never confirmed for real."""
+    def try_it(self, on: bool) -> bool:
+        """Setup's Try it (ADR 17): plan presses, send none. A change drops a question."""
+        if on == self._trying:
+            return False
         self._trying, self._question = on, None
+        return True
 
     def pause(self, paused: bool) -> None:
         """Paused, push-to-talk does nothing from the next press; one held ends normally."""
@@ -406,8 +408,7 @@ class Session:
         def end(status: Status, detail: str = "") -> Result:
             return progress.result(request, status, trace, heard, text, detail)
 
-        # Plan the whole chain before pressing anything (planning.py). A confirmation
-        # plans again from scratch, with the keybinds as they are now.
+        # Plan the whole chain before pressing (planning.py); a confirmation plans afresh.
         keybinds = self._keybinds()
         progress.announced = announced(commands)
         facts: frozenset[str] = frozenset()

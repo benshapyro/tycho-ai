@@ -224,9 +224,12 @@
       if (!firstRun) {
         if (trying === null && document.hasFocus()) {
           const t = await api.try_it(true);
-          // Left the step while that was asked: off again, and the new step stays drawn.
-          if (view !== "setup" || STEPS[step] !== "Try it") { if (t.ok) await api.try_it(false); return; }
-          trying = t.ok ? t.since : null;
+          // Left the step, or the window, while that was asked: off again (review of #464).
+          const left = view !== "setup" || STEPS[step] !== "Try it";
+          if (left || !document.hasFocus() || document.hidden) {
+            if (t.ok) await api.try_it(false);
+            if (left) return; // the new step stays drawn
+          } else trying = t.ok ? t.since : null;
         }
         const live = trying === null ? null : await api.recent(false);
         if (!live && !document.hasFocus()) tryCard = `<div class="card frame" id="tryCard"><h3>Try it now</h3><p>Click here to try it: Tycho tries only while this window is in front.</p></div>`;
@@ -421,6 +424,11 @@
       case "choice":
         if (r.packs) return packChoice(r);
         return `<div class="seg" role="group" aria-label="${esc(r.label)}">${r.choices.map((c) => `<button type="button" aria-pressed="${v === c}" data-pick="${esc(r.name)}" data-v="${esc(c)}">${esc(c)}</button>`).join("")}</div>`;
+      case "cards": {
+        // A switch for each kind of card in this game: on shows it (#422).
+        const hidden = new Set(String(v || "").split(",").map((k) => k.trim()).filter(Boolean));
+        return `<div class="seg" role="group" aria-label="${esc(r.label)}">${r.cards.map((c) => `<button type="button" aria-pressed="${!hidden.has(c.kind)}" data-card="${esc(c.kind)}" data-name="${esc(c.name)}">${esc(c.name)}</button>`).join("")}</div>`;
+      }
       case "setup":
         if (r.name === "push_to_talk")
           return `<span class="setup"><span class="num" id="setPtt">${esc(v ?? "None yet")}</span><button class="btn frame" type="button" id="setCapture">Change</button></span>`;
@@ -501,6 +509,13 @@
       // Another game: its pack's own setup first, and the switch from there (#364).
       if (b.dataset.pick === "game" && b.getAttribute("aria-pressed") !== "true") { pendingPack = b.dataset.v; packFrom = "settings"; view = "pack"; render(); return; }
       change(b.dataset.pick, b.dataset.v, `${label(b.dataset.pick)}: ${b.dataset.name || b.dataset.v}`);
+    }));
+    page.querySelectorAll("[data-card]").forEach((b) => b.addEventListener("click", () => {
+      const row = data.groups.flatMap((g) => g.rows).find((r) => r.name === "tile_hidden_cards");
+      const hidden = new Set(String(row.value || "").split(",").map((k) => k.trim()).filter(Boolean));
+      const showing = hidden.has(b.dataset.card);
+      if (showing) hidden.delete(b.dataset.card); else hidden.add(b.dataset.card);
+      change("tile_hidden_cards", [...hidden].join(", "), `${b.dataset.name} ${showing ? "shown" : "hidden"} on the Tile`);
     }));
     page.querySelectorAll("[data-text]").forEach((i) => i.addEventListener("change", () => change(i.dataset.text, i.value, `${label(i.dataset.text)}: ${i.value || "none"}`)));
     $("#setCapture")?.addEventListener("click", () => capture($("#setCapture"), $("#setPtt")));

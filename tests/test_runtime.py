@@ -750,6 +750,23 @@ def test_a_question_asked_during_try_it_cant_be_confirmed_for_real_after_it() ->
     assert r.keys.events == []
 
 
+def test_closing_the_window_off_try_it_keeps_an_open_question() -> None:
+    """Review of #464: the window says "off" on every close; only a change drops it."""
+
+    async def scenario() -> Rig:
+        r = rig("eject", "confirm")
+        r.say()
+        await r.session.idle()
+        assert r.session.try_it(False) is False  # it wasn't on
+        r.say()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert [x.status for x in r.results] == ["asking", "done"]
+
+
 def test_after_try_it_tycho_presses_again() -> None:
     async def scenario() -> Rig:
         r = rig("landing gear")
