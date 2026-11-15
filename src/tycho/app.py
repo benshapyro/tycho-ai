@@ -18,8 +18,8 @@ from tycho.audio.source import AudioError
 from tycho.brain_choice import brain_findings, load_brain
 from tycho.commands import CommandFileError, CommandMatcher, resolve
 from tycho.findings import TYCHO, Finding, key_finding, stored_key
-from tycho.game.install import GameInstall, root_from, search_roots
-from tycho.game.store import GameDataError, KeybindStore
+from tycho.games.star_citizen.install import GameInstall, root_from, search_roots
+from tycho.games.star_citizen.store import GameDataError, KeybindStore
 from tycho.keybinds import Keybinds
 from tycho.packs import YOU_TURNED_THEM_OFF, GamePack, PackError, as_run, built_in
 from tycho.ptt.binding import Binding, DeviceKind
@@ -1178,7 +1178,7 @@ def _checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Findin
         else:
             yield Finding("ok", "Commands", f"{counts}; add your own in {commands_file}")
 
-    from tycho.knowledge.fleet import Fleet
+    from tycho.games.star_citizen.fleet import Fleet
 
     if problem := Fleet.load(paths.fleet_file(pack.id)).problem:
         yield Finding("warn", "Your fleet", problem)

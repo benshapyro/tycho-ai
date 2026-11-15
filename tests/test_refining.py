@@ -5,8 +5,8 @@ import json
 from typing import Any
 
 from tests.fakes.fake_uex import FakeTradeUex
-from tycho.knowledge.refining import RefiningLookup, ShipPurchases
-from tycho.knowledge.trade_lookup import trade_lookups
+from tycho.games.star_citizen.refining import RefiningLookup, ShipPurchases
+from tycho.games.star_citizen.trade_lookup import trade_lookups
 
 
 def _tools() -> tuple[RefiningLookup, ShipPurchases]:

@@ -24,7 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from tycho import paths
 from tycho.brain.providers import BrainModel, Provider, choose
-from tycho.game.install import Channel
+from tycho.games.star_citizen.install import Channel
 from tycho.ptt.binding import Binding
 from tycho.tile.cards import ALL_KINDS
 from tycho.voice import voices

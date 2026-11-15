@@ -19,8 +19,8 @@ from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from typing import Any, cast
 
-from tycho.knowledge.items import CLASH, GENERIC, NOT_ITEMS, clashes, search_text
-from tycho.knowledge.wiki import ITEM_KINDS, VEHICLES, Hit
+from tycho.games.star_citizen.items import CLASH, GENERIC, NOT_ITEMS, clashes, search_text
+from tycho.games.star_citizen.wiki import ITEM_KINDS, VEHICLES, Hit
 from tycho.text import name_score, normalize, similarity
 
 MATCH = 0.6

@@ -7,8 +7,8 @@ from collections.abc import Mapping
 from typing import cast
 
 from tycho.brain.lookups import LookupResult, failure
-from tycho.knowledge.items import Found, IsAShip, Items, Missing, Unclear, facts
-from tycho.knowledge.wiki import WikiError, WikiSource
+from tycho.games.star_citizen.items import Found, IsAShip, Items, Missing, Unclear, facts
+from tycho.games.star_citizen.wiki import WikiError, WikiSource
 
 log = logging.getLogger(__name__)
 

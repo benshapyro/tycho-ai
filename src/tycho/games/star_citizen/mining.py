@@ -18,7 +18,7 @@ from collections.abc import Mapping
 from typing import Any, cast
 
 from tycho.brain.lookups import LookupResult, failure
-from tycho.knowledge.wiki import WikiError, WikiSource
+from tycho.games.star_citizen.wiki import WikiError, WikiSource
 from tycho.text import normalize
 
 log = logging.getLogger(__name__)

@@ -17,8 +17,8 @@ import time
 
 from tycho import settings
 from tycho.commands import CommandMatcher, Defer, resolve
-from tycho.game.install import GameInstall
-from tycho.game.store import KeybindStore
+from tycho.games.star_citizen.install import GameInstall
+from tycho.games.star_citizen.store import KeybindStore
 from tycho.input import NotPressable, Press, Presser, UnsupportedKey, plan
 from tycho.input.windows import WindowsFocusCheck, WindowsKeySender, foreground_executable
 from tycho.keybinds import Action

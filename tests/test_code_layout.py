@@ -20,35 +20,14 @@ OVER_LIMIT = {
     "desktop/bridge.py": 709,
     "tile/draw.py": 622,
     "brain/openrouter.py": 607,
-    "knowledge/items.py": 566,
+    "games/star_citizen/items.py": 566,
     "commands/matcher.py": 537,
-    "knowledge/ships.py": 519,
+    "games/star_citizen/ships.py": 519,
     "settings.py": 506,
 }
 
-# Star Citizen's code, wherever it is today. Step 6 (#397) moves it all to
-# tycho.games.star_citizen, and this becomes that one name.
-STAR_CITIZEN = (
-    "tycho.game",
-    "tycho.games.star_citizen",
-    *(
-        f"tycho.knowledge.{name}"
-        for name in (
-            "fleet",
-            "item_lookup",
-            "items",
-            "mining",
-            "refining",
-            "ship_lookup",
-            "ships",
-            "store",
-            "trade",
-            "trade_lookup",
-            "uex",
-            "wiki",
-        )
-    ),
-)
+# Star Citizen's code, all in one package since #397.
+STAR_CITIZEN = ("tycho.games.star_citizen",)
 # The one list of built-in parts may name Star Citizen's builders (ADR 19).
 MAY_IMPORT_STAR_CITIZEN = ("tycho.games",)
 
@@ -64,18 +43,13 @@ DLL_LOADERS = frozenset({"windll", "cdll", "oledll", "pydll"})
 
 # Today's breaks: (the importing module, what it imports). Remove an entry when you fix it.
 STAR_CITIZEN_BREAKS = {
-    ("tycho.app", "tycho.game.install"),
-    ("tycho.app", "tycho.game.store"),
-    ("tycho.app", "tycho.knowledge.fleet"),
-    ("tycho.desktop.bridge", "tycho.game.store"),
-    ("tycho.desktop.setup", "tycho.game.install"),
-    ("tycho.desktop.setup", "tycho.game.store"),
-    ("tycho.knowledge", "tycho.knowledge.ship_lookup"),
-    ("tycho.knowledge", "tycho.knowledge.ships"),
-    ("tycho.knowledge", "tycho.knowledge.trade_lookup"),
-    ("tycho.knowledge", "tycho.knowledge.uex"),
-    ("tycho.knowledge", "tycho.knowledge.wiki"),
-    ("tycho.settings", "tycho.game.install"),
+    ("tycho.app", "tycho.games.star_citizen.install"),
+    ("tycho.app", "tycho.games.star_citizen.store"),
+    ("tycho.app", "tycho.games.star_citizen.fleet"),
+    ("tycho.desktop.bridge", "tycho.games.star_citizen.store"),
+    ("tycho.desktop.setup", "tycho.games.star_citizen.install"),
+    ("tycho.desktop.setup", "tycho.games.star_citizen.store"),
+    ("tycho.settings", "tycho.games.star_citizen.install"),
 }
 TOP_BREAKS = {
     ("tycho.desktop.bridge", "tycho.app"),
@@ -109,7 +83,7 @@ def _imports(name: str, tree: ast.Module) -> Iterator[str]:
         elif isinstance(node, ast.ImportFrom):
             base = _base(name, node)
             for alias in node.names:
-                # `from tycho.knowledge import ships` imports a module; `from x import f` doesn't.
+                # `from tycho.knowledge import web` imports a module; `from x import f` doesn't.
                 full = f"{base}.{alias.name}"
                 yield full if full in MODULES else _origin(base, alias.name)
 
@@ -125,7 +99,7 @@ def _base(name: str, node: ast.ImportFrom) -> str:
 
 def _origin(package: str, name: str, depth: int = 0) -> str:
     """Where a name imported from ``package`` comes from: the module its ``__init__``
-    took it from (``from tycho.knowledge import UexApi`` reaches ``tycho.knowledge.uex``),
+    took it from (``from tycho.games.star_citizen import UexApi`` reaches its ``uex``),
     through relative imports and packages that pass it on, or the package itself."""
     path = MODULES.get(package)
     if path is None or path.name != "__init__.py" or depth > 5:
@@ -247,17 +221,17 @@ def test_the_checks_see_a_break() -> None:
     # The rules' own check: each catches what it's for, so an empty result means something.
     tree = ast.parse(
         "import ctypes\n"
-        "from tycho.game.keybinds import Action\n"
+        "from tycho.games.star_citizen.keybinds import Action\n"
         "def f():\n"
         "    from tycho import app\n"
         "    return ctypes.WinDLL('user32')\n"
     )
     imports = set(_imports("tycho.safety", tree))
-    assert "tycho.game.keybinds" in imports
+    assert "tycho.games.star_citizen.keybinds" in imports
     assert "tycho.app" in imports
     assert _loads_a_dll(tree)
     assert not _loads_a_dll(ast.parse("import ctypes\nx = ctypes.sizeof(ctypes.c_int)\n"))
     assert not _loads_a_dll(ast.parse("import ctypes\nu: ctypes.WinDLL = win32.user32()\n"))
     assert _loads_a_dll(ast.parse("import ctypes\nctypes.windll.user32.MessageBoxW()\n"))
     # A name re-exported by a package is traced to the module it comes from.
-    assert _origin("tycho.knowledge", "UexApi") == "tycho.knowledge.uex"
+    assert _origin("tycho.games.star_citizen", "UexApi") == "tycho.games.star_citizen.uex"

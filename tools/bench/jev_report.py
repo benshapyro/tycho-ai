@@ -40,8 +40,8 @@ from brain_report import MODES as CASE_MODES
 from tycho import credentials
 from tycho.brain.briefing import command_phrasings
 from tycho.commands.matcher import CommandMatcher
-from tycho.game.install import GameInstall
-from tycho.game.store import KeybindStore
+from tycho.games.star_citizen.install import GameInstall
+from tycho.games.star_citizen.store import KeybindStore
 from tycho.keybinds import Action
 from tycho.lexicon import Lexicon
 from tycho.packs import STAR_CITIZEN, built_in

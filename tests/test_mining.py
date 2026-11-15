@@ -5,8 +5,8 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from tycho.knowledge.mining import MiningLookup
-from tycho.knowledge.wiki import WikiError
+from tycho.games.star_citizen.mining import MiningLookup
+from tycho.games.star_citizen.wiki import WikiError
 
 NAMES = ["Quantainium (Raw)", "Lindinium (Ore)", "Raw Ice", "Hadanite", "Gold"]
 

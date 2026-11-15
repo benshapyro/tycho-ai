@@ -27,6 +27,12 @@ LAZY_IMPORTS = (
     "tycho.voice.playback",
     "anthropic",
     "tycho.brain.claude",
+    # The registry of built-in parts, and Star Citizen's code its builders import when
+    # a pack is loaded or a brain is built (ADR 19).
+    "tycho.games",
+    "tycho.games.star_citizen.gamelog",
+    "tycho.games.star_citizen.ship_lookup",
+    "tycho.games.star_citizen.trade_lookup",
     # The Tile (ADR 16): drawn with Pillow, whose text needs its FreeType module.
     "PIL._imagingft",
     "tycho.tile.display",

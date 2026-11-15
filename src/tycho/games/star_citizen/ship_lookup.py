@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import cast
 
 from tycho.brain.lookups import LookupResult, failure
-from tycho.knowledge.fresh import Fresh
-from tycho.knowledge.items import FRESH_SECONDS
-from tycho.knowledge.ships import (
+from tycho.games.star_citizen.data import ShipDataError, ensure
+from tycho.games.star_citizen.items import FRESH_SECONDS
+from tycho.games.star_citizen.ships import (
     Ambiguous,
     IsAnItem,
     NotFound,
@@ -26,8 +26,8 @@ from tycho.knowledge.ships import (
     rescued,
     searched,
 )
-from tycho.knowledge.store import ShipDataError, ensure
-from tycho.knowledge.wiki import Hit, WikiError, WikiSource, search
+from tycho.games.star_citizen.wiki import Hit, WikiError, WikiSource, search
+from tycho.knowledge.fresh import Fresh
 
 log = logging.getLogger(__name__)
 

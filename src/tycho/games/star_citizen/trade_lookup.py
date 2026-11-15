@@ -12,7 +12,7 @@ from collections.abc import Coroutine, Mapping
 from typing import Any
 
 from tycho.brain.lookups import Lookup, LookupResult, failure
-from tycho.knowledge.trade import (
+from tycho.games.star_citizen.trade import (
     MAX_ORIGINS,
     Commodity,
     Place,
@@ -21,7 +21,7 @@ from tycho.knowledge.trade import (
     hours_ago,
     top,
 )
-from tycho.knowledge.wiki import WikiError, WikiSource
+from tycho.games.star_citizen.wiki import WikiError, WikiSource
 
 log = logging.getLogger(__name__)
 
@@ -401,7 +401,7 @@ def _profit(row: Mapping[str, Any], cargo: int) -> float:
 def trade_lookups(source: WikiSource) -> list[Lookup]:
     """The UEX look-ups, sharing one set of its data: prices, routes, refining (#152)
     and where to buy a ship."""
-    from tycho.knowledge.refining import RefiningLookup, ShipPurchases
+    from tycho.games.star_citizen.refining import RefiningLookup, ShipPurchases
 
     trade = Trade(source)
     return [CommodityPrices(trade), TradeRoutes(trade), RefiningLookup(trade), ShipPurchases(trade)]

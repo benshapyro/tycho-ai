@@ -14,8 +14,8 @@ import tomllib
 from pathlib import Path
 
 from tycho.commands import CommandMatcher, Defer, Match, resolve
-from tycho.game.install import GameInstall
-from tycho.game.store import KeybindStore
+from tycho.games.star_citizen.install import GameInstall
+from tycho.games.star_citizen.store import KeybindStore
 from tycho.lexicon import Lexicon
 from tycho.packs import STAR_CITIZEN, built_in
 

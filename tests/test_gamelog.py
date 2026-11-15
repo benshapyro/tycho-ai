@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from tycho.game import gamelog
-from tycho.game.gamelog import QUANTUM_ROUTE, GameLog
+from tycho.games.star_citizen import gamelog
+from tycho.games.star_citizen.gamelog import QUANTUM_ROUTE, GameLog
 
 # Lines as the game writes them (the author's Game.log, 2026-10-30 and 31), shortened.
 HEADER = "<2026-10-31T14:30:14.950Z> Log started on Sat Oct 31 14:30:14 2026\n"

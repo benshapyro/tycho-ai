@@ -15,15 +15,15 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from tycho import paths
-from tycho.game import cryxml, localization
-from tycho.game.install import GameInstall
-from tycho.game.keybinds import (
+from tycho.games.star_citizen import cryxml, localization
+from tycho.games.star_citizen.install import GameInstall
+from tycho.games.star_citizen.keybinds import (
     DEFAULTS_P4K_PATH,
     apply_profile,
     parse_activation_modes,
     parse_defaults,
 )
-from tycho.game.p4k import P4kArchive
+from tycho.games.star_citizen.p4k import P4kArchive
 from tycho.keybinds import Action, ActivationMode, Keybinds
 
 type _Stamp = tuple[int, int] | None

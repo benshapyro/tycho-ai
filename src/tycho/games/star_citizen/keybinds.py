@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Mapping
 from dataclasses import replace
 
-from tycho.game.localization import resolve
+from tycho.games.star_citizen.localization import resolve
 from tycho.keybinds import Action, ActivationMode, KeyInput
 
 DEFAULTS_P4K_PATH = r"Data\Libs\Config\defaultProfile.xml"

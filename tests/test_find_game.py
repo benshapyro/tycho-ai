@@ -7,8 +7,8 @@ from types import SimpleNamespace
 import pytest
 
 from tycho import app, settings
-from tycho.game import install as found
-from tycho.game.install import GameInstall, launcher_roots, root_from, search_roots
+from tycho.games.star_citizen import install as found
+from tycho.games.star_citizen.install import GameInstall, launcher_roots, root_from, search_roots
 from tycho.settings import Settings, SettingsError
 
 

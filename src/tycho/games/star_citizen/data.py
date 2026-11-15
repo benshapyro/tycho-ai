@@ -23,9 +23,9 @@ from collections.abc import Callable, Iterable
 from contextlib import closing
 from pathlib import Path
 
-from tycho.knowledge.ships import Ship, ShipLibrary, concepts_from_uex, ships_from_wiki
-from tycho.knowledge.uex import concept_vehicles
-from tycho.knowledge.wiki import WikiError, WikiSource, all_vehicles, current_version
+from tycho.games.star_citizen.ships import Ship, ShipLibrary, concepts_from_uex, ships_from_wiki
+from tycho.games.star_citizen.uex import concept_vehicles
+from tycho.games.star_citizen.wiki import WikiError, WikiSource, all_vehicles, current_version
 
 log = logging.getLogger(__name__)
 
