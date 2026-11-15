@@ -87,39 +87,66 @@ def test_the_check_sees_the_calls() -> None:
     assert ("kernel32", "OpenProcess") in called  # user32, kernel32 = (..., ...)
 
 
-def test_a_dll_is_used_where_the_check_can_see_it() -> None:
-    # #407: the check above follows a DLL called inline or bound to a plain name. One
-    # kept on ``self`` or handed to a helper would hide its calls from it.
-    hidden: list[str] = []
-    for path in sorted(SRC.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.expr) or not _dll(node):
-                continue
-            parent = parents[node]
-            if isinstance(parent, ast.Tuple):
-                parent = parents[parent]
-            if isinstance(parent, ast.Attribute) or (
-                isinstance(parent, ast.Assign)
-                and all(isinstance(t, ast.Name | ast.Tuple) for t in parent.targets)
-            ):
-                continue
-            hidden.append(f"{path.relative_to(SRC).as_posix()}:{node.lineno}")
-        # #409: a name bound to a DLL is only ever used as ``name.Function``.
+def _hidden(tree: ast.Module) -> list[int]:
+    """Lines where a DLL is used out of the check's sight: one kept anywhere but a plain
+    name (on ``self``, handed to a helper, #407), or a name bound to one and then used
+    other than as ``name.Function`` (#409). Names count within their own function."""
+    lines: list[int] = []
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.expr) or not _dll(node):
+            continue
+        parent = parents[node]
+        if isinstance(parent, ast.Tuple):
+            parent = parents[parent]
+        if not isinstance(parent, ast.Attribute) and not (
+            isinstance(parent, ast.Assign)
+            and all(isinstance(t, ast.Name | ast.Tuple) for t in parent.targets)
+        ):
+            lines.append(node.lineno)
+    top = [s for s in tree.body if not isinstance(s, ast.FunctionDef | ast.ClassDef)]
+    functions = [n.body for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
+    for statements in (top, *functions):
+        body = [n for statement in statements for n in ast.walk(statement)]
         bound = {
             target.id
-            for node in ast.walk(tree)
+            for node in body
             if isinstance(node, ast.Assign)
             for target, value in _pairs(node)
             if isinstance(target, ast.Name) and _dll(value)
         }
-        for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Name)
-                and isinstance(node.ctx, ast.Load)
-                and node.id in bound
-                and not isinstance(parents[node], ast.Attribute)
-            ):
-                hidden.append(f"{path.relative_to(SRC).as_posix()}:{node.lineno}")
+        lines.extend(
+            node.lineno
+            for node in body
+            if isinstance(node, ast.Name)
+            and isinstance(node.ctx, ast.Load)
+            and node.id in bound
+            and not isinstance(parents[node], ast.Attribute)
+        )
+    return sorted(set(lines))
+
+
+def test_a_dll_is_used_where_the_check_can_see_it() -> None:
+    hidden = [
+        f"{path.relative_to(SRC).as_posix()}:{line}"
+        for path in sorted(SRC.rglob("*.py"))
+        for line in _hidden(ast.parse(path.read_text(encoding="utf-8")))
+    ]
     assert not hidden, f"call the DLL inline or bind it to a plain name: {hidden}"
+
+
+def test_the_check_sees_a_dll_out_of_sight() -> None:
+    seen = (
+        "def f(g):\n"
+        "    u = win32.user32()\n"
+        "    u.MessageBoxW(None, 'a', 'b', 0)\n"
+        "def h(g):\n"
+        "    k = win32.kernel32()\n"
+        "    g(k)\n"
+        "class A:\n"
+        "    def __init__(self):\n"
+        "        self.u = win32.user32()\n"
+        "def other(u):\n"
+        "    return u\n"
+    )
+    assert _hidden(ast.parse(seen)) == [6, 9]

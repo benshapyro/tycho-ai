@@ -16,12 +16,20 @@ import numpy as np
 from tycho import __version__, credentials, logs, paths, settings, updates
 from tycho.audio.source import AudioError
 from tycho.brain_choice import brain_findings, load_brain
-from tycho.commands import CommandFileError, CommandMatcher, resolve
+from tycho.commands import CommandFileError, CommandMatcher
 from tycho.findings import TYCHO, Finding, key_finding, stored_key
-from tycho.games.star_citizen.install import GameInstall, root_from, search_roots
-from tycho.games.star_citizen.store import GameDataError, KeybindStore
+from tycho.games import find_install, fleet_findings, game_findings, load_keys
 from tycho.keybinds import Keybinds
-from tycho.packs import YOU_TURNED_THEM_OFF, GamePack, PackError, as_run, built_in
+from tycho.packs import (
+    YOU_TURNED_THEM_OFF,
+    GameDataError,
+    GameKeys,
+    GamePack,
+    KeybindSource,
+    PackError,
+    as_run,
+    built_in,
+)
 from tycho.ptt.binding import Binding, DeviceKind
 from tycho.ptt.monitor import InputSource
 from tycho.settings import Settings, SettingsError
@@ -420,7 +428,7 @@ NO_TRAY = (
 
 def serve_with_tray(
     session: Session,
-    store: KeybindStore | None,
+    store: GameKeys | None,
     live: Live,
     display: TileDisplay | None,
     requests: OpenRequests | None = None,
@@ -656,9 +664,9 @@ def key_actions_finding(pack: GamePack) -> Finding:
     )
 
 
-def load_keybinds(current: Settings, binding: Binding) -> KeybindStore:
+def load_keybinds(current: Settings, binding: Binding) -> GameKeys:
     install = find_install(current)
-    store = KeybindStore.load(install)
+    store = load_keys(install)
     log.info("Keybinds: %d actions from %s", len(store.keybinds), install.folder)
     for warning in conflict_warnings(binding, store):
         log.warning("%s", warning)
@@ -742,7 +750,7 @@ def actions_command(current: Settings, words: list[str]) -> int:
         print(f"{game.name} has no actions: Tycho presses no keys there, it only answers.")
         return 1
     try:
-        keybinds = KeybindStore.load(find_install(current)).keybinds
+        keybinds = load_keys(find_install(current)).keybinds
     except (FileNotFoundError, GameDataError) as e:
         print(e, file=sys.stderr)
         return 2
@@ -940,7 +948,7 @@ def load_commands(pack: GamePack) -> CommandMatcher:
 def build_session(
     current: Settings,
     binding: Binding,
-    store: KeybindStore | None,
+    store: GameKeys | None,
     transcriber: Transcriber,
     *,
     audio: AudioSource,
@@ -1008,7 +1016,7 @@ NO_KEYBINDS = Keybinds([])
 
 
 async def serve(
-    session: Session, store: KeybindStore | None, stop: asyncio.Event | None = None
+    session: Session, store: GameKeys | None, stop: asyncio.Event | None = None
 ) -> None:
     """Run the session until ``stop``, Ctrl+C, or the console window closing. ``store``
     is reread now and then, if the pack has keybinds."""
@@ -1031,7 +1039,7 @@ async def serve(
             await asyncio.gather(refresher, return_exceptions=True)
 
 
-async def _refresh_keybinds(store: KeybindStore, changed: Callable[[], None]) -> None:
+async def _refresh_keybinds(store: GameKeys, changed: Callable[[], None]) -> None:
     """Reread the keybinds now and then; ``changed`` is called when they change, to warm
     the brain's cache for the new briefing (#60), once they've settled: the game writes
     the file once per rebind, so a player rebinding several keys would warm it each time
@@ -1178,56 +1186,12 @@ def _checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Findin
         else:
             yield Finding("ok", "Commands", f"{counts}; add your own in {commands_file}")
 
-    from tycho.games.star_citizen.fleet import Fleet
+    yield from fleet_findings(pack)
 
-    if problem := Fleet.load(paths.fleet_file(pack.id)).problem:
-        yield Finding("warn", "Your fleet", problem)
-
-    store: KeybindStore | None = None
+    store: GameKeys | None = None
     # A pack with no keybinds part (an advisor, #191) has no game folder or keys to check.
     if pack.parts.keybinds is not None:
-        try:
-            try:
-                install = find_install(current)
-                yield Finding("ok", "Star Citizen", str(install.folder))
-            except FileNotFoundError:
-                # Not found anywhere Tycho looks: ask, if someone's there to answer.
-                root = ask_game_root(current.game_channel) if ask and sys.stdin.isatty() else None
-                if root is None:
-                    raise
-                current = current.model_copy(update={"game_root": root})
-                saved = settings.save(current)
-                install = find_install(current)
-                yield Finding("ok", "Star Citizen", f"{install.folder} (saved to {saved})")
-            store = KeybindStore.load(install)
-            unbound = [
-                c.id
-                for c in matcher.commands
-                if not c.is_sequence and resolve(c, store.keybinds).action is None
-            ]
-            detail = f"{len(store.keybinds)} actions"
-            if unbound:
-                yield Finding(
-                    "warn",
-                    "Keybinds",
-                    f"{detail}; no key for {len(unbound)} voice command(s): {', '.join(unbound)}",
-                )
-            else:
-                yield Finding("ok", "Keybinds", f"{detail}; every voice command has a key")
-            log_file = install.game_log
-            if log_file.exists():
-                yield Finding("ok", "Game.log", str(log_file))
-            else:
-                yield Finding("warn", "Game.log", f"not found at {log_file}; the game writes it")
-        except FileNotFoundError as e:
-            yield Finding(
-                "fail",
-                "Star Citizen",
-                str(e),
-                fix=f'set game_root = "<the folder holding Data.p4k>" in {paths.settings_file()}',
-            )
-        except GameDataError as e:
-            yield Finding("fail", "Keybinds", f"couldn't read them: {e}")
+        store = yield from game_findings(current, matcher, ask=ask and sys.stdin.isatty())
 
     if binding is not None and store is not None:
         warnings = conflict_warnings(binding, store)
@@ -1390,31 +1354,6 @@ def sounds_command(current: Settings) -> int:
 # --- Shared pieces -------------------------------------------------------------------
 
 
-def find_install(current: Settings) -> GameInstall:
-    roots = search_roots()
-    if current.game_root is not None:
-        roots = (current.game_root, *roots)
-    return GameInstall.find(current.game_channel, roots=roots)
-
-
-def ask_game_root(channel: str, ask: Callable[[str], str] = input) -> Path | None:
-    """Ask where the game is, accepting the channel folder, StarCitizen or Roberts Space
-    Industries; None if the player skips or gives up."""
-    print(f"       Where is Star Citizen? Paste the folder that contains {channel}, or press")
-    print("       Enter to skip. (In the RSI Launcher: Settings, Games, Library Folder.)")
-    for _ in range(3):
-        try:
-            answer = ask("       > ").strip().strip('"')
-        except EOFError:
-            return None
-        if not answer:
-            return None
-        if (root := root_from(Path(answer), channel)) is not None:
-            return root
-        print(f"       There's no {channel}\\Data.p4k in or under {answer}. Try again?")
-    return None
-
-
 def device_choice(current: Settings) -> DeviceChoice:
     from tycho.stt import CudaLibraries, choose_device, cuda_available, gpu_free_mb
 
@@ -1433,7 +1372,7 @@ def microphone_device(setting: str | None) -> int | str | None:
     return int(setting) if setting.strip().isdigit() else setting
 
 
-def conflict_warnings(binding: Binding, store: KeybindStore) -> list[str]:
+def conflict_warnings(binding: Binding, store: KeybindSource) -> list[str]:
     from tycho.ptt import windows as win
     from tycho.ptt.conflicts import conflicts, game_code
 

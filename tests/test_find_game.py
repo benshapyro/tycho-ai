@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from tycho import app, settings
+from tycho.games.star_citizen import checks
 from tycho.games.star_citizen import install as found
 from tycho.games.star_citizen.install import GameInstall, launcher_roots, root_from, search_roots
 from tycho.settings import Settings, SettingsError
@@ -76,7 +77,7 @@ def test_a_game_the_launcher_installed_elsewhere_is_found(
 
 def test_the_channel_setting_picks_ptu(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     root = _game(_game(tmp_path), "PTU")
-    monkeypatch.setattr(app, "search_roots", lambda: ())
+    monkeypatch.setattr(checks, "search_roots", lambda: ())
     current = Settings(game_root=root, game_channel="PTU")
     assert app.find_install(current).folder == root / "PTU"
     with pytest.raises(FileNotFoundError, match="No Star Citizen EPTU"):
@@ -95,16 +96,16 @@ def test_any_level_of_folder_will_do(tmp_path: Path) -> None:
 def test_asking_retries_then_gives_up(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = _game(tmp_path / "StarCitizen")
     answers = iter([r"C:\nowhere", f'"{root / "LIVE"}"'])  # quoted, as Explorer copies it
-    assert app.ask_game_root("LIVE", lambda _: next(answers)) == root
+    assert checks.ask_game_root("LIVE", lambda _: next(answers)) == root
     assert "no LIVE\\Data.p4k" in capsys.readouterr().out
 
-    assert app.ask_game_root("LIVE", lambda _: "") is None  # Enter skips
-    assert app.ask_game_root("LIVE", lambda _: str(tmp_path / "x")) is None  # three misses
+    assert checks.ask_game_root("LIVE", lambda _: "") is None  # Enter skips
+    assert checks.ask_game_root("LIVE", lambda _: str(tmp_path / "x")) is None  # three misses
 
     def closed(_: str) -> str:
         raise EOFError
 
-    assert app.ask_game_root("LIVE", closed) is None
+    assert checks.ask_game_root("LIVE", closed) is None
 
 
 def test_check_saves_the_folder_it_was_given(
@@ -112,13 +113,13 @@ def test_check_saves_the_folder_it_was_given(
 ) -> None:
     root = _game(tmp_path / "StarCitizen")
     monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path / "config"))
-    monkeypatch.setattr(app, "search_roots", lambda: ())
+    monkeypatch.setattr(checks, "search_roots", lambda: ())
     monkeypatch.setattr(app.sys, "stdin", SimpleNamespace(isatty=lambda: True))
 
     def answer(channel: str) -> Path:
         return root
 
-    monkeypatch.setattr(app, "ask_game_root", answer)
+    monkeypatch.setattr(checks, "ask_game_root", answer)
     # Only the game check matters here: run the checks until they report the game.
     for finding in app._checks(Settings(), quick=True):  # pyright: ignore[reportPrivateUsage]
         if finding.what == "Star Citizen":

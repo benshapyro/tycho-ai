@@ -10,15 +10,15 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, get_args
+from typing import get_args
 
 from tycho import paths
+from tycho.settings import Channel
 
 DEFAULT_ROOT = Path(r"C:\Program Files\Roberts Space Industries\StarCitizen")
 ROOT_VARIABLE = "TYCHO_SC_ROOT"
 """Set to the folder that contains LIVE, for installs outside the default location."""
 
-type Channel = Literal["LIVE", "PTU", "EPTU", "TECH-PREVIEW", "HOTFIX"]
 CHANNELS: tuple[Channel, ...] = get_args(Channel.__value__)
 
 COMMON_FOLDERS = (

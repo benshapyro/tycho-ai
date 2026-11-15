@@ -8,9 +8,9 @@ from typing import Any
 import pytest
 
 from tests.fakes.fake_uex import NOW, FakeTradeUex
-from tycho.games.star_citizen import WikiError
 from tycho.games.star_citizen.trade import FRESH_SECONDS, Trade, TradeError, hours_ago
 from tycho.games.star_citizen.trade_lookup import CommodityPrices, TradeRoutes, trade_lookups
+from tycho.games.star_citizen.wiki import WikiError
 
 
 def _trade(uex: FakeTradeUex | None = None, clock: Any = None) -> Trade:

@@ -60,3 +60,19 @@ def test_a_test_s_fake_part_is_known_but_builds_nothing() -> None:
     assert "fake" in registry.known("lookups")
     with pytest.raises(NotImplementedError):
         registry.lookups["fake"](Workshop(SC, Settings()))
+
+
+def test_one_star_citizen_module_loads_only_what_it_needs() -> None:
+    # #411: the package re-exported its look-ups, so settings, which needs one type,
+    # loaded the ship data, UEX and the Wiki with it.
+    import subprocess
+    import sys
+
+    script = (
+        "import sys, tycho.settings, tycho.games.star_citizen.install\n"
+        "print(sorted(m for m in sys.modules if m.startswith('tycho.games.star_citizen.')))"
+    )
+    done = subprocess.run(  # noqa: S603 - this interpreter, running the script above
+        [sys.executable, "-c", script], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.strip() == "['tycho.games.star_citizen.install']", done.stderr

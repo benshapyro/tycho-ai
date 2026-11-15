@@ -25,12 +25,11 @@ from tycho.games.star_citizen.keybinds import (
 )
 from tycho.games.star_citizen.p4k import P4kArchive
 from tycho.keybinds import Action, ActivationMode, Keybinds
+from tycho.packs.parts import GameDataError
+
+__all__ = ["GameDataError", "KeybindStore", "default_cache_dir"]
 
 type _Stamp = tuple[int, int] | None
-
-
-class GameDataError(Exception):
-    """The game's files couldn't be read: missing, mid-patch, or corrupt."""
 
 
 def default_cache_dir() -> Path:

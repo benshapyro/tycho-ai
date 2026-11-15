@@ -10,11 +10,16 @@ from typing import Any
 import pytest
 
 from tests.fakes.fake_wiki import FakeUex, FakeWiki, uex_vehicle, vehicle
-from tycho.games.star_citizen import Ambiguous, NotFound, Ship, ShipLibrary, ShipLookup, ship_lookup
 from tycho.games.star_citizen import data as store
+from tycho.games.star_citizen import ship_lookup
 from tycho.games.star_citizen.data import ShipDataError, ensure, file_for, load, save
+from tycho.games.star_citizen.ship_lookup import ShipLookup
 from tycho.games.star_citizen.ships import (
+    Ambiguous,
     IsAnItem,
+    NotFound,
+    Ship,
+    ShipLibrary,
     concept_from_uex,
     concepts_from_uex,
     rescued,

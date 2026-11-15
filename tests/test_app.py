@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from tycho import app, brain_choice, logs, settings
+from tycho.games.star_citizen import checks
 from tycho.input import code_for
 from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.packs import STAR_CITIZEN, built_in
@@ -313,7 +314,7 @@ def test_check_json_is_one_document_with_a_fix_for_each_problem(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # For agents setting Tycho up: no reading of the printed text (agent setup, 2026-11-04).
-    monkeypatch.setattr(app, "find_install", _no_game)
+    monkeypatch.setattr(checks, "find_install", _no_game)
     assert app.main(["check", "--quick", "--json"]) == 1  # no button, no game: not ready
     document = json.loads(capsys.readouterr().out)
     assert document["ready"] is False
@@ -369,7 +370,7 @@ def test_tycho_actions_finds_names_by_label_and_by_what_players_say(
         return store
 
     monkeypatch.setattr(app, "find_install", install)
-    monkeypatch.setattr(app.KeybindStore, "load", load)
+    monkeypatch.setattr(app, "load_keys", load)
     assert app.main(["actions", "master", "mode"]) == 0
     out = capsys.readouterr().out
     assert "v_master_mode_set_scm  |  Set Master Mode to SCM  |  ralt+v" in out
@@ -598,7 +599,7 @@ def test_a_stored_anthropic_key_with_a_hidden_character_is_no_key(
         assert brain_choice.anthropic_key() is None
     assert "Anthropic key has a character keys don't have" in caplog.text
     assert "tycho key set anthropic" in caplog.text
-    monkeypatch.setattr(app, "find_install", _no_game)
+    monkeypatch.setattr(checks, "find_install", _no_game)
     app.main(["check", "--quick", "--json"])
     brain = {f["what"]: f for f in json.loads(capsys.readouterr().out)["findings"]}["Brain"]
     assert brain["level"] == "warn"
@@ -627,7 +628,7 @@ def test_tycho_check_says_a_stored_key_is_unusable_not_missing(
         return key if asked == name else None
 
     monkeypatch.setattr(app.credentials, "get", stored)
-    monkeypatch.setattr(app, "find_install", _no_game)
+    monkeypatch.setattr(checks, "find_install", _no_game)
     app.main(["check", "--quick", "--json"])
     finding = {f["what"]: f for f in json.loads(capsys.readouterr().out)["findings"]}[what]
     assert finding["level"] == "warn"

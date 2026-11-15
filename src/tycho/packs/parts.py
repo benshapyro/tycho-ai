@@ -51,6 +51,33 @@ class KeybindSource(Protocol):
     def keybinds(self) -> Keybinds: ...
 
 
+class GameDataError(Exception):
+    """The game's files couldn't be read: missing, mid-patch, or corrupt."""
+
+
+class GameFolder(Protocol):
+    """Where the game is on this PC (Star Citizen's: one channel's folder)."""
+
+    @property
+    def folder(self) -> Path: ...
+
+
+class GameKeys(KeybindSource, Protocol):
+    """The player's keybinds read from the game, reread now and then."""
+
+    @property
+    def install(self) -> GameFolder: ...
+
+    @property
+    def last_error(self) -> str | None:
+        """Why the last reread failed, if it did: the last good keys are kept."""
+        ...
+
+    def refresh(self) -> bool:
+        """Reread the keys if the game's files changed; True if they did."""
+        ...
+
+
 @dataclass(slots=True)
 class Workshop:
     """What a look-up's builder may use, for one brain. Builders share parts through
