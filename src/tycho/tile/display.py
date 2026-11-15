@@ -28,11 +28,11 @@ MARGIN = 0.022
 """The gap between the Tile and the screen's edge, as a share of the screen's width."""
 STAY: dict[str, float] = {"shorter": 0.6, "normal": 1.0, "longer": 1.6}
 SAMPLE_SECONDS = 3.0
+"""How long the sample card shows after a Tile setting changes."""
 SCREEN_MISSING = (
     "The Tile's screen isn't plugged in, so the Tile follows the game. Pick another "
     "screen in Tycho's window, on the Tile's page."
 )
-"""How long the sample card shows after a Tile setting changes."""
 PERIOD = {"listening": 1.0, "thinking": 1.1}
 """Seconds per pulse of the talk light."""
 ACCENT_SECONDS = 1.0
@@ -62,6 +62,8 @@ class TileDisplay:
         self._accent = TYCHO_ACCENT
         self._accent_at = -ACCENT_SECONDS
         self._last: tuple[int, int, int, int] | None = None
+        self._screen: Screen | None = None
+        """The screen the last frame was for: a new one redraws."""
         self._stopped = False
         self.on_stopped: Callable[[str], None] = lambda _why: None
         """Called once, on the window's thread, if the window stops while Tycho runs
@@ -94,12 +96,11 @@ class TileDisplay:
         """The window stopped while Tycho ran (#297): the Tile is off until a restart."""
         return self._stopped
 
-    def _screen_missing(self, _choice: str) -> None:
+    def _screen_missing(self, _choice: str) -> bool:
         """The chosen screen isn't plugged in (#447): said once, and the Tile follows
-        the game meanwhile."""
-        with self._lock:
-            self._board.show(notice(SCREEN_MISSING))
-            self._changed = True
+        the game meanwhile. False while the Tile is off or notices are hidden, so it's
+        said when the player can see it."""
+        return self.show(notice(SCREEN_MISSING))
 
     def _window_stopped(self, why: str) -> None:
         self._stopped = True
@@ -189,6 +190,8 @@ class TileDisplay:
             moving = light is not None or any(s.until is not None for s in view)
             accent = self._accent_now(now)
             look = self._look(screen, accent)
+            if screen != self._screen:  # a chosen screen plugged in or out (#468 review)
+                self._screen, self._changed = screen, True
             if not (moving or self._changed or self._last is None):
                 return SAME
             self._changed = False

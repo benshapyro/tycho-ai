@@ -65,8 +65,9 @@ def chosen(choice: str, screens: Sequence[Connected]) -> Screen | None:
 
 class Where:
     """Where the Tile goes each frame, on the Tile's thread: the chosen screen, or the
-    game's. A chosen screen that isn't plugged in is said once (``on_missing``), and said
-    again only after it has been back."""
+    game's. A chosen screen that isn't plugged in is said once (``on_missing``, which
+    returns whether the player was told), and said again only after it has been back.
+    A list that failed means "don't know": the Tile follows the game and says nothing."""
 
     def __init__(
         self,
@@ -74,7 +75,7 @@ class Where:
         *,
         foreground: Callable[[], Screen],
         connected: Callable[[], list[Connected]],
-        on_missing: Callable[[str], None] = lambda _choice: None,
+        on_missing: Callable[[str], bool] = lambda _choice: True,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._choice = choice
@@ -82,31 +83,37 @@ class Where:
         self._connected = connected
         self._on_missing = on_missing
         self._clock = clock
-        self._kept: tuple[float, list[Connected]] | None = None
+        self._kept: tuple[float, list[Connected] | None] | None = None
         self._missing = ""
+        self._logged = ""
 
     def __call__(self) -> Screen:
         choice = self._choice()
         if choice == GAME:
             return self._foreground()
-        screen = chosen(choice, self._screens())
+        plugged = self._screens()
+        if plugged is None:  # don't know: not "unplugged" (#468 review)
+            return self._foreground()
+        screen = chosen(choice, plugged)
         if screen is not None:
-            self._missing = ""
+            self._missing = self._logged = ""
             return screen
-        if self._missing != choice:
-            self._missing = choice
+        if self._logged != choice:
+            self._logged = choice
             log.warning("The Tile's screen %s isn't plugged in; it follows the game", choice)
-            self._on_missing(choice)
+        if self._missing != choice and self._on_missing(choice):
+            self._missing = choice  # told: else try again next frame (Tile off, notices hidden)
         return self._foreground()
 
-    def _screens(self) -> list[Connected]:
+    def _screens(self) -> list[Connected] | None:
+        """The screens plugged in, kept for a moment; None if listing them failed."""
         now = self._clock()
         if self._kept is None or now - self._kept[0] > KEEP_SECONDS:
             try:
                 self._kept = (now, self._connected())
-            except OSError:
+            except OSError, AttributeError:
                 log.debug("Listing the screens failed", exc_info=True)
-                self._kept = (now, [])
+                self._kept = (now, None)
         return self._kept[1]
 
 
@@ -126,7 +133,9 @@ def connected() -> list[Connected]:
 
     callback = win32.MONITORENUMPROC(each)
     # Real pixels whichever thread asks: the window's own thread isn't DPI-aware.
-    before = user32.SetThreadDpiAwarenessContext(_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+    before = None
+    with contextlib.suppress(AttributeError, OSError):  # older Windows lacks it
+        before = user32.SetThreadDpiAwarenessContext(_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
     try:
         if not user32.EnumDisplayMonitors(None, None, callback, 0):
             raise OSError(ctypes.get_last_error(), "EnumDisplayMonitors failed")

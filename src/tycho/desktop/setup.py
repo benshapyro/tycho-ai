@@ -104,7 +104,7 @@ class WindowsPC:
             return []
         try:
             return named(connected())
-        except OSError:
+        except OSError, AttributeError:
             log.debug("Listing the screens failed", exc_info=True)
             return []
 
