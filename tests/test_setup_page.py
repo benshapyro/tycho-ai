@@ -67,7 +67,14 @@ def vault(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
 class Setup:
     """The page on setup, over a real bridge."""
 
-    def __init__(self, browser: Browser, path: Path, *, first_run: bool = True) -> None:
+    def __init__(
+        self,
+        browser: Browser,
+        path: Path,
+        *,
+        first_run: bool = True,
+        findings: list[dict[str, str]] | None = None,
+    ) -> None:
         self.path = path
         self.pc = FakeSetupPC()
         self.finished: list[bool] = []
@@ -81,6 +88,7 @@ class Setup:
             first_run=first_run,
             restart=lambda: bool(self.restarts.append(True)) or True,
             latest_release=lambda: None,
+            findings=lambda: findings or [],
         )
         self.page: Page = browser.new_page()
         self.errors: list[str] = []
@@ -306,7 +314,9 @@ def test_a_first_run_for_a_game_tycho_only_advises_in(setup: Setup, vault: dict[
 def test_picking_another_game_in_settings_shows_its_own_setup_first(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
-    settings.save(Settings(push_to_talk="mouse:0x06", game_channel="PTU"), path)
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", game_channel="PTU", crash_reports=False), path
+    )
     setup = Setup(browser, path, first_run=False)
     page = setup.page
     page.get_by_role("button", name="Settings", exact=True).click()
@@ -350,11 +360,11 @@ def test_a_player_set_up_before_crash_reports_is_asked_once(
     crash = page.locator("#crashCard")
     expect(crash.locator("[data-crash][aria-pressed='true']")).to_have_count(0)
     crash.locator("[data-crash='no']").click()
-    expect(page.get_by_role("heading", name="Status")).to_be_visible()
+    expect(page.locator("#homeState")).to_be_visible()
     assert setup.saved().crash_reports is False
     setup.close()
     again = Setup(browser, path, first_run=False)  # the next start: answered, not asked
-    expect(again.page.get_by_role("heading", name="Status")).to_be_visible()
+    expect(again.page.locator("#homeState")).to_be_visible()
     again.close()
 
 
@@ -423,7 +433,7 @@ def test_a_game_tycho_only_advises_in_has_no_empty_pages(
     )
     setup = Setup(browser, path, first_run=False)
     page = setup.page
-    page.get_by_role("button", name="Commands").click()
+    page.get_by_role("button", name="What to say").click()
     expect(page.locator("#noCommands")).to_contain_text("ask in your own words")
     expect(page.locator("table")).to_have_count(0)
     page.get_by_role("button", name="Settings", exact=True).click()
@@ -463,4 +473,45 @@ def test_a_newer_version_makes_get_the_button_to_press(
     page.get_by_role("tab", name="Updates").click()
     expect(page.locator("#getUpdate")).to_have_class(re.compile(r"\bprimary\b"))
     expect(page.locator("#checkUpdates")).not_to_have_class(re.compile(r"\bprimary\b"))
+    setup.close()
+
+
+def test_the_places_are_down_the_side_and_home_shows_one_thing_to_fix(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """ADR 17 as amended (direction B): Home, What to say, The Tile and Settings down the
+    left, the game under them, at most one thing to fix on Home, and the Tile on its own."""
+    settings.save(
+        Settings(game="wow-forever", push_to_talk="mouse:0x06", crash_reports=False), path
+    )
+    checks = [
+        {"level": "ok", "what": "Microphone", "detail": "found", "fix": ""},
+        {"level": "warn", "what": "Voice", "detail": "the Windows voice", "fix": "add a key"},
+        {"level": "fail", "what": "Brain", "detail": "no key", "fix": "tycho key set"},
+    ]
+    setup = Setup(browser, path, first_run=False, findings=checks)
+    page = setup.page
+    nav = page.locator("nav[aria-label='Places'] button")
+    expect(nav).to_have_text(["Home", "What to say", "The Tile", "Settings"])
+    expect(page.locator("#gameBox")).to_contain_text("World of Warcraft: Forever")
+    expect(page.locator("#gameBox")).to_contain_text("Tycho only talks")
+    # Home: no brain key here, so there's something to fix, and only one shows.
+    expect(page.locator("#homeState")).to_be_visible()
+    expect(page.locator("#oneFix")).to_have_count(1)
+    expect(page.locator("#oneFix")).to_contain_text("Brain")  # the failure before the warning
+    expect(page.locator("#statusBadge")).to_have_text("2 !")
+    expect(page.locator("#checks")).to_be_hidden()
+    page.locator("#showChecks").click()
+    expect(page.locator("#checks .check").first).to_be_visible()
+    # The Tile has its own place, and Settings no longer has a Tile tab.
+    page.get_by_role("button", name="The Tile").click()
+    expect(page.get_by_role("heading", name="The Tile")).to_be_visible()
+    expect(page.locator("#tilePreview")).to_have_attribute("src", re.compile("^data:image"))
+    page.get_by_role("button", name="Settings", exact=True).click()
+    expect(page.get_by_role("tab", name="The Tile")).to_have_count(0)
+    # Switch game opens the game choice in Settings.
+    page.locator("#switchGame").click()
+    expect(page.get_by_role("tab", name="Game and controls")).to_have_attribute(
+        "aria-selected", "true"
+    )
     setup.close()
