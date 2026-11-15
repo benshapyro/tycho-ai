@@ -22,8 +22,8 @@ from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
+from tycho.games.star_citizen.wiki import ITEM_KINDS, VEHICLES, Hit, WikiError, WikiSource, search
 from tycho.knowledge.fresh import Fresh
-from tycho.knowledge.wiki import ITEM_KINDS, VEHICLES, Hit, WikiError, WikiSource, search
 from tycho.text import name_score, normalize
 
 log = logging.getLogger(__name__)

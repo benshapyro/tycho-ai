@@ -2,7 +2,7 @@
 and every action looked up by name (ADR 19).
 
 Every game that presses keys uses these. Reading a game's own files into them is that
-game's code: Star Citizen's readers are in ``tycho.game.keybinds``.
+game's code: Star Citizen's readers are in ``tycho.games.star_citizen.keybinds``.
 """
 
 import re

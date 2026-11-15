@@ -194,7 +194,7 @@ def test_the_keybinds_are_read_once_a_while_and_none_without_the_game(
     path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import tycho.app
-    from tycho.game.store import KeybindStore
+    from tycho.games.star_citizen.store import KeybindStore
 
     loads: list[object] = []
     game: list[object] = [object()]

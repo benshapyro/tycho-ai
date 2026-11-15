@@ -14,7 +14,7 @@ from typing import Any, cast
 
 import httpx2
 
-from tycho.knowledge.wiki import WikiApi, WikiError, WikiSource
+from tycho.games.star_citizen.wiki import WikiApi, WikiError, WikiSource
 
 log = logging.getLogger(__name__)
 

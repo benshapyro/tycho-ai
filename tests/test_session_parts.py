@@ -7,7 +7,7 @@ import pytest
 from tycho.brain import BrainError, Reply, RunActions, RunSequence
 from tycho.commands import Command, CommandMatcher
 from tycho.commands.reserved import TILE_WORDS
-from tycho.game.gamelog import QUANTUM_ROUTE
+from tycho.games.star_citizen.gamelog import QUANTUM_ROUTE
 from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.packs import STAR_CITIZEN, built_in
 from tycho.runtime.planning import (

@@ -2,6 +2,8 @@
 
 What the brain can look up: ships, items and crafting, mining, trade prices and routes, refining, ships for aUEC, the player's fleet, and web search. Read the root AGENTS.md and `src/tycho/brain/AGENTS.md` first.
 
+This folder holds what any game uses: web search (`web.py`) and kept answers (`fresh.py`). Star Citizen's look-ups and their sources live with its code in `src/tycho/games/star_citizen/` (ADR 19); the rules here apply to them, and to any game's.
+
 ## Sources and their terms
 
 - **UEX** (`uex.py`, `trade*.py`, `refining.py`): an official API, 120 requests a minute, for personal and non-commercial use. Credit UEX in what's said: `credit = "UEX"` makes the brain add "From UEX." if Claude didn't.

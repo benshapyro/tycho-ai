@@ -649,7 +649,7 @@ def test_settings_and_the_fleet_dont_say_checking() -> None:
 
 
 def test_the_real_settings_and_fleet_tools_are_instant() -> None:
-    from tycho.knowledge.fleet import FleetUpdate
+    from tycho.games.star_citizen.fleet import FleetUpdate
     from tycho.spoken_settings import SettingsTool
 
     assert SettingsTool.instant

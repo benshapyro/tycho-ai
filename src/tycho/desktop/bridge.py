@@ -560,7 +560,7 @@ class Bridge:
 
         def read() -> Keybinds | None:
             from tycho.app import find_install
-            from tycho.game.store import GameDataError, KeybindStore
+            from tycho.games.star_citizen.store import GameDataError, KeybindStore
 
             try:
                 return KeybindStore.load(find_install(current)).keybinds

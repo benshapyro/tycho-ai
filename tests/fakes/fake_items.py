@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from tests.fakes.fake_wiki import FakeSearch
-from tycho.knowledge import WikiError
+from tycho.games.star_citizen import WikiError
 
 
 def item(name: str, kind: str = "WeaponPersonal", **fields: Any) -> dict[str, Any]:

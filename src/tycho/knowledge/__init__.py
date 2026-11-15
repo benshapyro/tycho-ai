@@ -1,27 +1,6 @@
-"""Knowledge (ADR 15): what the brain can look up before it answers.
+"""Knowledge (ADR 15): what the brain can look up before it answers, for any game.
 
-Each source is a boundary (``WikiSource``) with a fake in tests, and each look-up
-satisfies ``tycho.brain.lookups.Lookup``. Data from outside is untrusted: it only
-ever shapes what Tycho says, never what it presses.
+Web search (``web``) and answers kept for a while (``fresh``). A game's own look-ups
+live with its code: Star Citizen's are in ``tycho.games.star_citizen``. Data from
+outside is untrusted: it only ever shapes what Tycho says, never what it presses.
 """
-
-from tycho.knowledge.ship_lookup import ShipLookup
-from tycho.knowledge.ships import Ambiguous, NotFound, Ship, ShipLibrary
-from tycho.knowledge.trade_lookup import CommodityPrices, TradeRoutes, trade_lookups
-from tycho.knowledge.uex import UexApi
-from tycho.knowledge.wiki import WikiApi, WikiError, WikiSource
-
-__all__ = [
-    "Ambiguous",
-    "CommodityPrices",
-    "NotFound",
-    "Ship",
-    "ShipLibrary",
-    "ShipLookup",
-    "TradeRoutes",
-    "UexApi",
-    "WikiApi",
-    "WikiError",
-    "WikiSource",
-    "trade_lookups",
-]

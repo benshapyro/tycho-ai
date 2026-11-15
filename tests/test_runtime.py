@@ -28,7 +28,7 @@ from tests.fakes.fake_speaker import FakeSpeaker
 from tycho import safety
 from tycho.brain import BrainError, BrainRequest, Decision, Reply, RunActions, RunSequence
 from tycho.commands import CommandMatcher
-from tycho.game.gamelog import QUANTUM_ROUTE
+from tycho.games.star_citizen.gamelog import QUANTUM_ROUTE
 from tycho.input import Presser, code_for
 from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.lexicon import Lexicon

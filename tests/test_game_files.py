@@ -7,12 +7,12 @@ from pathlib import Path
 import pytest
 
 from tests.fakes.cryxml_writer import encode
-from tycho.game import cryxml
-from tycho.game.install import GameInstall
-from tycho.game.keybinds import apply_profile, parse_defaults
-from tycho.game.localization import parse_global_ini, resolve
-from tycho.game.p4k import P4kArchive
-from tycho.game.store import GameDataError, KeybindStore
+from tycho.games.star_citizen import cryxml
+from tycho.games.star_citizen.install import GameInstall
+from tycho.games.star_citizen.keybinds import apply_profile, parse_defaults
+from tycho.games.star_citizen.localization import parse_global_ini, resolve
+from tycho.games.star_citizen.p4k import P4kArchive
+from tycho.games.star_citizen.store import GameDataError, KeybindStore
 from tycho.keybinds import Keybinds, KeyInput
 
 DEFAULTS = """<profile>

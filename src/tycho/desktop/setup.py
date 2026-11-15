@@ -88,7 +88,7 @@ class WindowsPC:
         return Game(True, current.game_channel, str(install.folder))
 
     def root(self, folder: str, channel: str) -> str | None:
-        from tycho.game.install import root_from
+        from tycho.games.star_citizen.install import root_from
 
         found = root_from(Path(folder), channel)
         return str(found) if found is not None else None
@@ -124,7 +124,7 @@ class WindowsPC:
 
     def conflicts(self, setting: str, current: Settings) -> list[str]:
         from tycho.app import conflict_warnings, find_install
-        from tycho.game.store import GameDataError, KeybindStore
+        from tycho.games.star_citizen.store import GameDataError, KeybindStore
         from tycho.packs import built_in
         from tycho.ptt.binding import Binding
 

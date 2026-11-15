@@ -78,7 +78,7 @@ class Command:
     settle_seconds: float = 0.0
     """How long to wait after setup for the game to change mode."""
     requires: tuple[str, ...] = ()
-    """Facts the game state must show (e.g. ``tycho.game.gamelog.QUANTUM_ROUTE``),
+    """Facts the game state must show (e.g. ``tycho.games.star_citizen.gamelog.QUANTUM_ROUTE``),
     or nothing is pressed."""
     accepted_risks: tuple[str, ...] = ()
     """Control contexts where the key could still do something dangerous, which the

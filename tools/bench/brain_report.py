@@ -30,8 +30,8 @@ from anthropic.types.beta import BetaTextBlockParam, BetaToolParam
 from openai.types.chat import ChatCompletionToolParam
 
 from tycho import credentials
-from tycho.game.install import GameInstall
-from tycho.game.store import KeybindStore
+from tycho.games.star_citizen.install import GameInstall
+from tycho.games.star_citizen.store import KeybindStore
 from tycho.keybinds import Keybinds
 from tycho.lexicon import Lexicon
 from tycho.packs import STAR_CITIZEN, built_in

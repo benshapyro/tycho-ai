@@ -18,8 +18,8 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
+from tycho.games.star_citizen.wiki import WikiError, WikiSource
 from tycho.knowledge.fresh import Fresh
-from tycho.knowledge.wiki import WikiError, WikiSource
 from tycho.text import name_score, normalize, similarity
 
 log = logging.getLogger(__name__)

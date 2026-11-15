@@ -21,8 +21,8 @@ from tests.fakes.fake_runtime import FakeFeedback
 from tycho import paths
 from tycho.commands import CommandMatcher
 from tycho.eval.wer import score_clip
-from tycho.game.install import GameInstall
-from tycho.game.store import GameDataError, KeybindStore
+from tycho.games.star_citizen.install import GameInstall
+from tycho.games.star_citizen.store import GameDataError, KeybindStore
 from tycho.input import Presser
 from tycho.keybinds import Keybinds
 from tycho.lexicon import Lexicon

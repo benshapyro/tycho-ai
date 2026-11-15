@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import cast
 
 from tycho.brain.lookups import LookupResult, failure
-from tycho.knowledge.ships import Ambiguous, NotFound, Ship, ShipLibrary
+from tycho.games.star_citizen.ships import Ambiguous, NotFound, Ship, ShipLibrary
 
 log = logging.getLogger(__name__)
 

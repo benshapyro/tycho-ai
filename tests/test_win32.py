@@ -20,14 +20,7 @@ def _called() -> dict[tuple[str, str], str]:
         names: dict[str, str] = {}  # local name -> DLL, from `user32 = win32.user32()`
         for node in ast.walk(tree):
             if isinstance(node, ast.Assign):
-                targets = node.targets[0]
-                values = node.value
-                pairs = (
-                    zip(targets.elts, values.elts, strict=False)
-                    if isinstance(targets, ast.Tuple) and isinstance(values, ast.Tuple)
-                    else [(targets, values)]
-                )
-                for target, value in pairs:
+                for target, value in _pairs(node):
                     if isinstance(target, ast.Name) and (dll := _dll(value)):
                         names[target.id] = dll
         for node in ast.walk(tree):
@@ -39,6 +32,14 @@ def _called() -> dict[tuple[str, str], str]:
             if dll:
                 found.setdefault((dll, node.attr), path.relative_to(SRC).as_posix())
     return found
+
+
+def _pairs(node: ast.Assign) -> list[tuple[ast.expr, ast.expr]]:
+    """Each (target, value) of an assignment, ``a, b = (x, y)`` taken apart."""
+    targets, values = node.targets[0], node.value
+    if isinstance(targets, ast.Tuple) and isinstance(values, ast.Tuple):
+        return list(zip(targets.elts, values.elts, strict=False))
+    return [(targets, values)]
 
 
 def _dll(node: ast.expr) -> str | None:
@@ -105,4 +106,20 @@ def test_a_dll_is_used_where_the_check_can_see_it() -> None:
             ):
                 continue
             hidden.append(f"{path.relative_to(SRC).as_posix()}:{node.lineno}")
+        # #409: a name bound to a DLL is only ever used as ``name.Function``.
+        bound = {
+            target.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Assign)
+            for target, value in _pairs(node)
+            if isinstance(target, ast.Name) and _dll(value)
+        }
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Name)
+                and isinstance(node.ctx, ast.Load)
+                and node.id in bound
+                and not isinstance(parents[node], ast.Attribute)
+            ):
+                hidden.append(f"{path.relative_to(SRC).as_posix()}:{node.lineno}")
     assert not hidden, f"call the DLL inline or bind it to a plain name: {hidden}"

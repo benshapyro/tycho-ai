@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING
 from tycho.packs.parts import Built, Registry, Workshop
 
 if TYPE_CHECKING:
-    from tycho.knowledge.ship_lookup import ShipLookup
-    from tycho.knowledge.ships import ShipLibrary
+    from tycho.games.star_citizen.ship_lookup import ShipLookup
+    from tycho.games.star_citizen.ships import ShipLibrary
     from tycho.packs import Tile
     from tycho.runtime.ports import GameState
 
@@ -29,7 +29,7 @@ log = logging.getLogger("tycho")
 
 def _game_log(folder: Path) -> GameState:
     """Star Citizen's Game.log, read so far now, not on the first command."""
-    from tycho.game.gamelog import GameLog
+    from tycho.games.star_citizen.gamelog import GameLog
 
     game_log = GameLog(folder / "Game.log")
     game_log.facts()
@@ -43,7 +43,7 @@ def _game_log(folder: Path) -> GameState:
 
 def _ship_lookup(workshop: Workshop) -> ShipLookup:
     from tycho import paths
-    from tycho.knowledge import ShipLookup, UexApi, WikiApi
+    from tycho.games.star_citizen import ShipLookup, UexApi, WikiApi
 
     return workshop.shared(
         "ship_lookup",
@@ -57,7 +57,7 @@ def _ships(workshop: Workshop) -> Built:
 
 def _fleet(workshop: Workshop) -> Built:
     from tycho import paths
-    from tycho.knowledge.fleet import Fleet, FleetUpdate
+    from tycho.games.star_citizen.fleet import Fleet, FleetUpdate
 
     ships = _ship_lookup(workshop)
     fleet = Fleet.load(paths.fleet_file(workshop.pack.id))
@@ -70,22 +70,22 @@ def _fleet(workshop: Workshop) -> Built:
 
 
 def _items(_: Workshop) -> Built:
-    from tycho.knowledge import WikiApi
-    from tycho.knowledge.item_lookup import ItemLookup
+    from tycho.games.star_citizen import WikiApi
+    from tycho.games.star_citizen.item_lookup import ItemLookup
 
     return Built((ItemLookup(WikiApi()),))
 
 
 def _mining(_: Workshop) -> Built:
-    from tycho.knowledge import WikiApi
-    from tycho.knowledge.mining import MiningLookup
+    from tycho.games.star_citizen import WikiApi
+    from tycho.games.star_citizen.mining import MiningLookup
 
     return Built((MiningLookup(WikiApi()),))
 
 
 def _trade(_: Workshop) -> Built:
-    from tycho.knowledge import UexApi
-    from tycho.knowledge.trade_lookup import trade_lookups
+    from tycho.games.star_citizen import UexApi
+    from tycho.games.star_citizen.trade_lookup import trade_lookups
 
     return Built(tuple(trade_lookups(UexApi())))
 
@@ -128,7 +128,7 @@ def _web(workshop: Workshop) -> Built:
 def ship_accent(flying: str, library: ShipLibrary | None, tile: Tile) -> str | None:
     """The Tile's colour for the ship the player said they're flying, if Tycho knows it,
     from the game pack's ``tile``."""
-    from tycho.knowledge.ships import Ship
+    from tycho.games.star_citizen.ships import Ship
     from tycho.tile.design import accent_for, accent_for_maker
 
     if not flying or library is None:

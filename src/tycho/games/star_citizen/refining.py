@@ -12,9 +12,9 @@ from collections.abc import Mapping
 from typing import Any
 
 from tycho.brain.lookups import LookupResult, failure
-from tycho.knowledge.trade import Trade, TradeError
-from tycho.knowledge.trade_lookup import SOURCE
-from tycho.knowledge.wiki import WikiError
+from tycho.games.star_citizen.trade import Trade, TradeError
+from tycho.games.star_citizen.trade_lookup import SOURCE
+from tycho.games.star_citizen.wiki import WikiError
 from tycho.text import name_score, normalize
 
 log = logging.getLogger(__name__)
