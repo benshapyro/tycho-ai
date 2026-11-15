@@ -110,7 +110,7 @@ def test_game_log_is_read_only_for_a_pack_with_a_game_state_part(
 ) -> None:
     store = SimpleNamespace(
         keybinds=FakeGameKeybinds().keybinds,
-        install=SimpleNamespace(game_log=tmp_path / "Game.log"),
+        install=SimpleNamespace(folder=tmp_path),
     )
     pack = fake_pack()
     assert pack.parts.game_state is None
@@ -136,3 +136,20 @@ def test_a_pack_without_ships_or_a_fleet_builds_neither(monkeypatch: pytest.Monk
     brain = _brain(built_in("wow-forever"))
     assert "update_fleet" not in brain._lookups
     asyncio.run(brain.close())
+
+
+def test_star_citizen_s_look_ups_keep_their_order() -> None:
+    # The tools' order is part of the brain's prompt cache (#396): the registry builds
+    # them in the pack's order, which must stay what it was.
+    assert list(_brain(built_in(STAR_CITIZEN))._lookups) == [
+        "ship_lookup",
+        "update_fleet",
+        "item_lookup",
+        "mining_lookup",
+        "commodity_prices",
+        "trade_routes",
+        "refining",
+        "ship_purchases",
+        "settings",
+        "web_search",
+    ]

@@ -64,18 +64,9 @@ DLL_LOADERS = frozenset({"windll", "cdll", "oledll", "pydll"})
 
 # Today's breaks: (the importing module, what it imports). Remove an entry when you fix it.
 STAR_CITIZEN_BREAKS = {
-    ("tycho.app", "tycho.game.gamelog"),
     ("tycho.app", "tycho.game.install"),
     ("tycho.app", "tycho.game.store"),
     ("tycho.app", "tycho.knowledge.fleet"),
-    ("tycho.brain_choice", "tycho.knowledge.fleet"),
-    ("tycho.brain_choice", "tycho.knowledge.item_lookup"),
-    ("tycho.brain_choice", "tycho.knowledge.mining"),
-    ("tycho.brain_choice", "tycho.knowledge.ship_lookup"),
-    ("tycho.brain_choice", "tycho.knowledge.ships"),
-    ("tycho.brain_choice", "tycho.knowledge.trade_lookup"),
-    ("tycho.brain_choice", "tycho.knowledge.uex"),
-    ("tycho.brain_choice", "tycho.knowledge.wiki"),
     ("tycho.desktop.bridge", "tycho.game.store"),
     ("tycho.desktop.setup", "tycho.game.install"),
     ("tycho.desktop.setup", "tycho.game.store"),

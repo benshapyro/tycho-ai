@@ -7,8 +7,9 @@ registry plus it, as a later release would add a real game's reader.
 from importlib.resources.abc import Traversable
 from pathlib import Path
 
+from tycho.games import BUILT_IN
 from tycho.keybinds import Action, Keybinds, KeyInput
-from tycho.packs import BUILT_IN, GamePack, load_pack
+from tycho.packs import GamePack, load_pack
 
 FOLDER: Traversable = Path(__file__).resolve().parents[1] / "packs" / "fake-game"
 REGISTRY = BUILT_IN.with_parts("keybinds", "fake-game")

@@ -959,19 +959,14 @@ def build_session(
     """The talking loop, wired the way ``tycho run`` wires it, for ``pack``'s game: its
     commands, words and safety lists, which say whether key actions are off (#191).
     ``store`` is None for a pack with no keybinds part."""
-    from tycho.game.gamelog import GameLog
+    from tycho.games import BUILT_IN
     from tycho.input import Presser
     from tycho.lexicon import Lexicon
     from tycho.ptt.monitor import PushToTalk
     from tycho.runtime import Session
 
     if game_state is None and store is not None and pack.parts.game_state is not None:
-        # "star-citizen", the only game-state part built in: Game.log.
-        game_log = GameLog(store.install.game_log)
-        game_log.facts()  # read the session so far now, not on the first command
-        if not game_log.readable:
-            log.info("No Game.log yet; Tycho reads it once the game writes one")
-        game_state = game_log
+        game_state = BUILT_IN.game_state[pack.parts.game_state](store.install.folder)
     matcher = load_commands(pack)
     return Session(
         audio=audio,
