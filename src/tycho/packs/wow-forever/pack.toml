@@ -13,7 +13,7 @@
 
 id = "wow-forever"
 name = "World of Warcraft: Forever"
-version = "0.2.0"
+version = "0.2.1"
 format = 1
 mode = "advisor"
 accent = "#f0c674"         # the window's and the Tile's colour in this game: gold (ADR 17)
@@ -34,3 +34,5 @@ examples = [
     "what's the first dungeon, and what level is it?",
     "how does the Legacy System work?",
 ]
+# The setting's name as the game shows it under System, Graphics (#381; check on the PC).
+tips = ["Set Display Mode to Windowed (Fullscreen) so the Tile can show over the game."]

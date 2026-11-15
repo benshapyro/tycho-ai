@@ -1,5 +1,5 @@
-# The Tile in World of Warcraft: Forever (ADR 16, ADR 18). Only the window's preview card
-# for now: the Tile over the game is #381.
+# The Tile in World of Warcraft: Forever (ADR 16, ADR 18, #381): cards over the game, in
+# the pack's gold. The window's Tile page shows this card as the preview.
 
 [sample]
 title = "Where to level"

@@ -27,7 +27,7 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
 - **Knows your fleet,** so "which of my ships is best for mining?" is about your ships.
 - **Settings by voice:** "turn your voice down a bit", "less time to confirm", "stop searching the web". "Undo" puts back the last change.
 - **Calls you what you like:** "Commander" by default, or "call me Ace", or nothing at all. It uses the name sparingly.
-- **The Tile:** a small see-through panel over the game for what's better read than heard: prices, routes, specs, recipes, steps, and the countdown when Tycho asks you to confirm. Its colour follows your ship. It needs Borderless Window mode.
+- **The Tile:** a small see-through panel over the game for what's better read than heard: prices, routes, specs, recipes, steps, and the countdown when Tycho asks you to confirm. In Star Citizen its colour follows your ship; in World of Warcraft: Forever it's gold. It needs a borderless window: Borderless Window mode in Star Citizen, Windowed (Fullscreen) in World of Warcraft: Forever.
 - **Its own window and a tray icon:** a guided first run that starts with your game (then your keys and what they cost, your push-to-talk button, a microphone test, Tycho's voice, and what leaves your PC), Status, Settings, and Commands, where you see everything you can say and add your own phrases.
 - **A log of every key it pressed.**
 - **Speech recognition on your PC,** on the graphics card when it has room and on the processor otherwise.
@@ -39,7 +39,6 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
 These are plans, not promises. Each links its issue.
 
 - **Your fleet and logs in Tycho's window** ([#12](https://github.com/benshapyro/tycho-ai/issues/12)).
-- **The Tile over World of Warcraft: Forever** ([#381](https://github.com/benshapyro/tycho-ai/issues/381)): cards over the game, as in Star Citizen.
 - **Learns from misses and fixes itself** ([#51](https://github.com/benshapyro/tycho-ai/issues/51)): offers to add phrases you rephrased, and repairs keybinds after a patch, always with your OK.
 - **Reads the game's log** ([#30](https://github.com/benshapyro/tycho-ai/issues/30)): knows which ship you're in and where you are, without being told.
 - **Looks at your screen when you ask** ([#31](https://github.com/benshapyro/tycho-ai/issues/31)): it captures only the game window and keeps nothing.

@@ -9,6 +9,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ## [Unreleased]
 
 ### Added
+- The Tile now shows cards over World of Warcraft: Forever too, in gold, for lists, steps and routes that are easier to read than hear. Setup tells you to set Display Mode to Windowed (Fullscreen), which the Tile needs. ([#381](https://github.com/benshapyro/tycho-ai/issues/381))
 - Setup's last step, Try it, is now a real test. Hold your button and speak: the window shows what Tycho heard and the keys it would press, and nothing reaches the game while that step is open and in front, so you can try it at the desktop. Switch to the game and Tycho presses keys again. After a first run's setup, the window opens again on that step once Tycho is listening. ([#464](https://github.com/benshapyro/tycho-ai/pull/464))
 - Choose which screen the Tile shows on, on the Tile page in Tycho's window: follow the game (as before), or a screen of your own, such as the one beside the game. If that screen isn't plugged in, the Tile follows the game and says so once. ([#447](https://github.com/benshapyro/tycho-ai/issues/447))
 - Home in Tycho's window now says whether Tycho is listening (or paused) and which button to hold, and lists the last 20 things you said with what Tycho did, newest first, as they happen. They're kept in memory only: never saved, and gone when Tycho quits.

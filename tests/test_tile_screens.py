@@ -5,10 +5,10 @@ from typing import Any
 import pytest
 
 from tycho.settings import Settings
-from tycho.tile import screens
+from tycho.tile import Card, screens
 from tycho.tile.display import SCREEN_MISSING, TileDisplay
 from tycho.tile.screens import GAME, Connected, Where, chosen, named, ordered
-from tycho.tile.window import Screen
+from tycho.tile.window import SAME, Screen
 
 MAIN = Connected(r"\\.\DISPLAY1", Screen(0, 0, 2560, 1440), main=True)
 LEFT = Connected(r"\\.\DISPLAY3", Screen(-1920, 0, 0, 1080))
@@ -42,9 +42,13 @@ class Rig:
             lambda: self.choice,
             foreground=lambda: GAMES,
             connected=self._connected,
-            on_missing=self.missing.append,
+            on_missing=self._told,
             clock=lambda: self.now,
         )
+
+    def _told(self, choice: str) -> bool:
+        self.missing.append(choice)
+        return True
 
     def _connected(self) -> list[Connected]:
         self.listed += 1
@@ -85,8 +89,39 @@ def test_a_screen_list_that_fails_follows_the_game() -> None:
     def failing() -> list[Connected]:
         raise OSError("no")
 
-    where = Where(lambda: r"\\.\DISPLAY2", foreground=lambda: GAMES, connected=failing)
+    told: list[str] = []
+
+    def tell(choice: str) -> bool:
+        told.append(choice)
+        return True
+
+    where = Where(
+        lambda: r"\\.\DISPLAY2", foreground=lambda: GAMES, connected=failing, on_missing=tell
+    )
     assert where() == GAMES
+    assert told == []  # don't know isn't "unplugged" (#468 review)
+
+
+def test_a_missing_screen_is_said_once_the_player_can_see_it() -> None:
+    """#468 review: while the Tile is off or notices are hidden, saying it fails, so
+    it's tried again until the player is told."""
+    told: list[str] = []
+    seen = False
+
+    def say(choice: str) -> bool:
+        told.append(choice)
+        return seen
+
+    where = Where(
+        lambda: r"\\.\DISPLAY2", foreground=lambda: GAMES, connected=lambda: [MAIN], on_missing=say
+    )
+    where()
+    where()
+    assert len(told) == 2
+    seen = True
+    where()
+    where()
+    assert len(told) == 3
 
 
 @pytest.mark.parametrize(
@@ -122,9 +157,27 @@ def test_the_display_tells_the_window_where_and_says_a_missing_screen_on_the_til
     )
     window: FakeWindow = display._window  # type: ignore[assignment] # pyright: ignore[reportPrivateUsage]
     assert isinstance(window.where, Where)
-    display._screen_missing(r"\\.\DISPLAY2")  # pyright: ignore[reportPrivateUsage]
+    assert display._screen_missing(r"\\.\DISPLAY2")  # pyright: ignore[reportPrivateUsage]
     shown = display._board.view()  # pyright: ignore[reportPrivateUsage]
     assert any(SCREEN_MISSING in str(s) for s in shown)
+
+
+@pytest.mark.parametrize("settings", [{"tile": False}, {"tile_hidden_cards": "notice"}])
+def test_a_missing_screen_isnt_said_where_it_cant_be_seen(settings: dict[str, object]) -> None:
+    """#468 review: not saved up while the Tile is off, and not counted as told when
+    notices are hidden."""
+    display = TileDisplay(Settings(**settings), clock=lambda: 0.0, window=FakeWindow)  # type: ignore[arg-type]
+    assert not display._screen_missing(r"\\.\DISPLAY2")  # pyright: ignore[reportPrivateUsage]
+    assert not display._board.view()  # pyright: ignore[reportPrivateUsage]
+
+
+def test_a_new_screen_under_a_still_card_draws_it_there() -> None:
+    """#468 review: a pinned card moves when its screen is plugged in or out."""
+    display = TileDisplay(Settings(), clock=lambda: 0.0, window=FakeWindow)  # type: ignore[arg-type]
+    display.show(Card("notice", body=("Kept.",)), pinned=True)
+    assert display.frame(GAMES) not in (None, SAME)
+    assert display.frame(GAMES) is SAME
+    assert display.frame(RIGHT.screen) not in (None, SAME)
 
 
 def test_a_new_screen_shows_a_sample_there_in_plain_words() -> None:
@@ -133,3 +186,14 @@ def test_a_new_screen_shows_a_sample_there_in_plain_words() -> None:
     shown = str(display._board.view())  # pyright: ignore[reportPrivateUsage]
     assert "The Tile shows here now" in shown
     assert "DISPLAY" not in shown
+
+
+def test_a_hidden_notice_doesnt_redraw_a_still_card() -> None:
+    """#469 review: trying to say a missing screen every frame, with notices hidden,
+    mustn't redraw a pinned card 15 times a second."""
+    settings = Settings(tile_hidden_cards="notice")
+    display = TileDisplay(settings, clock=lambda: 0.0, window=FakeWindow)  # type: ignore[arg-type]
+    display.show(Card("list", body=("Kept.",)), pinned=True)
+    assert display.frame(GAMES) not in (None, SAME)
+    assert not display._screen_missing(r"\\.\DISPLAY2")  # pyright: ignore[reportPrivateUsage]
+    assert display.frame(GAMES) is SAME
