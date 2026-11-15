@@ -319,6 +319,7 @@ def test_run_case_counts_calls_to_claude(replies: int, kind: str, calls: int) ->
                 None,
                 [],
                 costs,
+                lists=SC.safety,
             )
         )
     finally:
@@ -339,7 +340,9 @@ def test_say_that_again_never_reaches_the_brain() -> None:
 
     e = _eval()
     rule = {"heard": "say that again", "expect": ["say_again"], "max_calls": 0}
-    outcome = asyncio.run(e.run_case(rule, Lexicon.default(pack=SC), _NoBrain(), _keybinds()))
+    outcome = asyncio.run(
+        e.run_case(rule, Lexicon.default(pack=SC), _NoBrain(), _keybinds(), lists=SC.safety)
+    )
     assert (outcome.route, outcome.kind, outcome.calls) == ("session", "say_again", 0)
     assert e.grade(outcome, rule, set()) == "pass"
 
@@ -475,7 +478,11 @@ def test_each_result_says_which_host_served_it() -> None:
     try:
         asyncio.run(brain(served("Groq", text("Ready."))).warm(cast(Keybinds, _keybinds())))
         outcomes = [
-            asyncio.run(e.run_case(rule, Lexicon.default(pack=SC), b, _keybinds(), None, [], costs))
+            asyncio.run(
+                e.run_case(
+                    rule, Lexicon.default(pack=SC), b, _keybinds(), None, [], costs, lists=SC.safety
+                )
+            )
             for b in (
                 brain(served("Cerebras", text("Copy."))),
                 brain(served("Cerebras", tool_call("run_actions", act))),
@@ -746,7 +753,7 @@ def _act(actions: tuple[str, ...], keybinds: object, heard: str = "xyzzy plugh f
     e = _eval()
     rule = {"heard": heard, "expect": ["actions"]}
     brain = _ScriptedBrain(0, RunActions(actions, "Done."))
-    return asyncio.run(e.run_case(rule, Lexicon.default(pack=SC), brain, keybinds))
+    return asyncio.run(e.run_case(rule, Lexicon.default(pack=SC), brain, keybinds, lists=SC.safety))
 
 
 def _with(*actions: tuple[str, str]) -> object:
@@ -797,7 +804,9 @@ def test_the_fast_path_is_planned_through_the_gate_too() -> None:
 
     e = _eval()
     rule = {"heard": "eject", "expect": ["actions"]}
-    outcome = asyncio.run(e.run_case(rule, Lexicon.default(pack=SC), _NoBrain(), _keybinds()))
+    outcome = asyncio.run(
+        e.run_case(rule, Lexicon.default(pack=SC), _NoBrain(), _keybinds(), lists=SC.safety)
+    )
     assert (outcome.route, outcome.actions, outcome.asks) == ("fast", ["v_eject"], True)
 
 
@@ -806,7 +815,9 @@ def test_the_tiles_words_never_reach_the_brain_while_it_is_on() -> None:
 
     e = _eval()
     rule = {"heard": "keep that up", "expect": ["reply"]}
-    outcome = asyncio.run(e.run_case(rule, Lexicon.default(pack=SC), _NoBrain(), _keybinds()))
+    outcome = asyncio.run(
+        e.run_case(rule, Lexicon.default(pack=SC), _NoBrain(), _keybinds(), lists=SC.safety)
+    )
     assert (outcome.route, outcome.kind) == ("session", "pin")
 
 
