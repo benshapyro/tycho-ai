@@ -52,6 +52,7 @@ class SetupPage(SettingsPage, CommandsPage):
                 and not keys["elevenlabs"].get("unusable"),
             },
             "leaves": _leaves(pack, current),
+            "crash_reports": current.crash_reports,  # None: not asked yet (ADR 4)
             "todo": todo,
             "channels": list(setting_choices(Settings.model_fields["game_channel"].annotation)),
             "push_to_talk": {

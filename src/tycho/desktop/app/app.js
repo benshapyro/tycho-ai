@@ -137,7 +137,13 @@
         <p>Only text is sent, and only what's listed here.</p>
         <div class="tablewrap"><table class="leaves"><thead><tr><th>Who gets it</th><th>What</th><th>When</th></tr></thead><tbody>
         ${s.leaves.map((r) => `<tr><td><b>${esc(r.to)}</b></td><td>${esc(r.what)}</td><td class="dim">${esc(r.when)}</td></tr>`).join("")}</tbody></table></div>
-        <p class="note">Tycho counts and tracks nothing about how you use it. Your keys stay in Windows Credential Manager, and a record of what you said is kept on this PC only if you turn it on (Settings, Privacy).</p></div>`;
+        <p class="note">Tycho counts and tracks nothing about how you use it. Your keys stay in Windows Credential Manager, and a record of what you said is kept on this PC only if you turn it on (Settings, Privacy).</p></div>
+        <div class="card frame" id="crashCard"><h3>Send crash reports to help fix Tycho?</h3>
+        <p>Your choice. Nothing is sent unless you say yes, and you can change it any time under Settings, Privacy.</p>
+        <div class="seg big" role="group" aria-label="Send crash reports"><button type="button" aria-pressed="${s.crash_reports === false}" data-crash="no">No</button><button type="button" aria-pressed="${s.crash_reports === true}" data-crash="yes">Yes</button></div>
+        <div class="field"><label>A report holds</label>${list(["The kind of error, and where in Tycho's own code it happened", "Tycho's version, the Windows version, the game and the brain provider"])}</div>
+        <div class="field"><label>Never sent</label>${list(["What you or Tycho said, or anything sent to or from the brain", "Your keys", "Your name, what Tycho calls you, or your Windows user name", "Your files and folders, including the game's", "Your settings, log lines, or anything that identifies you or this PC"])}</div>
+        <p class="note">Reports go to Sentry, the service Tycho's maintainer uses to collect them, when Tycho next starts after a crash. Saying no deletes any report still waiting.</p></div>`;
     } else {
       ok = s.ready;
       const say = s.pack.examples;
@@ -215,6 +221,13 @@
       const r = await api.set(b.dataset.bool, on);
       if (!r.ok) toast(r.problem);
       else if (r.changed && !firstRun) toast(`${r.label} ${on ? "on" : "off"}. Applies when Tycho restarts.`, true);
+      render();
+    }));
+    page.querySelectorAll("[data-crash]").forEach((b) => b.addEventListener("click", async () => {
+      const on = b.dataset.crash === "yes";
+      const r = await api.set("crash_reports", on);
+      if (!r.ok) toast(r.problem);
+      else if (r.changed && !firstRun) toast(`Crash reports ${on ? "on" : "off"}.`, true);
       render();
     }));
     page.querySelectorAll("[data-channel]").forEach((b) => b.addEventListener("click", async () => {

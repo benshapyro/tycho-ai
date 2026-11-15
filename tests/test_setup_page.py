@@ -188,11 +188,26 @@ def test_a_first_run_for_a_game_tycho_presses_keys_in(setup: Setup, vault: dict[
     setup.next()
     setup.at("Privacy")
     leaves = page.locator("table.leaves")
-    expect(page.locator(".card")).to_contain_text("Your voice never does")
+    expect(page.locator(".card").first).to_contain_text("Your voice never does")
     for who in ("Anthropic (Claude)", "ElevenLabs", "Anthropic (web search)", "GitHub"):
         expect(leaves).to_contain_text(who)
     expect(leaves).to_contain_text("your bound actions with their keys")
     expect(leaves).to_contain_text("to UEX Corp")
+    # Crash reports (ADR 4): asked here, with what's sent and what never is beside it.
+    # No and Yes are equal, and neither is picked until the player picks.
+    crash = page.locator("#crashCard")
+    expect(crash).to_contain_text("Send crash reports to help fix Tycho?")
+    expect(crash).to_contain_text("where in Tycho's own code it happened")
+    expect(crash).to_contain_text("Your keys")
+    expect(crash.locator("[data-crash][aria-pressed='true']")).to_have_count(0)
+    assert setup.saved().crash_reports is None
+    crash.locator("[data-crash='yes']").click()
+    expect(crash.locator("[data-crash='yes']")).to_have_attribute("aria-pressed", "true")
+    assert setup.saved().crash_reports is True
+    crash.locator("[data-crash='no']").click()
+    expect(crash.locator("[data-crash='no']")).to_have_attribute("aria-pressed", "true")
+    expect(crash.locator("[data-crash='yes']")).to_have_attribute("aria-pressed", "false")
+    assert setup.saved().crash_reports is False
 
     # 7. What to say first, from the pack, and Start.
     setup.next()
@@ -260,6 +275,8 @@ def test_a_first_run_for_a_game_tycho_only_advises_in(setup: Setup, vault: dict[
     assert "bound actions" not in leaves.inner_text()
     assert "web search" not in leaves.inner_text()
     assert "UEX" not in leaves.inner_text()
+    # A player who never answers the crash question sends nothing: it stays unanswered.
+    expect(page.locator("#crashCard [data-crash][aria-pressed='true']")).to_have_count(0)
 
     # 7. The skipped button is what's missing: Start waits, and a button goes back for it.
     setup.next()
@@ -282,6 +299,7 @@ def test_a_first_run_for_a_game_tycho_only_advises_in(setup: Setup, vault: dict[
     assert setup.finished == [True]
     assert setup.saved().game == "wow-forever"
     assert setup.saved().voice == "Lily"
+    assert setup.saved().crash_reports is None
 
 
 def test_picking_another_game_in_settings_shows_its_own_setup_first(
