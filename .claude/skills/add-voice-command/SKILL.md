@@ -16,7 +16,7 @@ Built-in commands are Tycho's fast path: phrases matched on the player's PC, wit
 - **Look up the name:** `uv run tycho actions <words>` lists the game's actions with their labels, keys and action maps, from the game installed on this PC. Tycho's own commands said with those words are listed too.
 - **Prefer the specific action** ("Open All Doors"). A toggle goes after it, as the fallback: pressed blind, a toggle can do the opposite of what was asked.
 - **Unbound by default:** if the action has no key in the default profile, Tycho can't press it until the player binds one. Say so in the PR. `tools/spike/make_layout.py` gives specific on and off actions keys in a profile of their own.
-- **Confirm-grade actions** (ejecting, self-destruct, jettison, firing, respawn: `CONFIRM_GRADE` and `_DANGER_WORDS` in `safety.py`) always ask "confirm". Give them `confirm = true` too, so the file says so.
+- **Confirm-grade actions** (ejecting, self-destruct, jettison, firing, respawn: the `confirm` list in the pack's `safety.toml`, and `_DANGER_WORDS` in `safety.py`) always ask "confirm". Give them `confirm = true` too, so the file says so.
 
 ## 2. Write the entry
 

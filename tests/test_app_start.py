@@ -14,7 +14,7 @@ from typing import Any, ClassVar
 
 import pytest
 
-from tycho import app
+from tycho import app, win32
 from tycho.runtime import AlreadyRunning
 from tycho.runtime.instance import OpenRequests, ask_to_open
 from tycho.settings import Settings
@@ -284,7 +284,6 @@ def test_while_starting_the_star_says_what_its_doing_and_a_second_start_says_wai
 ) -> None:
     """Review of #157: after setup, the 2.5 GB speech model downloads with nothing on
     screen, and a second start did nothing."""
-    import ctypes
 
     import tycho.desktop.tray
 
@@ -297,7 +296,11 @@ def test_while_starting_the_star_says_what_its_doing_and_a_second_start_says_wai
             return 1
 
     monkeypatch.setattr(tycho.desktop.tray, "TrayIcon", _Tray)
-    monkeypatch.setattr(ctypes, "windll", type("Windll", (), {"user32": User32})())
+    monkeypatch.setattr(
+        win32,
+        "message_box",
+        lambda text, title, flags: User32.MessageBoxW(None, text, title, flags),
+    )
     requests = _Requests()
     starting = app._Starting(requests)  # type: ignore[arg-type]  # pyright: ignore[reportPrivateUsage]
     starting.doing("Getting the speech model (2.5 GB, once): 42%")
@@ -370,7 +373,6 @@ def test_tycho_can_be_quit_while_it_starts(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_the_still_starting_message_comes_to_the_front(monkeypatch: pytest.MonkeyPatch) -> None:
-    import ctypes
 
     import tycho.desktop.tray
 
@@ -383,7 +385,11 @@ def test_the_still_starting_message_comes_to_the_front(monkeypatch: pytest.Monke
             return 1
 
     monkeypatch.setattr(tycho.desktop.tray, "TrayIcon", _Tray)
-    monkeypatch.setattr(ctypes, "windll", type("Windll", (), {"user32": User32})())
+    monkeypatch.setattr(
+        win32,
+        "message_box",
+        lambda text, title, flags: User32.MessageBoxW(None, text, title, flags),
+    )
     starting = app._Starting(None)  # pyright: ignore[reportPrivateUsage]
     starting.say()
     starting.close()

@@ -33,18 +33,18 @@ STAR_CITIZEN = "star-citizen"
 """The first game pack, whose player files stay where they were before packs."""
 
 
-def pack_dir(pack: str = STAR_CITIZEN) -> Path:
+def pack_dir(pack: str) -> Path:
     """Where the player's own files for a game pack live (ADR 18). Star Citizen's stay
     in the config folder itself, so nobody's phrases or fleet move."""
     return config_dir() if pack == STAR_CITIZEN else config_dir() / "packs" / pack
 
 
-def commands_file(pack: str = STAR_CITIZEN) -> Path:
+def commands_file(pack: str) -> Path:
     """The player's own commands and sequences, added to the game's built-in ones (ADR 14)."""
     return pack_dir(pack) / "commands.toml"
 
 
-def fleet_file(pack: str = STAR_CITIZEN) -> Path:
+def fleet_file(pack: str) -> Path:
     """The player's ships (ADR 15), kept by Tycho and editable by hand."""
     return pack_dir(pack) / "fleet.toml"
 

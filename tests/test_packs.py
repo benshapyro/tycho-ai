@@ -62,7 +62,6 @@ change the text on purpose, update this, and expect the cache to refill."""
 def test_star_citizens_briefing_is_byte_for_byte_what_it_was_before_packs() -> None:
     text = instructions(built_in(STAR_CITIZEN))
     assert hashlib.sha256(text.encode()).hexdigest() == STAR_CITIZEN_INSTRUCTIONS
-    assert instructions(pack=SC) == text  # no pack named: Star Citizen
 
 
 def test_star_citizen_is_the_pack_tycho_ships() -> None:
@@ -131,7 +130,7 @@ def test_the_seam_presses_keys_for_a_game_that_isnt_star_citizen() -> None:
     assert planned.actions == ("shield_raise", "hatch_open")
 
     sender, clock = FakeKeySender(), FakeClock()
-    presser = Presser(sender, FakeFocus(True), sleep=clock.sleep, clock=clock, game="Star Citizen")
+    presser = Presser(sender, FakeFocus(True), sleep=clock.sleep, clock=clock, game=pack.name)
     for _, press in planned.presses:
         assert presser.press(press).done
     downs = [code for event, code in sender.events if event == "down"]
@@ -449,7 +448,7 @@ def test_an_old_settings_file_with_no_game_is_star_citizen(tmp_path: Path) -> No
 
 
 def test_star_citizens_player_files_stay_where_they_were(tmp_path: Path) -> None:
-    assert paths.commands_file() == paths.config_dir() / "commands.toml"
+    assert paths.commands_file("star-citizen") == paths.config_dir() / "commands.toml"
     assert paths.fleet_file("star-citizen") == paths.config_dir() / "fleet.toml"
     assert paths.commands_file("fake-game") == (
         paths.config_dir() / "packs" / "fake-game" / "commands.toml"
