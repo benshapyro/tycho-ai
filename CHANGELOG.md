@@ -21,11 +21,16 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - **Quit Tycho** is now a button in Tycho's window too (Settings, Updates). Before, the only Quit was on the icon by the clock, which Windows can hide and which can stop working. ([#424](https://github.com/benshapyro/tycho-ai/issues/424))
 
 ### Changed
+- In a game where Tycho only advises, the Commands page now says to just ask, instead of showing an empty table, and Settings no longer offers a game folder that game doesn't have. ([#446](https://github.com/benshapyro/tycho-ai/pull/446))
+- When a newer version is out, **Get the update** is now the highlighted button under Settings, Updates. The Undo message after a change stays for nine seconds, up from four and a half. ([#446](https://github.com/benshapyro/tycho-ai/pull/446))
 - Tycho's wording was gone through line by line, so one game's words don't turn up in another. `tycho check` now asks you to switch to the game you chose (it said Star Citizen whatever the game), and skips that test where Tycho presses no keys. The descriptions of the web search and Tile settings no longer talk about Star Citizen or a ship, and the ones that are Star Citizen's say so. In World of Warcraft: Forever, and in Star Citizen with key actions off, simple questions get shorter answers. ([#363](https://github.com/benshapyro/tycho-ai/issues/363))
 - With key actions off in Star Citizen, Tycho now names your own key when you say a built-in command ("night vision" gets "it's on Right Alt + N" if that's your key), instead of "your night vision key, if you've bound one". If the action has no key, it says so. ([#386](https://github.com/benshapyro/tycho-ai/issues/386))
 - With key actions off in Star Citizen, Tycho now names your own key however you ask, not only for the exact built-in phrases: "hit the brakes", "flashlight" and "can you get the lights" get your key instead of "check your keybinds". To do it, your key bindings (what each key does, nothing else) are now part of what Tycho sends to its brain when key actions are off. ([#392](https://github.com/benshapyro/tycho-ai/issues/392))
 
 ### Fixed
+- Setup's Back and Next buttons now stay at the bottom of the window. Before, you had to scroll down to find Next on every step. ([#446](https://github.com/benshapyro/tycho-ai/pull/446))
+- Setup no longer ticks a step you skipped. A skipped step keeps its number, in amber, so you can see what's still to do. ([#446](https://github.com/benshapyro/tycho-ai/pull/446))
+- When setup opens again only to ask about crash reports, the question is now at the top, not under the table of what leaves your PC. ([#446](https://github.com/benshapyro/tycho-ai/pull/446))
 - Shutting down or signing out of Windows while Tycho runs, or closing its console window, no longer makes the next start say Tycho stopped unexpectedly. ([#428](https://github.com/benshapyro/tycho-ai/issues/428))
 
 ## [0.7.0] - 2026-11-13
