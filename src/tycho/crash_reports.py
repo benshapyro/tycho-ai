@@ -57,7 +57,8 @@ _FIELDS: Mapping[str, re.Pattern[str]] = {
     "time": re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ"),
 }
 _WINDOWS_ONLY = re.compile(r"[^\w .()-]")
-_WORD = re.compile(r"[a-z0-9]+")
+_WORD = re.compile(r"[^\W_]+")
+"""Letters and digits in any script, so "田中" and "Zoë" are words too (#432)."""
 _MODULE = re.compile(r"[A-Za-z_][\w.]{0,120}")
 _FUNCTION = re.compile(r"[<>\w.]{1,120}")
 
@@ -125,7 +126,7 @@ def scrub(report: Mapping[str, Any], never: Iterable[str]) -> dict[str, Any] | N
     words = set(_WORD.findall(text))
     for value in never:
         # Whole words, so the user name "ben" doesn't drop a report naming "bench".
-        if any(len(w) >= 3 and w in words for w in _WORD.findall(value.lower())):
+        if any(_long(w) and w in words for w in _WORD.findall(value.lower())):
             return None
     return clean
 
@@ -163,6 +164,11 @@ def _checked_frame(raw: object) -> dict[str, object]:
     if not isinstance(line, int) or isinstance(line, bool) or not 0 <= line < 100_000:
         raise ValueError("line")
     return {"module": module, "function": function, "line": line}
+
+
+def _long(word: str) -> bool:
+    """Long enough to check: 3 letters, or 2 outside ASCII ("田中" is a whole name)."""
+    return len(word) >= 3 or (len(word) == 2 and not word.isascii())
 
 
 def never_sent(call_me: Iterable[str] = ()) -> list[str]:
