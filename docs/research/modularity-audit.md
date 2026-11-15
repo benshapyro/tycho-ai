@@ -75,7 +75,7 @@ By lines: `game/` and `knowledge/` are about 4,700 of the 19,300 lines in `src/t
 | Downloads | The installer, then the speech model (2.5 GB) on first run; CUDA libraries (1.2 GB) only with `tycho gpu install` | README |
 | Uninstall | Keeps settings, keys and the speech model | README |
 | Updates | Tycho checks GitHub's releases API once at start and says a newer version is out. It never updates itself | `updates.py` |
-| Start-up, memory, CPU | *Waiting for the field numbers* | P1 run, below |
+| Start-up, memory, CPU | About 10 s to listening, of which 7 s is the speech model; almost no CPU at idle; 3 GB of graphics memory | P1 run, below |
 
 ### What breaks in the field
 
@@ -112,7 +112,30 @@ By lines: `game/` and `knowledge/` are about 4,700 of the 19,300 lines in `src/t
 
 ### The field numbers (P1)
 
-*Left for the PC run: installer size, speech-model download size, time from start to "ready", memory and CPU at idle, and with the game at its menu if the maintainer allows. Anything antivirus or SmartScreen flags.*
+Measured on the maintainer's PC on 14 November 2026 (Windows 11 26H2, Core i9-13900HX, 32 GB, RTX 4080 Laptop 12 GB, one 2560x1440 monitor at 125%). Measuring only: nothing was installed, started or stopped. **The installed Tycho was 0.6.0**, already running for 71 hours with no game open, so the running numbers are 0.6.0's and the start-up times come from its log.
+
+| | Number | Notes |
+|---|---|---|
+| Installer (0.7.0) | 186 MB | The GitHub release asset |
+| Installed program (0.6.0) | 331 MB, 241 files | `%LOCALAPPDATA%\Programs\Tycho` |
+| Speech model | 2.51 GB | The six pinned Parakeet files; downloaded on first run |
+| CUDA libraries | 1.60 GB | Only with `tycho gpu install` |
+| On disk in all | About 4.4 GB with an NVIDIA card, 2.8 GB without | |
+| Start to "Listening." (0.6.0) | 9.5 s | 6.9 s of it loading the speech model on the graphics card |
+| Start to "Listening.", nine installed starts since 0.3.3 | Median 18.7 s (8.5 to 66.1 s) | 0.3.3 and 0.4.0 lost about 19 s between the microphone and the brain; that gap is 1.3 s on 0.6.0. The 66 s start was the first run, 56 s of it in setup |
+| CPU, listening and idle | 0.05% of the machine (median over 60 s), 0.24% at most | 1.5% of one core |
+| Graphics memory | 3.06 GB dedicated | As `stt/device.py` expects |
+| Memory | 5.3 GB committed; 2.0 GB peak working set | The working set had been trimmed to 28 MB after 71 idle hours. Task Manager's "Commit size" shows the 5.3 GB (CUDA, ONNX Runtime and the model), which a player may read as RAM in use |
+| Threads, handles | 288, 1,061 | Steady over the minute |
+| Windows Defender | Nothing naming Tycho | Detections, threats and 30 days of its event log |
+| WebView2 | 157.0, per machine | |
+| Single-instance lock | `Local\tycho-ai` | Per session, so two signed-in users can each run Tycho |
+
+**What they say.** Start-up is the speech model, and idle cost is graphics memory, not CPU: neither is the shell's doing, so a native shell would change neither. They support hardening the current stack (ADR 18). The number worth explaining to players is the 5.3 GB of committed memory.
+
+**Also seen in the log.** One keybind reread failed while the game was probably being patched (`Data.p4k`'s `defaultProfile.xml` read as corrupt); Tycho kept the last good keybinds, as designed.
+
+**Not measured, and needing the maintainer at the screen:** install and uninstall time, SmartScreen on a fresh download, the Tile over a game on each monitor and at other scales, memory and CPU during play, a key held when Tycho is killed, and a cold and a warm start of 0.7.0.
 
 ## Part 3: the follow-up issues
 
