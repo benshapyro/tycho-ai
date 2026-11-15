@@ -76,3 +76,15 @@ Built-in commands, one-line answers and small talk stay audio-only. The briefing
   - 13 Tile settings, each changeable by voice at once, with a sample card after a change.
 
   The colour follows the ship the player said they're flying, until the log reader (#30) knows it for itself. Still to come: reduce motion, and a pick from any colour.
+
+## Amendment, 15 November 2026: choosing the Tile's screen
+
+The maintainer asked whether a player can choose which screen the Tile shows on ([#447](https://github.com/benshapyro/tycho-ai/issues/447)). Until now there was no choice: the Tile went on the screen of whichever window was in front when it drew. With the game in front that is right. It is wrong for a player who wants the Tile on a second screen beside the game, and when something else is in front on another screen, because the Tile jumps there.
+
+- **A `tile_screen` setting.** It is `game` (the default, what happened before) or a screen as Windows names its device (`\\.\DISPLAY2`). The window's Tile page lists the screens plugged in now: "Follow the game", then "Screen 1 (main), 2560 x 1440" and the rest, main first, then left to right. The corner, size and nudges apply to the chosen screen.
+- **The device name, not a number, is saved.** It stays the same while the screen stays in the same port. The number shown is only for reading.
+- **An unplugged screen doesn't lose the Tile.** It follows the game instead and says so once on the Tile. It goes back to the chosen screen once that screen is plugged in again.
+- **Not by voice.** A device name means nothing spoken. The choice is made in the window, or in `settings.toml`.
+- **The rules stay apart from the window.** Which screen to use is `tycho.tile.screens`, tested with no screen. Only listing the screens asks Windows (`EnumDisplayMonitors`), and the list is kept for 2 seconds because the Tile asks for a frame 15 times a second.
+
+What does not change: a separate window, never anything in the game, clicks passing through, and never taking focus.

@@ -78,6 +78,24 @@ class MONITORINFO(ctypes.Structure):
     ]
 
 
+class MONITORINFOEXW(ctypes.Structure):
+    """``MONITORINFO`` with the screen's device name ("\\\\.\\DISPLAY2", #447)."""
+
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("rcMonitor", wintypes.RECT),
+        ("rcWork", wintypes.RECT),
+        ("dwFlags", wintypes.DWORD),
+        ("szDevice", wintypes.WCHAR * 32),
+    ]
+
+
+MONITORENUMPROC = _FUNCTYPE(
+    wintypes.BOOL, wintypes.HMONITOR, wintypes.HDC, ctypes.POINTER(wintypes.RECT), wintypes.LPARAM
+)
+"""``EnumDisplayMonitors``' callback: each screen in turn (#447)."""
+
+
 class GUID(ctypes.Structure):
     _fields_ = [
         ("Data1", wintypes.DWORD),
@@ -199,6 +217,8 @@ def _type_user32(u: ctypes.WinDLL) -> None:
     u.MonitorFromWindow.restype = wintypes.HMONITOR
     u.MonitorFromWindow.argtypes = [H, wintypes.DWORD]
     u.GetMonitorInfoW.argtypes = [wintypes.HMONITOR, P]
+    u.EnumDisplayMonitors.restype = wintypes.BOOL
+    u.EnumDisplayMonitors.argtypes = [wintypes.HDC, P, MONITORENUMPROC, wintypes.LPARAM]
     u.SetThreadDpiAwarenessContext.restype = P
     u.SetThreadDpiAwarenessContext.argtypes = [ctypes.c_ssize_t]
     u.CreatePopupMenu.restype = wintypes.HMENU

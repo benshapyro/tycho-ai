@@ -694,6 +694,37 @@ def test_the_tile_page_lists_the_games_own_kinds_of_card(
     setup.close()
 
 
+def test_the_tile_page_picks_the_tiles_screen(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#447: follow the game (as before), or a screen plugged in now. A chosen screen
+    that isn't plugged in stays listed, so opening the page doesn't lose it."""
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    setup = Setup(browser, path, first_run=False)
+    page = setup.page
+    page.locator("nav [data-view='tile']").click()
+    screen = page.get_by_label("Screen", exact=True)
+    expect(screen).to_have_value("game")
+    assert screen.locator("option").all_inner_texts() == [
+        "Follow the game",
+        "Screen 1 (main), 2560 x 1440",
+        "Screen 2, 1920 x 1080",
+    ]
+    screen.select_option(label="Screen 2, 1920 x 1080")
+    expect(page.locator("#toast")).to_contain_text("The Tile's screen: Screen 2, 1920 x 1080")
+    assert setup.saved().tile_screen == r"\\.\DISPLAY2"
+    setup.close()
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, tile_screen=r"\\.\DISPLAY7"), path
+    )
+    setup = Setup(browser, path, first_run=False)
+    setup.page.locator("nav [data-view='tile']").click()
+    screen = setup.page.get_by_label("Screen", exact=True)
+    expect(screen).to_have_value(r"\\.\DISPLAY7")
+    expect(screen.locator("option:checked")).to_have_text(r"\\.\DISPLAY7 (not plugged in now)")
+    setup.close()
+
+
 def test_home_has_no_exchanges_list_while_tycho_isnt_running(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:

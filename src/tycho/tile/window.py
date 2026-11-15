@@ -103,6 +103,8 @@ class TileWindow:
         self.on_stopped: Callable[[str], None] | None = None
         """Called once, on the window's thread, if the window stops while Tycho runs
         (#297): the player is told, and Tycho carries on without the Tile."""
+        self.where: Callable[[], Screen] = screen_of_foreground
+        """The screen the Tile goes on, asked each frame (``tile.screens``, #447)."""
 
     def start(self) -> bool:
         """Open the window, hidden. False, with ``failed`` saying why, if it can't."""
@@ -193,7 +195,7 @@ class TileWindow:
         dropped unseen, so a failure is caught here: logged the first time, and after
         ``GIVE_UP_AFTER`` in a row the window closes itself and ``_run`` says so."""
         try:
-            self._show(self._frame(screen_of_foreground()))
+            self._show(self._frame(self.where()))
         except Exception as e:
             self._failures += 1
             if self._failures == 1:

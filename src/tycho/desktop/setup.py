@@ -6,6 +6,8 @@ These run on the bridge's threads, never the event loop, and none of them waits 
 terminal: the window is the only one asking.
 """
 
+import logging
+import sys
 import threading
 import time
 from collections.abc import Callable
@@ -20,6 +22,8 @@ from tycho.settings import Settings
 
 CAPTURE_SECONDS = 15.0
 LEVEL_SECONDS = 1.5
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +69,11 @@ class SetupPC(Protocol):
         """A short listen: ``ok``, ``name``, ``peak`` and a ``verdict``, or a ``problem``."""
         ...
 
+    def screens(self) -> list[dict[str, str]]:
+        """The screens plugged in now, each with its ``value`` (the tile_screen setting)
+        and ``name`` ("Screen 1 (main), 2560 x 1440"), main first (#447)."""
+        ...
+
 
 class WindowsPC:
     """The real PC. Satisfies ``SetupPC``."""
@@ -87,6 +96,17 @@ class WindowsPC:
             name = built_in(current.game).name  # the game's name is its pack's (#364)
             return Game(False, channel, problem=f"{name} {channel} wasn't found")
         return Game(True, current.game_channel, str(install.folder))
+
+    def screens(self) -> list[dict[str, str]]:
+        from tycho.tile.screens import connected, named
+
+        if sys.platform != "win32":
+            return []
+        try:
+            return named(connected())
+        except OSError:
+            log.debug("Listing the screens failed", exc_info=True)
+            return []
 
     def root(self, folder: str, channel: str) -> str | None:
         from tycho.games import game_root

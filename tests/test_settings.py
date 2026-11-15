@@ -121,8 +121,16 @@ def test_tile_cards_to_hide_are_card_kinds_and_never_the_question() -> None:
 
 def test_every_tile_setting_changes_now_by_voice() -> None:
     names = [n for n in Settings.model_fields if n == "tile" or n.startswith("tile_")]
-    assert len(names) == 13
+    assert len(names) == 14
+    # The screen is Windows' name for it, which means nothing said aloud (#447).
+    assert settings.rule("tile_screen") == {
+        "voice": "no",
+        "applies": "now",
+        "how": settings.FILE_OR_APP,
+    }
     for name in names:
+        if name == "tile_screen":
+            continue
         assert settings.rule(name) == {"voice": "yes", "applies": "now"}, name
 
 

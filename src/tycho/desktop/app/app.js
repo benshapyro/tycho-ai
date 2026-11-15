@@ -429,6 +429,8 @@
         const hidden = new Set(String(v || "").split(",").map((k) => k.trim()).filter(Boolean));
         return `<div class="seg" role="group" aria-label="${esc(r.label)}">${r.cards.map((c) => `<button type="button" aria-pressed="${!hidden.has(c.kind)}" data-card="${esc(c.kind)}" data-name="${esc(c.name)}">${esc(c.name)}</button>`).join("")}</div>`;
       }
+      case "screen": // the screens plugged in now (#447)
+        return `<select class="input" data-screen="${esc(r.name)}" aria-label="${esc(r.label)}">${r.screens.map((s) => `<option value="${esc(s.value)}" ${s.value === v ? "selected" : ""}>${esc(s.name)}</option>`).join("")}</select>`;
       case "setup":
         if (r.name === "push_to_talk")
           return `<span class="setup"><span class="num" id="setPtt">${esc(v ?? "None yet")}</span><button class="btn frame" type="button" id="setCapture">Change</button></span>`;
@@ -517,6 +519,7 @@
       if (showing) hidden.delete(b.dataset.card); else hidden.add(b.dataset.card);
       change("tile_hidden_cards", [...hidden].join(", "), `${b.dataset.name} ${showing ? "shown" : "hidden"} on the Tile`);
     }));
+    page.querySelectorAll("[data-screen]").forEach((sel) => sel.addEventListener("change", () => change(sel.dataset.screen, sel.value, `The Tile's screen: ${sel.selectedOptions[0].textContent}`)));
     page.querySelectorAll("[data-text]").forEach((i) => i.addEventListener("change", () => change(i.dataset.text, i.value, `${label(i.dataset.text)}: ${i.value || "none"}`)));
     $("#setCapture")?.addEventListener("click", () => capture($("#setCapture"), $("#setPtt")));
     $("#setFolder")?.addEventListener("click", chooseFolder);

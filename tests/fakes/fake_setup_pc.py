@@ -25,6 +25,10 @@ class FakeSetupPC:
         self.capture_fails: Exception | None = None
         self.cancel: threading.Event | None = None
         self.listened: list[str | None] = []
+        self.shown_screens = [
+            {"value": "\\\\.\\DISPLAY1", "name": "Screen 1 (main), 2560 x 1440"},
+            {"value": "\\\\.\\DISPLAY2", "name": "Screen 2, 1920 x 1080"},
+        ]
 
     def game(self, current: Settings) -> Game:
         self.calls.append("game")
@@ -52,6 +56,9 @@ class FakeSetupPC:
     def microphones(self) -> list[str]:
         self.calls.append("microphones")
         return list(self.devices)
+
+    def screens(self) -> list[dict[str, str]]:
+        return list(self.shown_screens)
 
     def level(self, microphone: str | None) -> dict[str, object]:
         self.listened.append(microphone)
