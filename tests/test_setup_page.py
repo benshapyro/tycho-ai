@@ -334,3 +334,34 @@ def test_picking_another_game_in_settings_shows_its_own_setup_first(
     expect(page.locator("#packMode")).to_contain_text("presses your own keybinds there")
     expect(page.locator("#packFolder")).to_contain_text("Found in")
     setup.close()
+
+
+def test_a_player_set_up_before_crash_reports_is_asked_once(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """ADR 4: players who set up before crash reports existed are asked on their next
+    start, on setup's Privacy step, and once they answer the window goes on as usual."""
+    settings.save(Settings(push_to_talk="mouse:0x06"), path)
+    setup = Setup(browser, path, first_run=False)
+    page = setup.page
+    setup.at("Privacy")
+    expect(page.locator(".lede")).to_contain_text("One new question since you set Tycho up")
+    crash = page.locator("#crashCard")
+    expect(crash.locator("[data-crash][aria-pressed='true']")).to_have_count(0)
+    crash.locator("[data-crash='no']").click()
+    expect(page.get_by_role("heading", name="Status")).to_be_visible()
+    assert setup.saved().crash_reports is False
+    setup.close()
+    again = Setup(browser, path, first_run=False)  # the next start: answered, not asked
+    expect(again.page.get_by_role("heading", name="Status")).to_be_visible()
+    again.close()
+
+
+def test_the_first_run_asks_crash_reports_in_its_own_place(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    setup = Setup(browser, path, first_run=True)
+    assert setup.bridge.about()["ask_crash_reports"] is False
+    expect(setup.page.get_by_role("heading", name="Welcome to Tycho")).to_be_visible()
+    setup.at("Game")
+    setup.close()

@@ -52,6 +52,7 @@
   let step = 0;
   let firstRun = false;
   let canQuit = false;
+  let askingCrash = false; // set up before crash reports existed: ask once (ADR 4)
   function stepper() {
     return `<ol class="steps">${STEPS.map((s, i) => `<li class="${i < step ? "done" : i === step ? "now" : ""}"><b>${i < step ? "✓" : i === STEPS.length - 1 ? "✦" : i + 1}</b>${esc(s)}</li>`).join("")}</ol>`;
   }
@@ -94,7 +95,9 @@
     const s = await api.setup_state();
     const lede = firstRun
       ? "A few steps, about three minutes. Skip any of them and come back; Tycho starts listening when you're done."
-      : "Change anything you chose the first time. Changes apply when Tycho restarts.";
+      : askingCrash && STEPS[step] === "Privacy"
+        ? "One new question since you set Tycho up: crash reports. The rest is as you chose it."
+        : "Change anything you chose the first time. Changes apply when Tycho restarts.";
     const name = STEPS[step];
     let body = "";
     let ok = true;
@@ -229,6 +232,7 @@
       const r = await api.set("crash_reports", on);
       if (!r.ok) toast(r.problem);
       else if (r.changed && !firstRun) toast(`Crash reports ${on ? "on" : "off"}.`, true);
+      if (r.ok && askingCrash) { askingCrash = false; view = "status"; } // answered: done
       render();
     }));
     page.querySelectorAll("[data-channel]").forEach((b) => b.addEventListener("click", async () => {
@@ -592,6 +596,7 @@
     firstRun = Boolean(about.first_run);
     canQuit = Boolean(about.can_quit);
     if (firstRun) view = "setup";
+    else if (about.ask_crash_reports) { askingCrash = true; view = "setup"; step = STEPS.indexOf("Privacy"); }
     await render();
     if (!firstRun) notice(await api.check_updates(false));
   }

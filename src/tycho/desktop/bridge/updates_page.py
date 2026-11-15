@@ -14,10 +14,17 @@ log = logging.getLogger(__name__)
 
 class UpdatesPage(State):
     def about(self) -> dict[str, object]:
-        """``first_run``: Tycho is waiting for setup before it starts listening."""
+        """``first_run``: Tycho is waiting for setup before it starts listening.
+        ``ask_crash_reports``: set up before crash reports existed and never asked, so the
+        window opens on setup's Privacy step until the player answers (ADR 4, #199)."""
+        try:
+            unasked = settings.load(self._path).crash_reports is None
+        except SettingsError:
+            unasked = False  # the window says what's wrong with the file instead
         return {
             "version": __version__,
             "first_run": self._first_run,
+            "ask_crash_reports": unasked and not self._first_run,
             "can_quit": self._quit is not None,
         }
 
