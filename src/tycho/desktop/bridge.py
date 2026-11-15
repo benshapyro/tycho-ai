@@ -559,8 +559,7 @@ class Bridge:
         )
 
         def read() -> Keybinds | None:
-            from tycho.app import find_install
-            from tycho.games import GameDataError, load_keys
+            from tycho.games import GameDataError, find_install, load_keys
 
             try:
                 return load_keys(find_install(current)).keybinds
@@ -586,8 +585,8 @@ class Bridge:
 def _shown(name: str, value: object) -> object:
     """A value as the page shows it: push-to-talk by its name ("Mouse side (forward)")."""
     if name == "push_to_talk" and isinstance(value, str) and value:
-        from tycho.app import describe  # here: the app imports this module
         from tycho.ptt.binding import Binding
+        from tycho.ptt.devices import describe
 
         try:
             return describe(Binding.parse(value))

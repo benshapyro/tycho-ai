@@ -1,5 +1,6 @@
 import json
 import logging
+from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Literal
@@ -8,6 +9,7 @@ import numpy as np
 import pytest
 
 from tycho import app, brain_choice, logs, settings
+from tycho.findings import Finding
 from tycho.games.star_citizen import checks
 from tycho.input import code_for
 from tycho.keybinds import Action, Keybinds, KeyInput
@@ -635,3 +637,13 @@ def test_tycho_check_says_a_stored_key_is_unusable_not_missing(
     assert "stored but unusable" in finding["detail"]
     assert "no " + ("Anthropic" if name == "anthropic" else "ElevenLabs") not in finding["detail"]
     assert f"key set {name}" in finding["fix"]
+
+
+def test_check_reads_no_fleet_for_a_game_without_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    # #413, as #339: World of Warcraft: Forever names no fleet, so no fleet file is read.
+    def never(_pack: object) -> Iterator[Finding]:
+        raise AssertionError("a fleet check for a game without a fleet")
+
+    monkeypatch.setattr(app, "fleet_findings", never)
+    findings = list(app._checks(settings.Settings(game="wow-forever"), quick=True, ask=False))  # pyright: ignore[reportPrivateUsage]
+    assert findings

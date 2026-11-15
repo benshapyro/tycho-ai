@@ -87,6 +87,17 @@ def test_the_check_sees_the_calls() -> None:
     assert ("kernel32", "OpenProcess") in called  # user32, kernel32 = (..., ...)
 
 
+def _bound(nodes: list[ast.AST]) -> set[str]:
+    """The plain names these statements bind to a DLL."""
+    return {
+        target.id
+        for node in nodes
+        if isinstance(node, ast.Assign)
+        for target, value in _pairs(node)
+        if isinstance(target, ast.Name) and _dll(value)
+    }
+
+
 def _hidden(tree: ast.Module) -> list[int]:
     """Lines where a DLL is used out of the check's sight: one kept anywhere but a plain
     name (on ``self``, handed to a helper, #407), or a name bound to one and then used
@@ -104,17 +115,19 @@ def _hidden(tree: ast.Module) -> list[int]:
             and all(isinstance(t, ast.Name | ast.Tuple) for t in parent.targets)
         ):
             lines.append(node.lineno)
-    top = [s for s in tree.body if not isinstance(s, ast.FunctionDef | ast.ClassDef)]
-    functions = [n.body for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
-    for statements in (top, *functions):
-        body = [n for statement in statements for n in ast.walk(statement)]
-        bound = {
-            target.id
-            for node in body
-            if isinstance(node, ast.Assign)
-            for target, value in _pairs(node)
-            if isinstance(target, ast.Name) and _dll(value)
-        }
+    scope = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+    top = [s for s in tree.body if not isinstance(s, scope)]
+    module_bound = _bound([n for statement in top for n in ast.walk(statement)])
+    inner: list[list[ast.stmt]] = [
+        n.body
+        for n in ast.walk(tree)
+        if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
+    ]
+    for statements in (top, *inner):
+        own = [n for s in statements if not isinstance(s, scope) for n in ast.walk(s)]
+        # A function sees the module's names too; a class body's own names are its own.
+        body = own if statements is top else [n for s in statements for n in ast.walk(s)]
+        bound = module_bound | _bound(own)
         lines.extend(
             node.lineno
             for node in body
@@ -148,5 +161,11 @@ def test_the_check_sees_a_dll_out_of_sight() -> None:
         "        self.u = win32.user32()\n"
         "def other(u):\n"
         "    return u\n"
+        "U = win32.user32()\n"
+        "def module_level(g):\n"
+        "    g(U)\n"
+        "async def later(g):\n"
+        "    a = win32.user32()\n"
+        "    g(a)\n"
     )
-    assert _hidden(ast.parse(seen)) == [6, 9]
+    assert _hidden(ast.parse(seen)) == [6, 9, 14, 17]

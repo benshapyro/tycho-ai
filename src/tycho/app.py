@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 
 from tycho import __version__, credentials, logs, paths, settings, updates
-from tycho.audio.source import AudioError
+from tycho.audio.source import AudioError, microphone_device
 from tycho.brain_choice import brain_findings, load_brain
 from tycho.commands import CommandFileError, CommandMatcher
 from tycho.findings import TYCHO, Finding, key_finding, stored_key
@@ -25,13 +25,13 @@ from tycho.packs import (
     GameDataError,
     GameKeys,
     GamePack,
-    KeybindSource,
     PackError,
     as_run,
     built_in,
 )
 from tycho.ptt.binding import Binding, DeviceKind
-from tycho.ptt.monitor import InputSource
+from tycho.ptt.conflicts import conflict_warnings
+from tycho.ptt.devices import describe, input_sources
 from tycho.settings import Settings, SettingsError
 from tycho.stt import PARAKEET_V2, DeviceChoice, ModelError, ModelStore
 from tycho.voice.voices import Voice
@@ -1186,7 +1186,8 @@ def _checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Findin
         else:
             yield Finding("ok", "Commands", f"{counts}; add your own in {commands_file}")
 
-    yield from fleet_findings(pack)
+    if "fleet" in pack.parts.lookups:  # #413, as #339: no fleet file for a game without one
+        yield from fleet_findings(pack)
 
     store: GameKeys | None = None
     # A pack with no keybinds part (an advisor, #191) has no game folder or keys to check.
@@ -1363,75 +1364,6 @@ def device_choice(current: Settings) -> DeviceChoice:
     cuda = cuda_available(libraries.dlls if libraries.ready() else None)
     free_mb = gpu_free_mb() if cuda else None  # no NVIDIA tool runs without CUDA
     return choose_device(current.transcription_device, cuda=cuda, free_mb=free_mb)
-
-
-def microphone_device(setting: str | None) -> int | str | None:
-    """A microphone setting is a device number or (part of) its name."""
-    if setting is None or not setting.strip():
-        return None
-    return int(setting) if setting.strip().isdigit() else setting
-
-
-def conflict_warnings(binding: Binding, store: KeybindSource) -> list[str]:
-    from tycho.ptt import windows as win
-    from tycho.ptt.conflicts import conflicts, game_code
-
-    code = game_code(binding, win.scan_code)
-    if code is None:
-        return []
-    names = list(dict.fromkeys(a.label or a.name for a in conflicts(code, store.keybinds)))
-    if not names:
-        return []
-    shown = ", ".join(names[:4]) + (f" and {len(names) - 4} more" if len(names) > 4 else "")
-    return [
-        f"{describe(binding)} is also bound in game ({shown}). The game sees the press "
-        f"too, so choose another button with `{TYCHO} bind`, or unbind it in game."
-    ]
-
-
-def describe(binding: Binding) -> str:
-    from tycho.ptt import windows as win
-
-    if binding.kind is DeviceKind.JOYSTICK:
-        return f"joystick button {binding.code + 1}"
-    return win.describe(binding)
-
-
-def input_sources(binding: Binding | None) -> list[InputSource]:
-    """Keyboard and mouse always; joysticks when the binding needs them (or to capture one)."""
-    from tycho.ptt.windows import KeyboardMouseSource
-
-    sources: list[InputSource] = [KeyboardMouseSource()]
-    if binding is None or binding.kind is DeviceKind.JOYSTICK:
-        sources.append(_PollThreadJoysticks())
-    return sources
-
-
-class _PollThreadJoysticks:
-    """Joysticks, opened on first use: SDL must be set up on the thread that polls it."""
-
-    def __init__(self) -> None:
-        self._source: InputSource | None = None
-
-    def _get(self) -> InputSource:
-        if self._source is None:
-            from tycho.ptt.joystick import JoystickSource
-
-            self._source = JoystickSource()
-        return self._source
-
-    def pressed(self) -> frozenset[Binding]:
-        return self._get().pressed()
-
-    def is_pressed(self, binding: Binding) -> bool:
-        return binding.kind is DeviceKind.JOYSTICK and self._get().is_pressed(binding)
-
-    def close(self) -> None:
-        """Let SDL go, on the thread that set it up (a capture from the app window)."""
-        source, self._source = self._source, None
-        close = getattr(source, "close", None)
-        if close is not None:
-            close()
 
 
 def _device_name(device: str) -> str:

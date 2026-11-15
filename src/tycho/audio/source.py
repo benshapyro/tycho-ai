@@ -41,3 +41,10 @@ class AudioSource(Protocol):
     def stop(self) -> Samples:
         """Stop keeping audio, and return the clip."""
         ...
+
+
+def microphone_device(setting: str | None) -> int | str | None:
+    """A microphone setting is a device number or (part of) its name."""
+    if setting is None or not setting.strip():
+        return None
+    return int(setting) if setting.strip().isdigit() else setting

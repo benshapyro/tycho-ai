@@ -183,7 +183,7 @@ def test_the_commands_page_reads_the_new_game_s_keybinds_at_once(
 
     monkeypatch.setattr(bridge_module.settings, "load", load)
     monkeypatch.setattr(bridge, "_game_pack", star_citizen)
-    monkeypatch.setattr("tycho.app.find_install", find_install)
+    monkeypatch.setattr("tycho.games.find_install", find_install)
     monkeypatch.setattr("tycho.games.star_citizen.store.KeybindStore.load", read)
     bridge._keybinds()
     bridge._keybinds()

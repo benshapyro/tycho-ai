@@ -16,7 +16,19 @@ from typing import TYPE_CHECKING, cast
 
 from tycho.packs.parts import Built, GameDataError, GameFolder, GameKeys, Registry, Workshop
 
-__all__ = ["BUILT_IN", "GameDataError", "find_install", "game_findings", "load_keys"]
+__all__ = [
+    "BUILT_IN",
+    "SETTINGS",
+    "GameDataError",
+    "GameFolder",
+    "GameKeys",
+    "find_install",
+    "fleet_findings",
+    "game_findings",
+    "game_root",
+    "load_keys",
+    "ship_accent",
+]
 
 if TYPE_CHECKING:
     from tycho.commands import CommandMatcher
@@ -55,13 +67,6 @@ def game_root(folder: Path, channel: str) -> Path | None:
     from tycho.games.star_citizen.install import root_from
 
     return root_from(folder, channel)
-
-
-def ask_game_root(channel: str) -> Path | None:
-    """Ask in the terminal where Star Citizen is; None if the player skips."""
-    from tycho.games.star_citizen import checks
-
-    return checks.ask_game_root(channel)
 
 
 def fleet_findings(pack: GamePack) -> Iterator[Finding]:
