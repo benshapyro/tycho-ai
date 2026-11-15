@@ -21,6 +21,8 @@ from tests.fakes.fake_setup_pc import FakeSetupPC
 from tycho import credentials, settings, updates
 from tycho.desktop import window
 from tycho.desktop.bridge import Bridge
+from tycho.runtime.messages import Result
+from tycho.runtime.recent import Recent
 from tycho.settings import Settings
 
 STEPS = ["Game", "Keys", "Talk and listen", "Privacy", "Try it"]
@@ -74,8 +76,11 @@ class Setup:
         *,
         first_run: bool = True,
         findings: list[dict[str, str]] | None = None,
+        recent: Recent | None = None,
+        listening: bool | None = None,
     ) -> None:
         self.path = path
+        self.listening = listening
         self.pc = FakeSetupPC()
         self.finished: list[bool] = []
         self.restarts: list[bool] = []
@@ -89,6 +94,8 @@ class Setup:
             restart=lambda: bool(self.restarts.append(True)) or True,
             latest_release=lambda: None,
             findings=lambda: findings or [],
+            recent=recent.exchanges if recent is not None else list,
+            listening=lambda: self.listening,
         )
         self.page: Page = browser.new_page()
         self.errors: list[str] = []
@@ -538,6 +545,44 @@ def test_the_window_takes_the_games_own_colour(
     expect(setup.page.locator("#gameBox")).to_contain_text("World of Warcraft")
     accent = "getComputedStyle(document.documentElement).getPropertyValue('--acc').trim()"
     assert setup.page.evaluate(accent) == "#f0c674"
+    setup.close()
+
+
+def test_home_says_its_listening_and_shows_the_last_exchanges_from_memory(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """ADR 17 (amended): Home says in one line whether Tycho is listening and which
+    button to hold, and lists the last exchanges, newest first, as they come in."""
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    recent = Recent()
+    recent.add(Result(1, "done", text="gear down", say="Landing gear down."))
+    setup = Setup(browser, path, first_run=False, recent=recent, listening=True)
+    page = setup.page
+    expect(page.locator("#homeState h1")).to_have_text("Listening")
+    expect(page.locator("#homeState")).to_contain_text("Hold Mouse side (forward) and talk.")
+    expect(page.locator("#recent li")).to_have_count(1)
+    expect(page.locator("#recent li").first).to_contain_text("“gear down”")
+    expect(page.locator("#recent li").first).to_contain_text("Landing gear down.")
+    # A new one shows without a click, on top.
+    recent.add(Result(2, "no_focus", text="lights on"))
+    expect(page.locator("#recent li")).to_have_count(2, timeout=6000)
+    expect(page.locator("#recent li").first).to_contain_text("The game wasn't in front")
+    expect(page.locator("#recent li.no")).to_have_count(1)
+    # Paused from the tray: Home says so.
+    setup.listening = False
+    page.get_by_role("button", name="Settings", exact=True).click()
+    page.get_by_role("button", name="Home").click()
+    expect(page.locator("#homeState h1")).to_have_text("Paused")
+    setup.close()
+
+
+def test_home_has_no_exchanges_list_while_tycho_isnt_running(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    setup = Setup(browser, path, first_run=False)
+    expect(setup.page.locator("#homeState h1")).to_have_text("Ready")
+    expect(setup.page.locator("#recent")).to_have_count(0)
     setup.close()
 
 

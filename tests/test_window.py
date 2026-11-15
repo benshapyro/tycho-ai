@@ -378,6 +378,7 @@ def test_nothing_private_is_offered_to_the_page() -> None:
             "open_release",
             "pack_setup",
             "quit",
+            "recent",
             "remove_phrase",
             "remove_key",
             "set",

@@ -10,7 +10,7 @@ import contextlib
 import logging
 import os
 import sys
-from collections.abc import Callable, Coroutine, Mapping
+from collections.abc import Callable, Coroutine, Mapping, Sequence
 from typing import TYPE_CHECKING, Literal
 
 from tycho import crashes, doctor, paths, settings
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from tycho.desktop.window import AppWindow
     from tycho.runtime import Session
     from tycho.runtime.instance import OpenRequests
+    from tycho.runtime.recent import Exchange
     from tycho.spoken_settings import Live
     from tycho.tile.display import TileDisplay
 
@@ -55,6 +56,7 @@ def serve_with_tray(
     serve: Callable[[asyncio.Event | None], Coroutine[None, None, None]],
     reopen: bool = False,
     windowed: bool = False,
+    recent: Callable[[], Sequence[Exchange]] = lambda: [],
 ) -> Literal["stopped", "restart", "failed"]:
     """Run the session with Tycho's tray icon (ADR 17): pause, the Tile, the logs, quit.
     Without a tray (it couldn't start), the terminal only, as before; with no terminal
@@ -81,6 +83,8 @@ def serve_with_tray(
         ship_accent=display.ship_accent if display is not None else lambda: None,
         restart=host.restart,
         quit_tycho=lambda: host.ask("quit"),
+        recent=recent,
+        listening=lambda: not session.paused,
     )
     host.on_quit = window.close
     host.window_open = lambda: window.is_open
@@ -140,6 +144,8 @@ def app_window(
     finish: Callable[[], None] = lambda: None,
     restart: Callable[[], bool] = lambda: False,
     quit_tycho: Callable[[], None] | None = None,
+    recent: Callable[[], Sequence[Exchange]] = lambda: [],
+    listening: Callable[[], bool | None] = lambda: None,
 ) -> AppWindow:
     """Tycho's window and its bridge, for the first run and for the tray alike."""
     import dataclasses
@@ -164,6 +170,8 @@ def app_window(
         first_run=first_run,
         restart=restart,
         quit_tycho=quit_tycho,
+        recent=recent,
+        listening=listening,
     )
     window = AppWindow(bridge)
     return window
