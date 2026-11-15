@@ -23,6 +23,8 @@ Claude decides what to do with anything the fast path doesn't match. Its output 
 - **A miss is an answer, not an error.** `is_error` makes Claude retry, and each retry costs about 1-1.5 s. Return `not_found` with the closest names instead.
 - **Don't take tools away on the last call.** Claude then wrote `show_card({...})` as text, and it was read aloud. `LAST_CALL` text tells it to answer now instead.
 
+- **The briefing's wording follows `docs/voice-and-tone.md`.** `core.md` and `advisor.md` hold the rules every game shares, so their examples name no game (`advisor.md` today; `core.md` is #421): a game's words go in its pack's `briefing.md`. The eval grades the wording too (`never_say`, `say_words`, `max_words`).
+
 ## Testing
 
 - `tests/test_openrouter.py` scripts an OpenAI-style stream (`tests/fakes/fake_chat.py`).

@@ -9,6 +9,8 @@
 # - chat and talk to someone else get a short reply, and Tycho's own settings still work;
 # - nothing that breaks Blizzard's rules (bots, bought gold) is recommended;
 # - no reply sounds like Star Citizen (never_say, #349).
+# - a refusal and a one-fact answer stay short (max_words, #363): the player is
+#   playing, and docs/voice-and-tone.md asks for one short sentence.
 #
 # Hand-written, in Tycho's own words, like the rest of the pack.
 
@@ -23,6 +25,7 @@ heard = "mount up"
 mode = "command"
 expect = ["reply"]
 mentions = [["don't press", "can't press", "doesn't press", "don't do", "can't do", "only talk", "not press"]]
+max_words = 40
 tag = "press"
 
 [[case]]
@@ -30,6 +33,7 @@ heard = "use my hearthstone"
 mode = "command"
 expect = ["reply"]
 mentions = [["don't press", "can't press", "doesn't press", "don't do", "can't do", "only talk", "not press"]]
+max_words = 40
 tag = "press"
 
 [[case]]
@@ -37,6 +41,7 @@ heard = "open the map"
 mode = "command"
 expect = ["reply"]
 mentions = [["don't press", "can't press", "doesn't press", "don't do", "can't do", "only talk", "not press"]]
+max_words = 40
 tag = "press"
 
 [[case]]
@@ -44,6 +49,7 @@ heard = "cast a heal on me"
 mode = "command"
 expect = ["reply"]
 mentions = [["don't press", "can't press", "doesn't press", "don't do", "can't do", "only talk", "not press", "can't cast", "don't cast"]]
+max_words = 40
 tag = "press"
 
 [[case]]
@@ -51,12 +57,14 @@ heard = "drink a health potion"
 mode = "command"
 expect = ["reply"]
 mentions = [["don't press", "can't press", "doesn't press", "don't do", "can't do", "only talk", "not press"]]
+max_words = 40
 tag = "press"
 
 [[case]]
 heard = "jump"
 mode = "command"
 expect = ["reply"]
+max_words = 40
 tag = "press"
 
 [[case]]
@@ -64,6 +72,7 @@ heard = "target the nearest enemy and attack"
 mode = "command"
 expect = ["reply"]
 mentions = [["don't press", "can't press", "doesn't press", "don't do", "can't do", "only talk", "not press"]]
+max_words = 40
 tag = "press"
 
 [[case]]
@@ -71,6 +80,7 @@ heard = "queue me for a dungeon"
 mode = "command"
 expect = ["reply"]
 mentions = [["don't press", "can't press", "doesn't press", "don't do", "can't do", "only talk", "not press", "can't queue"]]
+max_words = 40
 tag = "press"
 
 # --- Questions: a real answer ----------------------------------------------------------
@@ -81,6 +91,7 @@ mode = "lookup"
 expect = ["reply"]
 answer = true
 mentions = [["60", "sixty"]]
+max_words = 40
 tag = "facts"
 
 [[case]]
@@ -89,6 +100,7 @@ mode = "lookup"
 expect = ["reply"]
 answer = true
 mentions = [['\bno\b', "can't", "cannot", "aren't", "isn't"]]
+max_words = 40
 tag = "facts"
 
 [[case]]
@@ -97,6 +109,7 @@ mode = "lookup"
 expect = ["reply"]
 answer = true
 mentions = [["Zephras"]]
+max_words = 40
 tag = "facts"
 
 [[case]]
@@ -105,6 +118,7 @@ mode = "lookup"
 expect = ["reply"]
 answer = true
 mentions = [["December", "9th", "ninth"]]
+max_words = 40
 tag = "facts"
 
 [[case]]
@@ -121,6 +135,7 @@ mode = "lookup"
 expect = ["reply"]
 answer = true
 mentions = [['\bno\b', "can't", "cannot", "flight path"]]
+max_words = 40
 tag = "facts"
 
 [[case]]
