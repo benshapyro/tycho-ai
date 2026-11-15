@@ -20,15 +20,27 @@ from tycho.packs.pack import (
     installed,
     load_pack,
 )
-from tycho.packs.parts import BUILT_IN, InstallFinder, KeybindSource, Registry
+from tycho.packs.parts import (
+    Built,
+    GameDataError,
+    GameFolder,
+    GameKeys,
+    InstallFinder,
+    KeybindSource,
+    Registry,
+    Workshop,
+)
 
 __all__ = [
-    "BUILT_IN",
     "CORE_SECTIONS",
     "FORMATS",
     "LOOSENING",
     "STAR_CITIZEN",
     "YOU_TURNED_THEM_OFF",
+    "Built",
+    "GameDataError",
+    "GameFolder",
+    "GameKeys",
     "GamePack",
     "InstallFinder",
     "KeybindSource",
@@ -37,6 +49,7 @@ __all__ = [
     "Registry",
     "Safety",
     "Tile",
+    "Workshop",
     "as_run",
     "built_in",
     "installed",

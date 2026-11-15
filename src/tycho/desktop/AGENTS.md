@@ -4,11 +4,11 @@ One Tycho process: the voice loop on its own thread (`host.py`), the tray icon o
 
 ## Rules
 
-- **The page's only way into Python is `bridge.py`.** It checks everything it's given. Keys go in and never come out: no method returns a key.
+- **The page's only way into Python is the `bridge` package**: one `Bridge` object, its calls in a module per page (`settings_page`, `setup_page`, `commands_page`, `updates_page`, `tile_page`) over the shared `state`. Every public name on it is a call the page can make, and `tests/test_bridge_pages.py` checks they're exactly the ones the page uses. It checks everything it's given. Keys go in and never come out: no method returns a key.
 - **No local server.** The page loads from memory; pywebview's `js_api` is the bridge.
 - **The window must run on the main thread**, so the voice loop runs in `Host`. Live setting changes reach the loop through `Host.run_now`.
 - **pystray is LGPL:** the tray is our own Win32 code. Never add an LGPL or GPL dependency.
-- **Two programs:** `tycho.exe` is for the terminal (the commands, and agents), and `tycho-app.exe` (the Start menu) has no console. In the app, `app.WINDOWED` is True: never prompt in a terminal. A problem shows in a message box (`packaging/tycho_main.py`). Subprocesses use `CREATE_NO_WINDOW`.
+- **Two programs:** `tycho.exe` is for the terminal (the commands, and agents), and `tycho-app.exe` (the Start menu) has no console. In the app, `tycho.start.run.WINDOWED` is True (`desktop/shell.py` is handed it as `windowed`): never prompt in a terminal. A problem shows in a message box (`packaging/tycho_main.py`). Subprocesses use `CREATE_NO_WINDOW`.
 - **A second start shows the running Tycho's window.** It uses a named event (`runtime/instance.py`, `OpenRequests`), not a server, and the window is raised once shown.
 - **The Commands page edits the player's `commands.toml` with tomlkit, so their comments stay.** A change is written only if the file then loads (`CommandMatcher.default`). Added phrases go in `[[phrases]]` entries; never copy a built-in command.
 

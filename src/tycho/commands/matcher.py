@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from tycho.commands.reserved import USES, reserved_for
-from tycho.packs import GamePack, Safety, built_in
+from tycho.packs import GamePack, Safety
 from tycho.text import normalize, similarity
 
 _LEADING_FILLER = (
@@ -78,7 +78,7 @@ class Command:
     settle_seconds: float = 0.0
     """How long to wait after setup for the game to change mode."""
     requires: tuple[str, ...] = ()
-    """Facts the game state must show (e.g. ``tycho.game.gamelog.QUANTUM_ROUTE``),
+    """Facts the game state must show (e.g. ``tycho.games.star_citizen.gamelog.QUANTUM_ROUTE``),
     or nothing is pressed."""
     accepted_risks: tuple[str, ...] = ()
     """Control contexts where the key could still do something dangerous, which the
@@ -130,10 +130,9 @@ class Defer:
     """"empty", "negation", "no_match" or "ambiguous"."""
 
 
-def built_in_commands(pack: GamePack | None = None) -> str:
-    """The text of a game pack's own commands.toml (Star Citizen's when none is given);
-    empty for a pack with no key actions."""
-    return (pack or built_in()).commands or ""
+def built_in_commands(pack: GamePack) -> str:
+    """The text of a game pack's own commands.toml; empty for a pack with no key actions."""
+    return pack.commands or ""
 
 
 class CommandMatcher:
@@ -165,15 +164,14 @@ class CommandMatcher:
         self._joined = ["".join(words) for words, _ in self._phrases]
 
     @classmethod
-    def default(cls, user_file: Path | None = None, pack: GamePack | None = None) -> CommandMatcher:
-        """The game pack's commands (Star Citizen's when none is given), plus the
-        player's own file if there is one.
+    def default(cls, user_file: Path | None = None, *, pack: GamePack) -> CommandMatcher:
+        """The game pack's commands, plus the player's own file if there is one.
 
         Raises ``CommandFileError`` if the player's file can't be used; the
         built-in commands alone always load.
         """
         text = built_in_commands(pack)
-        lists = (pack or built_in()).safety
+        lists = pack.safety
         entries = _entries(tomllib.loads(text), "the built-in commands", lists)
         source = "the built-in commands"
         warnings: tuple[str, ...] = ()
@@ -186,7 +184,7 @@ class CommandMatcher:
                 raise CommandFileError(f"{source}: {e}") from e
             mine = _entries(user, source, lists)
             extra = _phrase_entries(user, source)
-            warnings = (*_warnings(mine), *_reserved_warnings(mine, extra))
+            warnings = (*_warnings(mine), *_reserved_warnings(mine, extra, pack.terms))
             entries = _merge(entries, mine, extra, source)
         try:
             return cls(_build(entries), warnings=warnings)
@@ -290,7 +288,7 @@ def _split(words: tuple[str, ...]) -> list[tuple[str, ...]]:
 type _Entry = dict[str, Any]
 
 
-def _entries(data: dict[str, Any], source: str, lists: Safety | None = None) -> dict[str, _Entry]:
+def _entries(data: dict[str, Any], source: str, lists: Safety) -> dict[str, _Entry]:
     entries: dict[str, _Entry] = {}
     for kind in ("command", "sequence"):
         raw_list: Any = data.get(kind, [])
@@ -313,7 +311,7 @@ _LISTS = ("say", "actions", "setup", "requires", "accepted_risks")
 _FLAGS = ("confirm", "announced")
 
 
-def _type_problem(entry: _Entry, lists: Safety | None = None) -> str | None:
+def _type_problem(entry: _Entry, lists: Safety) -> str | None:
     """What's the wrong type in an entry, or None. Checked before anything uses it: a
     string where a list belongs would otherwise become one phrase per letter."""
     if not isinstance(entry["id"], str) or not entry["id"]:
@@ -335,16 +333,16 @@ def _type_problem(entry: _Entry, lists: Safety | None = None) -> str | None:
     return _unknown_to_the_gate(entry, lists)
 
 
-def _unknown_to_the_gate(entry: _Entry, lists: Safety | None = None) -> str | None:
+def _unknown_to_the_gate(entry: _Entry, lists: Safety) -> str | None:
     """A ``requires`` or ``accepted_risks`` value the safety gate doesn't know (from the
-    game pack's ``lists``, Star Citizen's when None), or None.
+    game pack's ``lists``), or None.
     A typo would otherwise pass silently: an unknown fact is never true, so the command
     is always refused, and an unknown risk is never accepted."""
     from tycho import safety  # here, not at the top: the gate imports this module
 
     checks = [("requires", safety.known_facts(lists))]
     if entry["_kind"] == "command":  # a sequence's accepted_risks are ignored, with a warning
-        checks.append(("accepted_risks", (lists or safety.STAR_CITIZEN).accepted_risks))
+        checks.append(("accepted_risks", lists.accepted_risks))
     for name, allowed in checks:
         if unknown := [v for v in entry.get(name, []) if v not in allowed]:
             return (
@@ -370,7 +368,7 @@ def _warnings(entries: dict[str, _Entry]) -> tuple[str, ...]:
 
 
 def _reserved_warnings(
-    entries: dict[str, _Entry], extra: list[tuple[str, list[str]]]
+    entries: dict[str, _Entry], extra: list[tuple[str, list[str]]], terms: Iterable[str]
 ) -> tuple[str, ...]:
     """The player's phrases that are the session's own words (#227). The session answers
     them before any command is matched, so they're kept but said: refusing would drop
@@ -380,7 +378,7 @@ def _reserved_warnings(
     given += [(command, phrase) for command, phrases in extra for phrase in phrases]
     found: list[str] = []
     for command, phrase in given:
-        if (use := reserved_for(phrase)) is None:
+        if (use := reserved_for(phrase, terms)) is None:
             continue
         effect = (
             "so it runs the command only while the Tile is off"

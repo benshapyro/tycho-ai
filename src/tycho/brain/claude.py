@@ -22,6 +22,7 @@ request at startup writes it, so the first real request is fast too.
 import asyncio
 import contextlib
 import datetime
+import json
 import logging
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -49,7 +50,7 @@ from tycho.brain.rounds import (
 )
 from tycho.brain.traces import TraceFile, briefing_hash
 from tycho.commands import CommandMatcher
-from tycho.game.keybinds import Keybinds
+from tycho.keybinds import Keybinds
 from tycho.packs import GamePack
 from tycho.tile.cards import TOOL_DESCRIPTION, TOOL_SCHEMA
 
@@ -82,11 +83,16 @@ def _tools(
 
 
 def history(
-    recent: Sequence[Exchange], text: str, today: datetime.date | None = None, about: str = ""
+    recent: Sequence[Exchange],
+    text: str,
+    today: datetime.date | None = None,
+    about: str = "",
+    own_keys: str = "",
 ) -> list[MessageParam]:
-    """Earlier exchanges as turns, then this request, headed by today's date and what
-    Tycho knows about the player (``about``: their ships). Both live here, not in the
-    briefing, so the cached briefing never changes."""
+    """Earlier exchanges as turns, then this request, headed by today's date, what
+    Tycho knows about the player (``about``: their ships) and, with key actions off,
+    their own keys for what they asked (#386). All live here, not in the briefing, so
+    the cached briefing never changes."""
     messages: list[MessageParam] = []
     for exchange in recent:
         messages.append({"role": "user", "content": exchange.said})
@@ -95,6 +101,8 @@ def history(
         messages.append({"role": "user", "content": text})
     else:
         header = f"[{today.day} {today:%B %Y}]" + (f"\n{about}" if about else "")
+        if own_keys:
+            header += f"\n[The player's own keys for this: {own_keys}]"
         messages.append(
             {
                 "role": "user",
@@ -118,7 +126,7 @@ class ClaudeBrain:
         about: Callable[[], str] = lambda: "",
         cards: Callable[[], bool] = lambda: False,
         traces: TraceFile | None = None,
-        pack: GamePack | None = None,
+        pack: GamePack,
     ) -> None:
         """``reference`` is extra text for the end of the cached briefing, such as
         the ship table being measured against the ship look-up (ADR 15). ``about``
@@ -132,10 +140,10 @@ class ClaudeBrain:
         )
         self._matcher = matcher
         self._pack = pack
-        """The game the briefing is for (Star Citizen when None, ADR 18)."""
+        """The game the briefing is for (ADR 18)."""
         self._model = model
         self._today = today
-        self._keys = pack is None or pack.mode == "keys"
+        self._keys = pack.mode == "keys"
         """Whether the brain may press: in advisor mode it has no tool to (#191)."""
         self._sequences = (
             sorted(c.id for c in matcher.commands if c.is_sequence) if self._keys else []
@@ -214,7 +222,7 @@ class ClaudeBrain:
         started = time.perf_counter()
         # The fleet line matches ship names, which is too slow for the event loop.
         about = await asyncio.to_thread(self._about)
-        messages = history(request.recent, request.text, self._today(), about)
+        messages = history(request.recent, request.text, self._today(), about, request.own_keys)
         try:
             for call in range(MAX_CALLS):
                 decided, message, round_ = await self._call(messages, started, turn)
@@ -277,9 +285,11 @@ class ClaudeBrain:
                     ):
                         block = event.content_block
                         if _cut_off(block.name, block.input, tools):
+                            round_.left(*_written(stream.current_message_snapshot))
                             return await round_.cut_short(block.name), None, round_
                         decided = await round_.tool_call(block.id, block.name, block.input)
                         if decided is not None:
+                            round_.left(*_written(stream.current_message_snapshot))
                             return decided, None, round_
                 message = await stream.get_final_message()
             round_.finished()
@@ -352,6 +362,25 @@ TOOL_CHOICE: Any = {"type": "auto"}
 """Several tools in one reply (#149, #156): look-ups at once instead of one call
 after another, and a fleet or settings note alongside an act. Only the first act in
 a reply is pressed (the stream is left there), and every act is still checked."""
+
+
+def _written(message: Any) -> tuple[int, dict[str, int]]:
+    """What a call left at an act had written, in characters, and its input and cache
+    tokens: Claude sends those as the call starts, but the output count only at its end,
+    which Tycho never reads (#387)."""
+    chars = 0
+    for block in message.content:
+        if block.type == "text":
+            chars += len(block.text)
+        elif block.type == "tool_use":
+            chars += len(json.dumps(block.input, ensure_ascii=False))
+    usage = message.usage
+    tokens = {
+        "input": usage.input_tokens,
+        "cache_read": usage.cache_read_input_tokens or 0,
+        "cache_write": usage.cache_creation_input_tokens or 0,
+    }
+    return chars, tokens
 
 
 def _log_usage(

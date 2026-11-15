@@ -10,8 +10,8 @@ import pytest
 
 from tests.test_knowledge import CONCEPTS, LIBRARY
 from tycho.brain.claude import history
-from tycho.knowledge.fleet import Fleet, FleetUpdate
-from tycho.knowledge.ships import ShipLibrary, concepts_from_uex
+from tycho.games.star_citizen.fleet import Fleet, FleetUpdate
+from tycho.games.star_citizen.ships import ShipLibrary, concepts_from_uex
 
 WITH_CONCEPTS = LIBRARY.with_concepts(concepts_from_uex(CONCEPTS[:3], LIBRARY.ships))
 

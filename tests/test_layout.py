@@ -3,8 +3,16 @@ from pathlib import Path
 
 import pytest
 
-from tycho.game.keybinds import Action, Keybinds, KeyInput, apply_profile, parse_defaults
-from tycho.game.layout import Addition, LayoutError, already_bound, build, outstanding, write
+from tycho.games.star_citizen.keybinds import apply_profile, parse_defaults
+from tycho.games.star_citizen.layout import (
+    Addition,
+    LayoutError,
+    already_bound,
+    build,
+    outstanding,
+    write,
+)
+from tycho.keybinds import Action, Keybinds, KeyInput
 
 DEFAULTS = """<profile>
   <actionmap name="spaceship_general">

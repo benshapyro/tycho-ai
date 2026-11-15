@@ -72,7 +72,6 @@ from brain_report import GLOBAL_NEVER  # pyright: ignore[reportMissingImports, r
 
 from tycho import credentials, logs, paths, safety, settings
 from tycho.address import Address
-from tycho.app import NO_KEYBINDS, find_install, load_commands
 from tycho.brain import BrainError, BrainRequest, Exchange, Reply, providers
 from tycho.brain.briefing import instructions_hash
 from tycho.brain.claude import MODEL, ClaudeBrain
@@ -82,21 +81,25 @@ from tycho.brain.rounds import NO_PRESS_AFTER_SEARCH
 from tycho.brain.traces import TraceFile
 from tycho.brain_choice import anthropic_key, openrouter_key
 from tycho.commands import Command, CommandMatcher, resolve
-from tycho.game.keybinds import Action, ActivationMode, Keybinds, KeyInput
-from tycho.game.store import KeybindStore
-from tycho.knowledge import ShipLookup, UexApi, WikiApi
-from tycho.knowledge.fleet import Fleet, FleetUpdate
-from tycho.knowledge.item_lookup import ItemLookup
-from tycho.knowledge.mining import MiningLookup
-from tycho.knowledge.store import ensure
-from tycho.knowledge.trade_lookup import trade_lookups
+from tycho.games.star_citizen.checks import find_install
+from tycho.games.star_citizen.data import ensure
+from tycho.games.star_citizen.fleet import Fleet, FleetUpdate
+from tycho.games.star_citizen.item_lookup import ItemLookup
+from tycho.games.star_citizen.mining import MiningLookup
+from tycho.games.star_citizen.ship_lookup import ShipLookup
+from tycho.games.star_citizen.store import KeybindStore
+from tycho.games.star_citizen.trade_lookup import trade_lookups
+from tycho.games.star_citizen.uex import UexApi
+from tycho.games.star_citizen.wiki import WikiApi
+from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.knowledge.web import WebSearch
 from tycho.lexicon import Lexicon
 from tycho.packs import STAR_CITIZEN, GamePack, Safety, as_run, built_in
 from tycho.runtime import routing
 from tycho.runtime.planning import Questions, Refusal, Steps, plan_request
-from tycho.runtime.routing import NotUnderstood, Picked, Reserved, from_brain
+from tycho.runtime.routing import NotUnderstood, Picked, Reserved, from_brain, own_keys
 from tycho.spoken_settings import SettingsTool
+from tycho.start.assemble import NO_KEYBINDS, load_commands
 
 PACKS = Path(__file__).resolve().parents[2] / "src" / "tycho" / "packs"
 
@@ -407,15 +410,14 @@ async def run_case(
     matcher: CommandMatcher | None = None,
     *,
     tile: bool = True,
-    lists: Safety | None = None,
+    lists: Safety,
 ) -> Outcome:
-    """One case through Tycho's path. ``lists`` are the pack's safety lists (Star
-    Citizen's when None)."""
+    """One case through Tycho's path. ``lists`` are the pack's safety lists."""
     outcome = Outcome(rule["heard"], str(rule.get("tag", "")))
     text = lexicon.correct(rule["heard"]).text
     matcher = matcher or MATCHER
     # The session's own routing (#55), so the eval grades the path the words really take.
-    routed = routing.route(text, matcher, tile=tile, keys=not (lists and lists.keys_off))
+    routed = routing.route(text, matcher, tile=tile, keys=not lists.keys_off)
     if isinstance(routed, Reserved):  # the session answers these itself ("say that again", #222)
         outcome.route, outcome.kind = "session", routed.word
         return outcome
@@ -439,8 +441,11 @@ async def run_case(
         def searching() -> None:
             outcome.searched = True
 
+        # As the session does (#386): with key actions off, a built-in phrase reaches
+        # the brain with the player's own keys for it.
+        keys = own_keys(routed.matched, keybinds) if routed.matched else ""
         decision = await brain.decide(
-            BrainRequest(text, keybinds, tuple(recent), waiting=searching)
+            BrainRequest(text, keybinds, tuple(recent), keys, waiting=searching)
         )
     except BrainError as e:
         outcome.kind, outcome.notes = "error", [str(e)]
@@ -480,7 +485,7 @@ def _plan(
     outcome: Outcome,
     commands: tuple[Command, ...],
     keybinds: Keybinds,
-    lists: Safety | None = None,
+    lists: Safety,
 ) -> None:
     """What Tycho would press for these commands, through the session's own planning and
     safety gate (#55): after "confirm" if the gate asks first, with every fact the game
@@ -502,7 +507,7 @@ def _plan(
         outcome.notes.append(f"Tycho would press nothing ({outcome.refused})")
 
 
-MATCHER = load_commands()
+MATCHER = load_commands(built_in(STAR_CITIZEN))
 LIVE: dict[str, Callable[[object], None]] = {
     name: lambda _value: None
     for name in settings.Settings.model_fields
@@ -616,7 +621,7 @@ def _export(path: Path) -> None:
     store = KeybindStore.load(install)
     stamp = install.data_p4k.stat()
     game = f"{install.channel} {stamp.st_size}-{int(stamp.st_mtime)}"
-    own = paths.commands_file()
+    own = paths.commands_file(STAR_CITIZEN)
     commands = own.read_text("utf-8-sig") if own.is_file() else ""
     export_keybinds(store.keybinds, path, game, commands)
     bound = sum(a.bound for a in store.keybinds)
@@ -624,14 +629,14 @@ def _export(path: Path) -> None:
     print(", with your own commands." if commands else ".")
 
 
-def _matcher(commands: str, pack: GamePack | None = None) -> CommandMatcher:
+def _matcher(commands: str, pack: GamePack) -> CommandMatcher:
     """The fast path with a keybinds file's own commands, as on the player's PC."""
     if not commands:
         return CommandMatcher.default(pack=pack)
     with tempfile.TemporaryDirectory() as folder:
         own = Path(folder) / "commands.toml"
         own.write_text(commands, "utf-8")
-        return CommandMatcher.default(own, pack)
+        return CommandMatcher.default(own, pack=pack)
 
 
 def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
@@ -813,7 +818,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     elif provider == "openrouter" and not args.no_web:
         print("Web search: not offered. The OpenRouter brain has none (it's Anthropic's tool).")
     elif not args.no_web:
-        web = [WebSearch(anthropic.AsyncAnthropic(api_key=key))]
+        web = [WebSearch(anthropic.AsyncAnthropic(api_key=key), sites=pack.web_sites)]
     if not web:
         rules, left_out = without_search(rules)
         if left_out:

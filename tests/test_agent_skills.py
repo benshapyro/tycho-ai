@@ -8,8 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from tycho import app
+from tycho import cli
 from tycho.commands import CommandMatcher
+from tycho.packs import STAR_CITIZEN, built_in
+
+SC = built_in(STAR_CITIZEN)
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILL_FOLDERS = (ROOT / "plugins", ROOT / ".claude" / "skills", ROOT / ".agents" / "skills")
@@ -74,7 +77,7 @@ def _commands(text: str) -> list[list[str]]:
 
 @pytest.mark.parametrize("path", SKILLS, ids=lambda p: p.parent.name)
 def test_every_tycho_command_a_skill_gives_is_real(path: Path) -> None:
-    parser = app.build_parser()
+    parser = cli.build_parser()
     commands = _commands(path.read_text("utf-8"))
     for arguments in commands:
         try:
@@ -98,7 +101,7 @@ def test_the_commands_skill_examples_load(tmp_path: Path) -> None:
     assert len(commands) == 3
     file = tmp_path / "commands.toml"
     file.write_text("\n".join(commands), "utf-8")
-    matcher = CommandMatcher.default(file)
+    matcher = CommandMatcher.default(file, pack=SC)
     assert matcher.get("space_mode") is not None
     gear = matcher.get("landing_gear")
     assert gear is not None

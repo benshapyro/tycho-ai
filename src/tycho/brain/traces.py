@@ -85,6 +85,12 @@ class Call:
     """Why the model stopped ("end_turn", "tool_use"), or "act" when Tycho left the
     stream at an act, so the rest never arrived."""
     tokens: dict[str, int] = field(default_factory=dict[str, int])
+    """The call's tokens. A call left at an act has no "output": the count only comes
+    at the end of the stream, which Tycho never reads (#387)."""
+    output_chars: int | None = None
+    """How much the model wrote before Tycho left the stream at an act: its text and
+    each tool call's arguments, in characters. The act's output tokens never arrive,
+    so this is how long that output was (#387)."""
     cost: float | None = None
     priced: str = ""
     """Where ``cost`` came from: "reported" by OpenRouter, worked out from its "price
@@ -160,6 +166,16 @@ class Trace:
         last.tokens, last.cost, last.host = dict(tokens), cost, host or last.host
         last.priced = priced if cost is not None else ""
         last.stop = stop or last.stop
+
+    def left(self, output_chars: int, tokens: Mapping[str, int] | None = None) -> None:
+        """Tycho left the current call's stream at an act: how much the model had
+        written by then, and the tokens known so far (Claude reports the input and
+        cache tokens as the call starts)."""
+        if self.calls:
+            last = self.calls[-1]
+            last.output_chars = output_chars
+            if tokens:
+                last.tokens = dict(tokens)
 
     def served(self, host: str, generation: str = "") -> None:
         """Who served the current call, and its id, when it ended at an act."""

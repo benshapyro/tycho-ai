@@ -1,7 +1,7 @@
 """The look-ups' time limits, fitted to timings on Ben's PC (#150)."""
 
-from tycho.knowledge import item_lookup, items, mining, refining, trade_lookup
-from tycho.runtime.session import LOOKING_SECONDS
+from tycho.games.star_citizen import item_lookup, items, mining, refining, trade_lookup
+from tycho.runtime.asking import LOOKING_SECONDS
 
 
 def test_no_look_up_can_take_most_of_the_extra_time_it_gets() -> None:

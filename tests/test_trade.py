@@ -8,9 +8,9 @@ from typing import Any
 import pytest
 
 from tests.fakes.fake_uex import NOW, FakeTradeUex
-from tycho.knowledge import WikiError
-from tycho.knowledge.trade import FRESH_SECONDS, Trade, TradeError, hours_ago
-from tycho.knowledge.trade_lookup import CommodityPrices, TradeRoutes, trade_lookups
+from tycho.games.star_citizen.trade import FRESH_SECONDS, Trade, TradeError, hours_ago
+from tycho.games.star_citizen.trade_lookup import CommodityPrices, TradeRoutes, trade_lookups
+from tycho.games.star_citizen.wiki import WikiError
 
 
 def _trade(uex: FakeTradeUex | None = None, clock: Any = None) -> Trade:
@@ -77,9 +77,9 @@ def test_a_place_that_fits_a_few_is_the_likeliest_with_the_others_named() -> Non
 
 
 def test_a_place_that_fits_many_asks_which(monkeypatch: pytest.MonkeyPatch) -> None:
-    import tycho.knowledge.trade
+    import tycho.games.star_citizen.trade
 
-    monkeypatch.setattr(tycho.knowledge.trade, "GUESS_AMONG", 1)
+    monkeypatch.setattr(tycho.games.star_citizen.trade, "GUESS_AMONG", 1)
     with pytest.raises(TradeError, match="name one"):
         _trade().place("Lagrange")
     with pytest.raises(TradeError, match="no place called"):
@@ -308,7 +308,7 @@ def test_a_station_and_a_commodity_ask_its_terminals_once() -> None:
 def test_a_slow_terminal_is_left_out(monkeypatch: pytest.MonkeyPatch) -> None:
     """#150: one terminal that doesn't answer mustn't use up the look-up's time: the
     routes from those that did answer are given."""
-    import tycho.knowledge.trade_lookup
+    import tycho.games.star_citizen.trade_lookup
 
     uex = FakeTradeUex()
     real_get = uex.get
@@ -319,7 +319,7 @@ def test_a_slow_terminal_is_left_out(monkeypatch: pytest.MonkeyPatch) -> None:
         return await real_get(path, params)
 
     monkeypatch.setattr(uex, "get", slow_at_area18)
-    monkeypatch.setattr(tycho.knowledge.trade_lookup, "PART_SECONDS", 0.05)
+    monkeypatch.setattr(tycho.games.star_citizen.trade_lookup, "PART_SECONDS", 0.05)
     monkeypatch.setattr(Trade, "terminals_at", _arc_l1_and_area18)
     error, result = _run(
         _routes(uex), {"start": "ARC-L1", "commodity": "", "end": "", "cargo_scu": 0}
@@ -338,7 +338,7 @@ def test_with_no_terminal_answered_it_waits_for_the_first(
 ) -> None:
     """Review of #211: with none answered by PART_SECONDS, giving up would fail a look-up
     that still had time left. It waits on for the first answer instead."""
-    import tycho.knowledge.trade_lookup
+    import tycho.games.star_citizen.trade_lookup
 
     uex = FakeTradeUex()
     real_get = uex.get
@@ -349,7 +349,7 @@ def test_with_no_terminal_answered_it_waits_for_the_first(
         return await real_get(path, params)
 
     monkeypatch.setattr(uex, "get", slow)
-    monkeypatch.setattr(tycho.knowledge.trade_lookup, "PART_SECONDS", 0.05)
+    monkeypatch.setattr(tycho.games.star_citizen.trade_lookup, "PART_SECONDS", 0.05)
     error, result = _run(
         _routes(uex), {"start": "ARC-L1", "commodity": "", "end": "", "cargo_scu": 0}
     )
@@ -409,9 +409,9 @@ def test_a_commodity_that_fits_a_few_names_the_others(monkeypatch: pytest.Monkey
     commodity, others = trade.commodity_match("aranite")  # Laranite and Caranite tie
     assert commodity.name in ("Laranite", "Caranite")
     assert others
-    import tycho.knowledge.trade
+    import tycho.games.star_citizen.trade
 
-    monkeypatch.setattr(tycho.knowledge.trade, "GUESS_AMONG", 1)
+    monkeypatch.setattr(tycho.games.star_citizen.trade, "GUESS_AMONG", 1)
     with pytest.raises(TradeError, match="name one"):
         trade.commodity_match("aranite")
 
@@ -428,7 +428,7 @@ def test_a_capped_commodity_list_falls_back_to_the_starts_routes(
 ) -> None:
     """#171: UEX stops a commodity's routes at 500, so a start can be missing from it.
     A whole system is asked by the commodity's list, then from a few of its terminals."""
-    import tycho.knowledge.trade_lookup
+    import tycho.games.star_citizen.trade_lookup
 
     uex = FakeTradeUex()
     real = uex._routes  # pyright: ignore[reportPrivateUsage]
@@ -439,7 +439,7 @@ def test_a_capped_commodity_list_falls_back_to_the_starts_routes(
         return real(query)
 
     monkeypatch.setattr(uex, "_routes", capped)
-    monkeypatch.setattr(tycho.knowledge.trade_lookup, "ROUTES_CAP", 1)
+    monkeypatch.setattr(tycho.games.star_citizen.trade_lookup, "ROUTES_CAP", 1)
     _, result = _run(
         _routes(uex), {"start": "Stanton", "commodity": "laranite", "end": "", "cargo_scu": 0}
     )
@@ -451,7 +451,7 @@ def test_a_capped_start_list_falls_back_to_the_commodities(
 ) -> None:
     """Should UEX ever give a start's routes without narrowing them to the commodity,
     a capped list without it still finds the routes, from the commodity's list."""
-    import tycho.knowledge.trade_lookup
+    import tycho.games.star_citizen.trade_lookup
 
     uex = FakeTradeUex()
     real = uex._routes  # pyright: ignore[reportPrivateUsage]
@@ -462,7 +462,7 @@ def test_a_capped_start_list_falls_back_to_the_commodities(
         return real(query)
 
     monkeypatch.setattr(uex, "_routes", ignores_the_commodity)
-    monkeypatch.setattr(tycho.knowledge.trade_lookup, "ROUTES_CAP", 1)
+    monkeypatch.setattr(tycho.games.star_citizen.trade_lookup, "ROUTES_CAP", 1)
     _, result = _run(
         _routes(uex), {"start": "Hurston", "commodity": "laranite", "end": "", "cargo_scu": 0}
     )

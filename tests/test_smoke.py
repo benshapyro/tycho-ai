@@ -15,3 +15,15 @@ def test_help_lists_the_commands(capsys: pytest.CaptureFixture[str]) -> None:
     out = capsys.readouterr().out
     for command in ("run", "check", "bind", "sounds"):
         assert command in out
+
+
+def test_the_tycho_command_is_the_command_line_package() -> None:
+    # #398: app.py is gone, with no shim; the command is tycho.cli:main (ADR 19).
+    import importlib.util
+    import tomllib
+    from pathlib import Path
+
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    scripts = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["scripts"]
+    assert scripts == {"tycho": "tycho.cli:main"}
+    assert importlib.util.find_spec("tycho.app") is None

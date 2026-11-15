@@ -7,21 +7,16 @@ shutdown has released every key (Windows allows about 5 seconds) before returnin
 Ctrl+C is left to Python, which already cancels the loop cleanly.
 """
 
-import ctypes
 import threading
 from collections.abc import Callable
-from ctypes import wintypes
 from types import TracebackType
 from typing import Self
+
+from tycho import win32
 
 CTRL_C, CTRL_BREAK, CTRL_CLOSE, CTRL_LOGOFF, CTRL_SHUTDOWN = 0, 1, 2, 5, 6
 _HANDLED = frozenset({CTRL_BREAK, CTRL_CLOSE, CTRL_LOGOFF, CTRL_SHUTDOWN})
 WAIT_SECONDS = 4.0
-
-_HandlerType = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.DWORD)
-_kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-_kernel32.SetConsoleCtrlHandler.argtypes = (_HandlerType, wintypes.BOOL)
-_kernel32.SetConsoleCtrlHandler.restype = wintypes.BOOL
 
 
 class CloseGuard:
@@ -31,10 +26,10 @@ class CloseGuard:
         self._request_stop = request_stop
         self._wait = wait
         self._finished = threading.Event()
-        self._handler = _HandlerType(self.on_event)  # kept referenced while installed
+        self._handler = win32.HANDLER_ROUTINE(self.on_event)  # kept referenced while installed
 
     def __enter__(self) -> Self:
-        _kernel32.SetConsoleCtrlHandler(self._handler, True)
+        win32.kernel32().SetConsoleCtrlHandler(self._handler, True)
         return self
 
     def __exit__(
@@ -44,7 +39,7 @@ class CloseGuard:
         traceback: TracebackType | None,
     ) -> None:
         self._finished.set()  # shutdown is done: let a waiting close go ahead
-        _kernel32.SetConsoleCtrlHandler(self._handler, False)
+        win32.kernel32().SetConsoleCtrlHandler(self._handler, False)
 
     def on_event(self, kind: int) -> bool:
         """Runs on a thread Windows creates. True means "handled, don't end us yet"."""
@@ -63,10 +58,10 @@ class CtrlCGuard:
 
     def __init__(self, on_ctrl_c: Callable[[], None]) -> None:
         self._on_ctrl_c = on_ctrl_c
-        self._handler = _HandlerType(self.on_event)
+        self._handler = win32.HANDLER_ROUTINE(self.on_event)
 
     def __enter__(self) -> Self:
-        _kernel32.SetConsoleCtrlHandler(self._handler, True)
+        win32.kernel32().SetConsoleCtrlHandler(self._handler, True)
         return self
 
     def __exit__(
@@ -75,7 +70,7 @@ class CtrlCGuard:
         exc: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        _kernel32.SetConsoleCtrlHandler(self._handler, False)
+        win32.kernel32().SetConsoleCtrlHandler(self._handler, False)
 
     def on_event(self, kind: int) -> bool:
         if kind == CTRL_C:

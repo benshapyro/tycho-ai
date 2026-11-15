@@ -53,7 +53,7 @@ from tycho.brain.rounds import (
 )
 from tycho.brain.traces import TraceFile, briefing_hash
 from tycho.commands import CommandMatcher
-from tycho.game.keybinds import Keybinds
+from tycho.keybinds import Keybinds
 from tycho.packs import GamePack
 from tycho.tile.cards import TOOL_DESCRIPTION, TOOL_SCHEMA
 
@@ -293,7 +293,7 @@ class OpenRouterBrain:
         hosts: Sequence[str] = (),
         sort: str | None = None,
         traces: TraceFile | None = None,
-        pack: GamePack | None = None,
+        pack: GamePack,
     ) -> None:
         """``model`` is OpenRouter's id ("anthropic/claude-haiku-5.5"). ``effort`` asks a
         model that reasons to reason that hard ("low"); by default nothing is asked, so
@@ -308,7 +308,7 @@ class OpenRouterBrain:
         self._client: ChatClient = client or OpenRouterClient(api_key or "")
         self._matcher = matcher
         self._pack = pack
-        """The game the briefing is for (Star Citizen when None, ADR 18)."""
+        """The game the briefing is for (ADR 18)."""
         self._model = model
         self._today = today
         self._effort = effort
@@ -316,7 +316,7 @@ class OpenRouterBrain:
         if sort is not None and sort not in SORTS:
             raise ValueError(f"OpenRouter can't sort hosts by {sort!r}")
         self._route = route(hosts, sort)
-        self._keys = pack is None or pack.mode == "keys"
+        self._keys = pack.mode == "keys"
         """Whether the brain may press: in advisor mode it has no tool to (#191)."""
         self._sequences = (
             sorted(c.id for c in matcher.commands if c.is_sequence) if self._keys else []
@@ -382,7 +382,7 @@ class OpenRouterBrain:
     async def _decide(self, request: BrainRequest, turn: Turn) -> Decision:
         started = time.perf_counter()
         about = await asyncio.to_thread(self._about)
-        messages = _messages(request.recent, request.text, self._today(), about)
+        messages = _messages(request.recent, request.text, self._today(), about, request.own_keys)
         for call in range(MAX_CALLS):
             decided, message, round_ = await self._call(messages, started, turn)
             if decided is not None:
@@ -461,6 +461,7 @@ class OpenRouterBrain:
     ) -> Decision | None:
         decided = await round_.tool_call(call.id, call.name, call.parsed())
         if decided is not None:
+            round_.left(len(message.text) + sum(len(c.arguments) for c in message.calls))
             # The call ends here, so its usage never arrives: the eval looks its cost
             # up by the generation's id.
             log.debug(
@@ -592,10 +593,10 @@ def _function(spec: Mapping[str, object]) -> dict[str, object]:
 
 
 def _messages(
-    recent: Sequence[Exchange], text: str, today: datetime.date, about: str
+    recent: Sequence[Exchange], text: str, today: datetime.date, about: str, own_keys: str = ""
 ) -> list[dict[str, Any]]:
     """The same turns ``ClaudeBrain`` sends: its text parts are OpenAI's shape too."""
-    return [dict(m) for m in history(recent, text, today, about)]
+    return [dict(m) for m in history(recent, text, today, about, own_keys)]
 
 
 def _error_text(error: object) -> str:

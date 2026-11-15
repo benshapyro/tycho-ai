@@ -28,7 +28,7 @@ from importlib.resources.abc import Traversable
 from types import MappingProxyType
 from typing import Literal, cast
 
-from tycho.packs.parts import BUILT_IN, Registry
+from tycho.packs.parts import Registry
 
 FORMATS = frozenset({1})
 """The folder formats this Tycho reads."""
@@ -156,8 +156,13 @@ class GamePack:
     None keeps Tycho's default. A name the player chose always wins (``address``)."""
 
 
-def load_pack(folder: Traversable, *, built_in: bool, registry: Registry = BUILT_IN) -> GamePack:
-    """The pack in ``folder``, checked; ``PackError`` says what's wrong with it."""
+def load_pack(folder: Traversable, *, built_in: bool, registry: Registry | None = None) -> GamePack:
+    """The pack in ``folder``, checked; ``PackError`` says what's wrong with it. Its
+    parts must be in ``registry``, Tycho's own (``tycho.games.BUILT_IN``) unless given."""
+    if registry is None:
+        from tycho.games import BUILT_IN
+
+        registry = BUILT_IN
     names = {item.name for item in folder.iterdir()}
     if "pack.toml" not in names:
         raise PackError(f"{folder.name}: no pack.toml")
@@ -275,7 +280,7 @@ def _keys_off(name: str, why: str) -> str:
 
 
 @cache
-def built_in(pack_id: str = STAR_CITIZEN) -> GamePack:
+def built_in(pack_id: str) -> GamePack:
     """A pack that ships inside Tycho, by id."""
     folder = resources.files("tycho.packs").joinpath(pack_id)
     if not _ID.fullmatch(pack_id) or not folder.is_dir():
@@ -349,7 +354,7 @@ def _parts(table: object, where: str, registry: Registry) -> Parts:
             raise PackError(f"{where}: Tycho has no built-in {kind} part {value!r}")
         named[kind] = value
     lookups = _strings(parts, "lookups", where)
-    if unknown := [name for name in lookups if name not in registry.lookups]:
+    if unknown := [name for name in lookups if name not in registry.known("lookups")]:
         raise PackError(f"{where}: Tycho has no built-in look-up {', '.join(map(repr, unknown))}")
     return Parts(named["install"], named["keybinds"], named["game_state"], lookups)
 

@@ -17,17 +17,17 @@ anything says gets a key pressed in a game whose rules forbid it.
 
 The rules are here; the lists they use (which actions ask first, which modes switch a
 control context off) are the game pack's ``safety.toml`` (ADR 18). Each function takes
-``lists``, Star Citizen's when None.
+``lists``, and there's no default: a forgotten pack is a type error, never another
+game's lists, some of which loosen a check (ADR 19).
 """
 
 import re
 from dataclasses import dataclass
-from typing import Final
 
 from tycho.commands.matcher import Command
-from tycho.game.keybinds import MODIFIERS, Action, Keybinds, KeyInput
 from tycho.input.plan import pressable_input
-from tycho.packs import Safety, built_in
+from tycho.keybinds import MODIFIERS, Action, Keybinds, KeyInput
+from tycho.packs import Safety
 
 _DANGER_WORDS = (
     *("eject", "self_destruct", "emergency_exit", "jettison", "respawn"),
@@ -37,13 +37,6 @@ _DANGER_WORDS = (
 pack's lists say, so a pack can add danger but never remove it (ADR 18). It also
 catches actions a game patch adds or renames before the pack's list is updated. Only a
 pack that ships inside Tycho may name harmless exceptions (``not_danger``)."""
-
-STAR_CITIZEN: Final = built_in().safety
-"""Star Citizen's lists (its pack's safety.toml): the gate's lists when none are given."""
-
-CONFIRM_GRADE = STAR_CITIZEN.confirm
-TRAVEL = STAR_CITIZEN.travel
-ACCEPTABLE_RISKS = STAR_CITIZEN.accepted_risks
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,7 +55,7 @@ def check(
     *,
     confirmed: bool = False,
     setup_done: int | None = None,
-    lists: Safety | None = None,
+    lists: Safety,
 ) -> Verdict:
     """Whether ``action`` may be pressed for ``command`` now.
 
@@ -72,7 +65,6 @@ def check(
     will have been pressed before this one (None: all of them). A setup key is
     checked in the mode the game is in before it, not after.
     """
-    lists = lists or STAR_CITIZEN
     if lists.keys_off:
         # First, whatever asks (#191): no command, sequence, brain pick or "confirm"
         # gets a key pressed in advisor mode. Not a question: confirming can't change it.
@@ -80,7 +72,9 @@ def check(
     name = action.label or action.name
     if missing := [fact for fact in command.requires if fact not in facts]:
         return Verdict(False, "; ".join(lists.facts.get(fact, fact) for fact in missing))
-    if keybinds is not None and (clash := key_clash(action, keybinds, command, setup_done, lists)):
+    if keybinds is not None and (
+        clash := key_clash(action, keybinds, command, setup_done, lists=lists)
+    ):
         risky, bound = clash
         key = pressable_input(action)
         danger = risky.label or risky.name
@@ -105,13 +99,11 @@ def spoken_name(action: Action) -> str:
     return re.sub(r"\s*\([^)]*\)", "", action.label).strip() or action.name
 
 
-def is_travel(command: Command, lists: Safety | None = None) -> bool:
-    travel = (lists or STAR_CITIZEN).travel
-    return any(name in travel for name in command.actions)
+def is_travel(command: Command, lists: Safety) -> bool:
+    return any(name in lists.travel for name in command.actions)
 
 
-def is_confirm_grade(action_name: str, lists: Safety | None = None) -> bool:
-    lists = lists or STAR_CITIZEN
+def is_confirm_grade(action_name: str, lists: Safety) -> bool:
     name = action_name.lower()
     if action_name in lists.confirm:
         return True
@@ -125,7 +117,8 @@ def shares_key_with_danger(
     keybinds: Keybinds,
     command: Command | None = None,
     setup_done: int | None = None,
-    lists: Safety | None = None,
+    *,
+    lists: Safety,
 ) -> Action | None:
     """A confirm-grade action bound to the very key Tycho would press for ``action``, or
     to modifiers alone that the press holds down on the way ("ralt" for "ralt+x").
@@ -133,7 +126,7 @@ def shares_key_with_danger(
     Ones in a control context that ``command``'s setup or requirements switch off
     don't count.
     """
-    clash = key_clash(action, keybinds, command, setup_done, lists)
+    clash = key_clash(action, keybinds, command, setup_done, lists=lists)
     return clash[0] if clash is not None else None
 
 
@@ -142,14 +135,17 @@ def key_clash(
     keybinds: Keybinds,
     command: Command | None = None,
     setup_done: int | None = None,
-    lists: Safety | None = None,
+    *,
+    lists: Safety,
 ) -> tuple[Action, KeyInput] | None:
     """As ``shares_key_with_danger``, with the confirm-grade action's binding that the
     press would also press: the same key, or the modifiers it holds (#208)."""
     key = pressable_input(action)
     if key is None:
         return None
-    off = switched_off(command, setup_done, lists) if command is not None else frozenset[str]()
+    off = (
+        switched_off(command, setup_done, lists=lists) if command is not None else frozenset[str]()
+    )
     for other in keybinds:
         if other.name == action.name or not is_confirm_grade(other.name, lists):
             continue
@@ -170,11 +166,10 @@ def _pressed_by(press: KeyInput, bound: KeyInput) -> bool:
 
 
 def switched_off(
-    command: Command, setup_done: int | None = None, lists: Safety | None = None
+    command: Command, setup_done: int | None = None, *, lists: Safety
 ) -> frozenset[str]:
     """Control contexts that can't act once ``command``'s requirements hold and the first
     ``setup_done`` of its setup actions (all of them, if None) have been pressed."""
-    lists = lists or STAR_CITIZEN
     off: set[str] = set()
     setup = command.setup if setup_done is None else command.setup[:setup_done]
     for name in setup:
@@ -185,6 +180,6 @@ def switched_off(
     return frozenset(off)
 
 
-def known_facts(lists: Safety | None = None) -> frozenset[str]:
+def known_facts(lists: Safety) -> frozenset[str]:
     """Facts a command may require: the ones the gate knows how to explain and rely on."""
-    return frozenset((lists or STAR_CITIZEN).facts)
+    return frozenset(lists.facts)

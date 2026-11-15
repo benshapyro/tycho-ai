@@ -3,7 +3,7 @@
 import asyncio
 
 from tycho.brain import BrainRequest, Decision
-from tycho.game.keybinds import Keybinds
+from tycho.keybinds import Keybinds
 
 
 class FakeBrain:

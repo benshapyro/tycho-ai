@@ -10,9 +10,16 @@ from typing import Any
 import pytest
 
 from tests.fakes.fake_wiki import FakeUex, FakeWiki, uex_vehicle, vehicle
-from tycho.knowledge import Ambiguous, NotFound, Ship, ShipLibrary, ShipLookup, ship_lookup, store
-from tycho.knowledge.ships import (
+from tycho.games.star_citizen import data as store
+from tycho.games.star_citizen import ship_lookup
+from tycho.games.star_citizen.data import ShipDataError, ensure, file_for, load, save
+from tycho.games.star_citizen.ship_lookup import ShipLookup
+from tycho.games.star_citizen.ships import (
+    Ambiguous,
     IsAnItem,
+    NotFound,
+    Ship,
+    ShipLibrary,
     concept_from_uex,
     concepts_from_uex,
     rescued,
@@ -20,8 +27,7 @@ from tycho.knowledge.ships import (
     ship_from_wiki,
     ships_from_wiki,
 )
-from tycho.knowledge.store import ShipDataError, ensure, file_for, load, save
-from tycho.knowledge.wiki import Hit
+from tycho.games.star_citizen.wiki import Hit
 
 FLEET = [
     vehicle("Constellation Mk IV Andromeda", game_name="RSI Constellation Mk IV Andromeda"),
@@ -516,7 +522,7 @@ def test_a_concept_ship_says_it_isnt_in_the_game() -> None:
 
 
 def test_concepts_leave_out_modules_and_ships_already_in_the_game() -> None:
-    from tycho.knowledge.uex import concept_vehicles
+    from tycho.games.star_citizen.uex import concept_vehicles
 
     records = asyncio.run(concept_vehicles(FakeUex(CONCEPTS)))
     names = [s.name for s in concepts_from_uex(records, LIBRARY.ships)]

@@ -24,7 +24,6 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from tycho import paths
 from tycho.brain.providers import BrainModel, Provider, choose
-from tycho.game.install import Channel
 from tycho.ptt.binding import Binding
 from tycho.tile.cards import ALL_KINDS
 from tycho.voice import voices
@@ -39,6 +38,7 @@ RENAMED_GAMES = {"world-of-warcraft": "wow-forever"}
 became World of Warcraft: Forever's (#349), and a file saved on main says the old id."""
 DEFAULT_CALL_ME = "Commander"
 """What Tycho calls the player unless they or the game pack choose otherwise (#15, #349)."""
+type Channel = Literal["LIVE", "PTU", "EPTU", "TECH-PREVIEW", "HOTFIX"]  # Star Citizen's
 type Device = Literal["auto", "gpu", "cpu"]
 type VoiceRule = Literal["yes", "lower_only", "no"]
 type Applies = Literal["now", "restart"]
@@ -134,7 +134,8 @@ class Settings(BaseModel):
         description="Tycho's ElevenLabs voice: George, Sarah, Lily, Brian, or a voice ID "
         "from your ElevenLabs account. A voice you designed works only with your own key. "
         "If your key can't use it, Tycho speaks as George and says so.",
-        json_schema_extra=_rule("no", how=FILE_OR_APP),
+        # By voice, only the four names every key can use; an ID needs the app (#355).
+        json_schema_extra=_rule("yes", how=FILE_OR_APP),
     )
     voice_model: VoiceModel = Field(
         default="the voice's own",

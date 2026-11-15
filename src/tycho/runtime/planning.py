@@ -18,8 +18,8 @@ from typing import Literal
 
 from tycho import safety
 from tycho.commands import Command, resolve
-from tycho.game.keybinds import Action, Keybinds
 from tycho.input import NotPressable, Press, UnsupportedKey, plan
+from tycho.keybinds import Action, Keybinds
 from tycho.packs import Safety
 
 CHAIN_BEAT_SECONDS = 0.15
@@ -85,17 +85,17 @@ def plan_request(
     facts: frozenset[str] = frozenset(),
     *,
     confirmed: bool = False,
-    lists: Safety | None = None,
+    lists: Safety,
 ) -> Planned:
     """The presses for ``commands``, or why there are none.
 
     A sequence is planned step by step, like a chain. A refusal outranks any
     question: if one part is refused, nothing is asked. ``confirmed`` means the
     player has said "confirm" to this request; every other check still applies.
-    ``lists`` are the game pack's safety lists (Star Citizen's when None): the one place
+    ``lists`` are the game pack's safety lists: the one place
     a pack's lists reach the gate (ADR 18).
     """
-    if lists is not None and lists.keys_off:
+    if lists.keys_off:
         # Advisor mode (#191): refused before anything else, even a missing key, so the
         # player hears why Tycho presses nothing here. safety.check refuses it too.
         return Refusal("refused", lists.keys_off)

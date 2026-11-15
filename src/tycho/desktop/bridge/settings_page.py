@@ -1,0 +1,262 @@
+"""The Settings page and the keys (ADR 17): every setting with its rules, changing one
+as voice does, undo, and storing a key (which never comes back out)."""
+
+import logging
+from collections.abc import Mapping
+from typing import Any
+
+from tycho import credentials, settings
+from tycho.desktop.bridge.state import (
+    SETUP_CHOICES,
+    UNDO_DEPTH,
+    State,
+    plain_error,
+    setting_choices,
+    setting_label,
+)
+from tycho.packs import PackError, built_in, installed
+from tycho.settings import Settings, SettingsError
+
+log = logging.getLogger(__name__)
+
+GROUPS: dict[str, tuple[str, ...]] = {
+    "Voice and sounds": (
+        "voice",
+        "voice_model",
+        "voice_volume",
+        "feedback_volume",
+        "call_me",
+        "call_me_says",
+        "call_me_how_often",
+    ),
+    "Brain": ("brain_provider", "brain_model", "brain_seconds"),
+    "Safety": ("key_actions", "confirm_seconds"),
+    "Privacy": ("keep_transcripts", "web_search", "web_search_open", "check_for_updates"),
+    "Game and controls": (
+        "game",
+        "game_channel",
+        "game_root",
+        "push_to_talk",
+        "microphone",
+        "transcription_device",
+    ),
+    "The Tile": tuple(n for n in Settings.model_fields if n == "tile" or n.startswith("tile_")),
+}
+"""Which settings each tab shows. Every setting but ``version`` is in one (a test checks)."""
+KEYS: dict[str, str] = {
+    "anthropic": "Anthropic",
+    "openrouter": "OpenRouter",
+    "elevenlabs": "ElevenLabs",
+}
+RESTARTS = frozenset({"game"})
+"""Settings a change in the app applies by restarting the voice loop (#295): the game's
+keybinds, briefing and look-ups are all loaded at start (ADR 18)."""
+
+
+class SettingsPage(State):
+    def settings(self) -> dict[str, object]:
+        """Every setting the app shows: its group, kind, value, limits, choices and rules."""
+        current = settings.load(self._path)
+        schema = Settings.model_json_schema()
+        props: dict[str, Any] = schema.get("properties", {})
+        groups: list[dict[str, object]] = []
+        for group, names in GROUPS.items():
+            rows = [self._row(name, _value(current, name), props.get(name, {})) for name in names]
+            groups.append({"name": group, "rows": rows})
+        return {"groups": groups, "can_undo": bool(self._undo)}
+
+    def _row(self, name: str, value: object, prop: Mapping[str, Any]) -> dict[str, object]:
+        field = Settings.model_fields[name]
+        rule = settings.rule(name)
+        row: dict[str, object] = {
+            "name": name,
+            "label": setting_label(name),
+            "description": field.description or "",
+            "value": _shown(name, value),
+            "voice": rule["voice"],
+            "applies": rule["applies"],
+            "how": rule.get("how", ""),
+            "kind": _kind(name, field.annotation, prop),
+        }
+        if choices := setting_choices(field.annotation):
+            row["choices"] = list(choices)
+        if name == "game":
+            row["packs"] = _packs()
+        for key in ("minimum", "maximum"):
+            if key in prop:
+                row[key] = prop[key]
+        return row
+
+    def keys(self) -> dict[str, dict[str, object]]:
+        """Which keys are stored, and their last four characters: never the key."""
+        out: dict[str, dict[str, object]] = {}
+        for name, label in KEYS.items():
+            try:
+                stored = credentials.get(name)
+            except credentials.CredentialStoreError as e:
+                out[name] = {"label": label, "stored": False, "ends": "", "problem": str(e)}
+                continue
+            if stored and not credentials.usable(stored):
+                # Tycho ignores it (#248), so the page mustn't say it's in use, nor show
+                # an ending with the invisible character in it (#250).
+                out[name] = {
+                    "label": label,
+                    "stored": True,
+                    "unusable": True,
+                    "ends": "",
+                    "problem": (
+                        "This key has a character keys don't have, maybe an invisible "
+                        "one, so Tycho can't use it. Remove it, then paste it again."
+                    ),
+                }
+                continue
+            out[name] = {
+                "label": label,
+                "stored": bool(stored),
+                "ends": stored[-4:] if stored else "",
+            }
+        return out
+
+    def set(self, name: object, value: object) -> dict[str, object]:
+        """Change one setting. Answers what changed and when it applies, or the problem."""
+        if not isinstance(name, str) or name not in Settings.model_fields or name == "version":
+            return {"ok": False, "problem": f"{name!r} isn't a setting"}
+        if name in SETUP_CHOICES:
+            return {"ok": False, "problem": f"{setting_label(name)} is chosen with its own control"}
+        before = getattr(settings.load(self._path), name)
+        try:
+            after = getattr(settings.update({name: value}, self._path), name)
+        except SettingsError as e:
+            return {"ok": False, "problem": plain_error(str(e))}
+        if after == before:
+            return {"ok": True, "changed": False}
+        self._undo = [*self._undo, (name, before)][-UNDO_DEPTH:]
+        return self._applied(name, after)
+
+    def undo(self) -> dict[str, object]:
+        """Put back the last change made in the app."""
+        if not self._undo:
+            return {"ok": False, "problem": "nothing to undo"}
+        name, before = self._undo.pop()
+        try:
+            after = getattr(settings.update({name: before}, self._path), name)
+        except SettingsError as e:
+            return {"ok": False, "problem": plain_error(str(e))}
+        return self._applied(name, after)
+
+    def _applied(self, name: str, value: object) -> dict[str, object]:
+        applies: str = settings.rule(name)["applies"]
+        if name in RESTARTS:
+            try:
+                if self._restart():
+                    applies = "restarting"  # the voice loop starts again with it
+            except Exception:
+                log.exception("Couldn't restart Tycho for %s", name)
+        elif applies == "now":
+            try:
+                if not self._apply(name, value):
+                    applies = "restart"  # nothing running to apply it to
+            except Exception:
+                log.exception("Couldn't apply %s in the running Tycho", name)
+                applies = "restart"
+        return {
+            "ok": True,
+            "changed": True,
+            "name": name,
+            "label": setting_label(name),  # the setup view has no settings list to look it up in
+            "value": value,
+            "applies": applies,
+        }
+
+    def store_key(self, name: object, key: object) -> dict[str, object]:
+        """Check a key with its provider, then store it in Windows Credential Manager."""
+        if not isinstance(name, str) or name not in KEYS:
+            return {"ok": False, "problem": "that isn't a key Tycho uses"}
+        key = key.strip() if isinstance(key, str) else ""
+        if problem := _shape(name, key):
+            return {"ok": False, "problem": problem}
+        if self._key_check is not None and (problem := self._key_check.check(name, key)):
+            return {"ok": False, "problem": problem}
+        try:
+            credentials.set_secret(name, key)
+        except Exception as e:
+            return {
+                "ok": False,
+                "problem": f"Windows Credential Manager refused it ({type(e).__name__})",
+            }
+        log.info("%s key stored from the app", KEYS[name])
+        # The brain and the voice are made when Tycho starts: reloading them is next (#12).
+        return {"ok": True, "ends": key[-4:], "applies": "restart"}
+
+    def remove_key(self, name: object) -> dict[str, object]:
+        if not isinstance(name, str) or name not in KEYS:
+            return {"ok": False, "problem": "that isn't a key Tycho uses"}
+        try:
+            removed = credentials.delete(name)
+        except credentials.CredentialStoreError as e:
+            return {"ok": False, "problem": str(e)}
+        return {"ok": True, "removed": removed, "applies": "restart"}
+
+
+def _shown(name: str, value: object) -> object:
+    """A value as the page shows it: push-to-talk by its name ("Mouse side (forward)")."""
+    if name == "push_to_talk" and isinstance(value, str) and value:
+        from tycho.ptt.binding import Binding
+        from tycho.ptt.devices import describe
+
+        try:
+            return describe(Binding.parse(value))
+        except ValueError:
+            return value
+    if value is None or isinstance(value, bool | int | float | str):
+        return value
+    return str(value)
+
+
+def _packs() -> list[dict[str, str]]:
+    """Each game pack Tycho ships, for the Game setting: its name, and whether Tycho may
+    press keys there, and why not, in the pack's words (#295)."""
+    shown: list[dict[str, str]] = []
+    for pack_id in installed():
+        try:
+            pack = built_in(pack_id)
+        except PackError:
+            log.exception("Game pack %s didn't load", pack_id)
+            continue
+        shown.append({"id": pack.id, "name": pack.name, "mode": pack.mode, "why": pack.why})
+    return shown
+
+
+def _value(current: Settings, name: str) -> object:
+    """A setting's value as the page shows it: ``call_me`` as the game uses it (#380)."""
+    if name == "call_me":
+        from tycho.address import called
+
+        return called(current)
+    return getattr(current, name)
+
+
+def _kind(name: str, annotation: object, prop: Mapping[str, Any]) -> str:
+    if name in SETUP_CHOICES:
+        return "setup"
+    if annotation is bool:
+        return "switch"
+    if annotation is float:
+        return "percent" if prop.get("maximum", 2) <= 1 else "number"
+    if setting_choices(annotation):
+        return "choice"
+    return "text"
+
+
+def _shape(name: str, key: str) -> str:
+    if name == "anthropic" and not key.startswith("sk-ant-"):
+        return "That doesn't look like an Anthropic key: it starts with sk-ant-."
+    if name == "openrouter" and not key.startswith("sk-or-"):
+        return "That doesn't look like an OpenRouter key: it starts with sk-or-."
+    if name == "elevenlabs" and not key.startswith("sk_"):
+        return "That doesn't look like an ElevenLabs key: it starts with sk_."
+    if len(key) < 24 or any(c.isspace() for c in key):
+        return "That key looks cut short. Copy it again, all of it."
+    if not credentials.usable(key):
+        return "That key has a character keys don't have, maybe an invisible one. Copy it again."
+    return ""

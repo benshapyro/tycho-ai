@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import Mapping
 from typing import Any
 
-from tycho.knowledge import WikiError
+from tycho.games.star_citizen.wiki import WikiError
 
 SEARCHED: dict[str, list[tuple[str, list[tuple[str, str | None, str | None]]]]] = {
     # The live API's unified search, GET /api/search?filter[query]=..., recorded on

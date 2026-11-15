@@ -16,6 +16,9 @@ import pytest
 
 from tests.fakes.fake_lookup import FakeLookup
 from tycho.brain.lookups import LookupResult, failure
+from tycho.packs import STAR_CITIZEN, built_in
+
+SC = built_in(STAR_CITIZEN)
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -310,12 +313,13 @@ def test_run_case_counts_calls_to_claude(replies: int, kind: str, calls: int) ->
         outcome = asyncio.run(
             e.run_case(
                 rule,
-                Lexicon.default(),
+                Lexicon.default(pack=SC),
                 _ScriptedBrain(replies, decision),
                 _keybinds(),
                 None,
                 [],
                 costs,
+                lists=SC.safety,
             )
         )
     finally:
@@ -336,7 +340,9 @@ def test_say_that_again_never_reaches_the_brain() -> None:
 
     e = _eval()
     rule = {"heard": "say that again", "expect": ["say_again"], "max_calls": 0}
-    outcome = asyncio.run(e.run_case(rule, Lexicon.default(), _NoBrain(), _keybinds()))
+    outcome = asyncio.run(
+        e.run_case(rule, Lexicon.default(pack=SC), _NoBrain(), _keybinds(), lists=SC.safety)
+    )
     assert (outcome.route, outcome.kind, outcome.calls) == ("session", "say_again", 0)
     assert e.grade(outcome, rule, set()) == "pass"
 
@@ -449,7 +455,7 @@ def test_each_result_says_which_host_served_it() -> None:
     from tests.fakes.fake_chat import FakeChat, text, tool_call
     from tycho.brain.openrouter import OpenRouterBrain
     from tycho.commands import CommandMatcher
-    from tycho.game.keybinds import Keybinds
+    from tycho.keybinds import Keybinds
     from tycho.lexicon import Lexicon
 
     def served(host: str, chunks: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -457,7 +463,9 @@ def test_each_result_says_which_host_served_it() -> None:
 
     def brain(*calls: Sequence[Mapping[str, Any]]) -> OpenRouterBrain:
         model = "openai/gpt-oss-120b"
-        return OpenRouterBrain(CommandMatcher.default(), model=model, client=FakeChat(*calls))
+        return OpenRouterBrain(
+            CommandMatcher.default(pack=SC), model=model, client=FakeChat(*calls), pack=SC
+        )
 
     act = {"actions": ["v_toggle_landing_system"], "say": "Gear."}
     e = _eval()
@@ -470,7 +478,11 @@ def test_each_result_says_which_host_served_it() -> None:
     try:
         asyncio.run(brain(served("Groq", text("Ready."))).warm(cast(Keybinds, _keybinds())))
         outcomes = [
-            asyncio.run(e.run_case(rule, Lexicon.default(), b, _keybinds(), None, [], costs))
+            asyncio.run(
+                e.run_case(
+                    rule, Lexicon.default(pack=SC), b, _keybinds(), None, [], costs, lists=SC.safety
+                )
+            )
             for b in (
                 brain(served("Cerebras", text("Copy."))),
                 brain(served("Cerebras", tool_call("run_actions", act))),
@@ -622,7 +634,7 @@ def test_the_adapter_check_says_far_apart(verdicts: list[str], calls: int) -> No
 
 
 def test_keybinds_go_through_a_file_unchanged(tmp_path: Path) -> None:
-    from tycho.game.keybinds import Action, ActivationMode, Keybinds, KeyInput
+    from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput
 
     e = _eval()
     keybinds = Keybinds(
@@ -741,12 +753,12 @@ def _act(actions: tuple[str, ...], keybinds: object, heard: str = "xyzzy plugh f
     e = _eval()
     rule = {"heard": heard, "expect": ["actions"]}
     brain = _ScriptedBrain(0, RunActions(actions, "Done."))
-    return asyncio.run(e.run_case(rule, Lexicon.default(), brain, keybinds))
+    return asyncio.run(e.run_case(rule, Lexicon.default(pack=SC), brain, keybinds, lists=SC.safety))
 
 
 def _with(*actions: tuple[str, str]) -> object:
     from tests.test_runtime import KEYBINDS, MODES, _action  # pyright: ignore[reportPrivateUsage]
-    from tycho.game.keybinds import Keybinds
+    from tycho.keybinds import Keybinds
 
     return Keybinds([*KEYBINDS, *(_action(n, k) for n, k in actions)], MODES)
 
@@ -792,7 +804,9 @@ def test_the_fast_path_is_planned_through_the_gate_too() -> None:
 
     e = _eval()
     rule = {"heard": "eject", "expect": ["actions"]}
-    outcome = asyncio.run(e.run_case(rule, Lexicon.default(), _NoBrain(), _keybinds()))
+    outcome = asyncio.run(
+        e.run_case(rule, Lexicon.default(pack=SC), _NoBrain(), _keybinds(), lists=SC.safety)
+    )
     assert (outcome.route, outcome.actions, outcome.asks) == ("fast", ["v_eject"], True)
 
 
@@ -801,7 +815,9 @@ def test_the_tiles_words_never_reach_the_brain_while_it_is_on() -> None:
 
     e = _eval()
     rule = {"heard": "keep that up", "expect": ["reply"]}
-    outcome = asyncio.run(e.run_case(rule, Lexicon.default(), _NoBrain(), _keybinds()))
+    outcome = asyncio.run(
+        e.run_case(rule, Lexicon.default(pack=SC), _NoBrain(), _keybinds(), lists=SC.safety)
+    )
     assert (outcome.route, outcome.kind) == ("session", "pin")
 
 
@@ -854,6 +870,27 @@ def test_a_press_case_passes_on_a_plain_reply_with_keys_off() -> None:
     assert e.grade(said, rule, set(), keys_off=True) == "pass"
     claimed = _outcome(say="Done.")
     assert e.grade(claimed, rule, set(), keys_off=True).startswith("claimed a press")
+
+
+def test_with_keys_off_the_eval_tells_the_brain_the_player_s_own_key() -> None:
+    # #386 review: the eval grades the path players take, so it sends own_keys too.
+    from tycho.brain import Reply
+    from tycho.lexicon import Lexicon
+    from tycho.packs import as_run, built_in
+
+    e = _eval()
+    asked: list[Any] = []
+
+    class Brain:
+        async def decide(self, request: Any) -> Any:
+            asked.append(request)
+            return Reply("I don't press keys here.")
+
+    lists = as_run(built_in("star-citizen"), key_actions=False).safety
+    rule = {"heard": "landing gear", "expect": ["reply"]}
+    asyncio.run(e.run_case(rule, Lexicon.default(pack=SC), Brain(), _keybinds(), lists=lists))
+    (request,) = asked
+    assert request.own_keys.endswith(" on N")
 
 
 def test_keys_off_runs_the_pack_as_advisor() -> None:

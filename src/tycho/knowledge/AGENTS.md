@@ -2,6 +2,8 @@
 
 What the brain can look up: ships, items and crafting, mining, trade prices and routes, refining, ships for aUEC, the player's fleet, and web search. Read the root AGENTS.md and `src/tycho/brain/AGENTS.md` first.
 
+This folder holds what any game uses: web search (`web.py`) and kept answers (`fresh.py`). Star Citizen's look-ups and their sources live with its code in `src/tycho/games/star_citizen/` (ADR 19); the rules here apply to them, and to any game's.
+
 ## Sources and their terms
 
 - **UEX** (`uex.py`, `trade*.py`, `refining.py`): an official API, 120 requests a minute, for personal and non-commercial use. Credit UEX in what's said: `credit = "UEX"` makes the brain add "From UEX." if Claude didn't.
@@ -18,7 +20,7 @@ What the brain can look up: ships, items and crafting, mining, trade prices and 
 - **One request beats many.** A commodity's routes come in one `/commodities_routes?id_commodity=N` call, not station by station. UEX caps that list at 500 (`ROUTES_CAP`). With a start too, ask from the start for that commodity (`id_planet_origin=P&id_commodity=N`, or each of a station's few terminals at once), not the commodity's whole list first (#150). Terminals asked at once that don't answer within `PART_SECONDS` are left out, not waited for.
 - **Time it against the live APIs** with `tools/bench/lookup_times.py` (free) before changing a look-up's `seconds`.
 - **Results are compact JSON with their source.** Each is a tool result in Claude's context, so keep it small.
-- **Time:** a look-up has `seconds` (3-5 s, fitted to timings with `tools/bench/lookup_times.py`, #150), and the request has a deadline (`LOOKING_SECONDS`, `LOOKING_LIMIT` in `runtime/session.py`).
+- **Time:** a look-up has `seconds` (3-5 s, fitted to timings with `tools/bench/lookup_times.py`, #150), and the request has a deadline (`LOOKING_SECONDS`, `LOOKING_LIMIT` in `runtime/asking.py`).
 
 ## Testing
 

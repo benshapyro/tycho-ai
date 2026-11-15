@@ -4,9 +4,12 @@ from typing import Any
 
 import pytest
 
+from tycho.packs import STAR_CITIZEN, built_in
 from tycho.tile import BRAIN_KINDS, Board, Card, Row, from_tool, lifetime
 from tycho.tile.cards import ALL_KINDS, TITLE, TOOL_SCHEMA, clean, confirm, long_answer
 from tycho.tile.design import TYCHO_ACCENT, accent_for
+
+SC = built_in(STAR_CITIZEN)
 
 
 def _call(kind: str = "list", **fields: Any) -> dict[str, Any]:
@@ -246,12 +249,12 @@ def test_clear_empties_the_tile() -> None:
     ],
 )
 def test_the_accent_follows_the_ships_maker(ship: str, accent: str) -> None:
-    assert accent_for(ship) == accent
+    assert accent_for(ship, tile=SC.tile) == accent
 
 
 @pytest.mark.parametrize("ship", [None, "", "Unknown_Ship", "nounderscore"])
 def test_no_known_maker_is_tychos_own_accent(ship: str | None) -> None:
-    assert accent_for(ship) == TYCHO_ACCENT
+    assert accent_for(ship, tile=SC.tile) == TYCHO_ACCENT
 
 
 def test_steps_lose_the_numbers_claude_gives_them_since_the_tile_numbers_them() -> None:

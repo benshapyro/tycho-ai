@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from tycho.game.keybinds import Action
+from tycho.keybinds import Action
 
 ROOT = Path(__file__).resolve().parent.parent
 CASES = ROOT / "src" / "tycho" / "packs" / "star-citizen" / "eval" / "cases.toml"

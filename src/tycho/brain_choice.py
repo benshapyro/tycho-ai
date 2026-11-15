@@ -10,10 +10,9 @@ import logging
 from collections.abc import Callable, Iterator, Sequence
 from typing import TYPE_CHECKING
 
-from tycho import paths
 from tycho.brain.providers import Choice, choose
 from tycho.findings import Finding, key_finding, key_help, stored_key
-from tycho.packs import GamePack, built_in
+from tycho.packs import GamePack
 
 if TYPE_CHECKING:
     from tycho.address import Address
@@ -21,7 +20,6 @@ if TYPE_CHECKING:
     from tycho.brain.traces import TraceFile
     from tycho.commands import CommandMatcher
     from tycho.desktop.keys import KeyCheck
-    from tycho.knowledge.ships import ShipLibrary
     from tycho.runtime import Brain
     from tycho.settings import Settings
     from tycho.spoken_settings import Live
@@ -57,80 +55,46 @@ def load_brain(
     live: Live | None = None,
     address: Address | None = None,
     display: TileDisplay | None = None,
-    pack: GamePack | None = None,
+    *,
+    pack: GamePack,
 ) -> Brain | None:
     """The brain the settings pick, if the player stored its provider's key. Without
     one, the fast path only. ``live`` applies settings changed by voice to the running
     session; ``address`` is what to call the player (#15), read fresh for each request.
     With a ``display``, the brain may show cards while the Tile is on, in the colour of
-    the ship being flown. ``pack`` is the game (Star Citizen when None): its briefing,
+    the ship being flown. ``pack`` is the game: its briefing,
     and only the look-ups it names (ADR 18)."""
-    pack = pack or built_in()
     choice = chosen(current)
     key = brain_key(choice)
     if key is None:
         log.info("No %s key, so %s. Add one: %s", choice.label, WITHOUT_BRAIN, key_help(choice.key))
         return None
-    import anthropic
-
-    from tycho.knowledge import ShipLookup, UexApi, WikiApi
-    from tycho.knowledge.fleet import Fleet, FleetUpdate
-    from tycho.knowledge.item_lookup import ItemLookup
-    from tycho.knowledge.mining import MiningLookup
-    from tycho.knowledge.trade_lookup import trade_lookups
-    from tycho.knowledge.web import SearchNeedsAnthropic, WebSearch
-    from tycho.spoken_settings import SettingsTool
+    from tycho.games import BUILT_IN
+    from tycho.packs import Workshop
 
     log.info("Brain: %s, for anything the built-in phrasings don't cover", choice.describe())
-    # Only the parts the pack names are built (#339): no ship data, fleet file or fleet
-    # line for a game without them. The order is the tools' order: keep it (the cache).
-    wanted = {*pack.parts.lookups, "settings"}
-    ships = (
-        ShipLookup(WikiApi(), paths.knowledge_dir(), concepts=UexApi())
-        if wanted & {"ships", "fleet"}
-        else None
+    # Only the parts the pack names are built (#339), by the registry, in the pack's
+    # order: that is the tools' order, so keep it (the prompt cache).
+    workshop = Workshop(
+        pack,
+        current,
+        live,
+        brain_provider=choice.provider,
+        search_key=lambda: key if choice.provider == "anthropic" else anthropic_key(),
     )
-    fleet = Fleet.load(paths.fleet_file(pack.id)) if "fleet" in wanted else None
-    lookups: list[Lookup] = []
-    if ships is not None and "ships" in wanted:
-        lookups.append(ships)
-    if ships is not None and fleet is not None:
-        lookups.append(FleetUpdate(fleet, lambda: ships.library))
-    if "items" in wanted:
-        lookups.append(ItemLookup(WikiApi()))
-    if "mining" in wanted:
-        lookups.append(MiningLookup(WikiApi()))
-    if "trade" in wanted:
-        lookups.extend(trade_lookups(UexApi()))
-    lookups.append(SettingsTool(live=live))  # core: every pack gets it
-    if "web" not in wanted:
+    built = [BUILT_IN.lookups[name](workshop) for name in lookup_order(pack.parts.lookups)]
+    if "web" not in pack.parts.lookups:
         log.info("Web search: %s has none", pack.name)
-    elif not current.web_search:
-        log.info("Web search: off (web_search is false)")
-    else:
-        search_key = key if choice.provider == "anthropic" else anthropic_key()
-        if search_key is None:
-            log.info("Web search: needs an Anthropic key (%s); Tycho says so", BRAIN_KEY_HELP)
-            lookups.append(SearchNeedsAnthropic())
-        else:
-            if choice.provider != "anthropic":
-                log.info("Web search: through your Anthropic key")
-            lookups.append(
-                WebSearch(
-                    anthropic.AsyncAnthropic(api_key=search_key, max_retries=0),
-                    log_queries=current.keep_transcripts,
-                    sites=pack.web_sites,
-                    fallback=current.web_search_open,
-                )
-            )
+    lookups: list[Lookup] = [lookup for part in built for lookup in part.lookups]
+    abouts = [part.about for part in built if part.about is not None]
+    accents = [part.accent for part in built if part.accent is not None]
 
     def about() -> str:
-        flown = fleet.describe(ships.library) if fleet is not None and ships is not None else ""
-        parts = [flown, address.header() if address else ""]
-        return "\n".join(p for p in parts if p)
+        lines = [*(line() for line in abouts), address.header() if address else ""]
+        return "\n".join(line for line in lines if line)
 
-    if display is not None and fleet is not None and ships is not None:
-        display.ship_accent = lambda: ship_accent(fleet.flying, ships.library)
+    if display is not None and accents:
+        display.ship_accent = accents[0]
     return make_brain(
         choice,
         key,
@@ -148,6 +112,17 @@ PLAYER_HOSTS = ("anthropic",)
 route is down, a request fails, as Claude direct would."""
 
 
+def lookup_order(named: Sequence[str]) -> list[str]:
+    """The look-ups to build, in the pack's order, each once. ``settings`` is core: a
+    pack that doesn't name it gets it before ``web``, or last."""
+    from tycho.games import SETTINGS
+
+    order = list(dict.fromkeys(named))
+    if SETTINGS not in order:
+        order.insert(order.index("web") if "web" in order else len(order), SETTINGS)
+    return order
+
+
 def make_brain(
     choice: Choice,
     key: str,
@@ -156,7 +131,7 @@ def make_brain(
     lookups: Sequence[Lookup] = (),
     about: Callable[[], str] = lambda: "",
     cards: Callable[[], bool] = lambda: False,
-    pack: GamePack | None = None,
+    pack: GamePack,
 ) -> Brain:
     """The adapter for the chosen provider, on the chosen model, briefed for ``pack``."""
     if choice.provider == "openrouter":
@@ -196,21 +171,6 @@ def _traces() -> TraceFile | None:
     if traces is not None:
         log.info("Tracing the brain's requests to %s", traces.path)
     return traces
-
-
-def ship_accent(flying: str, library: ShipLibrary | None) -> str | None:
-    """The Tile's colour for the ship the player said they're flying, if Tycho knows it."""
-    from tycho.knowledge.ships import Ship
-    from tycho.tile.design import MAKER_ACCENTS, accent_for, accent_for_maker
-
-    if not flying or library is None:
-        return None
-    found = library.find(flying)
-    if not isinstance(found, Ship):
-        return None
-    if found.key.split("_", 1)[0].upper() in MAKER_ACCENTS:
-        return accent_for(found.key)
-    return accent_for_maker(found.maker)
 
 
 def brain_findings(

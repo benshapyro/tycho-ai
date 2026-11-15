@@ -78,7 +78,7 @@ class WindowsPC:
         rescan must never run while the level test's stream is open."""
 
     def game(self, current: Settings) -> Game:
-        from tycho.app import find_install
+        from tycho.games import find_install
 
         try:
             install = find_install(current)
@@ -88,17 +88,17 @@ class WindowsPC:
         return Game(True, current.game_channel, str(install.folder))
 
     def root(self, folder: str, channel: str) -> str | None:
-        from tycho.game.install import root_from
+        from tycho.games import game_root
 
-        found = root_from(Path(folder), channel)
+        found = game_root(Path(folder), channel)
         return str(found) if found is not None else None
 
     def capture(self, seconds: float, cancel: threading.Event) -> str | None:
         """Keyboard, mouse (not left click) or joystick. The joystick source is made and
         polled on this thread and closed after, as SDL requires: Tycho's own joystick
         source, on its push-to-talk thread, is untouched."""
-        from tycho.app import input_sources
         from tycho.ptt import windows as win
+        from tycho.ptt.devices import input_sources
         from tycho.ptt.monitor import capture_binding
 
         sources = input_sources(None)
@@ -117,21 +117,21 @@ class WindowsPC:
         return str(found) if found is not None else None
 
     def name(self, setting: str) -> str:
-        from tycho.app import describe
         from tycho.ptt.binding import Binding
+        from tycho.ptt.devices import describe
 
         return describe(Binding.parse(setting))
 
     def conflicts(self, setting: str, current: Settings) -> list[str]:
-        from tycho.app import conflict_warnings, find_install
-        from tycho.game.store import GameDataError, KeybindStore
-        from tycho.packs import built_in
+        from tycho.games import find_install, load_keys
+        from tycho.packs import GameDataError, built_in
         from tycho.ptt.binding import Binding
+        from tycho.ptt.conflicts import conflict_warnings
 
         if built_in(current.game).parts.keybinds is None:
             return []  # a game Tycho reads no keybinds for: Star Citizen's aren't it (#341)
         try:
-            store = KeybindStore.load(find_install(current))
+            store = load_keys(find_install(current))
         except FileNotFoundError, GameDataError, OSError:
             return []
         return conflict_warnings(Binding.parse(setting), store)
@@ -143,8 +143,8 @@ class WindowsPC:
             return input_devices(rescan=self._rescan)
 
     def level(self, microphone: str | None) -> dict[str, object]:
-        from tycho.app import microphone_device
         from tycho.audio.microphone import Microphone
+        from tycho.audio.source import microphone_device
 
         try:
             with self._audio, Microphone(device=microphone_device(microphone)) as mic:

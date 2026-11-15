@@ -27,9 +27,12 @@ from tycho.brain.openrouter import (
 )
 from tycho.brain.rounds import CUT_SHORT, LAST_CALL, MAX_CALLS, NO_PRESS_AFTER_SEARCH
 from tycho.commands import CommandMatcher
-from tycho.game.keybinds import Action, Keybinds, KeyInput
+from tycho.keybinds import Action, Keybinds, KeyInput
+from tycho.packs import STAR_CITIZEN, built_in
 
-MATCHER = CommandMatcher.default()
+SC = built_in(STAR_CITIZEN)
+
+MATCHER = CommandMatcher.default(pack=SC)
 MODEL = "anthropic/claude-haiku-5.5"
 
 
@@ -49,6 +52,7 @@ GEAR = {"actions": ["v_toggle_landing_system"], "say": "Gear."}
 
 
 def _brain(client: FakeChat, *lookups: FakeLookup, **kwargs: Any) -> OpenRouterBrain:
+    kwargs.setdefault("pack", SC)
     return OpenRouterBrain(
         MATCHER,
         model=MODEL,
@@ -331,7 +335,7 @@ def test_a_failed_warm_up_is_only_logged() -> None:
 
 def test_it_needs_a_key_or_a_client() -> None:
     with pytest.raises(ValueError, match="key"):
-        OpenRouterBrain(MATCHER, model=MODEL)
+        OpenRouterBrain(MATCHER, model=MODEL, pack=SC)
 
 
 # --- The HTTP client --------------------------------------------------------------------

@@ -41,15 +41,18 @@ from typing import Self
 import numpy as np
 import soundfile as sf
 
-from tycho import app, settings
+from tycho import settings
 from tycho.audio.clip import ClipBuffer, Samples
 from tycho.commands import CommandMatcher, resolve
 from tycho.feedback import SoundDevicePlayer, SoundFeedback
-from tycho.game.keybinds import Keybinds
 from tycho.input import plan
 from tycho.input.windows import WindowsFocusCheck, WindowsKeySender, foreground_executable
+from tycho.keybinds import Keybinds
+from tycho.packs import STAR_CITIZEN, built_in
 from tycho.ptt.binding import Binding, DeviceKind
 from tycho.runtime import Result
+from tycho.start import assemble
+from tycho.start.serve import serve
 
 ROOT = Path(__file__).resolve().parents[2]
 RATE, BLOCK = 16_000, 320
@@ -238,7 +241,7 @@ def read_wav(path: Path) -> Samples:
 
 
 def expected_keys(command_ids: tuple[str, ...], keybinds: Keybinds) -> list[tuple[str, int, bool]]:
-    commands = {c.id: c for c in CommandMatcher.default().commands}
+    commands = {c.id: c for c in CommandMatcher.default(pack=built_in(STAR_CITIZEN)).commands}
     events: list[tuple[str, int, bool]] = []
     for command_id in command_ids:
         action = resolve(commands[command_id], keybinds).action
@@ -270,8 +273,8 @@ async def run_tests(
 ) -> int:
     current = settings.Settings(push_to_talk=str(PTT), feedback_volume=0.15)
     print("Loading keybinds and the speech model (as tycho run does)...")
-    store = app.load_keybinds(current, PTT)
-    transcriber = app.load_transcriber(current)
+    store = assemble.load_keybinds(current, PTT)
+    transcriber = assemble.load_transcriber(current)
     expected: dict[str, list[str]] = tomllib.loads(
         (ROOT / "tools" / "spike" / "expected.toml").read_text("utf-8")
     )
@@ -279,7 +282,7 @@ async def run_tests(
     focus = SwitchableFocus(exe)
     mic, speaker = Playback(), Speaker()
     results: asyncio.Queue[Result] = asyncio.Queue()
-    session = app.build_session(
+    session = assemble.build_session(
         current,
         PTT,
         store,
@@ -289,13 +292,14 @@ async def run_tests(
         focus=focus,
         feedback=speaker,
         on_result=results.put_nowait,  # called on the loop, so no thread hand-over needed
+        pack=built_in(STAR_CITIZEN),
     )
     # Windows only lets a program take the foreground after it has sent input,
     # so tap F24 once before Tycho is listening.
     push_to_talk(True)
     push_to_talk(False)
     stop = asyncio.Event()
-    serving = asyncio.create_task(app.serve(session, store, stop))
+    serving = asyncio.create_task(serve(session, store, stop))
     hwnd = int(window.frame(), 16)
     failures: list[str] = []
 

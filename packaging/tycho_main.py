@@ -27,6 +27,17 @@ LAZY_IMPORTS = (
     "tycho.voice.playback",
     "anthropic",
     "tycho.brain.claude",
+    # The registry of built-in parts, and Star Citizen's code its builders import when
+    # a pack is loaded or a brain is built (ADR 19).
+    "tycho.games",
+    "tycho.games.star_citizen.checks",
+    "tycho.games.star_citizen.fleet",
+    "tycho.games.star_citizen.gamelog",
+    "tycho.games.star_citizen.item_lookup",
+    "tycho.games.star_citizen.mining",
+    "tycho.games.star_citizen.ship_lookup",
+    "tycho.games.star_citizen.store",
+    "tycho.games.star_citizen.trade_lookup",
     # The Tile (ADR 16): drawn with Pillow, whose text needs its FreeType module.
     "PIL._imagingft",
     "tycho.tile.display",
@@ -93,13 +104,14 @@ def windowed(argv: list[str]) -> int:
     import contextlib
     import ctypes
 
-    from tycho import app
+    from tycho import cli, logs, paths
+    from tycho.start import run as started
 
-    app.WINDOWED = True
+    started.WINDOWED = True
     tail = _Tail()
     sys.stdout = sys.stderr = tail  # type: ignore[assignment]
     try:
-        code = app.main(argv or ["run"])
+        code = cli.main(argv or ["run"])
     except Exception as e:  # the player must see something, and the log the traceback
         import logging
 
@@ -107,14 +119,14 @@ def windowed(argv: list[str]) -> int:
         lines = _last_lines(tail.text)  # before logging, which writes the traceback here too
         if not logging.getLogger("tycho").handlers:  # it stopped before logging began
             with contextlib.suppress(OSError):  # if logging was what failed, the box still shows
-                app.logs.setup()
+                logs.setup()
         logging.getLogger("tycho").exception("Tycho stopped")
         code = 1
     else:
         lines = _last_lines(tail.text)
     if code != 0:
         message = "\n".join(lines) or "Tycho stopped."
-        log = app.paths.logs_dir()
+        log = paths.logs_dir()
         message += f"\n\nThe log is in {log}."
         ctypes.windll.user32.MessageBoxW(None, message, "Tycho", 0x30)  # MB_ICONWARNING
     return code
@@ -126,6 +138,6 @@ if __name__ == "__main__":
         sys.exit(smoke_imports())
     if sys.stdout is None or sys.stderr is None:  # tycho-app.exe: no terminal
         sys.exit(windowed(sys.argv[1:]))
-    from tycho.app import main
+    from tycho.cli import main
 
     sys.exit(main())

@@ -40,10 +40,11 @@ from brain_report import MODES as CASE_MODES
 from tycho import credentials
 from tycho.brain.briefing import command_phrasings
 from tycho.commands.matcher import CommandMatcher
-from tycho.game.install import GameInstall
-from tycho.game.keybinds import Action
-from tycho.game.store import KeybindStore
+from tycho.games.star_citizen.install import GameInstall
+from tycho.games.star_citizen.store import KeybindStore
+from tycho.keybinds import Action
 from tycho.lexicon import Lexicon
+from tycho.packs import STAR_CITIZEN, built_in
 
 ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 MODEL = "jev-1.14.0"
@@ -506,7 +507,8 @@ def main() -> None:
     cases, _ = load_cases(args.cases, engine="")
     keybinds = KeybindStore.load(GameInstall.find()).keybinds
     bound = [a for a in keybinds if a.bound and a.label]
-    examples = phrasings(command_phrasings(keybinds, CommandMatcher.default()))
+    pack = built_in(STAR_CITIZEN)
+    examples = phrasings(command_phrasings(keybinds, CommandMatcher.default(pack=pack)))
     questions, home = build_questions(bound, examples)
     valid = set(home)
     if args.replay:
@@ -516,7 +518,7 @@ def main() -> None:
     key = credentials.get("typesafe")
     if key is None:
         raise SystemExit("No TypeSafe key. Run: uv run python -m tycho.credentials set typesafe")
-    lexicon = Lexicon.default()
+    lexicon = Lexicon.default(pack)
     sizes = {k: len(v["criteria"]) for k, v in questions.items() if v["type"] == "choice"}
     print(f"{len(cases)} cases; {len(valid)} actions; option counts {sizes}\n")
 

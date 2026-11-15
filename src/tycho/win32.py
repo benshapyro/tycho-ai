@@ -1,16 +1,26 @@
-"""The Win32 definitions Tycho's own windows share: the Tile's (ADR 16) and the tray
-icon's (ADR 17). One copy, so a fix to a structure or an argument type reaches both.
+"""Every Windows DLL Tycho calls, loaded here and nowhere else (#298, ADR 19): the
+Tile's window (ADR 16), the tray icon (ADR 17), key presses and the focus check, push
+to talk, the single-instance lock, the console's close guard, and the game's drives.
+One copy, so a fix to a structure or an argument type reaches every caller.
 
-Each DLL is loaded and typed on first use, so importing this never fails off Windows.
+Each DLL is loaded and typed on first use. Every function a caller uses has its
+``argtypes`` and ``restype`` declared, so a handle is never cut to a 32-bit int. A test
+checks that no other module loads a DLL (``tests/test_code_layout.py``).
 """
 
 import ctypes
+import sys
 from collections.abc import Callable
 from ctypes import wintypes
 
-WNDPROC = ctypes.WINFUNCTYPE(
+# WINFUNCTYPE is Windows' own; the stand-in keeps this importable elsewhere (the cloud's
+# tests), where nothing is called.
+_FUNCTYPE = ctypes.WINFUNCTYPE if sys.platform == "win32" else ctypes.CFUNCTYPE
+WNDPROC = _FUNCTYPE(
     ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM
 )
+HANDLER_ROUTINE = _FUNCTYPE(wintypes.BOOL, wintypes.DWORD)
+"""A console control handler (SetConsoleCtrlHandler)."""
 
 
 class WNDCLASSEXW(ctypes.Structure):
@@ -201,6 +211,45 @@ def _type_user32(u: ctypes.WinDLL) -> None:
     u.CreateIconIndirect.restype = wintypes.HICON
     u.CreateIconIndirect.argtypes = [P]
     u.DestroyIcon.argtypes = [wintypes.HICON]
+    # Return types for the calls above that return a BOOL (or an int), and argument
+    # types for those that take none, so each is declared in full (#298).
+    B = wintypes.BOOL
+    u.DestroyWindow.restype = B
+    u.PostMessageW.restype = B
+    u.GetMessageW.restype = B
+    u.TranslateMessage.restype = B
+    u.UnregisterClassW.restype = B
+    u.ShowWindow.restype = B
+    u.SetWindowPos.restype = B
+    u.SetForegroundWindow.restype = B
+    u.UpdateLayeredWindow.restype = B
+    u.GetMonitorInfoW.restype = B
+    u.AppendMenuW.restype = B
+    u.SetMenuDefaultItem.restype = B
+    u.DestroyMenu.restype = B
+    u.GetCursorPos.restype = B
+    u.DestroyIcon.restype = B
+    u.ReleaseDC.restype = i
+    u.GetForegroundWindow.argtypes = []
+    u.CreatePopupMenu.argtypes = []
+    u.PostQuitMessage.restype = None
+    u.PostQuitMessage.argtypes = [i]
+    # Key presses and the focus check (input/windows.py).
+    u.SendInput.restype = U
+    u.SendInput.argtypes = [U, P, i]
+    u.GetWindowThreadProcessId.restype = wintypes.DWORD
+    # Push to talk (ptt/windows.py).
+    u.GetAsyncKeyState.restype = wintypes.SHORT
+    u.GetAsyncKeyState.argtypes = [i]
+    u.MapVirtualKeyW.restype = U
+    u.MapVirtualKeyW.argtypes = [U, U]
+    u.GetKeyNameTextW.restype = i
+    u.GetKeyNameTextW.argtypes = [wintypes.LONG, wintypes.LPWSTR, i]
+    # A second start hands the foreground on (runtime/instance.py), and says so (app.py).
+    u.AllowSetForegroundWindow.restype = wintypes.BOOL
+    u.AllowSetForegroundWindow.argtypes = [wintypes.DWORD]
+    u.MessageBoxW.restype = i
+    u.MessageBoxW.argtypes = [H, wintypes.LPCWSTR, wintypes.LPCWSTR, U]
 
 
 def _type_gdi32(g: ctypes.WinDLL) -> None:
@@ -220,13 +269,42 @@ def _type_gdi32(g: ctypes.WinDLL) -> None:
     g.CreateBitmap.argtypes = [ctypes.c_int, ctypes.c_int, wintypes.UINT, wintypes.UINT, P]
     g.SelectObject.restype = wintypes.HGDIOBJ
     g.SelectObject.argtypes = [wintypes.HDC, wintypes.HGDIOBJ]
+    g.DeleteObject.restype = wintypes.BOOL
     g.DeleteObject.argtypes = [wintypes.HGDIOBJ]
+    g.DeleteDC.restype = wintypes.BOOL
     g.DeleteDC.argtypes = [wintypes.HDC]
 
 
 def _type_kernel32(k: ctypes.WinDLL) -> None:
+    B, D, H, S = wintypes.BOOL, wintypes.DWORD, wintypes.HANDLE, wintypes.LPCWSTR
     k.GetModuleHandleW.restype = wintypes.HMODULE
-    k.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+    k.GetModuleHandleW.argtypes = [S]
+    k.CloseHandle.restype = B
+    k.CloseHandle.argtypes = [H]
+    # The focus check: which program is in front (input/windows.py).
+    k.OpenProcess.restype = H
+    k.OpenProcess.argtypes = [D, B, D]
+    k.QueryFullProcessImageNameW.restype = B
+    k.QueryFullProcessImageNameW.argtypes = [H, D, wintypes.LPWSTR, ctypes.POINTER(D)]
+    # One Tycho at a time, and "show your window" (runtime/instance.py).
+    k.CreateMutexW.restype = H
+    k.CreateMutexW.argtypes = [wintypes.LPVOID, B, S]
+    k.CreateEventW.restype = H
+    k.CreateEventW.argtypes = [wintypes.LPVOID, B, B, S]
+    k.OpenEventW.restype = H
+    k.OpenEventW.argtypes = [D, B, S]
+    k.SetEvent.restype = B
+    k.SetEvent.argtypes = [H]
+    k.WaitForMultipleObjects.restype = D
+    k.WaitForMultipleObjects.argtypes = [D, ctypes.POINTER(H), B, D]
+    # Closing the console window stops Tycho safely (runtime/console.py).
+    k.SetConsoleCtrlHandler.restype = B
+    k.SetConsoleCtrlHandler.argtypes = [HANDLER_ROUTINE, B]
+    # The game's drives (game/install.py).
+    k.GetLogicalDrives.restype = D
+    k.GetLogicalDrives.argtypes = []
+    k.GetDriveTypeW.restype = wintypes.UINT
+    k.GetDriveTypeW.argtypes = [S]
 
 
 def _type_shell32(s: ctypes.WinDLL) -> None:
@@ -240,3 +318,8 @@ _TYPERS: dict[str, Callable[[ctypes.WinDLL], None]] = {
     "kernel32": _type_kernel32,
     "shell32": _type_shell32,
 }
+
+
+def message_box(text: str, title: str, flags: int) -> int:
+    """A Windows message box; its answer (IDOK and so on)."""
+    return int(user32().MessageBoxW(None, text, title, flags))
