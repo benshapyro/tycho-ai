@@ -9,6 +9,9 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ## [Unreleased]
 
 ### Added
+- Crash reports, only if you say yes: set `crash_reports` in Tycho's window (Settings, Privacy) or in `settings.toml`. When Tycho crashes, it keeps a short report and sends it the next time it starts: where in Tycho's code it broke, Tycho's version, the Windows version, the game and the brain provider. It never sends what you or Tycho said, your keys, your name, your Windows user name, your files or folders, or anything that identifies your PC. Until you answer, nothing is sent. By voice, crash reports only switch off, and switching them off deletes any report still waiting. ([#199](https://github.com/benshapyro/tycho-ai/issues/199))
+
+### Added
 - Change Tycho's voice by asking: "switch your voice to Sarah". By voice you can pick George, Sarah, Lily or Brian; any other voice is still chosen in Tycho's window (Settings, Voice and sounds) or `settings.toml`. The new voice is used from the next start, and Tycho says so. ([#355](https://github.com/benshapyro/tycho-ai/issues/355))
 
 - If Tycho ever vanishes without a word (a crash deep inside Windows, the speech model or the sound system, which no error message can catch), it now leaves a record of what it was doing in its logs folder. The next time it starts, it tells you on the Tile that it stopped unexpectedly and where that file is, and `tycho check` and the window's status say so for a few days. Nothing is sent anywhere: the file stays on your PC, and holds no keys and nothing you said. ([#296](https://github.com/benshapyro/tycho-ai/issues/296))

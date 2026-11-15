@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from tycho import __version__, crashes, logs, settings
+from tycho import __version__, crash_reports, crashes, logs, settings
 from tycho.audio.source import AudioError, microphone_device
 from tycho.brain_choice import load_brain
 from tycho.desktop import shell
@@ -46,6 +46,7 @@ def run_command(current: Settings, *, verbose: bool = False, window: bool = True
     from tycho.runtime.instance import OpenRequests, ask_to_open
 
     log_file = logs.setup(verbose=verbose)
+    _crash_reports(current)
     window = window and sys.platform == "win32"
     try:
         with SingleInstance():
@@ -67,6 +68,21 @@ def run_command(current: Settings, *, verbose: bool = False, window: bool = True
         log.error("%s", e)
         print(f"Run `{TYCHO} check` for a full diagnosis.", file=sys.stderr)
         return 1
+
+
+def _crash_reports(current: Settings) -> None:
+    """Crash reports for this run, only if the player said yes (ADR 4, #199)."""
+
+    def allowed() -> bool:
+        try:
+            return settings.load().crash_reports is True
+        except SettingsError:
+            return False
+
+    context = crash_reports.Context(pack=current.game, provider=current.brain_provider)
+    crash_reports.start(
+        current.crash_reports, allowed, context, (current.call_me, current.call_me_says)
+    )
 
 
 def _run(
