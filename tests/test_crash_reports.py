@@ -342,7 +342,11 @@ def test_the_start_menu_app_keeps_a_report_of_the_crash_it_shows(
         def MessageBoxW(_owner: object, _text: str, _title: str, _flags: int) -> int:
             return 1
 
+    import logging
+
     crash_reports.install(lambda: True, CONTEXT, [NAME])
+    before = list(logging.getLogger("tycho").handlers)
+    monkeypatch.setattr(logging.getLogger("tycho"), "handlers", list(before))  # restored (#434)
     monkeypatch.setattr(cli, "main", crashes)
     monkeypatch.setattr(start_run, "WINDOWED", False)
     monkeypatch.setattr(ctypes, "windll", type("Windll", (), {"user32": User32})(), raising=False)
@@ -352,3 +356,11 @@ def test_the_start_menu_app_keeps_a_report_of_the_crash_it_shows(
     kept = list(paths.crash_reports_dir().glob("*.json"))
     assert len(kept) == 1
     assert "tycho.settings.SettingsError" in kept[0].read_text("utf-8")
+    for added in set(logging.getLogger("tycho").handlers) - set(before):
+        added.close()  # logs.setup's file handler, in this test's folder
+
+
+def test_a_name_inside_an_unspaced_word_is_found(report: dict[str, Any]) -> None:
+    """#434: "田中" inside "田中さん" is still the name."""
+    named = {**report, "frames": [{"module": "tycho.x", "function": "田中さん", "line": 1}]}
+    assert scrub(named, ["田中"]) is None
