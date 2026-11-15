@@ -32,12 +32,19 @@ def test_the_game_setting_lists_each_pack_with_its_mode_and_why(path: Path) -> N
     bridge = Bridge(settings_path=path)
     rows = {r["name"]: r for g in bridge.settings()["groups"] for r in g["rows"]}  # type: ignore[union-attr]
     assert rows["game"]["packs"] == [
-        {"id": "star-citizen", "name": "Star Citizen", "mode": "keys", "why": ""},
+        {
+            "id": "star-citizen",
+            "name": "Star Citizen",
+            "mode": "keys",
+            "why": "",
+            "accent": "#9fd8ff",  # Tycho's own
+        },
         {
             "id": "wow-forever",
             "name": "World of Warcraft: Forever",
             "mode": "advisor",
             "why": built_in("wow-forever").why,
+            "accent": "#f0c674",
         },
     ]
     assert "packs" not in rows["game_channel"]

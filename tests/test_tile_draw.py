@@ -198,7 +198,7 @@ def test_a_strip_is_a_thin_line_with_the_title() -> None:
 
 def test_the_tile_draws_with_the_bundled_fonts() -> None:
     """The Tile draws with the same files as the window (ADR 17), not Windows' own."""
-    from tycho.tile.draw import font
+    from tycho.tile.faces import font
 
     assert font("label", 20).getname() == ("Saira Condensed", "SemiBold")
     assert font("text", 20).getname()[0] == "Saira SemiCondensed"
@@ -211,7 +211,7 @@ def test_every_symbol_the_tile_draws_is_in_its_font() -> None:
     glyph, so a missing symbol drew as a box."""
     from PIL.ImageFont import FreeTypeFont
 
-    from tycho.tile.draw import Face, font
+    from tycho.tile.faces import Face, font
 
     def drawn(f: FreeTypeFont, ch: str) -> bool:
         missing = "\U000f0000"  # a private-use code point: no font here has it

@@ -14,24 +14,21 @@ The fonts ship with Tycho (``tycho.fonts``), with Windows' own (Bahnschrift, Con
 as the fallback.
 """
 
-import contextlib
 import functools
-import io
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
-from tycho import fonts
 from tycho.tile.board import Shown
 from tycho.tile.cards import Card
 from tycho.tile.design import CORE, TYCHO_ACCENT
+from tycho.tile.faces import Font, font
 
 type Light = Literal["listening", "thinking"] | None
 type Rgba = tuple[int, int, int, int]
-type Font = ImageFont.FreeTypeFont
 
 SS = 2
 """Supersampling: drawn this many times bigger, then scaled down."""
@@ -63,46 +60,6 @@ class Look:
 def rgba(hex_colour: str, alpha: float = 1.0) -> Rgba:
     h = hex_colour.lstrip("#")
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), round(255 * alpha)
-
-
-# --- fonts ----------------------------------------------------------------------
-
-type Face = Literal["label", "text", "strong", "number"]
-_BUNDLED: dict[Face, str] = {
-    "label": "condensed",
-    "text": "text",
-    "strong": "label",
-    "number": "number",
-}
-"""Each face's bundled font (``tycho.fonts``), the same files the window uses."""
-
-_WINDOWS: dict[Face, tuple[str, str | None]] = {
-    "label": ("bahnschrift.ttf", "SemiBold Condensed"),
-    "text": ("bahnschrift.ttf", "SemiLight SemiCondensed"),
-    "strong": ("bahnschrift.ttf", "SemiBold SemiCondensed"),
-    "number": ("consola.ttf", None),
-}
-"""Windows' own, if a bundled file is missing."""
-
-
-@functools.cache
-def font(face: Face, size: int) -> Font:
-    """The bundled font at ``size`` pixels, else Windows' own, else Pillow's."""
-    with contextlib.suppress(OSError):
-        return ImageFont.truetype(io.BytesIO(fonts.path(_BUNDLED[face]).read_bytes()), size)
-    file, style = _WINDOWS[face]
-    try:
-        loaded = ImageFont.truetype(file, size)
-    except OSError:
-        fallback = ImageFont.load_default(size)  # FreeType's own, built into Pillow
-        if not isinstance(fallback, ImageFont.FreeTypeFont):
-            raise RuntimeError("Pillow was built without FreeType") from None
-        return fallback
-    if style is not None:
-        # An older Bahnschrift without variations keeps its default style.
-        with contextlib.suppress(OSError, ValueError):
-            loaded.set_variation_by_name(style)
-    return loaded
 
 
 def _width(text: str, f: Font, tracking: float = 0.0) -> float:
