@@ -1,5 +1,7 @@
 """Settings for every test."""
 
+import faulthandler
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -7,7 +9,7 @@ import keyring
 import pytest
 
 from tests.fakes.fake_keyring import MemoryKeyring
-from tycho import paths
+from tycho import crashes, paths
 
 REAL_MODELS = paths.models_dir()
 """The developer's real speech model folder, worked out before any test changes the
@@ -22,6 +24,18 @@ def _no_real_keys() -> Iterator[None]:
     keyring.set_keyring(MemoryKeyring())
     yield
     keyring.set_keyring(previous)
+
+
+@pytest.fixture(autouse=True)
+def _no_crash_file_left_open() -> Iterator[None]:
+    """A test that starts Tycho starts its crash record (#296), an open file in the
+    test's folder that takes over ``faulthandler``: close it, and hand ``faulthandler``
+    back to pytest."""
+    pytests = faulthandler.is_enabled()
+    yield
+    crashes.stop()
+    if pytests and not faulthandler.is_enabled() and sys.__stderr__ is not None:
+        faulthandler.enable(sys.__stderr__)
 
 
 @pytest.fixture(autouse=True)

@@ -57,7 +57,12 @@ class TileDisplay:
         self._accent = TYCHO_ACCENT
         self._accent_at = -ACCENT_SECONDS
         self._last: tuple[int, int, int, int] | None = None
+        self._stopped = False
+        self.on_stopped: Callable[[str], None] = lambda _why: None
+        """Called once, on the window's thread, if the window stops while Tycho runs
+        (#297). From then the Tile is off: ``show`` says no, so answers are spoken."""
         self._window = window(self.frame)
+        self._window.on_stopped = self._window_stopped
 
     def start(self) -> bool:
         """Open the window. False if it can't, and the Tile stays off."""
@@ -71,7 +76,11 @@ class TileDisplay:
 
     @property
     def on(self) -> bool:
-        return self._settings.tile
+        return self._settings.tile and not self._stopped
+
+    def _window_stopped(self, why: str) -> None:
+        self._stopped = True
+        self.on_stopped(why)
 
     def allows(self, kind: Kind) -> bool:
         with self._lock:
