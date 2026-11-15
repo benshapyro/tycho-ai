@@ -133,7 +133,7 @@ def serve_with_tray(
 
 def _try_it(session: Session, on: bool) -> bool:
     log.info("Try it %s", "on: nothing is sent to the game" if on else "off")
-    session.trying = on
+    session.try_it(on)
     return True
 
 

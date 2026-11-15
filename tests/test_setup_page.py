@@ -10,7 +10,7 @@ import os
 import re
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -623,6 +623,30 @@ def test_try_it_ends_when_the_player_goes_back_a_step(
     expect(setup.page.locator("#tryCard")).to_have_count(0)
     assert setup.trying == [True, False]
     setup.close()
+
+
+def test_try_it_ends_when_the_player_switches_to_the_game(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """Review of #464: left open on Try it, nothing reached the game, and Tycho still
+    played done. Try it lasts only while the window is in front."""
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    setup = Setup(browser, path, first_run=False, listening=True, opening="try_it")
+    setup.at("Try it")
+    expect(setup.page.locator("#tryCard")).to_contain_text("Switch to the game")
+    setup.page.evaluate("window.dispatchEvent(new Event('blur'))")
+    _until(setup.page, lambda: setup.trying == [True, False])
+    setup.page.evaluate("window.dispatchEvent(new Event('focus'))")
+    _until(setup.page, lambda: setup.trying == [True, False, True])
+    setup.close()
+
+
+def _until(page: Page, ok: Callable[[], bool], seconds: float = 4.0) -> None:
+    """Wait for the bridge to be called: the page's calls are served while it waits."""
+    end = time.monotonic() + seconds
+    while not ok():
+        assert time.monotonic() < end, "timed out"
+        page.wait_for_timeout(50)
 
 
 def test_a_first_runs_try_it_says_the_window_comes_back(setup: Setup) -> None:

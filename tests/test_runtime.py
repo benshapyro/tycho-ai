@@ -711,7 +711,7 @@ def test_during_setups_try_it_nothing_is_sent_and_tycho_says_what_it_would_press
 
     async def scenario() -> Rig:
         r = rig("gear down and request landing", "eject", focus=FakeFocus(False))
-        r.session.trying = True
+        r.session.try_it(True)
         r.say()
         await r.session.idle()
         r.say()  # still asks first: the gate is the same
@@ -730,11 +730,31 @@ def test_during_setups_try_it_nothing_is_sent_and_tycho_says_what_it_would_press
     assert r.actions.entries[0]["pressed"] == []
 
 
+def test_a_question_asked_during_try_it_cant_be_confirmed_for_real_after_it() -> None:
+    """Review of #464: "eject" while trying, then Done, then "confirm": nothing."""
+
+    async def scenario() -> Rig:
+        r = rig("eject", "confirm")
+        r.session.try_it(True)
+        r.say()
+        await r.session.idle()
+        r.session.try_it(False)
+        r.say()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert r.results[0].status == "asking"
+    assert r.results[1].status != "done"
+    assert r.keys.events == []
+
+
 def test_after_try_it_tycho_presses_again() -> None:
     async def scenario() -> Rig:
         r = rig("landing gear")
-        r.session.trying = True
-        r.session.trying = False
+        r.session.try_it(True)
+        r.session.try_it(False)
         r.say()
         await r.session.idle()
         await r.session.close()

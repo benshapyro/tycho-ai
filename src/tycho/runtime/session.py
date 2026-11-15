@@ -123,8 +123,7 @@ class Session:
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         safety_lists: Safety,
     ) -> None:
-        """``safety_lists`` are the game pack's lists for the safety gate: every plan and
-        every brain pick uses them (ADR 18)."""
+        """``safety_lists``: the pack's lists for the safety gate, for every plan (ADR 18)."""
         self._safety_lists = safety_lists
         self._tail_seconds = tail_seconds
         self._tail_pending = False
@@ -168,12 +167,15 @@ class Session:
         self._keys = ThreadPoolExecutor(1, thread_name_prefix="tycho-keys")
         self._closed = False
         self._paused = False
-        self.trying = False
-        """Setup's Try it is open (ADR 17): plan every press as usual, send none."""
+        self._trying = False
+
+    def try_it(self, on: bool) -> None:
+        """Setup's Try it (ADR 17): plan every press as usual, send none. Turned on or
+        off, an open question is dropped, so a test is never confirmed for real."""
+        self._trying, self._question = on, None
 
     def pause(self, paused: bool) -> None:
-        """Paused, push-to-talk does nothing, from the next press (the tray, ADR 17).
-        A press already held still ends normally, so the microphone never stays open."""
+        """Paused, push-to-talk does nothing from the next press; one held ends normally."""
         self._paused = paused
         busy = self._listening or (self._current is not None and not self._current.done())
         if paused and not busy and self._display is not None:
@@ -253,8 +255,7 @@ class Session:
             self._current = asyncio.create_task(self._serve(next(self._ids)))
 
     async def idle(self) -> Result | None:
-        """Wait for the request in flight, if any, and for Tycho to finish saying
-        anything about it. Returns how the request ended."""
+        """Wait for the request in flight, if any, and for Tycho to finish saying it."""
         task = self._current
         if task is None:
             return None
@@ -303,8 +304,7 @@ class Session:
         cancel = self._cancel = threading.Event()
         progress = Progress()
         try:
-            # Keep listening briefly after release, so a last word still in flight isn't
-            # cut, unless the player had already finished.
+            # Listen briefly after release, so a last word isn't cut, unless they'd finished.
             await tail(self._audio, self._tail_seconds)
             self._tail_pending = False
             clip = self._audio.stop()
@@ -392,8 +392,7 @@ class Session:
                 progress.say, progress.card = picked.text, picked.card
                 return progress.result(request, "replied", trace, heard, text)
             if isinstance(picked, str) and routed.matched:
-                # Key actions are off and the brain failed (#384): the gate's refusal
-                # still says why nothing was pressed, as it did before the brain heard it.
+                # Keys off and the brain failed (#384): the gate's refusal still says why.
                 picked = Picked(routed.matched)
                 progress.by_brain = False
             if isinstance(picked, str):
@@ -436,7 +435,7 @@ class Session:
             sleep=self._sleep,
             progress=progress,
             trace=trace,
-            trying=self.trying,
+            trying=self._trying,
         )
         return end(status, detail)
 

@@ -222,12 +222,18 @@
       const say = s.pack.examples;
       let tryCard = "";
       if (!firstRun) {
-        if (trying === null) { const t = await api.try_it(true); trying = t.ok ? t.since : null; }
+        if (trying === null && document.hasFocus()) {
+          const t = await api.try_it(true);
+          // Left the step while that was asked: off again, and the new step stays drawn.
+          if (view !== "setup" || STEPS[step] !== "Try it") { if (t.ok) await api.try_it(false); return; }
+          trying = t.ok ? t.since : null;
+        }
         const live = trying === null ? null : await api.recent(false);
+        if (!live && !document.hasFocus()) tryCard = `<div class="card frame" id="tryCard"><h3>Try it now</h3><p>Click here to try it: Tycho tries only while this window is in front.</p></div>`;
         if (live) tryCard = `<div class="card frame" id="tryCard"><h3>Try it now</h3>
           ${live.listening === false ? `<p class="warn-line">Tycho is paused. Resume it from its icon by the clock, then try.</p>`
             : `<p>Tycho is listening. Hold <b>${esc(s.push_to_talk.name || "your button")}</b>, say something, and let go: what it heard and what it would do shows here.</p>`}
-          <p class="ok-line">✓ Nothing reaches the game while this step is open: Tycho shows the keys it would press instead.</p>
+          <p class="ok-line">✓ Nothing reaches the game while this step is open and in front: Tycho shows the keys it would press instead. Switch to the game, and Tycho presses keys again.</p>
           <div id="tried">${recentList(tried(live), TRIED_EMPTY)}</div>
           <p class="note">Tycho tries with the settings it started with. Changes you made here apply when it restarts.</p></div>`;
       }
@@ -734,6 +740,12 @@
     if (!firstRun) notice(await api.check_updates(false));
   }
   setInterval(() => { if (api) refreshRecent().catch(() => {}); }, 3000);
+  // Try it lasts while this window is in front (review of #464): switched to the game,
+  // Tycho presses keys again, and coming back here tries again.
+  async function leaveTry() { if (trying !== null) { trying = null; await api.try_it(false); } }
+  window.addEventListener("blur", () => { leaveTry().catch(() => {}); });
+  document.addEventListener("visibilitychange", () => { if (document.hidden) leaveTry().catch(() => {}); });
+  window.addEventListener("focus", () => { if (api && view === "setup" && STEPS[step] === "Try it" && trying === null) render(); });
   // Try it shows what was heard soon after the button is let go.
   async function refreshTried() {
     if (trying === null || !$("#tried") || document.hidden) return;
