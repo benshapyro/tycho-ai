@@ -194,3 +194,31 @@ def test_a_strip_is_a_thin_line_with_the_title() -> None:
     assert strip.strip
     alone = draw((strip,), Look(), now=clock.now)
     assert alone.height < 70
+
+
+def test_the_tile_draws_with_the_bundled_fonts() -> None:
+    """The Tile draws with the same files as the window (ADR 17), not Windows' own."""
+    from tycho.tile.faces import font
+
+    assert font("label", 20).getname() == ("Saira Condensed", "SemiBold")
+    assert font("text", 20).getname()[0] == "Saira SemiCondensed"
+    assert font("strong", 20).getname() == ("Saira SemiCondensed", "SemiBold")
+    assert font("number", 20).getname()[0] == "Share Tech Mono"
+
+
+def test_every_symbol_the_tile_draws_is_in_its_font() -> None:
+    """Review of #457: Share Tech Mono has no arrow, and Pillow doesn't fall back glyph by
+    glyph, so a missing symbol drew as a box."""
+    from PIL.ImageFont import FreeTypeFont
+
+    from tycho.tile.faces import Face, font
+
+    def drawn(f: FreeTypeFont, ch: str) -> bool:
+        missing = "\U000f0000"  # a private-use code point: no font here has it
+        return (f.getbbox(ch), f.getlength(ch)) != (f.getbbox(missing), f.getlength(missing))
+
+    assert drawn(font("strong", 20), "→")
+    faces: tuple[Face, ...] = ("label", "text", "strong", "number")
+    for face in faces:
+        for ch in "…·":
+            assert drawn(font(face, 20), ch), (face, ch)

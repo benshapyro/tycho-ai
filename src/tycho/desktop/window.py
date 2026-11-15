@@ -6,12 +6,15 @@ bridge (``js_api``). The window is closed, not hidden, when the player closes it
 uses no memory while they play; the tray icon opens it again.
 """
 
+import base64
 import importlib
 import logging
 import threading
 from collections.abc import Callable
 from importlib import resources
 from typing import Any
+
+from tycho import fonts
 
 log = logging.getLogger(__name__)
 
@@ -22,13 +25,34 @@ WEBVIEW2 = "https://developer.microsoft.com/microsoft-edge/webview2/"
 """Where to get Windows' web view, for a Windows 10 PC without it."""
 
 
+FACES = (
+    ("Saira Semi Condensed", "400", "text"),
+    ("Saira Semi Condensed", "600", "label"),
+    ("Tycho Label", "100 900", "label"),  # labels are always the semibold, at any weight
+    ("Share Tech Mono", "100 900", "number"),
+)
+"""The bundled fonts the page names: family, weights and face (``tycho.fonts``)."""
+
+
+def font_faces() -> str:
+    """``@font-face`` rules with the bundled fonts inline, so the page fetches nothing."""
+    rules: list[str] = []
+    for family, weight, face in FACES:
+        data = base64.b64encode(fonts.path(face).read_bytes()).decode("ascii")
+        rules.append(
+            f'@font-face {{ font-family: "{family}"; font-weight: {weight}; '
+            f'src: url(data:font/ttf;base64,{data}) format("truetype"); }}'
+        )
+    return "\n".join(rules)
+
+
 def page() -> str:
-    """The page, with its CSS and script inline."""
+    """The page, with its fonts, CSS and script inline."""
     folder = resources.files("tycho.desktop").joinpath("app")
     html = folder.joinpath("index.html").read_text("utf-8")
     css = folder.joinpath("app.css").read_text("utf-8")
     js = folder.joinpath("app.js").read_text("utf-8")
-    return html.replace("/*CSS*/", css).replace("/*JS*/", js)
+    return html.replace("/*CSS*/", font_faces() + "\n" + css).replace("/*JS*/", js)
 
 
 class AppWindow:

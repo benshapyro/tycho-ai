@@ -426,6 +426,8 @@ def test_a_game_tycho_only_advises_in_has_no_empty_pages(
     page.get_by_role("button", name="Settings", exact=True).click()
     page.get_by_role("tab", name="Game and controls").click()
     expect(page.locator(".set", has_text="Push-to-talk")).to_have_count(1)
+    page.get_by_role("tab", name="Advanced").click()
+    expect(page.locator(".set", has_text="Brain model")).to_have_count(1)
     expect(page.locator(".set", has_text="Game folder")).to_have_count(0)
     expect(page.locator(".set", has_text="Game channel")).to_have_count(0)
     names = [r["name"] for g in setup.bridge.settings()["groups"] for r in g["rows"]]  # type: ignore[index,union-attr]
@@ -479,7 +481,9 @@ def test_the_places_are_down_the_side_and_home_shows_one_thing_to_fix(
     setup = Setup(browser, path, first_run=False, findings=checks)
     page = setup.page
     nav = page.locator("nav[aria-label='Places'] button")
-    expect(nav).to_have_text(["Home", "What to say", "The Tile", "Settings"])
+    # Each place by its name; Home and What to say may carry a count once checks come in.
+    places = ["Home", "What to say", "The Tile", "Settings"]
+    expect(nav).to_have_text([re.compile(rf"^{p}\b") for p in places])
     expect(page.locator("#gameBox")).to_contain_text("World of Warcraft: Forever")
     expect(page.locator("#gameBox")).to_contain_text("Tycho only talks")
     # Home: no brain key here, so there's something to fix, and only one shows.
@@ -520,6 +524,20 @@ def test_the_game_box_says_tycho_only_talks_with_key_actions_off(
     settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False, key_actions=False), path)
     setup = Setup(browser, path, first_run=False)
     expect(setup.page.locator("#gameBox")).to_contain_text("Tycho only talks")
+    setup.close()
+
+
+def test_the_window_takes_the_games_own_colour(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """ADR 17 (amended): one accent per game, from the game's pack."""
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, game="wow-forever"), path
+    )
+    setup = Setup(browser, path, first_run=False)
+    expect(setup.page.locator("#gameBox")).to_contain_text("World of Warcraft")
+    accent = "getComputedStyle(document.documentElement).getPropertyValue('--acc').trim()"
+    assert setup.page.evaluate(accent) == "#f0c674"
     setup.close()
 
 

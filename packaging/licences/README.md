@@ -14,6 +14,9 @@ licences need the notice itself in every copy, not a link.
 - `webview2.txt`: the Microsoft WebView2 SDK's `LICENSE.txt`, from the
   Microsoft.Web.WebView2 1.0.3856.49 NuGet package (the version pywebview 6.2.1 ships:
   `Microsoft.Web.WebView2.Core.dll` and the loader DLLs).
+- `saira.txt` and `share-tech-mono.txt`: the fonts' `OFL.txt`, from
+  https://github.com/google/fonts/tree/main/ofl/sairasemicondensed and
+  .../ofl/sharetechmono. The window and the Tile draw with them (`src/tycho/fonts`).
 
 OpenSSL 3 is Apache-2.0, the same text as Tycho's LICENSE, which the notices include.
 Refresh these when Python's minor version or a bundled native library changes.

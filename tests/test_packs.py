@@ -190,6 +190,7 @@ def _edit(folder: Path, name: str, old: str, new: str) -> None:
         ("pack.toml", 'window = "FakeGame.exe"\n', "", "needs a keybinds part and a window"),
         ("pack.toml", 'mode = "keys"', 'mode = "advisor"', "an advisor pack can't have"),
         ("pack.toml", "[parts]", 'colour = "red"\n[parts]', "unknown settings: colour"),
+        ("pack.toml", "[parts]", 'accent = "gold"\n[parts]', "accent must be a colour"),
         ("pack.toml", 'lookups = ["settings"]', 'lookups = ["horoscope"]', "no built-in look-up"),
         ("pack.toml", "fakegame.example", "https://fakegame.example/", "bare domains"),
         ("pack.toml", "'''walk_\\w+'''", "'''walk_(\\w+'''", "isn't a pattern"),

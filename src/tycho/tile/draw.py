@@ -10,25 +10,25 @@ image is kept until it changes: only the timer bar, the countdown and the talk l
 are drawn again frame by frame.
 
 Sizes are for medium text on a 1080-pixel-high screen; ``Look.scale`` grows them.
-The fonts are Windows' own (Bahnschrift, Consolas), on every Windows 10 and 11 PC.
+The fonts ship with Tycho (``tycho.fonts``), with Windows' own (Bahnschrift, Consolas)
+as the fallback.
 """
 
-import contextlib
 import functools
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 from tycho.tile.board import Shown
 from tycho.tile.cards import Card
 from tycho.tile.design import CORE, TYCHO_ACCENT
+from tycho.tile.faces import Font, font
 
 type Light = Literal["listening", "thinking"] | None
 type Rgba = tuple[int, int, int, int]
-type Font = ImageFont.FreeTypeFont
 
 SS = 2
 """Supersampling: drawn this many times bigger, then scaled down."""
@@ -60,35 +60,6 @@ class Look:
 def rgba(hex_colour: str, alpha: float = 1.0) -> Rgba:
     h = hex_colour.lstrip("#")
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), round(255 * alpha)
-
-
-# --- fonts ----------------------------------------------------------------------
-
-type Face = Literal["label", "text", "strong", "number"]
-_FACES: dict[Face, tuple[str, str | None]] = {
-    "label": ("bahnschrift.ttf", "SemiBold Condensed"),
-    "text": ("bahnschrift.ttf", "SemiLight SemiCondensed"),
-    "strong": ("bahnschrift.ttf", "SemiBold SemiCondensed"),
-    "number": ("consola.ttf", None),
-}
-
-
-@functools.cache
-def font(face: Face, size: int) -> Font:
-    """A Windows font at ``size`` pixels, or Pillow's own if it's missing."""
-    file, style = _FACES[face]
-    try:
-        loaded = ImageFont.truetype(file, size)
-    except OSError:
-        fallback = ImageFont.load_default(size)  # FreeType's own, built into Pillow
-        if not isinstance(fallback, ImageFont.FreeTypeFont):
-            raise RuntimeError("Pillow was built without FreeType") from None
-        return fallback
-    if style is not None:
-        # An older Bahnschrift without variations keeps its default style.
-        with contextlib.suppress(OSError, ValueError):
-            loaded.set_variation_by_name(style)
-    return loaded
 
 
 def _width(text: str, f: Font, tracking: float = 0.0) -> float:
@@ -325,7 +296,7 @@ class _Pen:
                 fill=self.text,
             )
         mid = self.pad + leg_w + arrow_w / 2
-        arrow = font("number", self.px(20))
+        arrow = font("strong", self.px(20))  # Share Tech Mono has no arrow; Saira has
         self.d.text(
             (mid - arrow.getlength("→") / 2, self.y + h / 2 - self.px(12)),
             "→",
@@ -509,8 +480,16 @@ def strip_image(card: Card, look: Look) -> Image.Image:
         (card.title or card.label or card.kind).upper(), f, w - round(70 * u), 0.08 * f.size
     )
     pen.caps((round(34 * u), round(8 * u)), title, f, rgba(CORE.dim), 0.08)
-    arrow = font("number", round(16 * u))
-    d.text((w - round(26 * u), round(7 * u)), "▸", font=arrow, fill=rgba(look.accent))
+    # The pinned marker, drawn: none of the bundled fonts has a ▸.
+    tip_x, mid_y, half = w - round(16 * u), round(17 * u), round(4.5 * u)
+    d.polygon(
+        [
+            (tip_x - round(8 * u), mid_y - half),
+            (tip_x, mid_y),
+            (tip_x - round(8 * u), mid_y + half),
+        ],
+        fill=rgba(look.accent),
+    )
     return out.resize((round(w / SS), round(h / SS)), Image.Resampling.LANCZOS)
 
 

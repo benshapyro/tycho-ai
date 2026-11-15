@@ -208,3 +208,17 @@ def test_the_window_is_see_through_click_through_and_never_takes_focus() -> None
         assert user32.GetForegroundWindow() == before
     finally:
         window.close()
+
+
+def test_tychos_own_colour_is_the_games_where_it_names_one() -> None:
+    """ADR 17 (amended): one accent per game. WoW: Forever's is gold; Star Citizen keeps
+    Tycho's blue. A ship's own colour still comes first, and a pick is a pick."""
+    gold = "#f0c674"
+    wow, clock = _display(game="wow-forever", tile_colour="tycho")
+    assert wow._accent_now(clock.now) == gold  # pyright: ignore[reportPrivateUsage]
+    unknown_ship, clock = _display(game="wow-forever", tile_colour="ship")
+    assert unknown_ship._accent_now(clock.now) == gold  # pyright: ignore[reportPrivateUsage]
+    picked, clock = _display(game="wow-forever", tile_colour="green")
+    assert picked._accent_now(clock.now) == PICKS["green"]  # pyright: ignore[reportPrivateUsage]
+    sc, clock = _display(game="star-citizen", tile_colour="tycho")
+    assert sc._accent_now(clock.now) == TYCHO_ACCENT  # pyright: ignore[reportPrivateUsage]

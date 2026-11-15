@@ -37,6 +37,14 @@ NATIVE_LICENCES = (
         "Microsoft.Web.WebView2.WinForms.dll, WebView2Loader.dll, shipped with pywebview)",
         REPO / "packaging" / "licences" / "webview2.txt",
     ),
+    (
+        "Saira Semi Condensed and Saira Condensed (tycho/fonts): SIL Open Font License 1.1",
+        REPO / "packaging" / "licences" / "saira.txt",
+    ),
+    (
+        "Share Tech Mono (tycho/fonts): SIL Open Font License 1.1",
+        REPO / "packaging" / "licences" / "share-tech-mono.txt",
+    ),
 )
 """Licence texts for what isn't a Python package, kept in the repo (see their README)."""
 
@@ -66,6 +74,8 @@ libffi (libffi-8.dll): MIT; its notice is in Python's licences below
 SQLite (sqlite3.dll): public domain  https://sqlite.org/copyright.html
 SDL2 (sdl2dll/dll/SDL2.dll): zlib  https://www.libsdl.org/license.php
 PortAudio (libportaudio64bit.dll, from sounddevice): MIT; full text below
+Saira Semi Condensed, Saira Condensed and Share Tech Mono (tycho/fonts): SIL Open
+  Font License 1.1; full texts below
 PyInstaller's bootloader (tycho.exe): GPL-2.0 with an exception that allows
   distributing it with programs under any licence
   https://pyinstaller.org/en/stable/license.html

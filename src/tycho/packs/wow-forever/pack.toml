@@ -16,6 +16,7 @@ name = "World of Warcraft: Forever"
 version = "0.2.0"
 format = 1
 mode = "advisor"
+accent = "#f0c674"         # the window's and the Tile's colour in this game: gold (ADR 17)
 why = "Blizzard's rules don't allow tools that play the game for you, so in World of Warcraft Tycho only talks."
 # "Commander" is a Star Citizen title (#349): here Tycho calls the player nothing unless
 # they choose a name.
