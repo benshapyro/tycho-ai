@@ -8,8 +8,9 @@ from typing import Literal
 import numpy as np
 import pytest
 
-from tycho import app, brain_choice, doctor, logs, settings, updates
+from tycho import brain_choice, cli, doctor, logs, settings, updates
 from tycho.audio import source
+from tycho.cli import commands
 from tycho.findings import Finding
 from tycho.games.star_citizen import checks
 from tycho.input import code_for
@@ -168,7 +169,7 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
     import importlib.metadata
 
     with pytest.raises(SystemExit):
-        app.main(["--version"])
+        cli.main(["--version"])
     # The version is written once, in pyproject.toml, and read back from the package.
     assert capsys.readouterr().out.strip() == f"Tycho {importlib.metadata.version('tycho-ai')}"
 
@@ -178,7 +179,7 @@ def test_a_broken_settings_file_stops_with_its_message(
 ) -> None:
     monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path))
     (tmp_path / "settings.toml").write_text("feedback_volume = 9\n", encoding="utf-8")
-    assert app.main(["check", "--quick"]) == 2
+    assert cli.main(["check", "--quick"]) == 2
     assert "feedback_volume" in capsys.readouterr().err
 
 
@@ -211,8 +212,8 @@ def test_an_unknown_setting_is_a_note_not_a_stop(
     def gpu(action: str) -> int:
         return 0
 
-    monkeypatch.setattr(app, "gpu_command", gpu)
-    assert app.main(["gpu", "status"]) == 0
+    monkeypatch.setattr(cli, "gpu_command", gpu)
+    assert cli.main(["gpu", "status"]) == 0
     assert "from_the_future in settings.toml isn't a setting" in capsys.readouterr().err
     findings = doctor.checks(settings.load(), quick=True)
     first, second = next(findings), next(findings)
@@ -279,7 +280,7 @@ def test_tycho_credits_names_the_sources_and_says_its_unofficial(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     # ADR 15's credits screen, and CIG's fankit disclaimer (audit, 2026-11-03).
-    assert app.main(["credits"]) == 0
+    assert cli.main(["credits"]) == 0
     out = capsys.readouterr().out
     for expected in ("api.star-citizen.wiki", "UEX Corp", "starcitizen.tools", "CC-BY-4.0"):
         assert expected in out
@@ -322,7 +323,7 @@ def test_check_json_is_one_document_with_a_fix_for_each_problem(
 ) -> None:
     # For agents setting Tycho up: no reading of the printed text (agent setup, 2026-11-04).
     monkeypatch.setattr(checks, "find_install", _no_game)
-    assert app.main(["check", "--quick", "--json"]) == 1  # no button, no game: not ready
+    assert cli.main(["check", "--quick", "--json"]) == 1  # no button, no game: not ready
     document = json.loads(capsys.readouterr().out)
     assert document["ready"] is False
     by_what = {f["what"]: f for f in document["findings"]}
@@ -342,8 +343,8 @@ def test_tycho_model_status_and_download(
 ) -> None:
     from tycho.stt import ModelStore
 
-    monkeypatch.setattr(app.paths, "models_dir", lambda: Path("nowhere-yet"))
-    assert app.main(["model", "status"]) == 1
+    monkeypatch.setattr(commands.paths, "models_dir", lambda: Path("nowhere-yet"))
+    assert cli.main(["model", "status"]) == 1
     assert "tycho model download" in capsys.readouterr().out
     fetched: list[str] = []
 
@@ -352,7 +353,7 @@ def test_tycho_model_status_and_download(
         return Path("nowhere-yet")
 
     monkeypatch.setattr(ModelStore, "ensure", ensure)
-    assert app.main(["model", "download"]) == 0
+    assert cli.main(["model", "download"]) == 0
     assert fetched == ["ensure"]
     assert "Done." in capsys.readouterr().out
 
@@ -376,14 +377,14 @@ def test_tycho_actions_finds_names_by_label_and_by_what_players_say(
     def load(found: object) -> SimpleNamespace:
         return store
 
-    monkeypatch.setattr(app, "find_install", install)
-    monkeypatch.setattr(app, "load_keys", load)
-    assert app.main(["actions", "master", "mode"]) == 0
+    monkeypatch.setattr(commands, "find_install", install)
+    monkeypatch.setattr(commands, "load_keys", load)
+    assert cli.main(["actions", "master", "mode"]) == 0
     out = capsys.readouterr().out
     assert "v_master_mode_set_scm  |  Set Master Mode to SCM  |  ralt+v" in out
-    assert app.main(["actions", "gear", "down"]) == 0  # no label says "gear"
+    assert cli.main(["actions", "gear", "down"]) == 0  # no label says "gear"
     assert "landing_gear_down: v_deploy_landing_system" in capsys.readouterr().out
-    assert app.main(["actions", "zzqq"]) == 1
+    assert cli.main(["actions", "zzqq"]) == 1
 
 
 def test_actions_for_an_advisor_game_says_there_are_none(
@@ -394,9 +395,9 @@ def test_actions_for_an_advisor_game_says_there_are_none(
     def install(current: settings.Settings) -> object:
         raise AssertionError("an advisor game has no keybinds to find")
 
-    monkeypatch.setattr(app, "find_install", install)
+    monkeypatch.setattr(commands, "find_install", install)
     monkeypatch.setattr(settings, "load", lambda: settings.Settings(game="wow-forever"))
-    assert app.main(["actions", "jump"]) == 1
+    assert cli.main(["actions", "jump"]) == 1
     assert "World of Warcraft: Forever has no actions" in capsys.readouterr().out
 
 
@@ -571,7 +572,7 @@ def test_a_stored_voice_key_with_a_hidden_character_is_no_key_not_a_failed_start
     def stored(name: str) -> str:
         return "sk_" + "a" * 30 + "\u200b"
 
-    monkeypatch.setattr(app.credentials, "get", stored)
+    monkeypatch.setattr(cli.credentials, "get", stored)
     doing: list[str] = []
     with caplog.at_level(logging.WARNING, logger="tycho"):
         assert voice_choice.load_speaker(settings.Settings(), doing=doing.append) is None
@@ -604,13 +605,13 @@ def test_a_stored_anthropic_key_with_a_hidden_character_is_no_key(
     def stored(name: str) -> str:
         return "sk-ant-api03-" + "a" * 30 + "\u200b"
 
-    monkeypatch.setattr(app.credentials, "get", stored)
+    monkeypatch.setattr(cli.credentials, "get", stored)
     with caplog.at_level(logging.WARNING, logger="tycho"):
         assert brain_choice.anthropic_key() is None
     assert "Anthropic key has a character keys don't have" in caplog.text
     assert "tycho key set anthropic" in caplog.text
     monkeypatch.setattr(checks, "find_install", _no_game)
-    app.main(["check", "--quick", "--json"])
+    cli.main(["check", "--quick", "--json"])
     brain = {f["what"]: f for f in json.loads(capsys.readouterr().out)["findings"]}["Brain"]
     assert brain["level"] == "warn"
 
@@ -637,9 +638,9 @@ def test_tycho_check_says_a_stored_key_is_unusable_not_missing(
     def stored(asked: str) -> str | None:
         return key if asked == name else None
 
-    monkeypatch.setattr(app.credentials, "get", stored)
+    monkeypatch.setattr(cli.credentials, "get", stored)
     monkeypatch.setattr(checks, "find_install", _no_game)
-    app.main(["check", "--quick", "--json"])
+    cli.main(["check", "--quick", "--json"])
     finding = {f["what"]: f for f in json.loads(capsys.readouterr().out)["findings"]}[what]
     assert finding["level"] == "warn"
     assert "stored but unusable" in finding["detail"]

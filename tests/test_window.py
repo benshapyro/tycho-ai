@@ -7,7 +7,7 @@ import httpx2
 import pytest
 
 from tests.fakes.fake_key_check import FakeKeyCheck
-from tycho import __version__, app, credentials, doctor, settings, updates
+from tycho import __version__, cli, credentials, doctor, settings, updates
 from tycho.desktop import window
 from tycho.desktop.bridge import GROUPS, KEYS, Bridge
 from tycho.desktop.keys import ProviderKeyCheck
@@ -469,7 +469,7 @@ def test_the_windows_checks_never_ask_in_the_terminal(monkeypatch: pytest.Monkey
 
     monkeypatch.setattr(checks, "find_install", no_game)
     monkeypatch.setattr(checks, "ask_game_root", asked)
-    monkeypatch.setattr(app.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
     findings = list(doctor.checks(Settings(), quick=True, ask=False))
     assert any(f.what == "Star Citizen" and f.level == "fail" for f in findings)
 

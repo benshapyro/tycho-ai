@@ -2,7 +2,7 @@
 
 import sys
 
-from tycho.app import main
+from tycho.cli import main
 
 if __name__ == "__main__":
     sys.exit(main())

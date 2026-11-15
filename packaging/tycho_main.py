@@ -104,14 +104,14 @@ def windowed(argv: list[str]) -> int:
     import contextlib
     import ctypes
 
-    from tycho import app, logs, paths
+    from tycho import cli, logs, paths
     from tycho.start import run as started
 
     started.WINDOWED = True
     tail = _Tail()
     sys.stdout = sys.stderr = tail  # type: ignore[assignment]
     try:
-        code = app.main(argv or ["run"])
+        code = cli.main(argv or ["run"])
     except Exception as e:  # the player must see something, and the log the traceback
         import logging
 
@@ -138,6 +138,6 @@ if __name__ == "__main__":
         sys.exit(smoke_imports())
     if sys.stdout is None or sys.stderr is None:  # tycho-app.exe: no terminal
         sys.exit(windowed(sys.argv[1:]))
-    from tycho.app import main
+    from tycho.cli import main
 
     sys.exit(main())

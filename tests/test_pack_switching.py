@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from tests.fakes.fake_pack import FakeGameKeybinds, fake_pack
-from tycho import app, settings
+from tycho import cli, settings
 from tycho.desktop.bridge import Bridge
 from tycho.desktop.commands import Commands
 from tycho.desktop.host import Host
@@ -118,7 +118,7 @@ def test_tycho_starts_again_with_the_saved_settings_and_its_window_open(
         pass
 
     monkeypatch.setattr(start_run, "start_update_check", no_update_check)
-    monkeypatch.setattr(app.settings, "load", lambda: Settings(key_actions=False))
+    monkeypatch.setattr(cli.settings, "load", lambda: Settings(key_actions=False))
     code = start_run._run(Settings(), tmp_path / "log", window=False)  # pyright: ignore[reportPrivateUsage]
     assert code == 0
     # The first start as given; the second with the settings as saved, window open.

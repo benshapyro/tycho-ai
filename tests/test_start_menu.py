@@ -15,7 +15,7 @@ from typing import Any, ClassVar
 
 import pytest
 
-from tycho import app, logs, win32
+from tycho import cli, logs, win32
 from tycho.desktop import shell
 from tycho.runtime import AlreadyRunning
 from tycho.runtime.instance import OpenRequests, ask_to_open
@@ -151,7 +151,7 @@ def test_with_no_terminal_no_button_is_explained(
     import tycho.desktop.setup
 
     monkeypatch.setattr(tycho.desktop.setup, "needs_setup", lambda _current: False)
-    monkeypatch.setattr(app.settings, "load", lambda: Settings())
+    monkeypatch.setattr(cli.settings, "load", lambda: Settings())
     assert start_run._run(Settings(), tmp_path / "log") == 1  # pyright: ignore[reportPrivateUsage]
     assert "push-to-talk" in capsys.readouterr().err
 
@@ -197,7 +197,7 @@ def test_the_windowed_app_shows_a_problem_in_a_message_box(
             shown.append(f"{title}: {text}")
             return 1
 
-    monkeypatch.setattr(app, "main", fails)
+    monkeypatch.setattr(cli, "main", fails)
     monkeypatch.setattr(start_run, "WINDOWED", False)  # windowed() sets it: put it back after
     monkeypatch.setattr(ctypes, "windll", type("Windll", (), {"user32": User32})())
     monkeypatch.setattr(sys, "stdout", sys.stdout)  # restored after the test
@@ -216,7 +216,7 @@ def test_the_windowed_app_is_quiet_when_tycho_quits_normally(
 
     entry = _entry_point()
     shown: list[str] = []
-    monkeypatch.setattr(app, "main", lambda _argv: 0)
+    monkeypatch.setattr(cli, "main", lambda _argv: 0)
     monkeypatch.setattr(start_run, "WINDOWED", False)
     monkeypatch.setattr(
         ctypes,
@@ -349,7 +349,7 @@ def test_a_crash_box_shows_tycho_s_last_words_not_the_traceback(
             shown.append(text)
             return 1
 
-    monkeypatch.setattr(app, "main", crashes)
+    monkeypatch.setattr(cli, "main", crashes)
     monkeypatch.setattr(start_run, "WINDOWED", False)
     monkeypatch.setattr(ctypes, "windll", type("Windll", (), {"user32": User32})())
     monkeypatch.setattr(sys, "stdout", sys.stdout)

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from tycho import app
+from tycho import cli
 from tycho.commands import CommandMatcher
 from tycho.packs import STAR_CITIZEN, built_in
 
@@ -77,7 +77,7 @@ def _commands(text: str) -> list[list[str]]:
 
 @pytest.mark.parametrize("path", SKILLS, ids=lambda p: p.parent.name)
 def test_every_tycho_command_a_skill_gives_is_real(path: Path) -> None:
-    parser = app.build_parser()
+    parser = cli.build_parser()
     commands = _commands(path.read_text("utf-8"))
     for arguments in commands:
         try:

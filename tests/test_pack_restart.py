@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 
 import tycho.desktop.setup
-from tycho import app, settings
+from tycho import cli, settings
 from tycho.desktop import bridge as bridge_module
 from tycho.desktop import shell
 from tycho.desktop.bridge import Bridge
@@ -50,8 +50,8 @@ def two_games(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     def load(*_: object) -> Settings:
         return saved["now"]
 
-    monkeypatch.setattr(app.settings, "load", load)
-    monkeypatch.setattr(app.settings, "update", update)
+    monkeypatch.setattr(cli.settings, "load", load)
+    monkeypatch.setattr(cli.settings, "update", update)
     monkeypatch.setattr(start_run, "built_in", pack)
     monkeypatch.setattr(start_run, "start_update_check", _nothing)
     return saved

@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [project.scripts]
-tycho = "tycho.app:main"
+tycho = "tycho.cli:main"
 
 [dependency-groups]
 dev = [
