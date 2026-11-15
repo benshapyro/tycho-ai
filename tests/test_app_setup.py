@@ -193,7 +193,7 @@ def test_a_capture_that_fails_says_why_and_saves_nothing(path: Path) -> None:
 def test_the_keybinds_are_read_once_a_while_and_none_without_the_game(
     path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import tycho.app
+    import tycho.games
     from tycho.games.star_citizen.store import KeybindStore
 
     loads: list[object] = []
@@ -211,7 +211,7 @@ def test_the_keybinds_are_read_once_a_while_and_none_without_the_game(
         loads.append(install)
         return Store()
 
-    monkeypatch.setattr(tycho.app, "find_install", find_install)
+    monkeypatch.setattr(tycho.games, "find_install", find_install)
     monkeypatch.setattr(KeybindStore, "load", load)
     monkeypatch.setattr("tycho.desktop.bridge.time.monotonic", lambda: 100.0)  # no 30 s edge
     bridge = _bridge(path)
@@ -464,12 +464,12 @@ def test_push_to_talk_conflicts_are_star_citizens_only_when_it_is_the_game(
 ) -> None:
     """#341: with World of Warcraft: Forever chosen, a button Star Citizen uses still
     showed "It also does something in the game"."""
-    from tycho import app
+    import tycho.games
 
     def install(current: Settings) -> object:
         raise AssertionError("Star Citizen's keybinds read for another game")
 
-    monkeypatch.setattr(app, "find_install", install)
+    monkeypatch.setattr(tycho.games, "find_install", install)
     assert setup.WindowsPC().conflicts("mouse:0x06", Settings(game="wow-forever")) == []
 
 
