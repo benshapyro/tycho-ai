@@ -44,6 +44,7 @@
         <button class="btn frame" type="button" id="again">Check again</button></div>`
       : "";
     const paused = live.listening === false;
+    shownListening = live.listening;
     const hold = live.button ? `Hold <b>${esc(live.button)}</b> and talk.` : "Hold your push-to-talk button and talk.";
     const [title, line] = stuck ? ["Not ready yet", "Tycho can't do everything yet: the first thing to fix is below."]
       : paused ? ["Paused", "Tycho isn't listening. Resume from Tycho's icon by the clock."]
@@ -70,9 +71,11 @@
     return `<ol class="recent">${exchanges.map((e) => `<li class="${e.ok ? "ok" : "no"}"><span class="num">${esc(time(e.at))}</span>
       <span><b>“${esc(e.said)}”</b>${e.did ? `<small>${esc(e.did)}</small>` : ""}</span></li>`).join("")}</ol>`;
   }
+  let shownListening = null; // what Home's line says now: redrawn when it changes
   async function refreshRecent() {
     if (view !== "status" || !$("#recent") || document.hidden) return;
-    const live = await api.recent();
+    const live = await api.recent(false);
+    if (live.listening !== shownListening) return status(); // paused or resumed from the tray
     const box = $("#recent");
     if (box) box.innerHTML = recentList(live.exchanges);
   }

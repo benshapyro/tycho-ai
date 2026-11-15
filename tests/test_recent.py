@@ -2,6 +2,9 @@
 
 from pathlib import Path
 
+import pytest
+
+from tycho import settings
 from tycho.desktop.bridge import Bridge
 from tycho.runtime import recent as recent_module
 from tycho.runtime.messages import Result
@@ -59,3 +62,22 @@ def test_the_bridge_hands_them_to_the_page(tmp_path: object) -> None:
         {"at": 7.0, "said": "what's my cargo", "did": "96 SCU.", "ok": True}
     ]
     assert Bridge(latest_release=lambda: None).recent()["listening"] is None
+
+
+def test_details_meant_for_the_log_stay_out_of_home() -> None:
+    """Review of #459: a no_key or failed result's detail is action ids and error text."""
+    no_key = Result(1, "no_key", text="gear", detail="landing_gear: none of v_toggle has a key")
+    assert exchange(no_key, 0.0) == Exchange(0.0, "gear", "No key is bound for that.", False)
+    failed = Result(1, "failed", text="gear", detail="KeyError: 'x'")
+    assert exchange(failed, 0.0) == Exchange(0.0, "gear", "Something went wrong.", False)
+
+
+def test_homes_poll_doesnt_read_the_settings_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review of #459: the poll every few seconds reads memory only."""
+
+    def no_reading(*_args: object) -> None:
+        raise AssertionError("the poll read settings.toml")
+
+    monkeypatch.setattr(settings, "load", no_reading)
+    bridge = Bridge(listening=lambda: True, latest_release=lambda: None)
+    assert bridge.recent(False) == {"listening": True, "button": "", "exchanges": []}
