@@ -7,34 +7,32 @@ import logging
 import os
 import sys
 import time
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
-import numpy as np
-
-from tycho import __version__, credentials, logs, paths, settings, updates
+from tycho import __version__, credentials, doctor, logs, paths, settings
 from tycho.audio.source import AudioError, microphone_device
-from tycho.brain_choice import brain_findings, load_brain
+from tycho.brain_choice import load_brain
 from tycho.commands import CommandFileError, CommandMatcher
-from tycho.findings import TYCHO, Finding, key_finding, stored_key
-from tycho.games import find_install, fleet_findings, game_findings, load_keys
+from tycho.doctor import UNKNOWN_SETTING, diagnose, start_update_check
+from tycho.findings import TYCHO
+from tycho.games import find_install, load_keys
 from tycho.keybinds import Keybinds
 from tycho.packs import (
-    YOU_TURNED_THEM_OFF,
     GameDataError,
     GameKeys,
     GamePack,
-    PackError,
     as_run,
     built_in,
 )
-from tycho.ptt.binding import Binding, DeviceKind
+from tycho.ptt.binding import Binding
 from tycho.ptt.conflicts import conflict_warnings
 from tycho.ptt.devices import describe, input_sources
 from tycho.settings import Settings, SettingsError
-from tycho.stt import PARAKEET_V2, DeviceChoice, ModelError, ModelStore
-from tycho.voice.voices import Voice
+from tycho.stt import PARAKEET_V2, ModelError, ModelStore
+from tycho.stt.choice import GPU_HELP, MODEL_HELP, device_choice, device_name, gpu_hint
+from tycho.voice.choice import load_speaker
 
 if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when running
     from tycho.address import Address
@@ -58,11 +56,6 @@ if TYPE_CHECKING:  # the runtime pulls in the hands and audio; imported when run
     from tycho.tile.display import TileDisplay
 
 log = logging.getLogger("tycho")
-
-UNKNOWN_SETTING = (
-    "{name} in settings.toml isn't a setting this Tycho knows, so it's ignored. It may be a "
-    "typo, or from a newer Tycho."
-)
 
 KEYBIND_REFRESH_SECONDS = 2.0
 """How often to look for keybinds the player changed in game."""
@@ -512,7 +505,7 @@ def app_window(
 
     def findings() -> list[Mapping[str, str]]:
         current = settings.load()
-        return [dataclasses.asdict(f) for f in _checks(current, quick=True, ask=False)]
+        return [dataclasses.asdict(f) for f in doctor.checks(current, quick=True, ask=False)]
 
     bridge = Bridge(
         apply=apply,
@@ -650,20 +643,6 @@ def game_pack(current: Settings) -> GamePack:
     return pack
 
 
-def key_actions_finding(pack: GamePack) -> Finding:
-    """What ``tycho check`` and the window's status say about the game's mode (#191)."""
-    if not pack.safety.keys_off:
-        return Finding("ok", "Key actions", f"on in {pack.name}: Tycho presses your keys")
-    fix = f"key_actions in {paths.settings_file()}" if pack.why == YOU_TURNED_THEM_OFF else ""
-    return Finding(
-        "ok",
-        "Key actions",
-        f"off in {pack.name}, so Tycho answers, looks things up and shows cards, and "
-        f"presses nothing. {pack.why}",
-        fix=fix,
-    )
-
-
 def load_keybinds(current: Settings, binding: Binding) -> GameKeys:
     install = find_install(current)
     store = load_keys(install)
@@ -683,7 +662,7 @@ def load_transcriber(
     if doing is not None:
         doing("Loading the speech model")
     choice = device_choice(current)
-    log.info("Speech recognition on the %s: %s", _device_name(choice.device), choice.reason)
+    log.info("Speech recognition on the %s: %s", device_name(choice.device), choice.reason)
     started = time.monotonic()
     transcriber = ParakeetTranscriber.load(folder, choice.device)
     log.info("Speech model ready in %.1f s", time.monotonic() - started)
@@ -691,52 +670,6 @@ def load_transcriber(
     if transcriber.device == "cpu" and wanted and (hint := gpu_hint()):
         log.info("%s", hint)
     return transcriber
-
-
-def speech_finding(current: Settings) -> Finding:
-    """Where speech recognition runs, and how to move it to the graphics card if it
-    could be there (audit, 2026-11-03: check warned without saying what to do)."""
-    from tycho.stt import nvidia_driver
-
-    choice = device_choice(current)
-    detail = f"on the {_device_name(choice.device)}: {choice.reason}"
-    if choice.device == "gpu" or current.transcription_device == "cpu":
-        return Finding("ok", "Speech recognition", detail)
-    if hint := gpu_hint():
-        fix = GPU_HELP if hint.endswith(GPU_HELP) else ""
-        return Finding("warn", "Speech recognition", f"{detail}. {hint}", fix=fix)
-    if nvidia_driver() is None:  # nothing to do about it: fine, just slower
-        return Finding("ok", "Speech recognition", "on the processor (no NVIDIA card)")
-    return Finding("warn", "Speech recognition", detail)
-
-
-def gpu_hint() -> str | None:
-    """What to do when an NVIDIA card could run speech recognition but its libraries are
-    missing; None if there's no NVIDIA card or it already has them (downloaded, or the
-    pip wheels in development), so a card that's merely short of memory gets no hint."""
-    import importlib.util
-
-    from tycho.stt import CudaLibraries, nvidia_driver
-    from tycho.stt.cuda import DOWNLOAD_BYTES, MIN_DRIVER
-
-    driver = nvidia_driver()
-    if driver is None or CudaLibraries(paths.cuda_dir()).ready():
-        return None
-    if importlib.util.find_spec("nvidia") is not None:
-        return None
-    if driver < MIN_DRIVER:
-        return (
-            f"Your NVIDIA card could recognise speech about 10x faster, but needs driver "
-            f"{MIN_DRIVER} or newer (you have {driver}). Update it, then run: {GPU_HELP}"
-        )
-    return (
-        "Speech recognition is on the processor. Your NVIDIA card can do it about 10x "
-        f"faster with a one-time {DOWNLOAD_BYTES / 1e9:.1f} GB download: {GPU_HELP}"
-    )
-
-
-GPU_HELP = f"{TYCHO} gpu install"
-MODEL_HELP = f"{TYCHO} model download"
 
 
 MAX_ACTIONS_SHOWN = 40
@@ -850,86 +783,6 @@ def gpu_command(action: str) -> int:
         return 2
     print("Done. Speech recognition will use the graphics card the next time Tycho starts.")
     return 0
-
-
-VOICE_KEY_HELP = f"{TYCHO} key set elevenlabs"
-
-
-def elevenlabs_key() -> str | None:
-    return stored_key("elevenlabs", "ElevenLabs", VOICE_KEY_HELP)
-
-
-_voice_now: Finding | None = None
-"""The voice the running Tycho speaks with, for the window's status (#242). None until
-``load_speaker`` has chosen one."""
-
-
-def choose_voice(current: Settings, key: str) -> tuple[Voice, Finding]:
-    """The voice to speak with, asking ElevenLabs (free) whether the player's key can
-    use the one they chose; George on Flash if it can't (ADR 9, #242)."""
-    from tycho.voice import voices
-
-    chosen = voices.choose(current.voice, current.voice_model)
-    checked = voices.check(key, chosen)
-    if checked.availability == "missing" and (instead := voices.fallback(chosen)):
-        detail = (
-            f"{checked.reason}, so Tycho speaks as {instead.describe()}. "
-            "Set voice to one your account has."
-        )
-        return instead, Finding("warn", "Voice", detail, fix=f"voice in {paths.settings_file()}")
-    if checked.availability == "available":
-        return chosen, Finding("ok", "Voice", f"ElevenLabs, {chosen.describe()}")
-    return chosen, Finding(
-        "ok", "Voice", f"ElevenLabs, {chosen.describe()} ({checked.reason or 'not checked'})"
-    )
-
-
-def load_speaker(
-    current: Settings,
-    on_fallback: Callable[[str], None] = lambda _said: None,
-    doing: Callable[[str], None] = lambda _now: None,
-) -> Speaker | None:
-    """ElevenLabs, if the player has stored a key and the voice isn't turned off.
-    Without it, Tycho's replies are shown in its window and it plays its sounds.
-    ``on_fallback`` is told, in words for the player, when their voice isn't available
-    and Tycho speaks as George instead: at start, or later in the session."""
-    global _voice_now
-    if current.voice_volume == 0:
-        log.info("Voice: off (voice_volume is 0)")
-        return None
-    key = elevenlabs_key()
-    if key is None:
-        log.info(
-            "No ElevenLabs key, so Tycho's replies are shown here. Add one: %s", VOICE_KEY_HELP
-        )
-        return None
-    from tycho.voice.elevenlabs import ElevenLabsSpeaker
-
-    doing("Checking your voice")
-    voice, finding = choose_voice(current, key)
-    _voice_now = finding
-    if finding.level == "warn":
-        log.warning("Voice: %s", finding.detail)
-        on_fallback(finding.detail)
-    else:
-        log.info("Voice: %s", finding.detail)
-
-    def fell_back(gone: Voice, used: Voice) -> None:
-        global _voice_now
-        said = (
-            f"{gone.name} isn't available to your ElevenLabs key, so Tycho speaks as "
-            f"{used.describe()}. Set voice to one your account has."
-        )
-        _voice_now = Finding("warn", "Voice", said, fix=f"voice in {paths.settings_file()}")
-        on_fallback(said)
-
-    return ElevenLabsSpeaker(
-        api_key=key,
-        voice=voice,
-        volume=current.voice_volume,
-        kept=paths.voice_dir(),
-        on_fallback=fell_back,
-    )
 
 
 def load_commands(pack: GamePack) -> CommandMatcher:
@@ -1105,7 +958,7 @@ def check_json(current: Settings, *, quick: bool = False) -> int:
     helping the player set up doesn't have to read the printed text."""
     import json
 
-    findings = list(_checks(current, quick))
+    findings = list(doctor.checks(current, quick))
     failed = any(f.level == "fail" for f in findings)
     document = {
         "tycho": __version__,
@@ -1117,201 +970,6 @@ def check_json(current: Settings, *, quick: bool = False) -> int:
     }
     print(json.dumps(document, ensure_ascii=False, indent=2))
     return 1 if failed else 0
-
-
-def diagnose(current: Settings, *, quick: bool = False) -> Iterator[Finding]:
-    """Each check, printed as it finishes so a slow one doesn't look like a hang."""
-    for finding in _checks(current, quick):
-        mark = {"ok": " OK ", "warn": "WARN", "fail": "FAIL"}[finding.level]
-        print(f"[{mark}] {finding.what}: {finding.detail}")
-        yield finding
-
-
-def _checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Finding]:
-    """``ask``: a missing game folder may be asked for in the terminal. Never from the
-    app window, whose thread mustn't wait on a question nobody can see."""
-    yield Finding("ok", "Settings", str(paths.settings_file()))
-    for name in settings.unknown_keys():
-        yield Finding("warn", "Settings", UNKNOWN_SETTING.format(name=name))
-    try:
-        pack = as_run(built_in(current.game), key_actions=current.key_actions)
-    except PackError as e:
-        yield Finding("fail", "Game", str(e))
-        return
-    yield Finding("ok", "Game", f"{pack.name} (game pack {pack.version})")
-    yield key_actions_finding(pack)
-
-    binding = current.push_to_talk_binding
-    if binding is None:
-        yield Finding(
-            "fail", "Push-to-talk", f"not chosen yet. Run: {TYCHO} bind", fix=f"{TYCHO} bind"
-        )
-    else:
-        yield Finding("ok", "Push-to-talk", describe(binding))
-
-    if not quick:
-        yield microphone_finding(current)
-
-    yield from brain_findings(current, quick=quick)
-
-    if current.voice_volume == 0:
-        yield Finding(
-            "ok", "Voice", "off (voice_volume is 0); Tycho's replies are shown in its window"
-        )
-    elif elevenlabs_key() is None:
-        yield key_finding(
-            "elevenlabs",
-            "Voice",
-            "ElevenLabs",
-            "replies are shown in Tycho's window",
-            VOICE_KEY_HELP,
-        )
-    else:
-        yield voice_finding(current, quick)
-
-    commands_file = paths.commands_file(pack.id)
-    try:
-        matcher = CommandMatcher.default(commands_file, pack=pack)
-    except CommandFileError as e:
-        # A warning, not a failure: run starts anyway, with the built-in commands.
-        yield Finding("warn", "Your commands", f"{e} (only the built-in ones are used)")
-        matcher = CommandMatcher.default(pack=pack)
-    else:
-        sequences = sum(c.is_sequence for c in matcher.commands)
-        counts = f"{len(matcher.commands) - sequences} commands, {sequences} sequences"
-        if commands_file.exists():
-            yield Finding("ok", "Your commands", f"{counts}, with yours from {commands_file}")
-            for warning in matcher.warnings:
-                yield Finding("warn", "Your commands", warning)
-        else:
-            yield Finding("ok", "Commands", f"{counts}; add your own in {commands_file}")
-
-    if "fleet" in pack.parts.lookups:  # #413, as #339: no fleet file for a game without one
-        yield from fleet_findings(pack)
-
-    store: GameKeys | None = None
-    # A pack with no keybinds part (an advisor, #191) has no game folder or keys to check.
-    if pack.parts.keybinds is not None:
-        store = yield from game_findings(current, matcher, ask=ask and sys.stdin.isatty())
-
-    if binding is not None and store is not None:
-        warnings = conflict_warnings(binding, store)
-        if warnings:
-            for warning in warnings:
-                yield Finding("warn", "Push-to-talk conflict", warning)
-        elif binding.kind is DeviceKind.JOYSTICK:
-            yield Finding("ok", "Push-to-talk conflict", "joystick buttons aren't checked yet")
-        else:
-            yield Finding("ok", "Push-to-talk conflict", "not bound to anything in game")
-
-    model = ModelStore(paths.models_dir())
-    if model.ready(PARAKEET_V2) or not model.missing(PARAKEET_V2):
-        yield Finding("ok", "Speech model", str(model.folder(PARAKEET_V2)))
-    else:
-        size = PARAKEET_V2.size / 1e9
-        yield Finding(
-            "warn",
-            "Speech model",
-            f"not downloaded yet ({size:.1f} GB to {model.folder(PARAKEET_V2)}); "
-            f"{MODEL_HELP} (or {TYCHO} run) downloads it. Set TYCHO_MODELS to put it on "
-            "another drive.",
-            fix=MODEL_HELP,
-        )
-    yield speech_finding(current)
-
-    if not quick:
-        yield from _live_checks(current)
-
-
-def voice_finding(current: Settings, quick: bool) -> Finding:
-    """The voice and model Tycho will speak with. ``tycho check`` asks ElevenLabs
-    whether the key can use it (free); the window's quick checks show what the running
-    Tycho chose at start instead of asking again."""
-    from tycho.voice import voices
-
-    if quick:
-        if _voice_now is not None:
-            return _voice_now
-        chosen = voices.choose(current.voice, current.voice_model)
-        return Finding("ok", "Voice", f"ElevenLabs, {chosen.describe()}, with your key")
-    key = elevenlabs_key()
-    if key is None:  # removed since the check above
-        return Finding("warn", "Voice", f"no ElevenLabs key: {VOICE_KEY_HELP}", fix=VOICE_KEY_HELP)
-    return choose_voice(current, key)[1]
-
-
-def _live_checks(current: Settings) -> Iterator[Finding]:
-    """The checks that ask GitHub or need the player at the PC."""
-    if current.check_for_updates:  # the opt-out: no request to GitHub at all
-        yield update_finding()
-    yield focus_finding()
-
-
-def start_update_check(current: Settings) -> None:
-    """Ask GitHub for a newer Tycho in the background, unless the player turned it off."""
-    if current.check_for_updates:
-        updates.announce_in_background(__version__)
-
-
-def update_finding(get: Callable[[str], Any] = updates.latest_json) -> Finding:
-    """Whether a newer Tycho is out. Never a problem: at most worth a look."""
-    try:
-        release = updates.latest_release(get)
-    except updates.UpdateError as e:
-        return Finding("ok", "Updates", f"couldn't check ({e}); you have {__version__}")
-    if release is None:
-        return Finding("ok", "Updates", f"no release published yet; you have {__version__}")
-    if updates.is_newer(release.version, __version__):
-        return Finding(
-            "warn", "Updates", f"Tycho {release.version} is out: {release.url}", fix=release.url
-        )
-    return Finding("ok", "Updates", f"{__version__} is the latest")
-
-
-def microphone_finding(current: Settings, seconds: float = 2.5) -> Finding:
-    from tycho.audio.microphone import Microphone
-
-    try:
-        with Microphone(device=microphone_device(current.microphone)) as mic:
-            print(f"       Say a few words now ({seconds:.0f} s)...", flush=True)
-            mic.start()
-            time.sleep(seconds)
-            clip = mic.stop()
-            name = mic.name
-    except AudioError as e:
-        return Finding("fail", "Microphone", str(e))
-    return microphone_level(name, clip)
-
-
-def microphone_level(name: str, clip: np.ndarray[tuple[int], np.dtype[np.float32]]) -> Finding:
-    from tycho.audio.clip import loudness
-
-    peak, how = loudness(clip)
-    if how == "silent":
-        return Finding("fail", "Microphone", f"{name} heard nothing. Is it muted?")
-    if how == "quiet":
-        return Finding("warn", "Microphone", f"{name} is very quiet; raise its level in Windows")
-    if how == "clipping":
-        return Finding("warn", "Microphone", f"{name} is clipping; lower its level in Windows")
-    return Finding("ok", "Microphone", f"{name}, level good (peak {20 * np.log10(peak):.0f} dB)")
-
-
-def focus_finding(seconds: float = 10.0) -> Finding:
-    from tycho.input.windows import WindowsFocusCheck, foreground_executable
-
-    focus = WindowsFocusCheck()
-    print(f"       Switch to Star Citizen within {seconds:.0f} s to test the focus check...")
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
-        if focus.game_has_focus():
-            return Finding("ok", "Focus check", "Tycho can tell when Star Citizen is in front")
-        time.sleep(0.2)
-    front = foreground_executable() or "unknown"
-    return Finding(
-        "warn",
-        "Focus check",
-        f"Star Citizen wasn't in front ({front} was). Tycho only presses keys when it is.",
-    )
 
 
 # --- tycho bind and tycho sounds -----------------------------------------------------
@@ -1353,21 +1011,6 @@ def sounds_command(current: Settings) -> int:
 
 
 # --- Shared pieces -------------------------------------------------------------------
-
-
-def device_choice(current: Settings) -> DeviceChoice:
-    from tycho.stt import CudaLibraries, choose_device, cuda_available, gpu_free_mb
-
-    if current.transcription_device == "cpu":
-        return choose_device("cpu", cuda=False, free_mb=None)
-    libraries = CudaLibraries(paths.cuda_dir())
-    cuda = cuda_available(libraries.dlls if libraries.ready() else None)
-    free_mb = gpu_free_mb() if cuda else None  # no NVIDIA tool runs without CUDA
-    return choose_device(current.transcription_device, cuda=cuda, free_mb=free_mb)
-
-
-def _device_name(device: str) -> str:
-    return "graphics card" if device == "gpu" else "processor"
 
 
 if __name__ == "__main__":

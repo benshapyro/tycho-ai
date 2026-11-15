@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from tests.fakes.fake_setup_pc import FOUND, MISSING, FakeSetupPC
-from tycho import settings
+from tycho import doctor, settings
 from tycho.desktop import setup
 from tycho.desktop.bridge import Bridge
 from tycho.settings import Settings
@@ -305,13 +305,12 @@ def test_without_a_window_setup_falls_back_to_the_terminal(monkeypatch: pytest.M
 def test_setup_and_tycho_check_judge_loudness_alike(peak: float, how: str) -> None:
     import numpy as np
 
-    from tycho import app
     from tycho.audio.clip import loudness
 
     clip = np.array([0.0, peak, -peak / 2], dtype=np.float32)
     assert loudness(clip)[1] == how
     assert setup.verdict(clip)["verdict"] == how
-    check = app.microphone_level("Headset", clip).level
+    check = doctor.microphone_level("Headset", clip).level
     assert check == {"silent": "fail", "quiet": "warn", "clipping": "warn", "good": "ok"}[how]
 
 

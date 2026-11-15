@@ -15,7 +15,7 @@ LIMIT = 500
 
 # Files over the limit today, with their length as a ceiling (ADR 19). Shrink, never grow.
 OVER_LIMIT = {
-    "app.py": 1374,
+    "app.py": 1017,
     "runtime/session.py": 851,
     "desktop/bridge.py": 708,
     "tile/draw.py": 622,

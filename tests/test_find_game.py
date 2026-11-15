@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tycho import app, settings
+from tycho import app, doctor, settings
 from tycho.games.star_citizen import checks
 from tycho.games.star_citizen import install as found
 from tycho.games.star_citizen.install import GameInstall, launcher_roots, root_from, search_roots
@@ -121,7 +121,7 @@ def test_check_saves_the_folder_it_was_given(
 
     monkeypatch.setattr(checks, "ask_game_root", answer)
     # Only the game check matters here: run the checks until they report the game.
-    for finding in app._checks(Settings(), quick=True):  # pyright: ignore[reportPrivateUsage]
+    for finding in doctor.checks(Settings(), quick=True):
         if finding.what == "Star Citizen":
             assert finding.level == "ok"
             assert "saved to" in finding.detail

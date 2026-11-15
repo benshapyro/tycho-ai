@@ -8,7 +8,7 @@ from typing import Literal
 import numpy as np
 import pytest
 
-from tycho import app, brain_choice, logs, settings
+from tycho import app, brain_choice, doctor, logs, settings, updates
 from tycho.findings import Finding
 from tycho.games.star_citizen import checks
 from tycho.input import code_for
@@ -16,6 +16,7 @@ from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.packs import STAR_CITIZEN, built_in
 from tycho.ptt.binding import Binding, DeviceKind
 from tycho.ptt.conflicts import conflicts, game_code
+from tycho.voice import choice as voice_choice
 
 SC = built_in(STAR_CITIZEN)
 
@@ -147,7 +148,7 @@ def test_joystick_push_to_talk_is_not_compared() -> None:
 def test_microphone_level(peak: float, level: str, words: str) -> None:
     clip = np.zeros(1000, dtype=np.float32)
     clip[10] = peak
-    finding = app.microphone_level("Headset", clip)
+    finding = doctor.microphone_level("Headset", clip)
     assert finding.level == level
     assert words in finding.detail
 
@@ -209,7 +210,7 @@ def test_an_unknown_setting_is_a_note_not_a_stop(
     monkeypatch.setattr(app, "gpu_command", gpu)
     assert app.main(["gpu", "status"]) == 0
     assert "from_the_future in settings.toml isn't a setting" in capsys.readouterr().err
-    findings = app._checks(settings.load(), quick=True)  # pyright: ignore[reportPrivateUsage]
+    findings = doctor.checks(settings.load(), quick=True)
     first, second = next(findings), next(findings)
     assert first.what == second.what == "Settings"
     assert second.level == "warn"
@@ -233,8 +234,8 @@ def test_check_warns_about_broken_player_files_without_failing(
     monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path))
     (tmp_path / "commands.toml").write_text("[[sequence]\n", "utf-8")
     (tmp_path / "fleet.toml").write_text("ships = [ not toml", "utf-8")
-    seen: dict[str, app.Finding] = {}
-    for finding in app._checks(settings.load(), quick=True):  # pyright: ignore[reportPrivateUsage]
+    seen: dict[str, Finding] = {}
+    for finding in doctor.checks(settings.load(), quick=True):
         seen[finding.what] = finding
         if finding.what == "Your fleet":
             break
@@ -253,19 +254,19 @@ def test_check_for_updates_false_never_asks_github(
     def announce(current: str) -> None:
         asked.append("run")
 
-    def finding() -> app.Finding:
+    def finding() -> Finding:
         asked.append("check")
-        return app.Finding("ok", "Updates", "stub")
+        return Finding("ok", "Updates", "stub")
 
-    def focus() -> app.Finding:
-        return app.Finding("ok", "Focus", "stub")
+    def focus() -> Finding:
+        return Finding("ok", "Focus", "stub")
 
-    monkeypatch.setattr(app.updates, "announce_in_background", announce)
-    monkeypatch.setattr(app, "update_finding", finding)
-    monkeypatch.setattr(app, "focus_finding", focus)
+    monkeypatch.setattr(updates, "announce_in_background", announce)
+    monkeypatch.setattr(doctor, "update_finding", finding)
+    monkeypatch.setattr(doctor, "focus_finding", focus)
     current = settings.Settings(check_for_updates=allowed)
     app.start_update_check(current)
-    checked = [f.what for f in app._live_checks(current)]  # pyright: ignore[reportPrivateUsage]
+    checked = [f.what for f in doctor.live_checks(current)]
     assert asked == (["run", "check"] if allowed else [])
     assert checked == (["Updates", "Focus"] if allowed else ["Focus"])
 
@@ -304,10 +305,10 @@ def test_check_says_how_to_move_speech_to_the_graphics_card(
     def choice(current: settings.Settings) -> DeviceChoice:
         return DeviceChoice(device, "short of memory")
 
-    monkeypatch.setattr(app, "device_choice", choice)
-    monkeypatch.setattr(app, "gpu_hint", lambda: hint)
+    monkeypatch.setattr(doctor, "device_choice", choice)
+    monkeypatch.setattr(doctor, "gpu_hint", lambda: hint)
     monkeypatch.setattr(tycho.stt, "nvidia_driver", lambda: driver)
-    finding = app.speech_finding(settings.Settings())
+    finding = doctor.speech_finding(settings.Settings())
     assert finding.level == level
     assert says in finding.detail
 
@@ -470,9 +471,10 @@ def _voice_check(monkeypatch: pytest.MonkeyPatch, availability: str, reason: str
         asked.append(voice.id)
         return voices.Checked(availability, reason)  # pyright: ignore[reportArgumentType]
 
-    monkeypatch.setattr(app, "elevenlabs_key", lambda: "sk_test")
+    monkeypatch.setattr(voice_choice, "elevenlabs_key", lambda: "sk_test")
+    monkeypatch.setattr(doctor, "elevenlabs_key", lambda: "sk_test")
     monkeypatch.setattr(voices, "check", check)
-    monkeypatch.setattr(app, "_voice_now", None)
+    monkeypatch.setattr(voice_choice, "voice_now", None)
     return asked
 
 
@@ -486,7 +488,7 @@ def test_a_missing_voice_falls_back_to_george_on_flash_before_the_first_line(
     asked = _voice_check(monkeypatch, "missing", "The Ship's Mind isn't available to your key")
     told: list[str] = []
     with caplog.at_level(logging.INFO, logger="tycho"):
-        speaker = app.load_speaker(
+        speaker = voice_choice.load_speaker(
             settings.Settings(voice="The Ship's Mind"), on_fallback=told.append
         )
     assert asked == [voices.SHIPS_MIND]
@@ -496,7 +498,7 @@ def test_a_missing_voice_falls_back_to_george_on_flash_before_the_first_line(
     (said,) = told
     assert "George on Flash v2.5" in said
     # The window's status shows what the running Tycho chose, without asking again.
-    finding = app.voice_finding(settings.Settings(voice="The Ship's Mind"), quick=True)
+    finding = doctor.voice_finding(settings.Settings(voice="The Ship's Mind"), quick=True)
     assert finding.level == "warn"
     assert asked == [voices.SHIPS_MIND]
 
@@ -510,7 +512,9 @@ def test_the_start_log_names_the_voice_actually_used(
     _voice_check(monkeypatch, "available")
     told: list[str] = []
     with caplog.at_level(logging.INFO, logger="tycho"):
-        speaker = app.load_speaker(settings.Settings(voice="Sarah"), on_fallback=told.append)
+        speaker = voice_choice.load_speaker(
+            settings.Settings(voice="Sarah"), on_fallback=told.append
+        )
     assert isinstance(speaker, ElevenLabsSpeaker)
     assert speaker.voice.name == "Sarah"
     assert "Voice: ElevenLabs, Sarah on v4 Turbo" in caplog.text
@@ -526,7 +530,7 @@ def test_a_voice_that_couldnt_be_checked_is_kept(
 
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     _voice_check(monkeypatch, "unknown", "your key isn't allowed to read voices")
-    speaker = app.load_speaker(settings.Settings(voice="The Ship's Mind"))
+    speaker = voice_choice.load_speaker(settings.Settings(voice="The Ship's Mind"))
     assert isinstance(speaker, ElevenLabsSpeaker)
     assert speaker.voice.name == "The Ship's Mind"
 
@@ -543,12 +547,12 @@ def test_tycho_check_names_the_voice_and_warns_if_its_missing(
 ) -> None:
     asked = _voice_check(monkeypatch, availability, "The Ship's Mind isn't available to your key")
     voice = "George" if availability == "available" else "The Ship's Mind"
-    finding = app.voice_finding(settings.Settings(voice=voice), quick=False)
+    finding = doctor.voice_finding(settings.Settings(voice=voice), quick=False)
     assert (finding.what, finding.level) == ("Voice", level)
     assert words in finding.detail
     assert len(asked) == 1
     # The quick checks (the window's) never ask ElevenLabs.
-    quick = app.voice_finding(settings.Settings(voice=voice), quick=True)
+    quick = doctor.voice_finding(settings.Settings(voice=voice), quick=True)
     assert quick.level == "ok"
     assert len(asked) == 1
 
@@ -566,7 +570,7 @@ def test_a_stored_voice_key_with_a_hidden_character_is_no_key_not_a_failed_start
     monkeypatch.setattr(app.credentials, "get", stored)
     doing: list[str] = []
     with caplog.at_level(logging.WARNING, logger="tycho"):
-        assert app.load_speaker(settings.Settings(), doing=doing.append) is None
+        assert voice_choice.load_speaker(settings.Settings(), doing=doing.append) is None
     assert "invisible" in caplog.text
     assert doing == []  # nothing to check, so the starting star doesn't say so
 
@@ -577,9 +581,9 @@ def test_the_starting_star_says_when_the_voice_is_being_checked(
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     _voice_check(monkeypatch, "available")
     doing: list[str] = []
-    assert app.load_speaker(settings.Settings(), doing=doing.append) is not None
+    assert voice_choice.load_speaker(settings.Settings(), doing=doing.append) is not None
     assert doing == ["Checking your voice"]
-    assert app.load_speaker(settings.Settings(voice_volume=0), doing=doing.append) is None
+    assert voice_choice.load_speaker(settings.Settings(voice_volume=0), doing=doing.append) is None
     assert doing == ["Checking your voice"]
 
 
@@ -644,6 +648,6 @@ def test_check_reads_no_fleet_for_a_game_without_one(monkeypatch: pytest.MonkeyP
     def never(_pack: object) -> Iterator[Finding]:
         raise AssertionError("a fleet check for a game without a fleet")
 
-    monkeypatch.setattr(app, "fleet_findings", never)
-    findings = list(app._checks(settings.Settings(game="wow-forever"), quick=True, ask=False))  # pyright: ignore[reportPrivateUsage]
+    monkeypatch.setattr(doctor, "fleet_findings", never)
+    findings = list(doctor.checks(settings.Settings(game="wow-forever"), quick=True, ask=False))
     assert findings
