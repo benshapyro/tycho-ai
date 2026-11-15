@@ -156,11 +156,11 @@ def build_session(
 def _search_seconds(open_web: bool) -> tuple[float, float]:
     """How long the brain has once a search starts, and the request's limit. The
     open-web fallback (#354) searches twice and reads pages: it gets longer."""
-    from tycho.runtime import session
+    from tycho.runtime import asking
 
     if open_web:
-        return session.OPEN_SEARCH_SECONDS, session.OPEN_SEARCH_LIMIT
-    return session.SEARCH_SECONDS, session.SEARCH_LIMIT
+        return asking.OPEN_SEARCH_SECONDS, asking.OPEN_SEARCH_LIMIT
+    return asking.SEARCH_SECONDS, asking.SEARCH_LIMIT
 
 
 NO_KEYBINDS = Keybinds([])

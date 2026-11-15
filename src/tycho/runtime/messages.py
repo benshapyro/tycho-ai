@@ -79,3 +79,47 @@ class Result:
     @property
     def done(self) -> bool:
         return self.status == "done"
+
+
+@dataclass(slots=True)
+class Progress:
+    """How far one request got, so even a cancelled one is logged with what it pressed."""
+
+    commands: tuple[str, ...] = ()
+    pressed: list[str] = field(default_factory=list[str])
+    confirmed: bool = False
+    by_brain: bool = False
+    say: str = ""
+    announced: bool = False
+    question: str = ""
+    keydown_ms: float | None = None
+    card: Card | None = None
+
+    def result(
+        self,
+        request: int,
+        status: Status,
+        trace: Trace,
+        heard: str = "",
+        text: str = "",
+        detail: str = "",
+    ) -> Result:
+        """How the request ended, with everything it got to."""
+        return Result(
+            request=request,
+            status=status,
+            heard=heard,
+            text=text,
+            pressed=tuple(self.pressed),
+            detail=detail,
+            commands=self.commands,
+            confirmed=self.confirmed,
+            by_brain=self.by_brain,
+            say=self.say,
+            announced=self.announced,
+            question=self.question,
+            card=self.card,
+            timings=dict(trace.stages),
+            total_ms=trace.total_ms,
+            keydown_ms=self.keydown_ms,
+        )
