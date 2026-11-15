@@ -90,8 +90,13 @@ def test_a_screen_list_that_fails_follows_the_game() -> None:
         raise OSError("no")
 
     told: list[str] = []
+
+    def tell(choice: str) -> bool:
+        told.append(choice)
+        return True
+
     where = Where(
-        lambda: r"\\.\DISPLAY2", foreground=lambda: GAMES, connected=failing, on_missing=told.append
+        lambda: r"\\.\DISPLAY2", foreground=lambda: GAMES, connected=failing, on_missing=tell
     )
     assert where() == GAMES
     assert told == []  # don't know isn't "unplugged" (#468 review)
