@@ -94,7 +94,8 @@ def test_choosing_the_game_folder(path: Path) -> None:
 def test_a_folder_without_the_game_is_refused(path: Path) -> None:
     bridge = _bridge(path, choose_folder=lambda: "D:\\Photos")
     result = bridge.choose_game_folder()
-    assert result == {"ok": False, "problem": "There's no LIVE\\Data.p4k in or under D:\\Photos."}
+    problem = "Tycho can't find Star Citizen LIVE in or under D:\\Photos."
+    assert result == {"ok": False, "problem": problem}
     assert settings.load(path).game_root is None
 
 
@@ -515,16 +516,24 @@ def test_what_leaves_the_pc_follows_the_game_and_the_settings(path: Path) -> Non
     bridge = _bridge(path)
     leaves: Any = bridge.setup_state()["leaves"]
     to = [row["to"] for row in leaves]
-    assert to[:3] == ["Anthropic (Claude)", "ElevenLabs", "Anthropic (web search)"]
+    assert to[:4] == [
+        "Anthropic (Claude)",
+        "ElevenLabs",
+        "The key's own provider",
+        "Anthropic (web search)",
+    ]
     assert to[-2:] == ["GitHub", "Hugging Face"]
     assert "bound actions" in leaves[0]["what"]
-    assert "On now" in leaves[2]["when"]
+    # #435: the voice check at start, and a stored key's own check, are listed too.
+    assert "once when it starts" in leaves[1]["when"]
+    assert "to check it works" in leaves[2]["what"]
+    assert "On now" in leaves[3]["when"]
     assert any("UEX Corp" in row["what"] for row in leaves if row["to"] == "Star Citizen look-ups")
 
     settings.update({"web_search": False, "brain_provider": "openrouter"}, path)
     leaves = bridge.setup_state()["leaves"]
     assert leaves[0]["to"] == "OpenRouter, then Anthropic"
-    assert "Off now" in leaves[2]["when"]
+    assert "Off now" in leaves[3]["when"]
 
     # An advisor game with no look-ups: no keybinds to send, no search, no game services.
     settings.update({"game": "wow-forever"}, path)
@@ -532,6 +541,7 @@ def test_what_leaves_the_pc_follows_the_game_and_the_settings(path: Path) -> Non
     assert [row["to"] for row in leaves] == [
         "OpenRouter, then Anthropic",
         "ElevenLabs",
+        "The key's own provider",
         "GitHub",
         "Hugging Face",
     ]

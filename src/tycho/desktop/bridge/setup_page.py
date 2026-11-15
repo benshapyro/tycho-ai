@@ -9,7 +9,7 @@ import dataclasses
 import logging
 import threading
 import time
-from typing import cast
+from typing import assert_never, cast
 
 from tycho import settings
 from tycho.desktop import setup
@@ -95,10 +95,13 @@ class SetupPage(SettingsPage, CommandsPage):
         folder = self._choose_folder()
         if not folder:
             return {"ok": False, "cancelled": True}
-        channel = settings.load(self._path).game_channel
+        current = settings.load(self._path)
+        channel = current.game_channel
         root = self._pc.root(folder, channel)
         if root is None:
-            return {"ok": False, "problem": f"There's no {channel}\\Data.p4k in or under {folder}."}
+            name = self._shipped_pack(current).name
+            problem = f"Tycho can't find {name} {channel} in or under {folder}."
+            return {"ok": False, "problem": problem}
         result, current = self._save_choice("game_root", root)
         if current is not None:
             result["game"] = dataclasses.asdict(self._game(current))
@@ -220,9 +223,13 @@ def _pack_shown(pack: GamePack, current: Settings) -> dict[str, object]:
 def _leaves(pack: GamePack, current: Settings) -> list[dict[str, str]]:
     """What leaves the PC with this game and these settings, for setup's privacy step:
     who gets it, what, and when. The game's own look-ups are in its pack's words."""
-    brain = {"anthropic": "Anthropic (Claude)", "openrouter": "OpenRouter, then Anthropic"}[
-        current.brain_provider
-    ]
+    provider = current.brain_provider
+    if provider == "anthropic":
+        brain = "Anthropic (Claude)"
+    elif provider == "openrouter":
+        brain = "OpenRouter, then Anthropic"
+    else:  # a new provider must be named here: pyright says so before a player sees it
+        assert_never(provider)
     said = "What you said, as text, and your last few requests with what Tycho did"
     if pack.parts.keybinds is not None:
         said += "; your bound actions with their keys, and your commands"
@@ -235,10 +242,18 @@ def _leaves(pack: GamePack, current: Settings) -> list[dict[str, str]]:
         },
         {
             "to": "ElevenLabs",
-            "what": "The text Tycho speaks",
-            "when": "When Tycho speaks. Never without your key.",
+            "what": "The text Tycho speaks; at start, which voice you chose, to check "
+            "your key can use it",
+            "when": "When Tycho speaks, and once when it starts. Never without your key.",
         },
     ]
+    rows.append(
+        {
+            "to": "The key's own provider",
+            "what": "A key you store here, to check it works",
+            "when": "Once, when you store it.",
+        }
+    )
     if "web" in pack.parts.lookups:
         rows.append(
             {
