@@ -204,3 +204,21 @@ def test_the_tile_draws_with_the_bundled_fonts() -> None:
     assert font("text", 20).getname()[0] == "Saira SemiCondensed"
     assert font("strong", 20).getname() == ("Saira SemiCondensed", "SemiBold")
     assert font("number", 20).getname()[0] == "Share Tech Mono"
+
+
+def test_every_symbol_the_tile_draws_is_in_its_font() -> None:
+    """Review of #457: Share Tech Mono has no arrow, and Pillow doesn't fall back glyph by
+    glyph, so a missing symbol drew as a box."""
+    from PIL.ImageFont import FreeTypeFont
+
+    from tycho.tile.draw import Face, font
+
+    def drawn(f: FreeTypeFont, ch: str) -> bool:
+        missing = "\U000f0000"  # a private-use code point: no font here has it
+        return (f.getbbox(ch), f.getlength(ch)) != (f.getbbox(missing), f.getlength(missing))
+
+    assert drawn(font("strong", 20), "→")
+    faces: tuple[Face, ...] = ("label", "text", "strong", "number")
+    for face in faces:
+        for ch in "…·":
+            assert drawn(font(face, 20), ch), (face, ch)

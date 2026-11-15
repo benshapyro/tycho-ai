@@ -36,7 +36,7 @@ FACES = (
 
 def font_faces() -> str:
     """``@font-face`` rules with the bundled fonts inline, so the page fetches nothing."""
-    rules = []
+    rules: list[str] = []
     for family, weight, face in FACES:
         data = base64.b64encode(fonts.path(face).read_bytes()).decode("ascii")
         rules.append(

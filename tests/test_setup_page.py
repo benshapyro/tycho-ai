@@ -481,7 +481,9 @@ def test_the_places_are_down_the_side_and_home_shows_one_thing_to_fix(
     setup = Setup(browser, path, first_run=False, findings=checks)
     page = setup.page
     nav = page.locator("nav[aria-label='Places'] button")
-    expect(nav).to_have_text(["Home", "What to say", "The Tile", "Settings"])
+    # Each place by its name; Home and What to say may carry a count once checks come in.
+    places = ["Home", "What to say", "The Tile", "Settings"]
+    expect(nav).to_have_text([re.compile(rf"^{p}\b") for p in places])
     expect(page.locator("#gameBox")).to_contain_text("World of Warcraft: Forever")
     expect(page.locator("#gameBox")).to_contain_text("Tycho only talks")
     # Home: no brain key here, so there's something to fix, and only one shows.

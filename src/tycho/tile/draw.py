@@ -339,7 +339,7 @@ class _Pen:
                 fill=self.text,
             )
         mid = self.pad + leg_w + arrow_w / 2
-        arrow = font("number", self.px(20))
+        arrow = font("strong", self.px(20))  # Share Tech Mono has no arrow; Saira has
         self.d.text(
             (mid - arrow.getlength("→") / 2, self.y + h / 2 - self.px(12)),
             "→",
@@ -523,8 +523,16 @@ def strip_image(card: Card, look: Look) -> Image.Image:
         (card.title or card.label or card.kind).upper(), f, w - round(70 * u), 0.08 * f.size
     )
     pen.caps((round(34 * u), round(8 * u)), title, f, rgba(CORE.dim), 0.08)
-    arrow = font("number", round(16 * u))
-    d.text((w - round(26 * u), round(7 * u)), "▸", font=arrow, fill=rgba(look.accent))
+    # The pinned marker, drawn: none of the bundled fonts has a ▸.
+    tip_x, mid_y, half = w - round(16 * u), round(17 * u), round(4.5 * u)
+    d.polygon(
+        [
+            (tip_x - round(8 * u), mid_y - half),
+            (tip_x, mid_y),
+            (tip_x - round(8 * u), mid_y + half),
+        ],
+        fill=rgba(look.accent),
+    )
     return out.resize((round(w / SS), round(h / SS)), Image.Resampling.LANCZOS)
 
 

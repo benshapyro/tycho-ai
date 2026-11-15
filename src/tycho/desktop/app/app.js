@@ -640,7 +640,7 @@
     document.body.classList.toggle("solo", firstRun && view === "setup");
     document.body.classList.toggle("insetup", view === "setup");
     try {
-      if (!document.body.classList.contains("solo")) await gameBox();
+      await gameBox(); // in first-run setup too: the game's colour follows the pick
       if (view === "status") await status();
       else if (view === "tile") await tileView();
       else if (view === "setup") await setupView();
@@ -662,8 +662,8 @@
     const box = $("#gameBox");
     // The game's own colour (ADR 17): the rest of the look follows --acc.
     if (p && p.accent) document.documentElement.style.setProperty("--acc", p.accent);
-    box.hidden = !p;
-    if (!p) return;
+    box.hidden = !p || document.body.classList.contains("solo");
+    if (box.hidden) return;
     box.innerHTML = `<span class="label">Game</span><b>${esc(p.name)}</b><span>${p.mode === "advisor" || !pressing ? "Tycho only talks" : "Tycho presses your keys"}</span>
       ${game.packs.length > 1 ? `<button class="link" type="button" id="switchGame">Switch game</button>` : ""}`;
     $("#switchGame")?.addEventListener("click", () => { view = "settings"; tab = "Game and controls"; render(); });
