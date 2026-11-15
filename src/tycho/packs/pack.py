@@ -30,9 +30,10 @@ from importlib.resources.abc import Traversable
 from types import MappingProxyType
 from typing import Literal, cast
 
-from tycho.packs import onboarding
+from tycho.packs import onboarding, tiles
 from tycho.packs.onboarding import Setup
 from tycho.packs.parts import Registry
+from tycho.packs.tiles import Tile
 
 FORMATS = frozenset({1})
 """The folder formats this Tycho reads."""
@@ -83,27 +84,6 @@ class Parts:
     keybinds: str | None = None
     game_state: str | None = None
     lookups: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class Sample:
-    """The sample card the window's Tile preview shows for this game (#422): a list."""
-
-    title: str
-    label: str = ""
-    source: str = ""
-    rows: tuple[tuple[str, str, str], ...] = ()
-    """Each row's text, detail and value."""
-
-
-@dataclass(frozen=True, slots=True)
-class Tile:
-    sample: Sample | None = None
-    """The preview's card in this game's words; None takes Tycho's own."""
-    accents: Mapping[str, str] = field(default_factory=dict[str, str])
-    """The Tile's accent by the maker prefix of a ship's game name (``DRAK``)."""
-    makers: Mapping[str, str] = field(default_factory=dict[str, str])
-    """A maker's name, by its first word, to its prefix (``drake`` to ``DRAK``)."""
 
 
 LOOSENING = ("not_danger", "mode_guards", "state_guards", "accepted_risks")
@@ -421,38 +401,10 @@ def _terms(text: str) -> tuple[str, ...]:
 
 
 def _tile(table: Mapping[str, object], name: str) -> Tile:
-    where = f"{name}/tile.toml"
-    accents = _table(table, "accents", where)
-    makers = _table(table, "makers", where)
-    # Each value's type first: a list as a maker's accent can't be looked up (#319).
-    if bad := [k for k, v in accents.items() if not (isinstance(v, str) and _COLOUR.fullmatch(v))]:
-        raise PackError(f"{where}: accents must be colours like #4fb3ff: {', '.join(bad)}")
-    if bad := [k for k, v in makers.items() if not isinstance(v, str)]:
-        raise PackError(f"{where}: each maker must name an accent: {', '.join(bad)}")
-    if bad := [k for k, v in makers.items() if v not in accents]:
-        raise PackError(f"{where}: makers with no accent: {', '.join(bad)}")
-    return Tile(
-        _sample(_table(table, "sample", where), where),
-        MappingProxyType(cast(dict[str, str], accents)),
-        MappingProxyType(cast(dict[str, str], makers)),
-    )
-
-
-def _sample(table: Mapping[str, object], where: str) -> Sample | None:
-    if not table:
-        return None
-    title = _text(table, "title", where)
-    label, source, rows = table.get("label", ""), table.get("source", ""), table.get("rows", [])
-    if not (isinstance(label, str) and isinstance(source, str)):
-        raise PackError(f"{where}: the sample's label and source must be text")
-    cells = [cast(list[object], r) for r in cast(list[object], rows) if isinstance(r, list)]
-    if (
-        not isinstance(rows, list)
-        or len(cells) != len(cast(list[object], rows))
-        or any(len(c) != 3 or not all(isinstance(x, str) for x in c) for c in cells)
-    ):
-        raise PackError(f"{where}: each sample row is three pieces of text: what, where, value")
-    return Sample(title, label, source, tuple((str(a), str(b), str(c)) for a, b, c in cells))
+    try:
+        return tiles.read(table, f"{name}/tile.toml")
+    except ValueError as e:
+        raise PackError(str(e)) from e
 
 
 def _check_briefing(text: str, where: str) -> None:
