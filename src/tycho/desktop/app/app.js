@@ -448,7 +448,7 @@
         <div class="keyrow"><button class="btn ${lastUpdate.state === "newer" ? "" : "primary "}frame" type="button" id="checkUpdates">Check for updates</button><span id="updateMsg"></span></div>
         <div class="keyrow" id="getRow" ${lastUpdate.state === "newer" ? "" : "hidden"}><button class="btn primary frame" type="button" id="getUpdate">${lastUpdate.state === "newer" ? `Get Tycho ${esc(lastUpdate.latest)}` : ""}</button><span class="err" id="getErr"></span></div>
         <p class="note">Tycho never updates itself. The release page has the installer: quit Tycho (below, or from its icon by the clock), run it, and it installs over this version. Your settings and keys stay.</p>
-        <p class="note">${auto && auto.value ? "Tycho also checks each time its window opens, and says so at the top." : "Automatic checks are off (Privacy tab), so Tycho only checks when you press the button."}</p></div>
+        <p class="note">${auto && auto.value ? "Tycho also checks each time its window opens, and says so at the side." : "Automatic checks are off (Privacy tab), so Tycho only checks when you press the button."}</p></div>
       ${canQuit ? `<div class="card frame"><h3>Quit Tycho</h3>
         <div class="keyrow"><button class="btn frame" type="button" id="quitTycho">Quit Tycho</button><span class="err" id="quitErr"></span></div>
         <p class="note">Stops listening and closes Tycho, the same as Quit on its icon by the clock. Closing this window alone leaves Tycho listening.</p></div>` : ""}`;
@@ -624,9 +624,11 @@
     if (askingCrash && (view !== "setup" || STEPS[step] !== "Privacy")) askingCrash = false;
     if (capturing) api.cancel_capture();
     document.querySelectorAll("nav [data-view]").forEach((b) => b.setAttribute("aria-current", b.dataset.view === view ? "page" : "false"));
-    document.body.classList.toggle("solo", view === "setup" || view === "pack");
+    // The first run has the window to itself; run again, the places stay, so Home is a
+    // click away even while something is still missing (#453 review).
+    document.body.classList.toggle("solo", firstRun && view === "setup");
     try {
-      if (view !== "setup" && view !== "pack") await gameBox();
+      if (!document.body.classList.contains("solo")) await gameBox();
       if (view === "status") await status();
       else if (view === "tile") await tileView();
       else if (view === "setup") await setupView();
@@ -641,12 +643,14 @@
   // The chosen game under the places, and the way to another one (Settings, where the
   // other game's own setup shows first, #364).
   async function gameBox() {
-    const game = (await api.settings()).groups.flatMap((g) => g.rows).find((r) => r.name === "game");
+    const rows = (await api.settings()).groups.flatMap((g) => g.rows);
+    const game = rows.find((r) => r.name === "game");
+    const pressing = rows.find((r) => r.name === "key_actions")?.value !== false;
     const p = game && game.packs && game.packs.find((x) => x.id === game.value);
     const box = $("#gameBox");
     box.hidden = !p;
     if (!p) return;
-    box.innerHTML = `<span class="label">Game</span><b>${esc(p.name)}</b><span>${p.mode === "advisor" ? "Tycho only talks" : "Tycho presses your keys"}</span>
+    box.innerHTML = `<span class="label">Game</span><b>${esc(p.name)}</b><span>${p.mode === "advisor" || !pressing ? "Tycho only talks" : "Tycho presses your keys"}</span>
       ${game.packs.length > 1 ? `<button class="link" type="button" id="switchGame">Switch game</button>` : ""}`;
     $("#switchGame")?.addEventListener("click", () => { view = "settings"; tab = "Game and controls"; render(); });
   }

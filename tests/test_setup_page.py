@@ -514,4 +514,20 @@ def test_the_places_are_down_the_side_and_home_shows_one_thing_to_fix(
     expect(page.get_by_role("tab", name="Game and controls")).to_have_attribute(
         "aria-selected", "true"
     )
+    # Run again with something missing, the places stay: Home is a click away.
+    page.get_by_role("button", name="Home").click()
+    page.locator("#redo").click()
+    setup.at("Game")
+    expect(nav.first).to_be_visible()
+    nav.first.click()
+    expect(page.locator("#homeState")).to_be_visible()
+    setup.close()
+
+
+def test_the_game_box_says_tycho_only_talks_with_key_actions_off(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False, key_actions=False), path)
+    setup = Setup(browser, path, first_run=False)
+    expect(setup.page.locator("#gameBox")).to_contain_text("Tycho only talks")
     setup.close()
