@@ -78,6 +78,11 @@ def logs_dir() -> Path:
     return data_dir() / "logs"
 
 
+def crash_reports_dir() -> Path:
+    """Crash reports waiting to be sent, only while the player has said yes (#199)."""
+    return data_dir() / "crash_reports"
+
+
 def rsi_launcher_logs() -> Path:
     """The RSI Launcher's own logs, which name the folder the game is installed in. Read
     only; Tycho never writes there."""

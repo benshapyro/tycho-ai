@@ -5,7 +5,7 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
-from tycho import credentials, settings
+from tycho import crash_reports, credentials, settings
 from tycho.desktop.bridge.state import (
     SETUP_CHOICES,
     UNDO_DEPTH,
@@ -31,7 +31,13 @@ GROUPS: dict[str, tuple[str, ...]] = {
     ),
     "Brain": ("brain_provider", "brain_model", "brain_seconds"),
     "Safety": ("key_actions", "confirm_seconds"),
-    "Privacy": ("keep_transcripts", "web_search", "web_search_open", "check_for_updates"),
+    "Privacy": (
+        "keep_transcripts",
+        "web_search",
+        "web_search_open",
+        "check_for_updates",
+        "crash_reports",
+    ),
     "Game and controls": (
         "game",
         "game_channel",
@@ -128,6 +134,8 @@ class SettingsPage(State):
             after = getattr(settings.update({name: value}, self._path), name)
         except SettingsError as e:
             return {"ok": False, "problem": plain_error(str(e))}
+        if name == "crash_reports" and after is not True:
+            crash_reports.forget()  # the player said no: nothing waiting is sent (ADR 4)
         if after == before:
             return {"ok": True, "changed": False}
         self._undo = [*self._undo, (name, before)][-UNDO_DEPTH:]
@@ -239,7 +247,7 @@ def _value(current: Settings, name: str) -> object:
 def _kind(name: str, annotation: object, prop: Mapping[str, Any]) -> str:
     if name in SETUP_CHOICES:
         return "setup"
-    if annotation is bool:
+    if annotation is bool or annotation == bool | None:  # None: not asked yet
         return "switch"
     if annotation is float:
         return "percent" if prop.get("maximum", 2) <= 1 else "number"
