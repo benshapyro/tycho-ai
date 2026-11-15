@@ -24,7 +24,7 @@ from tycho.desktop import window
 from tycho.desktop.bridge import Bridge
 from tycho.runtime.messages import Result
 from tycho.runtime.recent import Recent
-from tycho.settings import Settings
+from tycho.settings import Game, Settings
 
 STEPS = ["Game", "Keys", "Talk and listen", "Privacy", "Try it"]
 ANTHROPIC = "sk-ant-api03-" + "a" * 40 + "Wxyz"
@@ -666,7 +666,7 @@ def test_a_first_runs_try_it_says_the_window_comes_back(setup: Setup) -> None:
     ("game", "own"), [("star-citizen", ["Ship specs", "Your fleet"]), ("wow-forever", [])]
 )
 def test_the_tile_page_lists_the_games_own_kinds_of_card(
-    browser: Browser, path: Path, vault: dict[str, str], game: str, own: list[str]
+    browser: Browser, path: Path, vault: dict[str, str], game: Game, own: list[str]
 ) -> None:
     """#422: the hidden-cards list named Star Citizen's ship and fleet cards in every
     game. Now each kind is a switch, and a game's own come from its pack."""
