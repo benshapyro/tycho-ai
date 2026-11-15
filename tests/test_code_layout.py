@@ -15,7 +15,7 @@ LIMIT = 500
 
 # Files over the limit today, with their length as a ceiling (ADR 19). Shrink, never grow.
 OVER_LIMIT = {
-    "app.py": 1508,
+    "app.py": 1442,
     "runtime/session.py": 851,
     "desktop/bridge.py": 709,
     "tile/draw.py": 622,
@@ -42,15 +42,7 @@ DLL_CLASSES = frozenset({"WinDLL", "CDLL", "OleDLL", "PyDLL", "LibraryLoader"})
 DLL_LOADERS = frozenset({"windll", "cdll", "oledll", "pydll"})
 
 # Today's breaks: (the importing module, what it imports). Remove an entry when you fix it.
-STAR_CITIZEN_BREAKS = {
-    ("tycho.app", "tycho.games.star_citizen.install"),
-    ("tycho.app", "tycho.games.star_citizen.store"),
-    ("tycho.app", "tycho.games.star_citizen.fleet"),
-    ("tycho.desktop.bridge", "tycho.games.star_citizen.store"),
-    ("tycho.desktop.setup", "tycho.games.star_citizen.install"),
-    ("tycho.desktop.setup", "tycho.games.star_citizen.store"),
-    ("tycho.settings", "tycho.games.star_citizen.install"),
-}
+STAR_CITIZEN_BREAKS = set[tuple[str, str]]()  # none since #397
 TOP_BREAKS = {
     ("tycho.desktop.bridge", "tycho.app"),
     ("tycho.desktop.setup", "tycho.app"),

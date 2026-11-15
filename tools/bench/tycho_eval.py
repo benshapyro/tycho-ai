@@ -72,7 +72,7 @@ from brain_report import GLOBAL_NEVER  # pyright: ignore[reportMissingImports, r
 
 from tycho import credentials, logs, paths, safety, settings
 from tycho.address import Address
-from tycho.app import NO_KEYBINDS, find_install, load_commands
+from tycho.app import NO_KEYBINDS, load_commands
 from tycho.brain import BrainError, BrainRequest, Exchange, Reply, providers
 from tycho.brain.briefing import instructions_hash
 from tycho.brain.claude import MODEL, ClaudeBrain
@@ -83,6 +83,7 @@ from tycho.brain.traces import TraceFile
 from tycho.brain_choice import anthropic_key, openrouter_key
 from tycho.commands import Command, CommandMatcher, resolve
 from tycho.games.star_citizen import ShipLookup, UexApi, WikiApi
+from tycho.games.star_citizen.checks import find_install
 from tycho.games.star_citizen.data import ensure
 from tycho.games.star_citizen.fleet import Fleet, FleetUpdate
 from tycho.games.star_citizen.item_lookup import ItemLookup

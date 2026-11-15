@@ -88,9 +88,9 @@ class WindowsPC:
         return Game(True, current.game_channel, str(install.folder))
 
     def root(self, folder: str, channel: str) -> str | None:
-        from tycho.games.star_citizen.install import root_from
+        from tycho.games import game_root
 
-        found = root_from(Path(folder), channel)
+        found = game_root(Path(folder), channel)
         return str(found) if found is not None else None
 
     def capture(self, seconds: float, cancel: threading.Event) -> str | None:
@@ -124,14 +124,14 @@ class WindowsPC:
 
     def conflicts(self, setting: str, current: Settings) -> list[str]:
         from tycho.app import conflict_warnings, find_install
-        from tycho.games.star_citizen.store import GameDataError, KeybindStore
-        from tycho.packs import built_in
+        from tycho.games import load_keys
+        from tycho.packs import GameDataError, built_in
         from tycho.ptt.binding import Binding
 
         if built_in(current.game).parts.keybinds is None:
             return []  # a game Tycho reads no keybinds for: Star Citizen's aren't it (#341)
         try:
-            store = KeybindStore.load(find_install(current))
+            store = load_keys(find_install(current))
         except FileNotFoundError, GameDataError, OSError:
             return []
         return conflict_warnings(Binding.parse(setting), store)

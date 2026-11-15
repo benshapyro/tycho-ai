@@ -10,18 +10,75 @@ folders (the layout test checks it).
 """
 
 import logging
+from collections.abc import Generator, Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
-from tycho.packs.parts import Built, Registry, Workshop
+from tycho.packs.parts import Built, GameDataError, GameFolder, GameKeys, Registry, Workshop
+
+__all__ = ["BUILT_IN", "GameDataError", "find_install", "game_findings", "load_keys"]
 
 if TYPE_CHECKING:
+    from tycho.commands import CommandMatcher
+    from tycho.findings import Finding
     from tycho.games.star_citizen.ship_lookup import ShipLookup
     from tycho.games.star_citizen.ships import ShipLibrary
-    from tycho.packs import Tile
+    from tycho.packs import GamePack, Tile
     from tycho.runtime.ports import GameState
+    from tycho.settings import Settings
 
 log = logging.getLogger("tycho")
+
+
+# --- Star Citizen's install and keybinds, for the rest of Tycho ---------------------
+# Defined here so nothing outside tycho.games imports Star Citizen's code (ADR 19).
+
+
+def find_install(current: Settings) -> GameFolder:
+    """Star Citizen's channel folder: the player's ``game_root`` first, then where the
+    RSI Launcher says, then the usual places. ``FileNotFoundError`` if it isn't there."""
+    from tycho.games.star_citizen import checks
+
+    return checks.find_install(current)
+
+
+def load_keys(install: GameFolder) -> GameKeys:
+    """The player's keybinds in that install. ``GameDataError`` if they can't be read."""
+    from tycho.games.star_citizen.install import GameInstall
+    from tycho.games.star_citizen.store import KeybindStore
+
+    return KeybindStore.load(cast(GameInstall, install))
+
+
+def game_root(folder: Path, channel: str) -> Path | None:
+    """The folder holding ``channel``, from whichever level the player picked."""
+    from tycho.games.star_citizen.install import root_from
+
+    return root_from(folder, channel)
+
+
+def ask_game_root(channel: str) -> Path | None:
+    """Ask in the terminal where Star Citizen is; None if the player skips."""
+    from tycho.games.star_citizen import checks
+
+    return checks.ask_game_root(channel)
+
+
+def fleet_findings(pack: GamePack) -> Iterator[Finding]:
+    """``tycho check``'s line on the player's fleet file, if it has a problem."""
+    from tycho.games.star_citizen import checks
+
+    yield from checks.fleet_findings(pack.id)
+
+
+def game_findings(
+    current: Settings, matcher: CommandMatcher, *, ask: bool
+) -> Generator[Finding, None, GameKeys | None]:
+    """``tycho check``'s lines on Star Citizen: its folder (asked for, with ``ask``),
+    keybinds and Game.log. Returns the keybinds, if they could be read."""
+    from tycho.games.star_citizen import checks
+
+    return (yield from checks.game_findings(current, matcher, ask=ask))
 
 
 # --- Game state ----------------------------------------------------------------------

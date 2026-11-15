@@ -24,7 +24,6 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from tycho import paths
 from tycho.brain.providers import BrainModel, Provider, choose
-from tycho.games.star_citizen.install import Channel
 from tycho.ptt.binding import Binding
 from tycho.tile.cards import ALL_KINDS
 from tycho.voice import voices
@@ -39,6 +38,7 @@ RENAMED_GAMES = {"world-of-warcraft": "wow-forever"}
 became World of Warcraft: Forever's (#349), and a file saved on main says the old id."""
 DEFAULT_CALL_ME = "Commander"
 """What Tycho calls the player unless they or the game pack choose otherwise (#15, #349)."""
+type Channel = Literal["LIVE", "PTU", "EPTU", "TECH-PREVIEW", "HOTFIX"]  # Star Citizen's
 type Device = Literal["auto", "gpu", "cpu"]
 type VoiceRule = Literal["yes", "lower_only", "no"]
 type Applies = Literal["now", "restart"]

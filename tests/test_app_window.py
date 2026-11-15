@@ -465,8 +465,10 @@ def test_the_windows_checks_never_ask_in_the_terminal(monkeypatch: pytest.Monkey
     def asked(_channel: str) -> None:
         raise AssertionError("the window's checks asked a question in the terminal")
 
-    monkeypatch.setattr(app, "find_install", no_game)
-    monkeypatch.setattr(app, "ask_game_root", asked)
+    from tycho.games.star_citizen import checks
+
+    monkeypatch.setattr(checks, "find_install", no_game)
+    monkeypatch.setattr(checks, "ask_game_root", asked)
     monkeypatch.setattr(app.sys.stdin, "isatty", lambda: True)
     findings = list(app._checks(Settings(), quick=True, ask=False))  # pyright: ignore[reportPrivateUsage]
     assert any(f.what == "Star Citizen" and f.level == "fail" for f in findings)
