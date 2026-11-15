@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from tycho import app, brain_choice, doctor, logs, settings, updates
+from tycho.audio import source
 from tycho.findings import Finding
 from tycho.games.star_citizen import checks
 from tycho.input import code_for
@@ -16,6 +17,9 @@ from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.packs import STAR_CITIZEN, built_in
 from tycho.ptt.binding import Binding, DeviceKind
 from tycho.ptt.conflicts import conflicts, game_code
+from tycho.start import assemble
+from tycho.start import run as start_run
+from tycho.start import serve as serving
 from tycho.voice import choice as voice_choice
 
 SC = built_in(STAR_CITIZEN)
@@ -157,7 +161,7 @@ def test_microphone_level(peak: float, level: str, words: str) -> None:
     ("setting", "device"), [(None, None), ("", None), ("3", 3), ("Arctis", "Arctis")]
 )
 def test_microphone_setting(setting: str | None, device: int | str | None) -> None:
-    assert app.microphone_device(setting) == device
+    assert source.microphone_device(setting) == device
 
 
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
@@ -184,7 +188,7 @@ def test_a_broken_commands_file_never_stops_tycho_starting(
     monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path))
     (tmp_path / "commands.toml").write_text("[[sequence]\n", "utf-8")
     with caplog.at_level(logging.WARNING, logger="tycho"):
-        matcher = app.load_commands(pack=SC)
+        matcher = assemble.load_commands(pack=SC)
     assert matcher.get("startup") is not None  # the built-in commands still load
     assert "commands file can't be used" in caplog.text
 
@@ -194,7 +198,7 @@ def test_the_players_commands_file_is_used(tmp_path: Path, monkeypatch: pytest.M
     (tmp_path / "commands.toml").write_text(
         '[[sequence]]\nid = "wake"\nsay = ["wake up"]\nsteps = ["flight_ready"]\n', "utf-8"
     )
-    assert app.load_commands(pack=SC).get("wake") is not None
+    assert assemble.load_commands(pack=SC).get("wake") is not None
 
 
 def test_an_unknown_setting_is_a_note_not_a_stop(
@@ -224,7 +228,7 @@ def test_a_commands_file_with_a_byte_order_mark_is_used(
     monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path))
     text = '[[sequence]]\nid = "wake"\nsay = ["wake up"]\nsteps = ["flight_ready"]\n'
     (tmp_path / "commands.toml").write_text(text, "utf-8-sig")
-    assert app.load_commands(pack=SC).get("wake") is not None
+    assert assemble.load_commands(pack=SC).get("wake") is not None
 
 
 def test_check_warns_about_broken_player_files_without_failing(
@@ -265,7 +269,7 @@ def test_check_for_updates_false_never_asks_github(
     monkeypatch.setattr(doctor, "update_finding", finding)
     monkeypatch.setattr(doctor, "focus_finding", focus)
     current = settings.Settings(check_for_updates=allowed)
-    app.start_update_check(current)
+    start_run.start_update_check(current)
     checked = [f.what for f in doctor.live_checks(current)]
     assert asked == (["run", "check"] if allowed else [])
     assert checked == (["Updates", "Focus"] if allowed else ["Focus"])
@@ -401,7 +405,7 @@ def test_a_keybind_change_warms_the_brain_again(monkeypatch: pytest.MonkeyPatch)
     rebind was about 3 s cold. Only a change asks."""
     import asyncio
 
-    monkeypatch.setattr(app, "KEYBIND_REFRESH_SECONDS", 0.0)
+    monkeypatch.setattr(serving, "KEYBIND_REFRESH_SECONDS", 0.0)
     changes = iter([False, True, False])
     store = SimpleNamespace(refresh=lambda: next(changes, False), last_error=None)
     warmed: list[bool] = []
@@ -414,7 +418,7 @@ def test_a_keybind_change_warms_the_brain_again(monkeypatch: pytest.MonkeyPatch)
             changed.set()
 
         refresher = asyncio.create_task(
-            app._refresh_keybinds(store, warm)  # pyright: ignore[reportPrivateUsage, reportArgumentType]
+            serving._refresh_keybinds(store, warm)  # pyright: ignore[reportPrivateUsage, reportArgumentType]
         )
         await changed.wait()
         await asyncio.sleep(0.01)  # the third read, unchanged, asks for nothing
@@ -430,7 +434,7 @@ def test_a_run_of_rebinds_warms_the_brain_once(
     """#352: the game writes the file once per rebind, and each change warmed the brain."""
     import asyncio
 
-    monkeypatch.setattr(app, "KEYBIND_REFRESH_SECONDS", 0.0)
+    monkeypatch.setattr(serving, "KEYBIND_REFRESH_SECONDS", 0.0)
     changes = iter([True, True, True, False])
     reads: list[bool] = []
     enough: asyncio.Event | None = None
@@ -448,7 +452,7 @@ def test_a_run_of_rebinds_warms_the_brain_once(
         nonlocal enough
         enough = asyncio.Event()
         refresher = asyncio.create_task(
-            app._refresh_keybinds(store, lambda: warmed.append(True))  # pyright: ignore[reportPrivateUsage, reportArgumentType]
+            serving._refresh_keybinds(store, lambda: warmed.append(True))  # pyright: ignore[reportPrivateUsage, reportArgumentType]
         )
         await enough.wait()
         refresher.cancel()

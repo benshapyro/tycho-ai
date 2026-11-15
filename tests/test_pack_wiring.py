@@ -16,7 +16,7 @@ from tests.fakes.fake_audio import FakeAudioSource
 from tests.fakes.fake_keys import FakeFocus, FakeKeySender
 from tests.fakes.fake_pack import FOLDER, REGISTRY, FakeGameKeybinds, fake_pack
 from tests.fakes.fake_runtime import FakeFeedback, FakeTranscriber
-from tycho import app, brain_choice, credentials
+from tycho import brain_choice, credentials
 from tycho.brain.claude import ClaudeBrain
 from tycho.commands import CommandMatcher
 from tycho.knowledge.web import WebSearch
@@ -24,6 +24,7 @@ from tycho.packs import STAR_CITIZEN, GamePack, built_in, load_pack
 from tycho.ptt import InputSource
 from tycho.ptt.binding import Binding
 from tycho.settings import Settings
+from tycho.start import assemble
 
 ANTHROPIC = "sk-ant-api03-" + "a" * 40
 
@@ -83,8 +84,8 @@ def _session(pack: GamePack, store: object | None, monkeypatch: pytest.MonkeyPat
     def no_sources(binding: Binding | None) -> list[InputSource]:
         return []  # no Windows input here
 
-    monkeypatch.setattr(app, "input_sources", no_sources)
-    return app.build_session(
+    monkeypatch.setattr(assemble, "input_sources", no_sources)
+    return assemble.build_session(
         Settings(),
         Binding.parse("mouse:0x06"),
         cast(Any, store),

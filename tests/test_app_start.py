@@ -4,6 +4,7 @@ running Tycho's window instead of saying it's already running."""
 # Stand-ins for app functions are lambdas here.
 # pyright: reportUnknownLambdaType=false, reportUnknownArgumentType=false
 
+import asyncio
 import importlib.util
 import sys
 import threading
@@ -14,10 +15,13 @@ from typing import Any, ClassVar
 
 import pytest
 
-from tycho import app, win32
+from tycho import app, logs, win32
+from tycho.desktop import shell
 from tycho.runtime import AlreadyRunning
 from tycho.runtime.instance import OpenRequests, ask_to_open
 from tycho.settings import Settings
+from tycho.start import assemble
+from tycho.start import run as start_run
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -80,10 +84,10 @@ def test_starting_tycho_again_opens_the_running_ones_window(
     import tycho.runtime
     import tycho.runtime.instance
 
-    monkeypatch.setattr(app.logs, "setup", lambda verbose=False: tmp_path / "tycho.jsonl")
+    monkeypatch.setattr(logs, "setup", lambda verbose=False: tmp_path / "tycho.jsonl")
     monkeypatch.setattr(tycho.runtime, "SingleInstance", _Running)
     monkeypatch.setattr(tycho.runtime.instance, "ask_to_open", lambda: listening)
-    assert app.run_command(Settings()) == code
+    assert start_run.run_command(Settings()) == code
     out = capsys.readouterr()
     if listening:
         assert "its window is open" in out.out
@@ -116,8 +120,8 @@ def test_a_second_start_during_setup_brings_setup_forward(
 ) -> None:
     requests = _Requests()
     window = _Window(requests)
-    monkeypatch.setattr(app, "app_window", lambda **_options: window)
-    app.first_run(requests)  # type: ignore[arg-type]
+    monkeypatch.setattr(shell, "app_window", lambda **_options: window)
+    shell.first_run(requests)  # type: ignore[arg-type]
     assert window.target_while_open == window.focus
     assert requests.target is not window.focus  # not once setup has closed
 
@@ -126,8 +130,8 @@ def test_a_second_start_during_setup_brings_setup_forward(
 def windowed(monkeypatch: pytest.MonkeyPatch) -> None:
     import tycho.desktop.setup
 
-    monkeypatch.setattr(app, "WINDOWED", True)
-    monkeypatch.setattr(app, "start_update_check", lambda _current: None)
+    monkeypatch.setattr(start_run, "WINDOWED", True)
+    monkeypatch.setattr(start_run, "start_update_check", lambda _current: None)
     monkeypatch.setattr(tycho.desktop.setup, "needs_setup", lambda _current: True)
 
 
@@ -135,8 +139,8 @@ def windowed(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_with_no_terminal_a_missing_webview_is_explained_not_asked_in_a_terminal(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
-    monkeypatch.setattr(app, "first_run", lambda _requests: "no_window")
-    assert app._run(Settings(), tmp_path / "log") == 1  # pyright: ignore[reportPrivateUsage]
+    monkeypatch.setattr(shell, "first_run", lambda _requests: "no_window")
+    assert start_run._run(Settings(), tmp_path / "log") == 1  # pyright: ignore[reportPrivateUsage]
     assert "WebView2" in capsys.readouterr().err
 
 
@@ -148,7 +152,7 @@ def test_with_no_terminal_no_button_is_explained(
 
     monkeypatch.setattr(tycho.desktop.setup, "needs_setup", lambda _current: False)
     monkeypatch.setattr(app.settings, "load", lambda: Settings())
-    assert app._run(Settings(), tmp_path / "log") == 1  # pyright: ignore[reportPrivateUsage]
+    assert start_run._run(Settings(), tmp_path / "log") == 1  # pyright: ignore[reportPrivateUsage]
     assert "push-to-talk" in capsys.readouterr().err
 
 
@@ -194,7 +198,7 @@ def test_the_windowed_app_shows_a_problem_in_a_message_box(
             return 1
 
     monkeypatch.setattr(app, "main", fails)
-    monkeypatch.setattr(app, "WINDOWED", False)  # windowed() sets it: put it back after
+    monkeypatch.setattr(start_run, "WINDOWED", False)  # windowed() sets it: put it back after
     monkeypatch.setattr(ctypes, "windll", type("Windll", (), {"user32": User32})())
     monkeypatch.setattr(sys, "stdout", sys.stdout)  # restored after the test
     monkeypatch.setattr(sys, "stderr", sys.stderr)
@@ -213,7 +217,7 @@ def test_the_windowed_app_is_quiet_when_tycho_quits_normally(
     entry = _entry_point()
     shown: list[str] = []
     monkeypatch.setattr(app, "main", lambda _argv: 0)
-    monkeypatch.setattr(app, "WINDOWED", False)
+    monkeypatch.setattr(start_run, "WINDOWED", False)
     monkeypatch.setattr(
         ctypes,
         "windll",
@@ -243,19 +247,22 @@ class _NoTray:
         pass
 
 
+async def _serve(_stop: asyncio.Event | None) -> None:
+    raise AssertionError("the session never runs here")
+
+
 def test_with_no_terminal_a_tray_that_wont_start_stops_tycho_with_a_reason(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Review of #157: it ended silently, with code 0, so no message box appeared."""
     import tycho.desktop.tray
 
-    monkeypatch.setattr(app, "WINDOWED", True)
     monkeypatch.setattr(tycho.desktop.tray, "TrayIcon", _NoTray)
-    monkeypatch.setattr(app, "app_window", lambda **_options: _Window(_Requests()))
+    monkeypatch.setattr(shell, "app_window", lambda **_options: _Window(_Requests()))
     from types import SimpleNamespace
 
     session = SimpleNamespace(paused=False)
-    outcome = app.serve_with_tray(session, object(), {}, None)  # type: ignore[arg-type]
+    outcome = shell.serve_with_tray(session, {}, None, serve=_serve, windowed=True)  # type: ignore[arg-type]
     assert outcome == "failed"
     assert "couldn't put its icon" in capsys.readouterr().err
 
@@ -302,7 +309,7 @@ def test_while_starting_the_star_says_what_its_doing_and_a_second_start_says_wai
         lambda text, title, flags: User32.MessageBoxW(None, text, title, flags),
     )
     requests = _Requests()
-    starting = app._Starting(requests)  # type: ignore[arg-type]  # pyright: ignore[reportPrivateUsage]
+    starting = shell.Starting(requests)  # type: ignore[arg-type]  # pyright: ignore[reportPrivateUsage]
     starting.doing("Getting the speech model (2.5 GB, once): 42%")
     assert _Tray.made[-1].tip() == "Tycho: Getting the speech model (2.5 GB, once): 42%…"
     requests.target()
@@ -314,7 +321,7 @@ def test_while_starting_the_star_says_what_its_doing_and_a_second_start_says_wai
 
 def test_download_progress_reaches_the_star() -> None:
     seen: list[str] = []
-    show = app._download_progress(doing=seen.append)  # pyright: ignore[reportPrivateUsage]
+    show = assemble.download_progress(doing=seen.append)  # pyright: ignore[reportPrivateUsage]
     show("encoder-model.onnx.data", 1_200_000_000, 2_400_000_000)
     show("vocab.txt", 10, 20)  # a small file isn't the wait
     assert seen == ["Getting the speech model (2.5 GB, once): 50%"]
@@ -343,7 +350,7 @@ def test_a_crash_box_shows_tycho_s_last_words_not_the_traceback(
             return 1
 
     monkeypatch.setattr(app, "main", crashes)
-    monkeypatch.setattr(app, "WINDOWED", False)
+    monkeypatch.setattr(start_run, "WINDOWED", False)
     monkeypatch.setattr(ctypes, "windll", type("Windll", (), {"user32": User32})())
     monkeypatch.setattr(sys, "stdout", sys.stdout)
     monkeypatch.setattr(sys, "stderr", sys.stderr)
@@ -363,8 +370,8 @@ def test_tycho_can_be_quit_while_it_starts(monkeypatch: pytest.MonkeyPatch) -> N
 
     monkeypatch.setattr(tycho.desktop.tray, "TrayIcon", _Tray)
     quit_with: list[int] = []
-    monkeypatch.setattr(app.os, "_exit", quit_with.append)
-    starting = app._Starting(None)  # pyright: ignore[reportPrivateUsage]
+    monkeypatch.setattr(shell.os, "_exit", quit_with.append)
+    starting = shell.Starting(None)  # pyright: ignore[reportPrivateUsage]
     keys = [item.key for item in _Tray.made[-1].menu()]
     assert "quit" in keys
     _Tray.made[-1].chosen("quit")  # as the tray calls it (review of #180)
@@ -390,7 +397,7 @@ def test_the_still_starting_message_comes_to_the_front(monkeypatch: pytest.Monke
         "message_box",
         lambda text, title, flags: User32.MessageBoxW(None, text, title, flags),
     )
-    starting = app._Starting(None)  # pyright: ignore[reportPrivateUsage]
+    starting = shell.Starting(None)  # pyright: ignore[reportPrivateUsage]
     starting.say()
     starting.close()
     assert flags[0] & 0x10000  # MB_SETFOREGROUND
@@ -425,9 +432,9 @@ def test_once_listening_a_second_start_opens_the_trays_window(
 
     monkeypatch.setattr(tycho.desktop.tray, "TrayIcon", _Tray)
     monkeypatch.setattr(tycho.desktop.host, "Host", Host)
-    monkeypatch.setattr(app, "app_window", lambda **_options: _Window(_Requests()))
+    monkeypatch.setattr(shell, "app_window", lambda **_options: _Window(_Requests()))
     requests = _Requests()
     session = SimpleNamespace(paused=False)
-    outcome = app.serve_with_tray(session, object(), {}, None, requests)  # type: ignore[arg-type]
+    outcome = shell.serve_with_tray(session, {}, None, requests, serve=_serve)  # type: ignore[arg-type]
     assert outcome == "stopped"
     assert asked == ["open"]

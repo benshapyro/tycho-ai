@@ -15,7 +15,6 @@ LIMIT = 500
 
 # Files over the limit today, with their length as a ceiling (ADR 19). Shrink, never grow.
 OVER_LIMIT = {
-    "app.py": 1017,
     "runtime/session.py": 851,
     "desktop/bridge.py": 708,
     "tile/draw.py": 622,
@@ -34,7 +33,7 @@ MAY_IMPORT_STAR_CITIZEN = ("tycho.games",)
 # The top of the program: the command line and starting Tycho. Only __main__ and the
 # command line import them. tycho.app is today's of both; step 7 (#398) splits it.
 TOP = ("tycho.app", "tycho.cli", "tycho.start")
-MAY_IMPORT_TOP = ("tycho.__main__", "tycho.cli")
+MAY_IMPORT_TOP = ("tycho.__main__", "tycho.cli", "tycho.app")  # app: until it becomes cli
 
 # Loading a DLL: calling one of these, or reading one of the loaders. Only tycho.win32
 # may (#298). A type hint such as ``-> ctypes.WinDLL`` loads nothing, so it's allowed.

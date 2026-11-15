@@ -104,9 +104,10 @@ def windowed(argv: list[str]) -> int:
     import contextlib
     import ctypes
 
-    from tycho import app
+    from tycho import app, logs, paths
+    from tycho.start import run as started
 
-    app.WINDOWED = True
+    started.WINDOWED = True
     tail = _Tail()
     sys.stdout = sys.stderr = tail  # type: ignore[assignment]
     try:
@@ -118,14 +119,14 @@ def windowed(argv: list[str]) -> int:
         lines = _last_lines(tail.text)  # before logging, which writes the traceback here too
         if not logging.getLogger("tycho").handlers:  # it stopped before logging began
             with contextlib.suppress(OSError):  # if logging was what failed, the box still shows
-                app.logs.setup()
+                logs.setup()
         logging.getLogger("tycho").exception("Tycho stopped")
         code = 1
     else:
         lines = _last_lines(tail.text)
     if code != 0:
         message = "\n".join(lines) or "Tycho stopped."
-        log = app.paths.logs_dir()
+        log = paths.logs_dir()
         message += f"\n\nThe log is in {log}."
         ctypes.windll.user32.MessageBoxW(None, message, "Tycho", 0x30)  # MB_ICONWARNING
     return code
