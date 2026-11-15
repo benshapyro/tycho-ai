@@ -93,6 +93,11 @@ def test_a_curly_apostrophe_still_dodges() -> None:
         "This is chat aimed at the squad or the room, not for me, so no action. Copy.",
         "This sounds like squad chat, not a request for me, so I'll just acknowledge it. Copy.",
         "This is chat to me, not a request, so a short friendly reply. Glad you're enjoying it.",
+        # #392: the note sent with the request, read aloud. It passed.
+        'The player\'s request is "head lights" with their own key bound: Headlights on L. '
+        "That's a game command. Your headlights are on L.",
+        "The bracketed line says Headlights on L.",
+        "The player's own keys for this: Headlights on L.",
     ],
 )
 def test_a_reply_that_explains_itself_fails(say: str) -> None:
@@ -891,6 +896,18 @@ def test_with_keys_off_the_eval_tells_the_brain_the_player_s_own_key() -> None:
     asyncio.run(e.run_case(rule, Lexicon.default(pack=SC), Brain(), _keybinds(), lists=lists))
     (request,) = asked
     assert request.own_keys.endswith(" on N")
+
+
+def test_with_keys_off_the_eval_counts_replies_that_name_the_player_s_key() -> None:
+    # #392: "hit the brakes" passed with "check your keybinds". A measure, not a verdict.
+    e = _eval()
+    keybinds = _keybinds()
+    rule = {"heard": "gear", "expect": ["actions"], "must": [["v_toggle_landing_system"]]}
+    assert e.names_key("I don't press keys here. Your landing gear is on N.", rule, keybinds)
+    assert e.names_key("Check your keybinds for the landing gear.", rule, keybinds) is False
+    assert e.names_key("Not now.", rule, keybinds) is False  # "N" inside a word isn't the key
+    assert e.names_key("On N.", {"expect": ["reply"]}, keybinds) is None
+    assert e.names_key("On N.", {"must": [["v_not_bound"]]}, keybinds) is None
 
 
 def test_keys_off_runs_the_pack_as_advisor() -> None:

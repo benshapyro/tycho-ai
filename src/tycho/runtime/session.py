@@ -28,6 +28,7 @@ from tycho.audio.clip import Samples, trim_silence
 from tycho.audio.source import AudioError, AudioSource
 from tycho.brain import Reply
 from tycho.commands import CommandMatcher
+from tycho.commands.keys import own_keys
 from tycho.input import Presser
 from tycho.keybinds import Keybinds
 from tycho.lexicon import Lexicon
@@ -76,7 +77,6 @@ from tycho.runtime.routing import (
     NotUnderstood,
     Picked,
     Reserved,
-    own_keys,
     route,
 )
 from tycho.runtime.speaking import Speaking, log_failure

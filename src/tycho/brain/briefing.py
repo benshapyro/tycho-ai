@@ -12,16 +12,21 @@ The fixed text is the core (``core.md``: the rules every game shares) placed int
 the game pack's ``briefing.md`` (ADR 18). The game facts (the pack's ``facts.md``)
 are what changed since Claude learned about the game, kept by hand: update them each
 patch. Facts only, never keys: Tycho uses the player's own keybinds.
+
+With key actions off (#191) there's nothing to pick, so the lists of actions go, and
+the player's own keys take their place (#392): the brain says how, and names the key.
 """
 
 import hashlib
 from importlib import resources
 
 from tycho.commands import CommandMatcher, resolve
+from tycho.commands.keys import own_keys
 from tycho.input.plan import pressable_input
-from tycho.keybinds import Keybinds
+from tycho.keybinds import Keybinds, key_text
 from tycho.packs import GamePack
 from tycho.packs.pack import KEYS, MARKER
+from tycho.safety import spoken_name
 
 
 def core_sections() -> dict[str, str]:
@@ -126,6 +131,46 @@ def unbound_commands(keybinds: Keybinds, matcher: CommandMatcher) -> list[str]:
     return sorted(lines)
 
 
+def command_keys(keybinds: Keybinds, matcher: CommandMatcher) -> list[str]:
+    """With key actions off: each command and sequence, how it's said, and the player's
+    own keys for it (#392), so the brain names the key however the player asks. A
+    sequence names each step's key, in order."""
+    lines: list[str] = []
+    for command in matcher.commands:
+        if command.say and (keys := own_keys((command,), keybinds)):
+            lines.append(f"{'; '.join(_examples(command.say))} | {keys}")
+    return sorted(lines)
+
+
+def action_keys(keybinds: Keybinds, matcher: CommandMatcher, pack: GamePack) -> list[str]:
+    """With key actions off: what each action the brain would have been offered does,
+    and the player's key for it (#392: "hit the brakes" is no command). Never its name:
+    there's nothing to pick."""
+    lines: set[str] = set()
+    for name in offered_actions(keybinds, matcher, pack):
+        action = keybinds.get(name)
+        key = pressable_input(action) if action is not None else None
+        if action is not None and key is not None:
+            lines.add(f"{spoken_name(action)} | {key_text(key)}")
+    return sorted(lines)
+
+
+def own_key_lists(keybinds: Keybinds, matcher: CommandMatcher, pack: GamePack) -> str:
+    """The end of the keys-off briefing: the player's own keys, or nothing when Tycho
+    reads no keybinds for the game. Cached with the rest: it changes only when the
+    keybinds or the commands do."""
+    actions = action_keys(keybinds, matcher, pack)
+    if not actions:
+        return ""
+    return (
+        "\nThe player's own keys for the game's commands (how it's said | their keys):\n"
+        + ("\n".join(command_keys(keybinds, matcher)) or "(none)")
+        + "\n\nThe player's own keys for everything else (what it does | their key):\n"
+        + "\n".join(actions)
+        + "\n"
+    )
+
+
 def _examples(say: tuple[str, ...]) -> list[str]:
     """The first phrase, which names the command, and the shortest others: how it's
     said in a few words ("gear down"), not the long variants after it."""
@@ -140,10 +185,17 @@ def game_facts(pack: GamePack) -> str:
 
 def briefing(keybinds: Keybinds, matcher: CommandMatcher, pack: GamePack) -> str:
     """The whole briefing, for the pack's game. In
-    advisor mode (#191) it lists no commands, sequences or actions: there's nothing the
-    brain could press."""
+    advisor mode (#191) it lists no commands, sequences or actions to pick: there's
+    nothing the brain could press. It ends with the player's own keys instead, where
+    Tycho reads the game's keybinds, so the brain can say which key does it (#392)."""
     if pack.safety.keys_off:
-        return instructions(pack) + "\nGame facts:\n" + game_facts(pack) + "\n"
+        return (
+            instructions(pack)
+            + "\nGame facts:\n"
+            + game_facts(pack)
+            + "\n"
+            + own_key_lists(keybinds, matcher, pack)
+        )
     actions = offered_actions(keybinds, matcher, pack)
     sequences = sorted(
         f"{c.id} | {', then '.join(s.command.id for s in c.steps)} | {'; '.join(c.say)}"
