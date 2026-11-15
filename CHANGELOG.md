@@ -11,6 +11,9 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ### Added
 - Change Tycho's voice by asking: "switch your voice to Sarah". By voice you can pick George, Sarah, Lily or Brian; any other voice is still chosen in Tycho's window (Settings, Voice and sounds) or `settings.toml`. The new voice is used from the next start, and Tycho says so. ([#355](https://github.com/benshapyro/tycho-ai/issues/355))
 
+- If Tycho ever vanishes without a word (a crash deep inside Windows, the speech model or the sound system, which no error message can catch), it now leaves a record of what it was doing in its logs folder. The next time it starts, it tells you on the Tile that it stopped unexpectedly and where that file is, and `tycho check` and the window's status say so for a few days. Nothing is sent anywhere: the file stays on your PC, and holds no keys and nothing you said. ([#296](https://github.com/benshapyro/tycho-ai/issues/296))
+- If the Tile or Tycho's icon by the clock stops working while you play, Tycho now tells you once, and keeps listening. A lost icon is a card on the Tile (or spoken, if the Tile is off); a lost Tile is spoken, and from then on Tycho says its answers instead of putting them on a Tile you can't see. Before, both went silently. ([#297](https://github.com/benshapyro/tycho-ai/issues/297))
+
 ### Changed
 - With key actions off in Star Citizen, Tycho now names your own key when you say a built-in command ("night vision" gets "it's on Right Alt + N" if that's your key), instead of "your night vision key, if you've bound one". If the action has no key, it says so. ([#386](https://github.com/benshapyro/tycho-ai/issues/386))
 

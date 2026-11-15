@@ -40,6 +40,9 @@ STYLES: Final = (
 )
 FRAME_MS = 66
 """How often the window asks for a frame: about 15 a second, enough for a fade."""
+GIVE_UP_AFTER = 15
+"""Frames in a row that may fail (about a second) before the window closes itself and
+says so (#297): a Tile that can't draw is a Tile that stopped."""
 
 _WM_DESTROY, _WM_CLOSE, _WM_TIMER = 0x0002, 0x0010, 0x0113
 _WM_MOUSEACTIVATE, _MA_NOACTIVATE = 0x0021, 3
@@ -93,8 +96,13 @@ class TileWindow:
         self._ready = threading.Event()
         self._hwnd = 0
         self._shown = False
+        self._closing = False
+        self._failures = 0
         self.failed: str = ""
         """Why the window couldn't open, if it couldn't; the Tile is then off."""
+        self.on_stopped: Callable[[str], None] | None = None
+        """Called once, on the window's thread, if the window stops while Tycho runs
+        (#297): the player is told, and Tycho carries on without the Tile."""
 
     def start(self) -> bool:
         """Open the window, hidden. False, with ``failed`` saying why, if it can't."""
@@ -107,6 +115,7 @@ class TileWindow:
         return bool(self._hwnd) and not self.failed
 
     def close(self) -> None:
+        self._closing = True
         if self._hwnd:
             win32.user32().PostMessageW(self._hwnd, _WM_CLOSE, 0, 0)
         if self._thread is not None:
@@ -121,8 +130,17 @@ class TileWindow:
             log.exception("The Tile's window stopped")
             self.failed = f"{type(e).__name__}: {e}"
         finally:
+            opened = bool(self._hwnd)
             self._hwnd = 0
             self._ready.set()
+        if opened and not self._closing:  # it was open, and nobody asked it to close
+            self.failed = self.failed or "its message loop ended"
+            log.error("The Tile is gone (%s); Tycho carries on without it", self.failed)
+            if self.on_stopped is not None:
+                try:
+                    self.on_stopped(self.failed)
+                except Exception:
+                    log.exception("Couldn't say the Tile stopped")
 
     def _loop(self) -> None:
         user32 = win32.user32()
@@ -171,11 +189,25 @@ class TileWindow:
         _ = proc  # kept alive until the loop ends
 
     def _tick(self) -> None:
+        """One frame. Windows calls this through ``proc``, where an exception would be
+        dropped unseen, so a failure is caught here: logged the first time, and after
+        ``GIVE_UP_AFTER`` in a row the window closes itself and ``_run`` says so."""
         try:
-            frame = self._frame(screen_of_foreground())
-        except Exception:
-            log.exception("Drawing the Tile failed")
-            frame = None
+            self._show(self._frame(screen_of_foreground()))
+        except Exception as e:
+            self._failures += 1
+            if self._failures == 1:
+                log.exception("Drawing the Tile failed")
+            if self._failures == GIVE_UP_AFTER and self._hwnd:
+                self.failed = f"it couldn't draw: {type(e).__name__}: {e}"
+                win32.user32().DestroyWindow(self._hwnd)
+            elif self._shown:  # nothing true to show: hide it, as before
+                win32.user32().ShowWindow(self._hwnd, _SW_HIDE)
+                self._shown = False
+        else:
+            self._failures = 0
+
+    def _show(self, frame: Frame) -> None:
         if isinstance(frame, _Same):
             return
         user32 = win32.user32()

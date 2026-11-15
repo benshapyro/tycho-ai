@@ -56,6 +56,10 @@ def test_say_that_again_repeats_the_last_line() -> None:
     assert say_again(Line(), None, 0.0, 5).detail == "nothing to say again"
 
 
+SLOW = 5.0
+"""A brain far too slow for any limit in these tests."""
+
+
 class _Brain:
     """Starts a web search or a look-up (or neither), then takes ``seconds``."""
 
@@ -96,24 +100,28 @@ def _ask(brain: _Brain, times: Times, searching: Callable[[], None] = lambda: No
 
 
 def test_the_brain_answers_within_its_time_or_it_took_too_long() -> None:
-    assert _ask(_Brain(0.01), Times(brain=0.5)) == Reply("Here.")
-    assert _ask(_Brain(0.3), Times(brain=0.05)) == "it took too long"
+    # #420: each side has seconds to spare, so a slow CI runner can't flip the answer.
+    # A brain that's too slow is cut off at its time, so no test waits for SLOW.
+    assert _ask(_Brain(0.01), Times(brain=5.0)) == Reply("Here.")
+    assert _ask(_Brain(SLOW), Times(brain=0.05)) == "it took too long"
 
 
 def test_a_web_search_moves_the_time_on_and_says_a_line() -> None:
     said: list[str] = []
-    times = Times(brain=0.05, search=0.5, search_limit=1.0)
-    assert _ask(_Brain(0.2, "search"), times, lambda: said.append("filler")) == Reply("Here.")
+    # Past the brain's own 0.05 s, so only the search's time lets it answer.
+    times = Times(brain=0.05, search=5.0, search_limit=10.0)
+    assert _ask(_Brain(0.1, "search"), times, lambda: said.append("filler")) == Reply("Here.")
     assert said == ["filler"]
 
 
 def test_a_search_never_runs_past_its_limit() -> None:
     # #169: the limit counts from the request, however late the search starts.
     times = Times(brain=0.05, search=1.0, search_limit=0.1)
-    assert _ask(_Brain(0.4, "search"), times) == "it took too long"
+    assert _ask(_Brain(SLOW, "search"), times) == "it took too long"
 
 
 def test_a_look_up_moves_the_time_on_up_to_its_limit() -> None:
-    assert _ask(_Brain(0.15, "look"), Times(brain=0.05, looking=0.4)) == Reply("Here.")
+    moved = Times(brain=0.05, looking=5.0, looking_limit=10.0)
+    assert _ask(_Brain(0.1, "look"), moved) == Reply("Here.")
     capped = Times(brain=0.05, looking=1.0, looking_limit=0.1)
-    assert _ask(_Brain(0.4, "look"), capped) == "it took too long"
+    assert _ask(_Brain(SLOW, "look"), capped) == "it took too long"

@@ -97,7 +97,11 @@ class TrayIcon:
         self._hwnd = 0
         self._icon = 0
         self._abandoned = False
+        self._closing = False
         self.failed = ""
+        self.on_stopped: Callable[[str], None] | None = None
+        """Called once, on the tray's thread, if the icon stops while Tycho runs (#297):
+        with it go Quit and the way to the window, so the player must be told."""
 
     def start(self) -> bool:
         """Show the icon. False, with ``failed`` saying why, if it can't."""
@@ -120,6 +124,7 @@ class TrayIcon:
             win32.user32().PostMessageW(self._hwnd, _WM_APP_TRAY, 0, 1)  # lParam 1: refresh
 
     def close(self) -> None:
+        self._closing = True
         if self._hwnd:
             win32.user32().PostMessageW(self._hwnd, _WM_CLOSE, 0, 0)
         if self._thread is not None:
@@ -134,8 +139,17 @@ class TrayIcon:
             log.exception("The tray icon stopped")
             self.failed = f"{type(e).__name__}: {e}"
         finally:
+            shown = bool(self._hwnd)
             self._hwnd = 0
             self._ready.set()
+        if shown and not self._closing:  # it was there, and nobody asked it to go
+            self.failed = self.failed or "its message loop ended"
+            log.error("The tray icon is gone (%s); Tycho carries on", self.failed)
+            if self.on_stopped is not None:
+                try:
+                    self.on_stopped(self.failed)
+                except Exception:
+                    log.exception("Couldn't say the tray icon stopped")
 
     def _loop(self) -> None:
         user32 = win32.user32()
