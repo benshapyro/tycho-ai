@@ -188,18 +188,46 @@ KNOWN = {
     "tools",
     "no_tools",
     "no_errors",
+    "max_words",
 }
 
 
-def test_every_case_uses_only_keys_the_eval_reads() -> None:
+@pytest.mark.parametrize("pack", ["star-citizen", "wow-forever"])
+def test_every_case_uses_only_keys_the_eval_reads(pack: str) -> None:
     """A misspelt key ("max_call") would be ignored, and its check silently skipped."""
     data = tomllib.loads(
-        (ROOT / "src" / "tycho" / "packs" / "star-citizen" / "eval" / "cases.toml").read_text(
-            "utf-8"
-        )
+        (ROOT / "src" / "tycho" / "packs" / pack / "eval" / "cases.toml").read_text("utf-8")
     )
     unknown = {(c["heard"], k) for c in data["case"] for k in c if k not in KNOWN}
     assert not unknown
+    assert set(data) <= {"case", "never_say", "say_words"}  # the file's own keys
+
+
+def test_a_line_said_with_a_press_is_a_few_words() -> None:
+    # docs/voice-and-tone.md (#363): the cases file's say_words limits the say line.
+    e = _eval()
+    rule = {"expect": ["actions"], "must": [["v_lights"]]}
+    long = "Lights are on now, and I have also had a look at everything else for you."
+    pressed = _outcome(kind="actions", actions=["v_lights"], say=long)
+    assert e.grade(pressed, rule, {"v_lights"}) == "pass"  # no limit, as before
+    verdict = e.grade(pressed, rule, {"v_lights"}, say_words=15)
+    assert verdict.startswith("said 16 words, at most 15")
+    short = _outcome(kind="actions", actions=["v_lights"], say="Lights on.")
+    assert e.grade(short, rule, {"v_lights"}, say_words=15) == "pass"
+    # A reply isn't a say line: the file's limit doesn't apply to it.
+    assert e.grade(_outcome(say=long), {"expect": ["reply"]}, set(), say_words=15) == "pass"
+
+
+def test_a_case_can_limit_its_reply_s_words() -> None:
+    e = _eval()
+    reply = _outcome(say="No. Skyborne can't be Paladins.")
+    assert e.grade(reply, {"expect": ["reply"], "max_words": 5}, set()) == "pass"
+    verdict = e.grade(reply, {"expect": ["reply"], "max_words": 4}, set())
+    assert verdict == 'said 5 words, at most 4: "No. Skyborne can\'t be Paladins."'
+    # The case's limit is for a reply; a press it also allows is the file's business.
+    pressed = _outcome(kind="actions", actions=["v_lights"], say="Lights on, as you asked.")
+    rule = {"expect": ["actions", "reply"], "max_words": 2}
+    assert e.grade(pressed, rule, {"v_lights"}) == "pass"
 
 
 def test_every_case_says_what_the_player_wants() -> None:

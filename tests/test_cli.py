@@ -263,7 +263,7 @@ def test_check_for_updates_false_never_asks_github(
         asked.append("check")
         return Finding("ok", "Updates", "stub")
 
-    def focus() -> Finding:
+    def focus(game: str, window: str) -> Finding:
         return Finding("ok", "Focus", "stub")
 
     monkeypatch.setattr(updates, "announce_in_background", announce)
@@ -271,7 +271,7 @@ def test_check_for_updates_false_never_asks_github(
     monkeypatch.setattr(doctor, "focus_finding", focus)
     current = settings.Settings(check_for_updates=allowed)
     start_run.start_update_check(current)
-    checked = [f.what for f in doctor.live_checks(current)]
+    checked = [f.what for f in doctor.live_checks(current, built_in(STAR_CITIZEN))]
     assert asked == (["run", "check"] if allowed else [])
     assert checked == (["Updates", "Focus"] if allowed else ["Focus"])
 

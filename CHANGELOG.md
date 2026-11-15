@@ -12,6 +12,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - Change Tycho's voice by asking: "switch your voice to Sarah". By voice you can pick George, Sarah, Lily or Brian; any other voice is still chosen in Tycho's window (Settings, Voice and sounds) or `settings.toml`. The new voice is used from the next start, and Tycho says so. ([#355](https://github.com/benshapyro/tycho-ai/issues/355))
 
 ### Changed
+- Tycho's wording was gone through line by line, so one game's words don't turn up in another. `tycho check` now asks you to switch to the game you chose (it said Star Citizen whatever the game), and skips that test where Tycho presses no keys. The descriptions of the web search and Tile settings no longer talk about Star Citizen or a ship, and the ones that are Star Citizen's say so. In World of Warcraft: Forever, and in Star Citizen with key actions off, simple questions get shorter answers. ([#363](https://github.com/benshapyro/tycho-ai/issues/363))
 - With key actions off in Star Citizen, Tycho now names your own key when you say a built-in command ("night vision" gets "it's on Right Alt + N" if that's your key), instead of "your night vision key, if you've bound one". If the action has no key, it says so. ([#386](https://github.com/benshapyro/tycho-ai/issues/386))
 
 ## [0.7.0] - 2026-11-13
