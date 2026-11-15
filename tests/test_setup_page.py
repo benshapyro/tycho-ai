@@ -23,7 +23,7 @@ from tycho.desktop import window
 from tycho.desktop.bridge import Bridge
 from tycho.settings import Settings
 
-STEPS = ["Game", "Keys", "Push-to-talk", "Microphone", "Voice", "Privacy", "Try it"]
+STEPS = ["Game", "Keys", "Talk and listen", "Privacy", "Try it"]
 ANTHROPIC = "sk-ant-api03-" + "a" * 40 + "Wxyz"
 ELEVENLABS = "sk_" + "b" * 40
 # In a test the bridge is this proxy: every call goes to Python and comes back as JSON.
@@ -168,32 +168,28 @@ def test_a_first_run_for_a_game_tycho_presses_keys_in(setup: Setup, vault: dict[
     assert vault["anthropic"] == ANTHROPIC
     assert ANTHROPIC not in page.content()
 
-    # 3. Push-to-talk: a button press.
+    # 3. Talk and listen: push-to-talk, the microphone and the voice on one page.
     setup.next()
-    setup.at("Push-to-talk")
+    setup.at("Talk and listen")
     expect(page.locator("#pttName")).to_have_text("None yet")
     page.get_by_role("button", name="Choose a button").click()
     expect(page.locator("#pttName")).to_have_text("Mouse side (forward)")
     assert setup.saved().push_to_talk == "mouse:0x06"
 
-    # 4. The microphone, and how it sounds.
-    setup.next()
-    setup.at("Microphone")
+    # The microphone, and how it sounds.
     page.locator("#mic").select_option("Desk mic, MME")
     page.get_by_role("button", name="Test: say something").click()
     expect(page.locator("#micMsg")).to_have_text("Good level: Tycho will hear you clearly.")
     assert setup.saved().microphone == "Desk mic, MME"
 
-    # 5. The voice: without an ElevenLabs key it says so, and the choice is still kept.
-    setup.next()
-    setup.at("Voice")
+    # The voice: without an ElevenLabs key it says so, and the choice is still kept.
     expect(page.locator("#noVoice")).to_contain_text("No ElevenLabs key yet")
     expect(page.locator("[data-voice='George']")).to_have_attribute("aria-pressed", "true")
     page.locator("[data-voice='Sarah']").click()
     expect(page.locator("[data-voice='Sarah']")).to_have_attribute("aria-pressed", "true")
     assert setup.saved().voice == "Sarah"
 
-    # 6. What leaves the PC: the brain, the voice, web search, and the pack's own look-ups.
+    # 4. What leaves the PC: the brain, the voice, web search, and the pack's own look-ups.
     setup.next()
     setup.at("Privacy")
     leaves = page.locator("table.leaves")
@@ -218,7 +214,7 @@ def test_a_first_run_for_a_game_tycho_presses_keys_in(setup: Setup, vault: dict[
     expect(crash.locator("[data-crash='yes']")).to_have_attribute("aria-pressed", "false")
     assert setup.saved().crash_reports is False
 
-    # 7. What to say first, from the pack, and Start.
+    # 5. What to say first, from the pack, and Start.
     setup.next()
     setup.at("Try it")
     expect(page.locator("ul.say li")).to_have_text(
@@ -262,21 +258,15 @@ def test_a_first_run_for_a_game_tycho_only_advises_in(setup: Setup, vault: dict[
     page.locator("[data-store='elevenlabs']").click()
     expect(page.locator("#keysForm")).to_contain_text(ELEVENLABS[-4:])
 
-    # 3 and 4. Push-to-talk and the microphone can be skipped.
+    # 3. Push-to-talk can be skipped; the voice is offered plainly, as the key is stored.
     setup.next()
-    setup.at("Push-to-talk")
-    expect(page.locator(".card")).to_contain_text("Tycho can't start without one")
-    setup.next()
-    setup.at("Microphone")
-
-    # 5. The voice: the key is stored, so the choice is offered plainly.
-    setup.next()
-    setup.at("Voice")
+    setup.at("Talk and listen")
+    expect(page.locator(".card").first).to_contain_text("Tycho can't start without one")
     expect(page.locator("#noVoice")).to_have_count(0)
     page.locator("[data-voice='Lily']").click()
     expect(page.locator("[data-voice='Lily']")).to_have_attribute("aria-pressed", "true")
 
-    # 6. What leaves the PC: no keybinds, no web search and no look-ups for this game.
+    # 4. What leaves the PC: no keybinds, no web search and no look-ups for this game.
     setup.next()
     setup.at("Privacy")
     leaves = page.locator("table.leaves")
@@ -287,7 +277,7 @@ def test_a_first_run_for_a_game_tycho_only_advises_in(setup: Setup, vault: dict[
     # A player who never answers the crash question sends nothing: it stays unanswered.
     expect(page.locator("#crashCard [data-crash][aria-pressed='true']")).to_have_count(0)
 
-    # 7. The skipped button is what's missing: Start waits, and a button goes back for it.
+    # 5. The skipped button is what's missing: Start waits, and a button goes back for it.
     setup.next()
     setup.at("Try it")
     expect(page.locator("ul.say li")).to_have_count(3)
@@ -295,11 +285,11 @@ def test_a_first_run_for_a_game_tycho_only_advises_in(setup: Setup, vault: dict[
     expect(page.locator("#noBrain")).to_contain_text("Tycho can't answer in World of Warcraft")
     expect(page.locator("#todo")).to_contain_text("a push-to-talk button")
     expect(page.get_by_role("button", name="Start Tycho")).to_be_disabled()
-    page.get_by_role("button", name="Go to Push-to-talk").click()
-    setup.at("Push-to-talk")
+    page.get_by_role("button", name="Go to Talk and listen").click()
+    setup.at("Talk and listen")
     page.get_by_role("button", name="Choose a button").click()
     expect(page.locator("#pttName")).to_have_text("Mouse side (forward)")
-    for _ in range(4):
+    for _ in range(2):
         setup.next()
     setup.at("Try it")
     expect(page.locator("#todo")).to_have_count(0)
@@ -387,7 +377,7 @@ def test_a_skipped_step_is_not_ticked_and_next_stays_in_view(setup: Setup) -> No
     expect(page.get_by_role("button", name="Next", exact=True)).to_be_in_viewport()
     for _ in range(3):  # past the game (not found), the keys (none) and push-to-talk (none)
         setup.next()
-    setup.at("Microphone")
+    setup.at("Privacy")
     steps = page.locator(".steps li")
     for i in range(3):
         expect(steps.nth(i)).to_have_class("todo")
@@ -397,12 +387,9 @@ def test_a_skipped_step_is_not_ticked_and_next_stays_in_view(setup: Setup) -> No
     page.locator("#capture").click()
     expect(page.locator("#pttName")).to_have_text("Mouse side (forward)")
     setup.next()
-    setup.at("Microphone")
+    setup.at("Privacy")  # the longest step: Next is still there to press
     expect(steps.nth(2)).to_have_class("done")
     expect(steps.nth(2)).to_contain_text("✓")
-    setup.next()
-    setup.next()
-    setup.at("Privacy")  # the longest step: Next is still there to press
     expect(page.get_by_role("button", name="Next", exact=True)).to_be_in_viewport()
 
 
@@ -416,7 +403,7 @@ def test_the_one_crash_question_comes_before_the_table(
     expect(cards.first).to_have_id("crashCard")
     setup.close()
     first = Setup(browser, path, first_run=True)  # the first run reads the table first
-    for _ in range(5):
+    for _ in range(3):
         first.next()
     first.at("Privacy")
     expect(first.page.locator("main > .card").last).to_have_id("crashCard")
@@ -530,4 +517,32 @@ def test_the_game_box_says_tycho_only_talks_with_key_actions_off(
     settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False, key_actions=False), path)
     setup = Setup(browser, path, first_run=False)
     expect(setup.page.locator("#gameBox")).to_contain_text("Tycho only talks")
+    setup.close()
+
+
+def test_setup_run_again_shows_another_game_before_switching(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#435: run again from Home, picking another game in setup restarted Tycho at once
+    and closed the window mid-setup, with no word on what Tycho does there."""
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, voice="The Ship's Mind"), path
+    )
+    setup = Setup(browser, path, first_run=False)
+    page = setup.page
+    page.locator("#redo").click()
+    setup.at("Game")
+    page.locator("[data-game='wow-forever']").click()
+    expect(page.get_by_role("heading", name="Set up World of Warcraft: Forever")).to_be_visible()
+    assert setup.saved().game == "star-citizen"
+    assert setup.restarts == []
+    page.get_by_role("button", name="Back").click()
+    setup.at("Game")  # back in setup, where it was
+    # #435: a voice of the player's own account isn't "a voice of your own" twice over.
+    setup.next()
+    setup.next()
+    setup.at("Talk and listen")
+    expect(page.locator("#voiceNow")).to_have_text(
+        "Now: The Ship's Mind. Pick one of these to change it."
+    )
     setup.close()

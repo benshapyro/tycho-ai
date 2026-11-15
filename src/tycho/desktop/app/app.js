@@ -60,7 +60,10 @@
   /* ---------- setup: the first run, or again from Status (#364) ----------
      The game comes first, and what's said about a game is its pack's own text (s.pack).
      Every step can be skipped: the last one says what Tycho still needs to start. */
-  const STEPS = ["Game", "Keys", "Push-to-talk", "Microphone", "Voice", "Privacy", "Try it"];
+  const STEPS = ["Game", "Keys", "Talk and listen", "Privacy", "Try it"];
+  // What the bridge's to-do list calls a step, and the step it's on now.
+  const STEP_OF = { "Push-to-talk": "Talk and listen", Microphone: "Talk and listen", Voice: "Talk and listen" };
+  const stepOf = (name) => STEPS.indexOf(STEP_OF[name] || name);
   let step = 0;
   let firstRun = false;
   let canQuit = false;
@@ -70,9 +73,9 @@
   function stepDone(name, s) {
     if (name === "Game") return !s.game.needed || s.game.found;
     if (name === "Keys") return brainKey(s);
-    if (name === "Push-to-talk") return s.push_to_talk.set;
+    if (name === "Talk and listen") return s.push_to_talk.set;
     if (name === "Privacy") return s.crash_reports != null;
-    return true; // the microphone and the voice have a default
+    return true;
   }
   function stepper(s) {
     return `<ol class="steps">${STEPS.map((name, i) => {
@@ -140,26 +143,26 @@
           <li><b>ElevenLabs</b>: gives Tycho its voice. About 0.5 credits a character: a chatty hour is about 4,000 credits. Without it, Tycho answers with sounds.</li>
         </ul>
         <p class="${s.pack.can_press ? "note" : "warn-line"}">${s.pack.can_press ? "Without an Anthropic or OpenRouter key, only the built-in phrases work." : `Tycho needs an Anthropic or OpenRouter key to answer in ${esc(s.pack.name)}: it has no built-in phrases there.`}</p></div>${await keysView()}`;
-    } else if (name === "Push-to-talk") {
-      body = `<div class="card frame"><h3>Push-to-talk</h3>
+    } else if (name === "Talk and listen") {
+      // Push-to-talk, the microphone and the voice: how you talk to Tycho and hear it back.
+      const ptt = `<div class="card frame"><h3>Push-to-talk</h3>
         <p>Hold it, speak, let go. A mouse side button or a spare joystick button works well.</p>
         <div class="ptt"><span class="key num" id="pttName">${esc(s.push_to_talk.name || "None yet")}</span>
           <button class="btn primary frame" type="button" id="capture">${s.push_to_talk.set ? "Choose another button" : "Choose a button"}</button></div>
         ${s.push_to_talk.set ? "" : `<p class="note">Tycho can't start without one, but you can choose it later.</p>`}
         ${s.push_to_talk.conflicts.map((c) => `<p class="warn-line">${esc(c)}</p>`).join("")}</div>`;
-    } else if (name === "Microphone") {
-      body = `<div class="card frame"><h3>Microphone</h3>
+      const mic = `<div class="card frame"><h3>Microphone</h3>
         ${micSelect(s.microphone)}
         <div class="keyrow"><button class="btn frame" type="button" id="micTest">Test: say something</button><span class="note" id="micMsg">It listens for a moment and tells you how you sound.</span></div></div>`;
-    } else if (name === "Voice") {
       const v = s.voice;
       const mine = v.names.find((n) => n.toLowerCase() === v.setting.toLowerCase());
-      body = `<div class="card frame"><h3>Tycho's voice</h3>
+      const voice = `<div class="card frame"><h3>Tycho's voice</h3>
         ${v.key ? `<p>Pick who speaks for Tycho. Later you can just say “switch to Sarah”.</p>`
           : `<p class="warn-line" id="noVoice">No ElevenLabs key yet, so Tycho answers with sounds. Add one in the Keys step to hear a voice; what you pick here is kept.</p>`}
         <div class="seg" role="group" aria-label="Voice">${v.names.map((n) => `<button type="button" aria-pressed="${n === mine}" data-voice="${esc(n)}">${esc(n)}</button>`).join("")}</div>
-        ${mine ? "" : `<p class="note">Now: ${esc(v.setting)}, a voice of your own.</p>`}
+        ${mine ? "" : `<p class="note" id="voiceNow">Now: ${esc(v.setting)}. Pick one of these to change it.</p>`}
         <p class="note">Its volume, and what Tycho calls you, are under Settings, Voice and sounds.</p></div>`;
+      body = ptt + mic + voice;
     } else if (name === "Privacy") {
       const leaves = `<div class="card frame"><h3>What leaves your PC</h3>
         <p class="ok-line">✓ Your voice never does: speech recognition runs on this PC.</p>
@@ -179,7 +182,7 @@
       ok = s.ready;
       const say = s.pack.examples;
       body = `<div class="card frame"><h3>${s.ready ? "Ready" : "Almost there"}</h3>
-        ${s.todo.length ? `<div id="todo"><p class="warn-line">Tycho still needs:</p>${s.todo.map((t) => `<div class="keyrow"><span>${esc(t.what)}</span><button class="btn frame" type="button" data-goto="${esc(t.step)}">Go to ${esc(t.step)}</button></div>`).join("")}
+        ${s.todo.length ? `<div id="todo"><p class="warn-line">Tycho still needs:</p>${s.todo.map((t) => `<div class="keyrow"><span>${esc(t.what)}</span><button class="btn frame" type="button" data-goto="${esc(t.step)}">Go to ${esc(STEP_OF[t.step] || t.step)}</button></div>`).join("")}
           <p class="note">Or close this window and finish later: what you've chosen is kept.</p></div>` : ""}
         ${say.length ? `<div class="field"><label>Hold your button and say</label>${list(say.map((e) => `“${e}”`), "say")}</div>` : `<p>Hold your button and ask Tycho something about ${esc(s.pack.name)}.</p>`}
         ${brainKey(s) ? "" : `<p class="warn-line" id="noBrain">${s.pack.can_press ? "With no Anthropic or OpenRouter key, only the built-in phrases work: What to say lists them." : `With no Anthropic or OpenRouter key, Tycho can't answer in ${esc(s.pack.name)}. Add one in the Keys step.`}</p>`}
@@ -194,9 +197,10 @@
 
   /* ---------- a new game, picked in Settings: its pack's own setup (#364) ---------- */
   let pendingPack = "";
+  let packFrom = "settings"; // where Back goes
   async function packView() {
     const r = await api.pack_setup(pendingPack);
-    if (!r.ok) { toast(r.problem); view = "settings"; return settingsView(); }
+    if (!r.ok) { toast(r.problem); view = packFrom; return render(); }
     const p = r.pack;
     page.innerHTML = `<h1>Set up ${esc(p.name)}</h1>
       <p class="lede">What Tycho does in ${esc(p.name)}, before you switch. Switching restarts Tycho with that game's commands, look-ups and what its brain knows.</p>
@@ -206,9 +210,10 @@
         ${list(p.tips, "tips")}</div>
       <div class="bar"><button class="btn frame" type="button" id="packBack">Back</button>
         <button class="btn primary frame" type="button" id="packUse">Use ${esc(p.name)}</button></div>`;
-    $("#packBack").addEventListener("click", () => { view = "settings"; render(); });
+    $("#packBack").addEventListener("click", () => { view = packFrom; packFrom = "settings"; render(); });
     $("#packUse").addEventListener("click", async () => {
-      view = "settings";
+      view = packFrom === "setup" ? "status" : "settings";
+      packFrom = "settings";
       await change("game", p.id, `Game: ${p.name}`);
     });
   }
@@ -234,8 +239,11 @@
       step = Math.max(0, Math.min(STEPS.length - 1, step + delta));
       render();
     }));
-    page.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => { step = Math.max(0, STEPS.indexOf(b.dataset.goto)); render(); }));
+    page.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => { step = Math.max(0, stepOf(b.dataset.goto)); render(); }));
     page.querySelectorAll("[data-game]").forEach((b) => b.addEventListener("click", async () => {
+      // Run again from Home, another game restarts Tycho: show its own setup first, as
+      // Settings does, and switch only from there (#435).
+      if (!firstRun && b.getAttribute("aria-pressed") !== "true") { pendingPack = b.dataset.game; packFrom = "setup"; view = "pack"; render(); return; }
       const r = await api.set("game", b.dataset.game);
       if (!r.ok) toast(r.problem);
       else if (r.changed && !firstRun) toast(`Game: ${b.dataset.name}.${r.applies === "restarting" ? " Tycho restarts with it now." : " Applies when Tycho restarts."}`, true);
@@ -432,7 +440,7 @@
     });
     page.querySelectorAll("[data-pick]").forEach((b) => b.addEventListener("click", () => {
       // Another game: its pack's own setup first, and the switch from there (#364).
-      if (b.dataset.pick === "game" && b.getAttribute("aria-pressed") !== "true") { pendingPack = b.dataset.v; view = "pack"; render(); return; }
+      if (b.dataset.pick === "game" && b.getAttribute("aria-pressed") !== "true") { pendingPack = b.dataset.v; packFrom = "settings"; view = "pack"; render(); return; }
       change(b.dataset.pick, b.dataset.v, `${label(b.dataset.pick)}: ${b.dataset.name || b.dataset.v}`);
     }));
     page.querySelectorAll("[data-text]").forEach((i) => i.addEventListener("change", () => change(i.dataset.text, i.value, `${label(i.dataset.text)}: ${i.value || "none"}`)));
