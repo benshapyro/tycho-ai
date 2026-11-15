@@ -9,7 +9,8 @@ import pytest
 from tests.fakes.fake_key_check import FakeKeyCheck
 from tycho import __version__, cli, credentials, doctor, settings, updates
 from tycho.desktop import window
-from tycho.desktop.bridge import GROUPS, KEYS, Bridge
+from tycho.desktop.bridge import Bridge
+from tycho.desktop.bridge.settings_page import GROUPS, KEYS
 from tycho.desktop.keys import ProviderKeyCheck
 from tycho.settings import Settings
 
@@ -620,10 +621,10 @@ def test_the_windows_own_check_is_kept_an_hour_from_when_it_asked(
     path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """#376: it was kept per clock hour, so a check at 10:59 asked again at 11:00."""
-    from tycho.desktop import bridge as bridge_module
+    import time
 
     now = [3599.0]
-    monkeypatch.setattr(bridge_module.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(time, "monotonic", lambda: now[0])
     latest, asked = _releases(None, NEWER)
     bridge, _ = _bridge(path, latest_release=latest)
     assert bridge.check_updates(False)["state"] == "none"
