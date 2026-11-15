@@ -3,11 +3,14 @@ cockpit, as it would sit on a 2560 x 1440 screen."""
 
 import base64
 import io
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from tycho import settings
 from tycho.desktop.bridge.state import State
 from tycho.packs import PackError, Sample, built_in
+
+if TYPE_CHECKING:
+    from tycho.tile.cards import Card
 
 
 class TilePage(State):
@@ -17,7 +20,6 @@ class TilePage(State):
         from PIL import Image
 
         from tycho.tile.board import Board
-        from tycho.tile.cards import Card, Row
         from tycho.tile.design import game_accent
         from tycho.tile.display import accent, look, place
         from tycho.tile.draw import draw
@@ -27,15 +29,7 @@ class TilePage(State):
         screen = Screen(0, 0, 2560, 1440)
         board = Board(clock=lambda: 0.0)
         sample = _sample(current.game) or OWN_SAMPLE
-        board.show(
-            Card(
-                "list",
-                title=sample.title,
-                label=sample.label,
-                source=sample.source,
-                rows=tuple(Row(*row) for row in sample.rows),
-            )
-        )
+        board.show(_card(sample))
         try:
             ship = self._ship_accent()
         except Exception:
@@ -65,6 +59,34 @@ OWN_SAMPLE = Sample(
     ),
 )
 """The preview's card for a game whose pack has none: no game's words (#422)."""
+
+
+def _card(sample: Sample) -> Card:
+    """The sample as a card, cleaned and cut like one from the brain (review of #461)."""
+    from tycho.tile.cards import (
+        DEFAULT_ROWS,
+        DETAIL,
+        LABEL,
+        SOURCE,
+        TEXT,
+        TITLE,
+        VALUE,
+        Card,
+        Row,
+        clean,
+    )
+
+    rows = tuple(
+        Row(clean(text, TEXT), clean(detail, DETAIL), clean(value, VALUE))
+        for text, detail, value in sample.rows[:DEFAULT_ROWS]
+    )
+    return Card(
+        "list",
+        title=clean(sample.title, TITLE),
+        label=clean(sample.label, LABEL),
+        source=clean(sample.source, SOURCE),
+        rows=rows,
+    )
 
 
 def _sample(game: str) -> Sample | None:
