@@ -85,6 +85,7 @@ from tycho.brain.rounds import NO_PRESS_AFTER_SEARCH
 from tycho.brain.traces import TraceFile
 from tycho.brain_choice import anthropic_key, openrouter_key
 from tycho.commands import Command, CommandMatcher, resolve
+from tycho.commands.keys import own_keys
 from tycho.games.star_citizen.checks import find_install
 from tycho.games.star_citizen.data import ensure
 from tycho.games.star_citizen.fleet import Fleet, FleetUpdate
@@ -95,13 +96,14 @@ from tycho.games.star_citizen.store import KeybindStore
 from tycho.games.star_citizen.trade_lookup import trade_lookups
 from tycho.games.star_citizen.uex import UexApi
 from tycho.games.star_citizen.wiki import WikiApi
-from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput
+from tycho.input.plan import pressable_input
+from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput, key_text
 from tycho.knowledge.web import WebSearch
 from tycho.lexicon import Lexicon
 from tycho.packs import STAR_CITIZEN, GamePack, Safety, as_run, built_in
 from tycho.runtime import routing
 from tycho.runtime.planning import Questions, Refusal, Steps, plan_request
-from tycho.runtime.routing import NotUnderstood, Picked, Reserved, from_brain, own_keys
+from tycho.runtime.routing import NotUnderstood, Picked, Reserved, from_brain
 from tycho.spoken_settings import SettingsTool
 from tycho.start.assemble import NO_KEYBINDS, load_commands
 
@@ -128,12 +130,16 @@ NARRATED = re.compile(
     r"\bso a short (friendly |simple )?(reply|answer)\b|"
     r"\b(this|that) (is|sounds like) (squad |room )?chat\b|\bchat (to|for) (me|the squad)\b|"
     r"\bthe player (is|was|said|asked|wants|trailed|didn't)\b|\bjust acknowledg|"
-    r"\bso (there's )?no action\b|\bpress(ing)? nothing\b|\bcall(ing)? no tool\b",
+    r"\bso (there's )?no action\b|\bpress(ing)? nothing\b|\bcall(ing)? no tool\b|"
+    r"\bthe player'?s (request|own keys?)\b|\b(their|your) own keys? (bound|for this)\b|"
+    r"\bbracketed\b",
     re.IGNORECASE,
 )
 """A reply that explains itself or talks about the player, which the player hears: "This
 is chat for the squad, not a request for me, so I'm just acknowledging it. Copy." (the
-#192 eval after #278, four replies graded as passes)."""
+#192 eval after #278, four replies graded as passes). Or one that reads out the notes
+sent with the request: "The player's request is "head lights" with their own key bound:
+Headlights on L." (#392)."""
 SAY_WORDS = 8
 """What Tycho says after acting should be a few words: the press already happened."""
 COST_GUESS = 0.0002
@@ -187,6 +193,9 @@ class Outcome:
     card_rows: list[str] = field(default_factory=list[str])
     hosts: list[str] = field(default_factory=list[str])
     """Who served each call through OpenRouter, in order ("Cerebras"), where it said (#267)."""
+    named_key: bool | None = None
+    """With key actions off, whether a reply to a request for a press named one of the
+    player's own keys for it (#392); ``None`` when there was no key to name."""
     verdict: str = ""
     notes: list[str] = field(default_factory=list[str])
 
@@ -237,6 +246,24 @@ class _Costs(logging.Handler):
         self.total += cost
         self.counted += 1
         self.sources[source] = self.sources.get(source, 0) + 1
+
+
+def names_key(say: str, rule: dict[str, Any], keybinds: Keybinds) -> bool | None:
+    """Whether ``say`` names the player's key for one of the actions the case asks for
+    ("Left Alt + N", or "Left Alt and N"), or ``None`` if none of them has a key. A
+    measure, not a verdict: a one-letter key can be a word."""
+    keys: list[str] = []
+    for name in (name for group in rule.get("must", []) for name in group):
+        action = keybinds.get(name)
+        key = pressable_input(action) if action is not None else None
+        if key is not None:
+            keys.append(key_text(key))
+    if not keys:
+        return None
+    return any(
+        all(re.search(rf"(?<![A-Za-z0-9]){re.escape(part)}(?![A-Za-z0-9])", say) for part in parts)
+        for parts in (key.split(" + ") for key in keys)
+    )
 
 
 def pressed(commands: tuple[Command, ...], keybinds: Keybinds) -> list[str]:
@@ -479,6 +506,10 @@ async def run_case(
         outcome.hosts = costs.hosts[hosts:] if costs else []
     if isinstance(decision, Reply):
         outcome.kind, outcome.say = "reply", decision.text
+        if lists.keys_off:
+            outcome.named_key = names_key(decision.text, rule, keybinds)
+            if outcome.named_key is False:
+                outcome.notes.append("didn't name the player's key")
         if decision.card is not None or decision.text == NO_PRESS_AFTER_SEARCH:
             outcome.calls += 1  # show_card (or an act after a search) ended its call early
         if decision.card is not None:
@@ -1156,6 +1187,9 @@ def _summary(outcomes: list[Outcome], costs: _Costs, summary: dict[str, Any]) ->
             f"Look-ups: {len(looked)} requests used them, "
             f"p50 {statistics.median(o.ms for o in looked):.0f} ms"
         )
+    if keyed := [o for o in outcomes if o.named_key is not None]:
+        named = sum(1 for o in keyed if o.named_key)
+        print(f"Named the player's key: {named} of {len(keyed)} requests for a press (#392)")
     if (calls := [o.calls for o in outcomes if o.route == "brain"]) and calls:
         retried = sum(1 for o in outcomes if o.errors)
         print(

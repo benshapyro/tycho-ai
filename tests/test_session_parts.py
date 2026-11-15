@@ -6,6 +6,7 @@ import pytest
 
 from tycho.brain import BrainError, Reply, RunActions, RunSequence
 from tycho.commands import Command, CommandMatcher
+from tycho.commands.keys import own_keys
 from tycho.commands.reserved import TILE_WORDS
 from tycho.games.star_citizen.gamelog import QUANTUM_ROUTE
 from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput
@@ -25,7 +26,6 @@ from tycho.runtime.routing import (
     Reserved,
     ToBrain,
     from_brain,
-    own_keys,
     route,
     tile_command,
 )

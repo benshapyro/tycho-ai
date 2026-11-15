@@ -112,6 +112,8 @@ def serve_with_tray(
         requests.target = lambda: host.ask("open")
     if reopen:
         host.ask("open")  # the window asked for the restart: it's back, on the new loop
+    elif _crash_reports_unasked():
+        host.ask("open")  # set up before crash reports: the window asks, once (ADR 4, #442)
     try:
         host.run(window.open)
     finally:
@@ -119,6 +121,15 @@ def serve_with_tray(
             requests.target = lambda: None
         tray.close()
     return "restart" if host.restarting else "stopped"
+
+
+def _crash_reports_unasked() -> bool:
+    """Set up before crash reports existed and never asked (ADR 4): the window opens at
+    start to ask, even for a player who never opens it."""
+    try:
+        return settings.load().crash_reports is None
+    except settings.SettingsError:
+        return False
 
 
 def app_window(

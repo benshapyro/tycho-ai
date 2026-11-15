@@ -96,7 +96,7 @@
     const lede = firstRun
       ? "A few steps, about three minutes. Skip any of them and come back; Tycho starts listening when you're done."
       : askingCrash && STEPS[step] === "Privacy"
-        ? "One new question since you set Tycho up: crash reports. The rest is as you chose it."
+        ? "One question left: crash reports. The rest is as you chose it."
         : "Change anything you chose the first time. Changes apply when Tycho restarts.";
     const name = STEPS[step];
     let body = "";
@@ -575,6 +575,8 @@
 
   /* ---------- shell ---------- */
   async function render() {
+    // Left the question without answering: setup is as usual from here (#442).
+    if (askingCrash && (view !== "setup" || STEPS[step] !== "Privacy")) askingCrash = false;
     if (capturing) api.cancel_capture();
     document.querySelectorAll("nav [data-view]").forEach((b) => b.setAttribute("aria-current", b.dataset.view === view ? "page" : "false"));
     try {
