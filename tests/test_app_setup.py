@@ -7,7 +7,7 @@ import pytest
 
 from tests.fakes.fake_setup_pc import FOUND, MISSING, FakeSetupPC
 from tycho import doctor, settings
-from tycho.desktop import setup
+from tycho.desktop import setup, shell
 from tycho.desktop.bridge import Bridge
 from tycho.settings import Settings
 
@@ -275,7 +275,6 @@ def test_the_slow_look_ups_are_kept_between_redraws(path: Path) -> None:
 
 
 def test_without_a_window_setup_falls_back_to_the_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
-    from tycho import app
 
     class NoWindow:
         def open(self) -> bool:
@@ -287,8 +286,8 @@ def test_without_a_window_setup_falls_back_to_the_terminal(monkeypatch: pytest.M
     def no_window(**_options: object) -> NoWindow:
         return NoWindow()
 
-    monkeypatch.setattr(app, "app_window", no_window)
-    assert app.first_run() == "no_window"
+    monkeypatch.setattr(shell, "app_window", no_window)
+    assert shell.first_run() == "no_window"
 
 
 @pytest.mark.parametrize(
@@ -334,14 +333,13 @@ class _Window:
 def test_the_first_run_ends_done_or_closed(
     monkeypatch: pytest.MonkeyPatch, finishes: bool, outcome: str
 ) -> None:
-    from tycho import app
 
     def window(**options: object) -> _Window:
         return _Window(options["finish"], finishes)
 
-    monkeypatch.setattr(app, "app_window", window)
+    monkeypatch.setattr(shell, "app_window", window)
     monkeypatch.setattr("threading.Timer", _NoTimer)  # no real 0.8 s close
-    assert app.first_run() == outcome
+    assert shell.first_run() == outcome
 
 
 class _NoTimer:

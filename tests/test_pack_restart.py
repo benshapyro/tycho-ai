@@ -16,12 +16,14 @@ import pytest
 import tycho.desktop.setup
 from tycho import app, settings
 from tycho.desktop import bridge as bridge_module
+from tycho.desktop import shell
 from tycho.desktop.bridge import Bridge
 from tycho.desktop.host import Host
 from tycho.games.star_citizen.store import GameDataError
 from tycho.keybinds import Keybinds
 from tycho.packs import STAR_CITIZEN, GamePack, built_in
 from tycho.settings import Settings
+from tycho.start import run as start_run
 
 OTHER = "other-game"
 """A second game: not one the settings accept yet, so it's built without checks."""
@@ -50,8 +52,8 @@ def two_games(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     monkeypatch.setattr(app.settings, "load", load)
     monkeypatch.setattr(app.settings, "update", update)
-    monkeypatch.setattr(app, "built_in", pack)
-    monkeypatch.setattr(app, "start_update_check", _nothing)
+    monkeypatch.setattr(start_run, "built_in", pack)
+    monkeypatch.setattr(start_run, "start_update_check", _nothing)
     return saved
 
 
@@ -72,14 +74,14 @@ def test_a_new_game_that_won_t_start_falls_back_to_the_last_one_and_says_why(
     def start(current: Settings, **options: Any) -> int:
         starts.append((current.game, tuple(options["notices"])))
         if len(starts) == 1:
-            return app.RESTART  # Star Citizen ran; the other game was picked
+            return start_run.RESTART  # Star Citizen ran; the other game was picked
         if str(current.game) == OTHER:
             raise FileNotFoundError("Other Game's folder isn't there")
         return 0
 
     with pytest.MonkeyPatch.context() as m:
-        m.setattr(app, "_start", start)
-        code = app._run(Settings(), tmp_path / "log", window=False)
+        m.setattr(start_run, "_start", start)
+        code = start_run._run(Settings(), tmp_path / "log", window=False)
     assert code == 0  # not 1, with the window already closed: Tycho didn't vanish
     assert [game for game, _ in starts] == ["star-citizen", OTHER, "star-citizen"]
     (said,) = starts[-1][1]
@@ -96,16 +98,16 @@ def test_a_game_that_won_t_start_at_all_still_stops_tycho(
     def start(current: Settings, **options: Any) -> int:
         raise GameDataError("no keybinds")
 
-    monkeypatch.setattr(app, "_start", start)
+    monkeypatch.setattr(start_run, "_start", start)
     with pytest.raises(GameDataError):
-        app._run(Settings(), tmp_path / "log", window=False)
+        start_run._run(Settings(), tmp_path / "log", window=False)
 
 
 def test_a_new_game_that_needs_setting_up_opens_setup_and_goes_back_if_it_isn_t_finished(
     two_games: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     starts: list[tuple[str, tuple[str, ...]]] = []
-    answers = [app.RESTART, 0]
+    answers = [start_run.RESTART, 0]
 
     def start(current: Settings, **options: Any) -> int:
         starts.append((current.game, tuple(options["notices"])))
@@ -117,16 +119,16 @@ def test_a_new_game_that_needs_setting_up_opens_setup_and_goes_back_if_it_isn_t_
         setups.append("setup")
         return "closed"
 
-    monkeypatch.setattr(app, "_start", start)
-    monkeypatch.setattr(app, "_Starting", _nothing)
+    monkeypatch.setattr(start_run, "_start", start)
+    monkeypatch.setattr(shell, "Starting", _nothing)
     monkeypatch.setattr(sys, "platform", "win32")
 
     def needs_setup(current: Settings) -> bool:
         return str(current.game) == OTHER
 
     monkeypatch.setattr(tycho.desktop.setup, "needs_setup", needs_setup)
-    monkeypatch.setattr(app, "first_run", setup)
-    assert app._run(Settings(), tmp_path / "log", window=True) == 0
+    monkeypatch.setattr(shell, "first_run", setup)
+    assert start_run._run(Settings(), tmp_path / "log", window=True) == 0
     assert setups == ["setup"]  # the window asked, rather than Tycho failing to start
     assert [game for game, _ in starts] == ["star-citizen", "star-citizen"]
     (said,) = starts[-1][1]

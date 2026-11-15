@@ -72,7 +72,6 @@ from brain_report import GLOBAL_NEVER  # pyright: ignore[reportMissingImports, r
 
 from tycho import credentials, logs, paths, safety, settings
 from tycho.address import Address
-from tycho.app import NO_KEYBINDS, load_commands
 from tycho.brain import BrainError, BrainRequest, Exchange, Reply, providers
 from tycho.brain.briefing import instructions_hash
 from tycho.brain.claude import MODEL, ClaudeBrain
@@ -100,6 +99,7 @@ from tycho.runtime import routing
 from tycho.runtime.planning import Questions, Refusal, Steps, plan_request
 from tycho.runtime.routing import NotUnderstood, Picked, Reserved, from_brain, own_keys
 from tycho.spoken_settings import SettingsTool
+from tycho.start.assemble import NO_KEYBINDS, load_commands
 
 PACKS = Path(__file__).resolve().parents[2] / "src" / "tycho" / "packs"
 

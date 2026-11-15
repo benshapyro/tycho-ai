@@ -16,7 +16,6 @@ from pydantic import ValidationError
 from tests.fakes.fake_keys import FakeClock, FakeFocus, FakeKeySender
 from tests.fakes.fake_pack import FOLDER, REGISTRY, FakeGameKeybinds, fake_pack
 from tycho import paths, safety, settings
-from tycho.app import game_pack, load_commands
 from tycho.brain import RunActions
 from tycho.brain.briefing import (
     bound_actions,
@@ -46,6 +45,7 @@ from tycho.runtime.planning import Planned, Questions, Refusal, Steps, plan_requ
 from tycho.runtime.routing import Picked, from_brain
 from tycho.settings import Game, Settings
 from tycho.settings import rule as settings_rule
+from tycho.start.assemble import game_pack, load_commands
 from tycho.tile.design import accent_for, accent_for_maker
 
 SC = built_in(STAR_CITIZEN)

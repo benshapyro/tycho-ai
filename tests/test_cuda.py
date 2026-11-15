@@ -12,7 +12,8 @@ from typing import Any
 import pytest
 
 from tycho import app
-from tycho.stt import ModelError, cuda, models
+from tycho.start import assemble
+from tycho.stt import ModelError, choice, cuda, models
 from tycho.stt.cuda import CudaLibraries, Wheel
 
 
@@ -167,13 +168,13 @@ def test_tycho_gpu_install_needs_an_nvidia_card_and_driver(
 
 
 def test_the_hint_says_what_to_do(gpu: SimpleNamespace) -> None:
-    hint = app.gpu_hint()
+    hint = choice.gpu_hint()
     assert hint is not None
     assert "uv run tycho gpu install" in hint
     gpu.driver = 560
-    assert "driver 580" in (app.gpu_hint() or "")
+    assert "driver 580" in (choice.gpu_hint() or "")
     gpu.driver = None
-    assert app.gpu_hint() is None
+    assert choice.gpu_hint() is None
 
 
 def test_without_any_cuda_libraries_cuda_isnt_available(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -210,13 +211,15 @@ def test_the_hint_fires_when_cuda_is_missing_and_not_when_memory_is_short(
 
     monkeypatch.setattr(app.ModelStore, "ensure", present)
     monkeypatch.setattr(ParakeetTranscriber, "load", loaded)
-    monkeypatch.setattr(app, "device_choice", no_cuda)
+    monkeypatch.setattr(assemble, "device_choice", no_cuda)
     caplog.set_level(logging.INFO)
-    app.load_transcriber(Settings())
+    assemble.load_transcriber(Settings())
     assert "uv run tycho gpu install" in caplog.text
 
     caplog.clear()
-    app.load_transcriber(Settings(transcription_device="cpu"))  # the player chose the processor
+    assemble.load_transcriber(
+        Settings(transcription_device="cpu")
+    )  # the player chose the processor
     assert "gpu install" not in caplog.text
 
 

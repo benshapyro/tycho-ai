@@ -15,6 +15,7 @@ from tycho.desktop.commands import Commands
 from tycho.desktop.host import Host
 from tycho.packs import STAR_CITIZEN, YOU_TURNED_THEM_OFF, as_run, built_in
 from tycho.settings import Settings
+from tycho.start import run as start_run
 
 
 @pytest.fixture
@@ -105,20 +106,20 @@ def test_tycho_starts_again_with_the_saved_settings_and_its_window_open(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     starts: list[tuple[bool, bool]] = []
-    answers = [app.RESTART, 0]
+    answers = [start_run.RESTART, 0]
 
     def start(current: Settings, **options: object) -> int:
         starts.append((current.key_actions, bool(options["reopen"])))
         return answers.pop(0)
 
-    monkeypatch.setattr(app, "_start", start)
+    monkeypatch.setattr(start_run, "_start", start)
 
     def no_update_check(_current: Settings) -> None:
         pass
 
-    monkeypatch.setattr(app, "start_update_check", no_update_check)
+    monkeypatch.setattr(start_run, "start_update_check", no_update_check)
     monkeypatch.setattr(app.settings, "load", lambda: Settings(key_actions=False))
-    code = app._run(Settings(), tmp_path / "log", window=False)  # pyright: ignore[reportPrivateUsage]
+    code = start_run._run(Settings(), tmp_path / "log", window=False)  # pyright: ignore[reportPrivateUsage]
     assert code == 0
     # The first start as given; the second with the settings as saved, window open.
     assert starts == [(True, False), (False, True)]

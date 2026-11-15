@@ -128,6 +128,8 @@ def _hidden(tree: ast.Module) -> list[int]:
             node = todo.pop()
             if isinstance(node, SCOPES):
                 inner.append(node)
+                # Its decorators, defaults and bases run here, in the enclosing scope.
+                todo.extend(c for c in ast.iter_child_nodes(node) if c not in node.body)
                 continue
             nodes.append(node)
             todo.extend(ast.iter_child_nodes(node))
@@ -148,7 +150,12 @@ def _hidden(tree: ast.Module) -> list[int]:
             assert isinstance(scope, SCOPES)
             # A scope sees the names around it, but a class body's own names aren't seen
             # by its methods: they see only what the class saw.
+            # A function's arguments are its own names, whatever they're called outside.
             seen = visible if in_class else bound
+            if not isinstance(scope, ast.ClassDef):
+                a = scope.args
+                every = [*a.posonlyargs, *a.args, *a.kwonlyargs, a.vararg, a.kwarg]
+                seen = seen - {arg.arg for arg in every if arg is not None}
             visit(scope.body, seen, in_class=isinstance(scope, ast.ClassDef))
 
     visit(tree.body, set(), in_class=False)
@@ -191,7 +198,13 @@ def test_the_check_sees_a_dll_out_of_sight() -> None:
         "    o = win32.user32()\n"
         "    def inner():\n"
         "        g(o)\n"
+        "D = win32.user32()\n"
+        "def shadowed(D):\n"
+        "    return D\n"
+        "def default(x=D):\n"
+        "    return x\n"
     )
     # Line 21 is a method's own argument, not the class's DLL: unseen. Line 25 uses the
-    # outer function's DLL: seen, once.
-    assert _hidden(ast.parse(seen)) == [6, 9, 14, 17, 25]
+    # outer function's DLL: seen, once. Line 28's D is the function's own argument; line
+    # 29 hands the module's DLL on as a default.
+    assert _hidden(ast.parse(seen)) == [6, 9, 14, 17, 25, 29]

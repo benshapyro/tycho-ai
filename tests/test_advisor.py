@@ -16,7 +16,6 @@ import pytest
 from tests.fakes.fake_keys import FakeFocus, FakeKeySender
 from tests.fakes.fake_pack import ADVISOR, REGISTRY, FakeGameKeybinds, advisor_pack, fake_pack
 from tycho import safety, settings
-from tycho.app import game_pack
 from tycho.brain.briefing import briefing, core_sections, instructions
 from tycho.brain.claude import ClaudeBrain
 from tycho.brain.decisions import Decision, UnboundAction
@@ -39,6 +38,7 @@ from tycho.runtime.planning import Refusal, plan_request
 from tycho.settings import Settings
 from tycho.settings import rule as settings_rule
 from tycho.spoken_settings import Refused, check_rule
+from tycho.start.assemble import game_pack
 
 SC = built_in(STAR_CITIZEN)
 
