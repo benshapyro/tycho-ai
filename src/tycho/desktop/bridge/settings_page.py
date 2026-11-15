@@ -81,7 +81,7 @@ class SettingsPage(State):
         if choices := setting_choices(field.annotation):
             row["choices"] = list(choices)
         if name == "game":
-            row["packs"] = _packs()
+            row["packs"] = shown_packs()
         for key in ("minimum", "maximum"):
             if key in prop:
                 row[key] = prop[key]
@@ -213,7 +213,7 @@ def _shown(name: str, value: object) -> object:
     return str(value)
 
 
-def _packs() -> list[dict[str, str]]:
+def shown_packs() -> list[dict[str, str]]:
     """Each game pack Tycho ships, for the Game setting: its name, and whether Tycho may
     press keys there, and why not, in the pack's words (#295)."""
     shown: list[dict[str, str]] = []

@@ -252,7 +252,7 @@ def test_the_keys_page_marks_an_unusable_key() -> None:
 def test_the_setup_keys_note_names_openrouter_as_the_brains_other_choice() -> None:
     """#316: the note named only Anthropic, beside the OpenRouter key field."""
     page = (Path(__file__).parents[1] / "src/tycho/desktop/app/app.js").read_text("utf-8")
-    assert "an OpenRouter key does the same with the brain set to OpenRouter" in page
+    assert "the same Claude through one OpenRouter key" in page
 
 
 def test_removing_a_key(path: Path, vault: dict[str, str]) -> None:
@@ -376,6 +376,7 @@ def test_nothing_private_is_offered_to_the_page() -> None:
             "keys",
             "microphone_level",
             "open_release",
+            "pack_setup",
             "remove_phrase",
             "remove_key",
             "set",

@@ -11,6 +11,9 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ### Added
 - Change Tycho's voice by asking: "switch your voice to Sarah". By voice you can pick George, Sarah, Lily or Brian; any other voice is still chosen in Tycho's window (Settings, Voice and sounds) or `settings.toml`. The new voice is used from the next start, and Tycho says so. ([#355](https://github.com/benshapyro/tycho-ai/issues/355))
 
+- Setup now starts with your game. Pick Star Citizen or World of Warcraft: Forever first, and every step after it fits that game: what Tycho does there, whether it presses keys and why, what it can look up, and two or three things to say first. A PC with only World of Warcraft no longer lands on "Star Citizen wasn't found". The steps are the game, your keys (with what each costs), push-to-talk, the microphone, Tycho's voice, what leaves your PC, and a first thing to try. You can skip any step: the last one lists what Tycho still needs before it can start, and what you chose is kept if you close the window. ([#364](https://github.com/benshapyro/tycho-ai/issues/364))
+- Picking another game under Settings, Game and controls, now shows what Tycho does in that game before you switch, with a Back button. Before, one click restarted Tycho with it. ([#364](https://github.com/benshapyro/tycho-ai/issues/364))
+
 ### Changed
 - With key actions off in Star Citizen, Tycho now names your own key when you say a built-in command ("night vision" gets "it's on Right Alt + N" if that's your key), instead of "your night vision key, if you've bound one". If the action has no key, it says so. ([#386](https://github.com/benshapyro/tycho-ai/issues/386))
 

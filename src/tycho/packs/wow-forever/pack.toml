@@ -23,3 +23,13 @@ call_me = ""
 
 [parts]
 lookups = ["settings"]
+
+# What setup says about World of Warcraft: Forever (#364).
+[setup]
+intro = "Tycho answers questions about World of Warcraft: Forever while you play: classes, dungeons, professions, zones and the Legacy System. It only talks: it presses nothing."
+lookups = ["What Tycho knows about Forever is written into Tycho. It looks nothing up for this game."]
+examples = [
+    "which classes can a Skyborne play?",
+    "what's the first dungeon, and what level is it?",
+    "how does the Legacy System work?",
+]

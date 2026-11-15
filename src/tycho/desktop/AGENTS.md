@@ -15,5 +15,6 @@ One Tycho process: the voice loop on its own thread (`host.py`), the tray icon o
 ## Testing
 
 - `tests/fakes/fake_setup_pc.py` and `fake_key_check.py` stand in for the PC and the key checks.
-- The page can be driven in a browser with a `window.TYCHO_FAKE` bridge (see the app tests).
+- The page can be driven in a browser with a `window.TYCHO_FAKE` bridge. `tests/test_setup_page.py` does it for real with Playwright: the app's own page, every call going to a real `Bridge` over the fake PC. It uses the PC's own Edge on Windows (and CI), so there's no browser to download. A new step or page gets a test there.
+- **Setup names no game** (#364). What it says about a game is that pack's `[setup]` text (`packs/onboarding.py`), sent by `setup_state` and `pack_setup`. Don't put a game's words in `app.js` or the bridge.
 - Windows-only behaviour (the tray, the foreground, the windowless app) needs the real PC: install CI's build, and check it with the maintainer at the screen.
