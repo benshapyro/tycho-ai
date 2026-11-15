@@ -106,6 +106,7 @@ def setting_label(name: str) -> str:
         "feedback_volume": "Sound volume",
         "game": "Game",
         "game_root": "Game folder",
+        "push_to_talk": "Push-to-talk",
         "transcription_device": "Speech recognition on",
         "voice": "Voice",
         "voice_model": "Voice model",

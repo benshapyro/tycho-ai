@@ -18,7 +18,7 @@
     $("#toastUndo").hidden = !undo;
     $("#toast").hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => ($("#toast").hidden = true), 4500);
+    toastTimer = setTimeout(() => ($("#toast").hidden = true), undo ? 9000 : 4500); // Undo stays longer
   }
   $("#toastUndo").addEventListener("click", async () => {
     const r = await api.undo();
@@ -53,11 +53,24 @@
   let firstRun = false;
   let canQuit = false;
   let askingCrash = false; // set up before crash reports existed: ask once (ADR 4)
-  function stepper() {
-    return `<ol class="steps">${STEPS.map((s, i) => `<li class="${i < step ? "done" : i === step ? "now" : ""}"><b>${i < step ? "✓" : i === STEPS.length - 1 ? "✦" : i + 1}</b>${esc(s)}</li>`).join("")}</ol>`;
+  // A step is ticked when what it asks for is there, not when it was walked past: a
+  // skipped one keeps its number, marked as still to do.
+  function stepDone(name, s) {
+    if (name === "Game") return !s.game.needed || s.game.found;
+    if (name === "Keys") return brainKey(s);
+    if (name === "Push-to-talk") return s.push_to_talk.set;
+    if (name === "Privacy") return s.crash_reports != null;
+    return true; // the microphone and the voice have a default
+  }
+  function stepper(s) {
+    return `<ol class="steps">${STEPS.map((name, i) => {
+      const past = i < step, done = past && stepDone(name, s);
+      const cls = i === step ? "now" : done ? "done" : past ? "todo" : "";
+      return `<li class="${cls}"${past && !done ? ' title="Still to do"' : ""}><b>${done ? "✓" : i === STEPS.length - 1 ? "✦" : i + 1}</b>${esc(name)}</li>`;
+    }).join("")}</ol>`;
   }
   function stepNav(nextOk, next = "Next") {
-    return `<div class="bar"><button class="btn frame" type="button" data-step="-1" ${step === 0 ? "disabled" : ""}>Back</button>
+    return `<div class="bar stepnav"><button class="btn frame" type="button" data-step="-1" ${step === 0 ? "disabled" : ""}>Back</button>
       <button class="btn primary frame" type="button" data-step="1" ${nextOk ? "" : "disabled"}>${esc(next)}</button></div>`;
   }
   const levelWords = {
@@ -72,7 +85,7 @@
   // why, and what it can look up. `live`: the game is the chosen one, so its controls work.
   function packCard(p, game, live) {
     const keys = !p.can_press
-      ? `<p class="warn-line" id="packMode">Advisor only: Tycho presses no keys in ${esc(p.name)}. ${esc(p.why)}</p>`
+      ? `<p class="info-line" id="packMode">Advisor only: Tycho presses no keys in ${esc(p.name)}. ${esc(p.why)}</p>`
       : live
         ? `<div class="set" id="packMode"><div><b>Let Tycho press keys</b><p>Every press goes through the safety gate, and anything you can't undo waits for you to say “confirm”. Off, Tycho only answers and advises.</p></div>
             <div class="ctl"><button class="switch" type="button" role="switch" aria-checked="${p.key_actions === true}" aria-label="Let Tycho press keys" data-bool="key_actions"></button></div></div>`
@@ -136,18 +149,20 @@
         ${mine ? "" : `<p class="note">Now: ${esc(v.setting)}, a voice of your own.</p>`}
         <p class="note">Its volume, and what Tycho calls you, are under Settings, Voice and sounds.</p></div>`;
     } else if (name === "Privacy") {
-      body = `<div class="card frame"><h3>What leaves your PC</h3>
+      const leaves = `<div class="card frame"><h3>What leaves your PC</h3>
         <p class="ok-line">✓ Your voice never does: speech recognition runs on this PC.</p>
         <p>Only text is sent, and only what's listed here.</p>
         <div class="tablewrap"><table class="leaves"><thead><tr><th>Who gets it</th><th>What</th><th>When</th></tr></thead><tbody>
         ${s.leaves.map((r) => `<tr><td><b>${esc(r.to)}</b></td><td>${esc(r.what)}</td><td class="dim">${esc(r.when)}</td></tr>`).join("")}</tbody></table></div>
-        <p class="note">Tycho counts and tracks nothing about how you use it. Your keys stay in Windows Credential Manager, and a record of what you said is kept on this PC only if you turn it on (Settings, Privacy).</p></div>
-        <div class="card frame" id="crashCard"><h3>Send crash reports to help fix Tycho?</h3>
+        <p class="note">Tycho counts and tracks nothing about how you use it. Your keys stay in Windows Credential Manager, and a record of what you said is kept on this PC only if you turn it on (Settings, Privacy).</p></div>`;
+      const crash = `<div class="card frame" id="crashCard"><h3>Send crash reports to help fix Tycho?</h3>
         <p>Your choice. Nothing is sent unless you say yes, and you can change it any time under Settings, Privacy.</p>
         <div class="seg big" role="group" aria-label="Send crash reports"><button type="button" aria-pressed="${s.crash_reports === false}" data-crash="no">No</button><button type="button" aria-pressed="${s.crash_reports === true}" data-crash="yes">Yes</button></div>
         <div class="field"><label>A report holds</label>${list(["The kind of error, and where in Tycho's own code it happened", "Tycho's version, the Windows version, the game and the brain provider"])}</div>
         <div class="field"><label>Never sent</label>${list(["What you or Tycho said, or anything sent to or from the brain", "Your keys", "Your name, what Tycho calls you, or your Windows user name", "Your files and folders, including the game's", "Your settings, log lines, or anything that identifies you or this PC"])}</div>
         <p class="note">Reports go to Sentry, the service Tycho's maintainer uses to collect them, when Tycho next starts after a crash. Saying no deletes any report still waiting.</p></div>`;
+      // Asked this one question (set up before it existed): it comes first, not under the table.
+      body = askingCrash ? crash + leaves : leaves + crash;
     } else {
       ok = s.ready;
       const say = s.pack.examples;
@@ -161,7 +176,7 @@
         <span class="err" id="finishErr"></span></div>`;
     }
     const last = step === STEPS.length - 1;
-    page.innerHTML = `<h1>${firstRun ? "Welcome to Tycho" : "Setup"}</h1><p class="lede">${lede}</p>${stepper()}${body}${stepNav(ok, last ? (firstRun ? "Start Tycho" : "Done") : "Next")}`;
+    page.innerHTML = `<h1>${firstRun ? "Welcome to Tycho" : "Setup"}</h1><p class="lede">${lede}</p>${stepper(s)}${body}${stepNav(ok, last ? (firstRun ? "Start Tycho" : "Done") : "Next")}`;
     bindSetup(s);
   }
 
@@ -411,8 +426,8 @@
   function updatesView() {
     const auto = data.groups.flatMap((g) => g.rows).find((r) => r.name === "check_for_updates");
     return `<div class="card frame"><h3>You have Tycho <span class="num">${esc($("#ver").textContent)}</span></h3>
-        <div class="keyrow"><button class="btn primary frame" type="button" id="checkUpdates">Check for updates</button><span id="updateMsg"></span></div>
-        <div class="keyrow" id="getRow" ${lastUpdate.state === "newer" ? "" : "hidden"}><button class="btn frame" type="button" id="getUpdate">${lastUpdate.state === "newer" ? `Get Tycho ${esc(lastUpdate.latest)}` : ""}</button><span class="err" id="getErr"></span></div>
+        <div class="keyrow"><button class="btn ${lastUpdate.state === "newer" ? "" : "primary "}frame" type="button" id="checkUpdates">Check for updates</button><span id="updateMsg"></span></div>
+        <div class="keyrow" id="getRow" ${lastUpdate.state === "newer" ? "" : "hidden"}><button class="btn primary frame" type="button" id="getUpdate">${lastUpdate.state === "newer" ? `Get Tycho ${esc(lastUpdate.latest)}` : ""}</button><span class="err" id="getErr"></span></div>
         <p class="note">Tycho never updates itself. The release page has the installer: quit Tycho (below, or from its icon by the clock), run it, and it installs over this version. Your settings and keys stay.</p>
         <p class="note">${auto && auto.value ? "Tycho also checks each time its window opens, and says so at the top." : "Automatic checks are off (Privacy tab), so Tycho only checks when you press the button."}</p></div>
       ${canQuit ? `<div class="card frame"><h3>Quit Tycho</h3>
@@ -444,6 +459,7 @@
         const u = await api.check_updates(true);
         [msg.textContent, msg.className] = updateWords(u);
         $("#getRow").hidden = u.state !== "newer";
+        b.classList.toggle("primary", u.state !== "newer"); // a newer one: Get is the button to press
         if (u.state === "newer") $("#getUpdate").textContent = `Get Tycho ${u.latest}`;
         notice(u);
       } catch (e) {
@@ -509,6 +525,16 @@
     // Typing in the search box filters what was fetched; everything else fetches again.
     const d = keepFocus && cmdData ? cmdData : (cmdData = await api.commands());
     const rows = d.rows;
+    if (!rows.length && d.keys_off && !d.problem) {
+      // A game Tycho presses nothing in has no commands to list: say what to do instead.
+      $("#noKeyBadge").textContent = "";
+      page.innerHTML = `<h1>Commands</h1>
+        <p class="lede">There are no commands to list for ${esc(d.game_name)}.</p>
+        <div class="card frame" id="noCommands"><h3>Just ask</h3>
+          <p>${esc(d.keys_off)}</p>
+          <p>Hold your push-to-talk button and ask in your own words. Every question goes to the brain, so there are no set phrases to learn.</p></div>`;
+      return;
+    }
     const noKey = rows.filter((r) => !r.sequence && !r.key && d.game).length;
     $("#noKeyBadge").textContent = noKey ? `${noKey} no key` : "";
     const q = cmdQuery.trim().toLowerCase();

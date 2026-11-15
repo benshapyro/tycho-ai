@@ -66,8 +66,13 @@ class SettingsPage(State):
         schema = Settings.model_json_schema()
         props: dict[str, Any] = schema.get("properties", {})
         groups: list[dict[str, object]] = []
+        hidden = _not_for(current.game)
         for group, names in GROUPS.items():
-            rows = [self._row(name, _value(current, name), props.get(name, {})) for name in names]
+            rows = [
+                self._row(name, _value(current, name), props.get(name, {}))
+                for name in names
+                if name not in hidden
+            ]
             groups.append({"name": group, "rows": rows})
         return {"groups": groups, "can_undo": bool(self._undo)}
 
@@ -219,6 +224,20 @@ def _shown(name: str, value: object) -> object:
     if value is None or isinstance(value, bool | int | float | str):
         return value
     return str(value)
+
+
+FOLDER_SETTINGS = frozenset({"game_channel", "game_root"})
+"""Where a game is installed: shown only for a game Tycho reads something from."""
+
+
+def _not_for(game: str) -> frozenset[str]:
+    """The settings that mean nothing in the chosen game, so its Settings leave them out:
+    a game whose pack reads nothing from its folder has no folder to choose."""
+    try:
+        pack = built_in(game)
+    except PackError:  # tycho check and Status say why; show everything
+        return frozenset()
+    return FOLDER_SETTINGS if pack.parts.install is None else frozenset()
 
 
 def shown_packs() -> list[dict[str, str]]:

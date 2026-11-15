@@ -176,3 +176,8 @@ ul.costs, ul.tips { color: var(--dim); font-size: 14px; }
 .steps-line { color: var(--dim); font-size: 13px; }
 .chip.bad { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, transparent); }
 
+/* The design review: setup's Back and Next stay in view, a skipped step isn't ticked,
+   and a plain fact isn't amber. The bar sits over main's 40px bottom padding so nothing shows under it. */
+.stepnav { position: sticky; bottom: -40px; padding: 14px 0 22px; margin-top: 2px; background: linear-gradient(to bottom, transparent, var(--void) 12px); z-index: 5; }
+.steps li.todo b { border-color: color-mix(in srgb, var(--caution) 60%, transparent); color: var(--caution); }
+.info-line { color: var(--text); font-size: 14px; border-left: 2px solid var(--acc-line); padding-left: 10px; }

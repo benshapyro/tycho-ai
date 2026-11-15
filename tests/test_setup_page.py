@@ -7,6 +7,7 @@ pywebview in the app: each call it makes is a call on the ``Bridge``.
 """
 
 import os
+import re
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -17,7 +18,7 @@ from playwright.sync_api import Browser, Error, Page, expect, sync_playwright
 
 from tests.fakes.fake_key_check import FakeKeyCheck
 from tests.fakes.fake_setup_pc import FakeSetupPC
-from tycho import credentials, settings
+from tycho import credentials, settings, updates
 from tycho.desktop import window
 from tycho.desktop.bridge import Bridge
 from tycho.settings import Settings
@@ -364,4 +365,102 @@ def test_the_first_run_asks_crash_reports_in_its_own_place(
     assert setup.bridge.about()["ask_crash_reports"] is False
     expect(setup.page.get_by_role("heading", name="Welcome to Tycho")).to_be_visible()
     setup.at("Game")
+    setup.close()
+
+
+def test_a_skipped_step_is_not_ticked_and_next_stays_in_view(setup: Setup) -> None:
+    """The design review: setup ticked every step walked past, done or not, and Next sat
+    below the window's edge on its first screen."""
+    page = setup.page
+    page.set_viewport_size({"width": 1120, "height": 800})  # the window's own size
+    setup.at("Game")
+    expect(page.get_by_role("button", name="Next", exact=True)).to_be_in_viewport()
+    for _ in range(3):  # past the game (not found), the keys (none) and push-to-talk (none)
+        setup.next()
+    setup.at("Microphone")
+    steps = page.locator(".steps li")
+    for i in range(3):
+        expect(steps.nth(i)).to_have_class("todo")
+        expect(steps.nth(i)).not_to_contain_text("✓")
+    # Done properly, a step is ticked.
+    page.get_by_role("button", name="Back").click()
+    page.locator("#capture").click()
+    expect(page.locator("#pttName")).to_have_text("Mouse side (forward)")
+    setup.next()
+    setup.at("Microphone")
+    expect(steps.nth(2)).to_have_class("done")
+    expect(steps.nth(2)).to_contain_text("✓")
+    setup.next()
+    setup.next()
+    setup.at("Privacy")  # the longest step: Next is still there to press
+    expect(page.get_by_role("button", name="Next", exact=True)).to_be_in_viewport()
+
+
+def test_the_one_crash_question_comes_before_the_table(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    settings.save(Settings(push_to_talk="mouse:0x06"), path)
+    setup = Setup(browser, path, first_run=False)
+    setup.at("Privacy")
+    cards = setup.page.locator("main > .card")
+    expect(cards.first).to_have_id("crashCard")
+    setup.close()
+    first = Setup(browser, path, first_run=True)  # the first run reads the table first
+    for _ in range(5):
+        first.next()
+    first.at("Privacy")
+    expect(first.page.locator("main > .card").last).to_have_id("crashCard")
+    first.close()
+
+
+def test_a_game_tycho_only_advises_in_has_no_empty_pages(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """The design review: an advisor game showed an empty commands table with a column
+    for keys, and another game's folder settings."""
+    settings.save(
+        Settings(game="wow-forever", push_to_talk="mouse:0x06", crash_reports=False), path
+    )
+    setup = Setup(browser, path, first_run=False)
+    page = setup.page
+    page.get_by_role("button", name="Commands").click()
+    expect(page.locator("#noCommands")).to_contain_text("ask in your own words")
+    expect(page.locator("table")).to_have_count(0)
+    page.get_by_role("button", name="Settings", exact=True).click()
+    page.get_by_role("tab", name="Game and controls").click()
+    expect(page.locator(".set", has_text="Push-to-talk")).to_have_count(1)
+    expect(page.locator(".set", has_text="Game folder")).to_have_count(0)
+    expect(page.locator(".set", has_text="Game channel")).to_have_count(0)
+    names = [r["name"] for g in setup.bridge.settings()["groups"] for r in g["rows"]]  # type: ignore[index,union-attr]
+    assert "game_root" not in names
+    assert "game" in names
+    setup.close()
+    # A game with a folder keeps them.
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    there = Setup(browser, path, first_run=False)
+    there.page.get_by_role("button", name="Settings", exact=True).click()
+    there.page.get_by_role("tab", name="Game and controls").click()
+    expect(there.page.locator(".set", has_text="Game folder")).to_have_count(1)
+    there.close()
+
+
+def test_a_newer_version_makes_get_the_button_to_press(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    setup = Setup(browser, path, first_run=False)
+    page = setup.page
+    page.get_by_role("button", name="Settings", exact=True).click()
+    page.get_by_role("tab", name="Updates").click()
+    expect(page.locator("#getRow")).to_be_hidden()  # nothing newer: Check is the one
+    expect(page.locator("#checkUpdates")).to_have_class(re.compile(r"\bprimary\b"))
+    setup.bridge._latest_release = lambda: updates.Release("99.0.0", "https://example.invalid")  # pyright: ignore[reportPrivateUsage]
+    page.locator("#checkUpdates").click()
+    expect(page.locator("#getUpdate")).to_have_class(re.compile(r"\bprimary\b"))
+    expect(page.locator("#checkUpdates")).not_to_have_class(re.compile(r"\bprimary\b"))
+    # And when the page is drawn again, knowing it.
+    page.get_by_role("tab", name="Keys").click()
+    page.get_by_role("tab", name="Updates").click()
+    expect(page.locator("#getUpdate")).to_have_class(re.compile(r"\bprimary\b"))
+    expect(page.locator("#checkUpdates")).not_to_have_class(re.compile(r"\bprimary\b"))
     setup.close()
