@@ -527,6 +527,7 @@ def test_what_leaves_the_pc_follows_the_game_and_the_settings(path: Path) -> Non
     # #435: the voice check at start, and a stored key's own check, are listed too.
     assert "once when it starts" in leaves[1]["when"]
     assert "to check it works" in leaves[2]["what"]
+    assert "tycho check" in leaves[2]["when"]  # #452: a full check sends the brain key too
     assert "On now" in leaves[3]["when"]
     assert any("UEX Corp" in row["what"] for row in leaves if row["to"] == "Star Citizen look-ups")
 

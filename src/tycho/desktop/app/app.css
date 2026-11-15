@@ -206,3 +206,6 @@ ul.costs, ul.tips { color: var(--dim); font-size: 14px; }
 .stepnav { position: sticky; bottom: -40px; padding: 14px 0 22px; margin-top: 2px; background: linear-gradient(to bottom, transparent, var(--void) 12px); z-index: 5; }
 .steps li.todo b { border-color: color-mix(in srgb, var(--caution) 60%, transparent); color: var(--caution); }
 .info-line { color: var(--text); font-size: 14px; border-left: 2px solid var(--acc-line); padding-left: 10px; }
+/* In setup a message sits above Back and Next, never on them. */
+body.solo .toast { bottom: 86px; }
+main > .card + .card { margin-top: 12px; }

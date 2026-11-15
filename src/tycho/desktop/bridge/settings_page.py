@@ -20,16 +20,15 @@ from tycho.settings import Settings, SettingsError
 log = logging.getLogger(__name__)
 
 GROUPS: dict[str, tuple[str, ...]] = {
-    "Voice and sounds": (
+    "Voice": (
         "voice",
-        "voice_model",
         "voice_volume",
         "feedback_volume",
         "call_me",
         "call_me_says",
         "call_me_how_often",
     ),
-    "Brain": ("brain_provider", "brain_model", "brain_seconds"),
+    "Game and controls": ("game", "push_to_talk", "microphone"),
     "Safety": ("key_actions", "confirm_seconds"),
     "Privacy": (
         "keep_transcripts",
@@ -38,17 +37,19 @@ GROUPS: dict[str, tuple[str, ...]] = {
         "check_for_updates",
         "crash_reports",
     ),
-    "Game and controls": (
-        "game",
+    "The Tile": tuple(n for n in Settings.model_fields if n == "tile" or n.startswith("tile_")),
+    "Advanced": (
+        "brain_provider",
+        "brain_model",
+        "brain_seconds",
+        "voice_model",
         "game_channel",
         "game_root",
-        "push_to_talk",
-        "microphone",
         "transcription_device",
     ),
-    "The Tile": tuple(n for n in Settings.model_fields if n == "tile" or n.startswith("tile_")),
 }
-"""Which settings each tab shows. Every setting but ``version`` is in one (a test checks)."""
+"""Which settings each tab shows (The Tile has a place of its own; Advanced holds what most
+players never change). Every setting but ``version`` is in one (a test checks)."""
 KEYS: dict[str, str] = {
     "anthropic": "Anthropic",
     "openrouter": "OpenRouter",

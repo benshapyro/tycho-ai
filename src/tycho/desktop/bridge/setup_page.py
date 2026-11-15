@@ -251,7 +251,7 @@ def _leaves(pack: GamePack, current: Settings) -> list[dict[str, str]]:
         {
             "to": "The key's own provider",
             "what": "A key you store here, to check it works",
-            "when": "Once, when you store it.",
+            "when": "Once, when you store it, and when you run `tycho check`.",
         }
     )
     if "web" in pack.parts.lookups:

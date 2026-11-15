@@ -105,7 +105,7 @@ def parse(name: str, said: str, current: object) -> Parsed:
             spoken = ", ".join(voices.SPOKEN[:-1]) + " or " + voices.SPOKEN[-1]
             raise Refused(
                 f"by voice, Tycho's voice is one of {spoken}; any other voice is chosen "
-                "in the app's Settings, under Voice and sounds"
+                "in the app's Settings, under Voice"
             )
         return Parsed(voice.name)
     if kind is bool or kind == bool | None:  # None: not asked yet (crash_reports)
