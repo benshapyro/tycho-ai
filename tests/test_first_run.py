@@ -1,6 +1,7 @@
 """The app's setup (ADR 17): the first run and its choices, with stand-ins for the PC."""
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -8,7 +9,7 @@ import pytest
 from tests.fakes.fake_setup_pc import FOUND, MISSING, FakeSetupPC
 from tycho import doctor, settings
 from tycho.desktop import setup, shell
-from tycho.desktop.bridge import Bridge
+from tycho.desktop.bridge import Bridge, commands_page
 from tycho.settings import Settings
 
 
@@ -213,7 +214,8 @@ def test_the_keybinds_are_read_once_a_while_and_none_without_the_game(
 
     monkeypatch.setattr(tycho.games, "find_install", find_install)
     monkeypatch.setattr(KeybindStore, "load", load)
-    monkeypatch.setattr("time.monotonic", lambda: 100.0)  # no 30 s edge
+    # No 30 s edge. Only the Commands page's clock (#420), not the whole process's.
+    monkeypatch.setattr(commands_page, "time", SimpleNamespace(monotonic=lambda: 100.0))
     bridge = _bridge(path)
     assert bridge._keybinds() == "the keybinds"  # pyright: ignore[reportPrivateUsage]
     assert bridge._keybinds() == "the keybinds"  # pyright: ignore[reportPrivateUsage]

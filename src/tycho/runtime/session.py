@@ -79,7 +79,7 @@ from tycho.runtime.routing import (
     Reserved,
     route,
 )
-from tycho.runtime.speaking import Speaking, log_failure
+from tycho.runtime.speaking import Speaking, log_failure, refused_keys_off, tell_player
 from tycho.runtime.tiling import tile_word, to_tile
 from tycho.tile.cards import notice
 
@@ -167,6 +167,7 @@ class Session:
         self._keys = ThreadPoolExecutor(1, thread_name_prefix="tycho-keys")
         self._closed = False
         self._paused = False
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     def pause(self, paused: bool) -> None:
         """Paused, push-to-talk does nothing, from the next press (the tray, ADR 17).
@@ -186,7 +187,7 @@ class Session:
 
     async def run(self, stop: asyncio.Event) -> None:
         """Listen for push-to-talk until ``stop`` is set, then shut down safely."""
-        loop = asyncio.get_running_loop()
+        self._loop = loop = asyncio.get_running_loop()
         halt = threading.Event()
         poller = threading.Thread(
             target=poll,
@@ -478,7 +479,9 @@ class Session:
         if self._display is not None:
             listening, wait = self._listening, self._confirm_seconds
             to_tile(self._display, result, listening=listening, confirm_seconds=wait)
-        keys_off = self._keys_off_first(result)
+        # The session's first press refused because key actions are off.
+        keys_off = not self._told_keys_off and refused_keys_off(result, self._safety_lists)
+        self._told_keys_off = self._told_keys_off or keys_off
         if keys_off and self._display is not None:
             # A player who forgot they turned key actions off hears why, once a session
             # (#327): on the Tile, and spoken after the not-done sound.
@@ -487,12 +490,9 @@ class Session:
         if self._on_result is not None:
             self._on_result(result)
 
-    def _keys_off_first(self, result: Result) -> bool:
-        """Whether this is the session's first press refused because key actions are off."""
-        lists = self._safety_lists
-        if self._told_keys_off or not lists.keys_off:
-            return False
-        if result.status != "refused" or result.detail != lists.keys_off:
-            return False
-        self._told_keys_off = True
-        return True
+    def tell(self, said: str) -> None:
+        """From any thread: something the player must know that no request asked for,
+        as the Tile or the tray icon stopping (#297; ``speaking.tell_player``)."""
+        log.warning("%s", said)
+        if self._loop is not None:
+            tell_player(self._loop, said, self._display, self._voice, self._feedback)

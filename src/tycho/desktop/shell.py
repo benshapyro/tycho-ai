@@ -13,7 +13,7 @@ import sys
 from collections.abc import Callable, Coroutine, Mapping
 from typing import TYPE_CHECKING, Literal
 
-from tycho import doctor, paths, settings
+from tycho import crashes, doctor, paths, settings
 
 if TYPE_CHECKING:
     from tycho.desktop.window import AppWindow
@@ -31,6 +31,13 @@ NO_WINDOW = (
     "(go.microsoft.com/fwlink/p/?LinkId=2124703), or run `tycho run` in a terminal "
     "to set up there."
 )
+
+
+TRAY_STOPPED = (
+    "Tycho's icon by the clock stopped working. Tycho is still listening. Starting "
+    "Tycho again from the Start menu opens its window."
+)
+"""Shown on the Tile, or said, when the tray icon stops while Tycho runs (#297)."""
 
 
 NO_TRAY = (
@@ -88,6 +95,9 @@ def serve_with_tray(
     )
     tray = TrayIcon(menu.tip, menu.items, menu.chosen)
     menu.refresh = tray.refresh
+    # The icon stopping later mustn't go unsaid (#297): the player hears it once, and
+    # Tycho keeps listening.
+    tray.on_stopped = lambda _why: session.tell(TRAY_STOPPED)
     if not tray.start():
         if windowed:
             log.error("No tray icon (%s), and no terminal: stopping", tray.failed)
@@ -176,6 +186,7 @@ class Starting:
             log.info("Quit while starting")
             if sys.stdout is not None and sys.stdout.isatty():
                 print("\nStopped.", flush=True)  # after the download's progress line
+            crashes.stop()  # a clean stop, though nothing after this line runs (#296)
             os._exit(0)  # the main thread is inside the download, which can't be told
 
     def doing(self, now: str) -> None:

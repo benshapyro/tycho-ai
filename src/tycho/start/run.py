@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from tycho import __version__, crash_reports, logs, settings
+from tycho import __version__, crash_reports, crashes, logs, settings
 from tycho.audio.source import AudioError, microphone_device
 from tycho.brain_choice import load_brain
 from tycho.desktop import shell
@@ -93,6 +93,9 @@ def _run(
     requests: OpenRequests | None = None,
 ) -> int:
     log.info("Tycho %s. Log file: %s", __version__, log_file)
+    # A native crash writes what Tycho was doing to a file in the logs folder (#296);
+    # this start finds the last run's, if it crashed, and says so.
+    crashed = crashes.watch(log_file.parent)
     start_update_check(current)
     if window and sys.platform == "win32":
         from tycho.desktop.setup import needs_setup
@@ -117,6 +120,9 @@ def _run(
     previous: Settings | None = None
     """The settings before a restart, while the new game hasn't started yet (#329)."""
     notices: list[str] = []
+    if crashed is not None:
+        notices.append(crashes.STOPPED.format(file=crashed))
+        log.warning("%s", notices[0])
     while True:
         starting = shell.Starting(requests) if window and sys.platform == "win32" else None
         try:
@@ -271,6 +277,7 @@ def _start(
             pack=pack,
         )
         live["confirm_seconds"] = lambda v: session.set_confirm_seconds(_float(v))
+        tile.on_stopped = lambda _why: session.tell(TILE_STOPPED)  # said, once (#297)
         log.info("Listening. Hold %s and speak; press Ctrl+C to stop.", describe(binding))
         if starting is not None:
             starting.close()  # the tray's own star takes its place
@@ -298,6 +305,13 @@ def _start(
     if mic.overflows:
         log.warning("The microphone dropped audio %d time(s)", mic.overflows)
     return RESTART if restart else 0
+
+
+TILE_STOPPED = (
+    "The Tile stopped working, so Tycho says its answers and shows no cards. Starting "
+    "Tycho again brings it back."
+)
+"""Said when the Tile's window stops while Tycho runs (#297); Tycho keeps listening."""
 
 
 NO_BUTTON = (
