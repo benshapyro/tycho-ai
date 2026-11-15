@@ -173,7 +173,7 @@ def checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Finding
         yield crashed
 
     if not quick:
-        yield from live_checks(current)
+        yield from live_checks(current, pack)
 
 
 def voice_finding(current: Settings, quick: bool) -> Finding:
@@ -193,11 +193,13 @@ def voice_finding(current: Settings, quick: bool) -> Finding:
     return choose_voice(current, key)[1]
 
 
-def live_checks(current: Settings) -> Iterator[Finding]:
-    """The checks that ask GitHub or need the player at the PC."""
+def live_checks(current: Settings, pack: GamePack) -> Iterator[Finding]:
+    """The checks that ask GitHub or need the player at the PC. The focus check is only
+    for a game Tycho presses keys in: an advisor game has no window to be in front."""
     if current.check_for_updates:  # the opt-out: no request to GitHub at all
         yield update_finding()
-    yield focus_finding()
+    if pack.window and not pack.safety.keys_off:
+        yield focus_finding(pack.name, pack.window)
 
 
 def start_update_check(current: Settings) -> None:
@@ -249,19 +251,22 @@ def microphone_level(name: str, clip: np.ndarray[tuple[int], np.dtype[np.float32
     return Finding("ok", "Microphone", f"{name}, level good (peak {20 * np.log10(peak):.0f} dB)")
 
 
-def focus_finding(seconds: float = 10.0) -> Finding:
+def focus_finding(game: str, window: str, seconds: float = 10.0) -> Finding:
+    """Whether Tycho can tell that ``game`` (the pack's name, never a game named here:
+    docs/voice-and-tone.md) is in front. ``window`` is the pack's program."""
     from tycho.input.windows import WindowsFocusCheck, foreground_executable
 
-    focus = WindowsFocusCheck()
-    print(f"       Switch to Star Citizen within {seconds:.0f} s to test the focus check...")
+    focus = WindowsFocusCheck(window)
+    print(f"       Switch to {game} within {seconds:.0f} s to test the focus check...")
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         if focus.game_has_focus():
-            return Finding("ok", "Focus check", "Tycho can tell when Star Citizen is in front")
+            return Finding("ok", "Focus check", f"Tycho can tell when {game} is in front")
         time.sleep(0.2)
-    front = foreground_executable() or "unknown"
+    front = foreground_executable() or "another program"
     return Finding(
         "warn",
         "Focus check",
-        f"Star Citizen wasn't in front ({front} was). Tycho only presses keys when it is.",
+        f"{game} wasn't in front ({front} was). Tycho only presses keys when it is: "
+        f"start the game, then run the check again.",
     )

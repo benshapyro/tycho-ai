@@ -95,6 +95,7 @@ They're in `.claude/skills/` (Claude Code) and `.agents/skills/` (Codex and othe
 - Code under `tools/` measures things and may call paid APIs; product code under `src/` must not depend on `tools/`.
 - Key sequences must be cancellable and must release every held key in a `finally` block.
 - No module in `src/tycho` is over 500 lines, and Star Citizen's code, the command line and DLL loading stay behind the import rules of [ADR 19](docs/adr/0019-code-layout.md). `tests/test_code_layout.py` checks both by reading the source; its lists of today's breaks only shrink, so when you fix one, take it off the list.
+- Every line a player hears or reads follows [docs/voice-and-tone.md](docs/voice-and-tone.md): plain words, short spoken lines, no blame, what to do next, and a game's own words only from its pack. `tests/test_wording.py` fails on a game's word in the core; its `KNOWN` list only shrinks.
 - Commits follow Conventional Commits: `feat(input): ...`, `fix(stt): ...`.
 - Every change goes through a pull request: branch from `main`, push, open a PR, and merge only when CI and the Claude review pass. `main` is protected; never push to it directly.
 - Pin every GitHub Action to a full commit SHA, with the version in a comment. The repo refuses tag refs like `@v4`.

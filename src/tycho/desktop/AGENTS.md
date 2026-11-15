@@ -13,6 +13,8 @@ One Tycho process: the voice loop on its own thread (`host.py`), the tray icon o
 - **A second start shows the running Tycho's window.** It uses a named event (`runtime/instance.py`, `OpenRequests`), not a server, and the window is raised once shown.
 - **The Commands page edits the player's `commands.toml` with tomlkit, so their comments stay.** A change is written only if the file then loads (`CommandMatcher.default`). Added phrases go in `[[phrases]]` entries; never copy a built-in command.
 
+- **The page's words follow `docs/voice-and-tone.md`.** The window shows whichever game is chosen, so a label or hint names no game: take the game's name from the bridge's data.
+
 ## Testing
 
 - `tests/fakes/fake_setup_pc.py` and `fake_key_check.py` stand in for the PC and the key checks.

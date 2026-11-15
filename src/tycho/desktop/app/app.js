@@ -399,7 +399,7 @@
       <p class="lede">What you can say, what it does in the game, and your key for it. Built-in phrases are instant; anything else goes to Claude. Your phrases are saved to <span class="num">${esc(d.file)}</span> and apply when Tycho restarts.</p>
       ${d.problem ? `<p class="err">${esc(d.problem)}</p>` : ""}${d.warnings.map((w) => `<p class="warn-line">${esc(w)}</p>`).join("")}
       ${d.keys_off ? `<p class="warn-line">Key actions are off. ${esc(d.keys_off)} These commands press nothing.</p>` : d.game ? "" : `<p class="warn-line">${esc(d.game_name)} wasn't found, so keys can't be shown. Set the game folder in Settings.</p>`}
-      <div class="toolbar"><input class="input" id="cmdSearch" type="search" placeholder="Search: gear, doors, quantum…" value="${esc(cmdQuery)}" aria-label="Search commands">
+      <div class="toolbar"><input class="input" id="cmdSearch" type="search" placeholder="Search by what you say or what it does" value="${esc(cmdQuery)}" aria-label="Search commands">
         <div class="seg" role="group" aria-label="Show">${filters.map(([k, l]) => `<button type="button" aria-pressed="${cmdFilter === k}" data-filter="${k}">${l} ${counts[k]}</button>`).join("")}</div></div>
       <div class="tablewrap"><table><thead><tr><th>Command</th><th>Say it</th><th>Your key</th><th>Notes</th></tr></thead><tbody>
       ${shown.map(cmdRow).join("") || `<tr><td colspan="4" class="dim">Nothing matches. Try another word.</td></tr>`}
