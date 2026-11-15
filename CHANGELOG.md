@@ -9,9 +9,13 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ## [Unreleased]
 
 ### Added
+- Crash reports, only if you say yes: set `crash_reports` in Tycho's window (Settings, Privacy) or in `settings.toml`. When Tycho crashes, it keeps a short report and sends it the next time it starts: where in Tycho's code it broke, Tycho's version, the Windows version, the game and the brain provider. It never sends what you or Tycho said, your keys, your name, your Windows user name, your files or folders, or anything that identifies your PC. Until you answer, nothing is sent. By voice, crash reports only switch off, and switching them off deletes any report still waiting. ([#199](https://github.com/benshapyro/tycho-ai/issues/199))
+
+### Added
 - Change Tycho's voice by asking: "switch your voice to Sarah". By voice you can pick George, Sarah, Lily or Brian; any other voice is still chosen in Tycho's window (Settings, Voice and sounds) or `settings.toml`. The new voice is used from the next start, and Tycho says so. ([#355](https://github.com/benshapyro/tycho-ai/issues/355))
 
 ### Changed
+- Tycho's wording was gone through line by line, so one game's words don't turn up in another. `tycho check` now asks you to switch to the game you chose (it said Star Citizen whatever the game), and skips that test where Tycho presses no keys. The descriptions of the web search and Tile settings no longer talk about Star Citizen or a ship, and the ones that are Star Citizen's say so. In World of Warcraft: Forever, and in Star Citizen with key actions off, simple questions get shorter answers. ([#363](https://github.com/benshapyro/tycho-ai/issues/363))
 - With key actions off in Star Citizen, Tycho now names your own key when you say a built-in command ("night vision" gets "it's on Right Alt + N" if that's your key), instead of "your night vision key, if you've bound one". If the action has no key, it says so. ([#386](https://github.com/benshapyro/tycho-ai/issues/386))
 - With key actions off in Star Citizen, Tycho now names your own key however you ask, not only for the exact built-in phrases: "hit the brakes", "flashlight" and "can you get the lights" get your key instead of "check your keybinds". To do it, your key bindings (what each key does, nothing else) are now part of what Tycho sends to its brain when key actions are off. ([#392](https://github.com/benshapyro/tycho-ai/issues/392))
 

@@ -65,7 +65,7 @@ DESCRIPTION = """\
 Read or change Tycho's own settings, when the player asks about or for a change to \
 how Tycho works: its voice (George, Sarah, Lily or Brian) and sound volumes, how \
 long they have to say "confirm", \
-web search, keeping transcripts, update checks, game channel, speech recognition \
+web search, keeping transcripts, update checks, crash reports, game channel, speech recognition \
 device. action "get" reads them all, with which can change by voice. action "set" \
 changes the ones named; a value can be relative ("-10%" for a bit quieter, "+2" \
 seconds). action "undo" puts back the last change made by voice. Some settings only \
@@ -108,7 +108,7 @@ def parse(name: str, said: str, current: object) -> Parsed:
                 "in the app's Settings, under Voice and sounds"
             )
         return Parsed(voice.name)
-    if kind is bool:
+    if kind is bool or kind == bool | None:  # None: not asked yet (crash_reports)
         if text in _TRUE:
             return Parsed(True)
         if text in _FALSE:
@@ -179,8 +179,8 @@ def check_rule(name: str, before: object, after: object) -> None:
 
 
 def _raises(before: object, after: object) -> bool:
-    if isinstance(before, bool) and isinstance(after, bool):
-        return after and not before
+    if isinstance(after, bool) and (before is None or isinstance(before, bool)):
+        return after and not before  # None is off: never asked, so nothing is sent
     if isinstance(before, int | float) and isinstance(after, int | float):
         return after > before
     return False
@@ -311,6 +311,10 @@ class SettingsTool:
         if updates:
             before = {name: getattr(current, name) for name in updates}
             updated = settings.update(updates, self._path)
+            if "crash_reports" in updates:  # only ever off by voice: delete what waits
+                from tycho import crash_reports
+
+                crash_reports.forget()
             self._undo = [*self._undo, (self._clock(), before)][-UNDO_DEPTH:]
             result["changed"] = self._applied(before, updated, notes)
             result["undo"] = 'say "undo" to put it back'

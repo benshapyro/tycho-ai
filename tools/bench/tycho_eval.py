@@ -13,6 +13,10 @@ Answers to questions must answer: a reply that only points the player elsewhere
 ("check the wiki") fails a case marked ``answer = true``, and a case's ``mentions``
 (the true numbers and names) must all be in the reply.
 
+Wording (docs/voice-and-tone.md, #363): the cases file's ``never_say`` lists another
+game's words, which fail any reply that says one; its ``say_words`` is the most words in
+the line said with a press; and a case's ``max_words`` is the most words in its reply.
+
 Settings requests ("turn your voice down") go through the settings tool, on a scratch
 settings file each case sets up ("settings", and "before" for changes already made);
 "settings_after", "settings_below" and "settings_unchanged" grade what it holds after.
@@ -283,11 +287,14 @@ def grade(
     *,
     keys_off: bool = False,
     never_say: Sequence[re.Pattern[str]] = (),
+    say_words: int = 0,
 ) -> str:
     """The case's verdict. ``keys_off``: Tycho presses nothing in this game (advisor mode,
     #191), so a reply that claims it did something fails (#326). ``never_say``: the
     cases file's words from another game ("quantum" in World of Warcraft), which fail
-    any case whose spoken line says one (#349)."""
+    any case whose spoken line says one (#349). ``say_words``: the cases file's limit on
+    the line spoken with a press, which is "a few words" (docs/voice-and-tone.md, #363);
+    0 is no limit. A case's own ``max_words`` limits its reply the same way."""
     never = (set(GLOBAL_NEVER) | set(rule.get("never", []))) - set(rule.get("allow", []))
     if outcome.kind == "error":
         return "error"
@@ -320,6 +327,8 @@ def grade(
         return f"narrated its reply: {outcome.say!r}"
     if found := next((p.search(said) for p in never_say if p.search(said)), None):
         return f"said {found.group(0)!r}, from another game: {outcome.say!r}"
+    if long := too_long(outcome, rule, say_words):
+        return long
     if keys_off and outcome.kind == "reply" and CLAIMED.search(said.strip()):
         return f"claimed a press with keys off: {outcome.say!r}"
     if outcome.kind == "reply" and rule.get("answer") and DODGE.search(said):
@@ -333,6 +342,17 @@ def grade(
     if (kinds := rule.get("card")) and outcome.card not in kinds:
         return f"showed {outcome.card or 'no card'}, expected {'/'.join(kinds)}"
     return grade_path(outcome, rule)
+
+
+def too_long(outcome: Outcome, rule: dict[str, Any], say_words: int) -> str:
+    """Why the spoken line is too long, or "" (#363): the line said with a press against
+    the file's ``say_words``, a reply against its case's ``max_words``. Words, not
+    characters: what matters is how long the player listens."""
+    most = say_words if outcome.kind == "actions" else rule.get("max_words", 0)
+    if outcome.kind not in ("actions", "reply") or not most:
+        return ""
+    count = len(outcome.say.split())
+    return f"said {count} words, at most {most}: {outcome.say!r}" if count > most else ""
 
 
 CURLY = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'})
@@ -800,6 +820,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     data: dict[str, Any] = tomllib.loads(args.cases.read_text("utf-8"))
     rules: list[dict[str, Any]] = data["case"]
     never_say = [re.compile(p, re.IGNORECASE) for p in data.get("never_say", [])]
+    say_words = int(data.get("say_words", 0))
     if args.tag:
         rules = [r for r in rules if r.get("tag") in args.tag]
     pinned = route(args.host, args.sort) if provider == "openrouter" else {}
@@ -947,7 +968,12 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
                 lists=pack.safety,
             )
             outcome.verdict = grade(
-                outcome, rule, valid, keys_off=bool(pack.safety.keys_off), never_say=never_say
+                outcome,
+                rule,
+                valid,
+                keys_off=bool(pack.safety.keys_off),
+                never_say=never_say,
+                say_words=say_words,
             )
             if outcome.verdict == "pass":
                 outcome.verdict = grade_fleet(fleet, rule)
