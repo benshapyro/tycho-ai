@@ -1,6 +1,6 @@
 # 17. The app: one Tycho, a tray icon and a window
 
-Date: 2026-11-05 · Status: accepted ([#12](https://github.com/benshapyro/tycho-ai/issues/12), [#10](https://github.com/benshapyro/tycho-ai/issues/10))
+Date: 2026-11-05 · Status: accepted, amended 2026-11-15 (see the end) ([#12](https://github.com/benshapyro/tycho-ai/issues/12), [#10](https://github.com/benshapyro/tycho-ai/issues/10))
 
 ## Context
 
@@ -88,3 +88,20 @@ The app may do what voice can't: lengthen the confirm time, turn transcripts on,
   2. the bridge and the first run;
   3. Status and Settings;
   4. Commands.
+
+## Amendment, 15 November 2026: the window's second layout
+
+A design review of the window ([review](https://claude.ai/artifact/1hNCZ1eqZTtqhsXVwRVzWz), private to the maintainer) walked every screen and journey for both game packs. The maintainer chose its direction B, "the co-pilot console", and approved a clickable mockup ([mockup](https://claude.ai/artifact/MRWXof7zjaGFKg3xUNbZdq), private to the maintainer). The technology, the threads, the narrow bridge and the rule that keys never come back out all stay. These parts of the decision change:
+
+- **Places down the left, not sections across the top.** Home, What to say, The Tile, Settings. The game and the version sit under them. This replaces "Setup (Status once setup is done), Settings, Commands".
+- **Home replaces Status.** It says in one line whether Tycho is listening and which button to hold, shows at most one thing to fix with its button, and lists the last few exchanges: what the player said and what Tycho did. The full list of checks stays one click away.
+- **The last exchanges are shown from memory only.** The voice loop keeps the last 20 in memory and the bridge hands them to the page. They are never written to a file because of this, they go nowhere but the window, and they are gone when Tycho quits. Keeping them on disk is still only the `transcripts` setting. The bridge gains one row: *Recent: the last exchanges, read only*.
+- **Setup is a full-window flow of five steps** (game, keys, talk and listen, privacy, try it) with no places beside it, and Back and Next always in view.
+- **"Try it" is real.** The voice loop runs during the last step of setup, so the player holds their button, speaks, and sees what Tycho heard. This replaces the bridge's "would press" check as the test. While setup is open the loop runs in a try-it mode: every press is planned through the safety gate as usual and then reported as "would press", never sent to the game. Leaving setup starts Tycho normally.
+- **Settings are plain groups** (Voice, Talking, Safety, Privacy, Keys, Updates) with the rest under Advanced. They are still built from `settings.json_schema()`; the schema gains the group and an "advanced" mark. "Applies at restart" becomes one line with a Restart now button, not a note on each row.
+- **The fonts are bundled.** Saira, Saira Semi Condensed and Share Tech Mono (all SIL OFL) ship in the installer and are embedded in the page from memory, so the page still fetches nothing and works offline. The Tile draws with the same files. Their licence goes in the notices.
+- **One accent colour per game pack.** A pack may name its accent in its data (ADR 18); the window and the Tile use it. The rest of the look is unchanged.
+
+What does not change: one Tycho with a tray icon, a real window that is closed and not hidden, no local server, the bridge as the only way in, the model never chosen by voice.
+
+Choosing which screen the Tile shows on ([#447](https://github.com/benshapyro/tycho-ai/issues/447)) belongs to ADR 16 and is amended there with that work.
