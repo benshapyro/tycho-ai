@@ -7,7 +7,7 @@ Each record explains one decision: the context, what was decided, and what follo
 | [1](0001-build-from-scratch-in-python.md) | Build from scratch, in Python | Accepted |
 | [2](0002-cascaded-voice-pipeline.md) | Cascaded voice pipeline, measured before committing | Accepted after the latency spike; providers superseded in part by 6 and 9 |
 | [3](0003-staying-within-cig-rules.md) | Staying within CIG's rules | Accepted |
-| [4](0004-built-for-every-player.md) | Built for every player, modular at the seams | Accepted |
+| [4](0004-built-for-every-player.md) | Built for every player, modular at the seams | Accepted; privacy amended 14 Nov 2026 (opt-in crash reports) |
 | [5](0005-settings-one-schema-three-ways-in.md) | Settings: one schema, three ways in | Accepted |
 | [6](0006-cloud-brain-local-ears.md) | Cloud brain, local ears | Accepted; amended by 9 |
 | [7](0007-name-tycho.md) | The name: Tycho | Accepted |

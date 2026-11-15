@@ -58,7 +58,7 @@ Each stage is a small, replaceable unit behind a `typing.Protocol` (ADR 4), pass
   - A readable console log, plus a rotating JSON-lines file in `%LOCALAPPDATA%\tycho\logs`.
   - A redaction filter guarantees API keys never reach a log, and a test checks it.
   - Transcripts are logged only if the player turns it on.
-- **No telemetry** (ADR 4).
+- **No telemetry** (ADR 4). *Amended 14 November 2026: crash reports only, if the player says yes (ADR 4's amendment).*
 
 ### Failure and shutdown
 - **Every expected failure has a defined behaviour and a plain-language message** ([#11](https://github.com/benshapyro/tycho-ai/issues/11)):

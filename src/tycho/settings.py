@@ -25,6 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from tycho import paths
 from tycho.brain.providers import BrainModel, Provider, choose
 from tycho.ptt.binding import Binding
+from tycho.settings_toml import to_toml, toml_value
 from tycho.tile.cards import ALL_KINDS
 from tycho.voice import voices
 
@@ -298,6 +299,13 @@ class Settings(BaseModel):
         "Questions waiting on you always show.",
         json_schema_extra=_rule("yes", "now"),
     )
+    crash_reports: bool | None = Field(
+        default=None,
+        description="Send a crash report when Tycho crashes: where in Tycho's code it broke, "
+        "and the Tycho and Windows versions. Never what was said, keys, names or your files. "
+        "Empty means not asked yet, and nothing is sent.",
+        json_schema_extra=_rule("lower_only", how=FILE_OR_APP),
+    )
     check_for_updates: bool = Field(
         default=True,
         description="When Tycho starts, and when its window opens, ask GitHub whether a newer "
@@ -440,7 +448,7 @@ def save(
                     f"{name} in {path} isn't a simple value, so Tycho can't rewrite the file "
                     "without losing it. Change the setting in the file instead."
                 )
-            kept.append(f"{name} = {_toml_value(value)}")
+            kept.append(f"{name} = {toml_value(value)}")
         text += "\n".join(kept) + "\n"
     path.parent.mkdir(parents=True, exist_ok=True)
     handle, temp = tempfile.mkstemp(dir=path.parent, prefix=".settings.", suffix=".tmp")
@@ -476,27 +484,6 @@ def _update(changes: Mapping[str, object], path: Path) -> Settings:
     data = _read(path) or {}
     save(updated, path, keep={k: v for k, v in data.items() if k not in Settings.model_fields})
     return updated
-
-
-def to_toml(settings: Settings) -> str:
-    """The settings as TOML, each value with its description as a comment. Unset values omitted."""
-    lines = ["# Tycho settings. Edit by hand, by voice, or in the settings screen.", ""]
-    fields = type(settings).model_fields
-    for name, value in settings.model_dump().items():
-        if value is None:
-            lines.append(f"# {name} = (not set). {fields[name].description}")
-            continue
-        lines += [f"# {fields[name].description}", f"{name} = {_toml_value(value)}", ""]
-    return "\n".join(lines).rstrip() + "\n"
-
-
-def _toml_value(value: object) -> str:
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, int | float):
-        return repr(value)
-    text = str(value).replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{text}"'
 
 
 def _migrate(data: dict[str, Any]) -> dict[str, Any]:
