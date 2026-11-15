@@ -5,7 +5,6 @@ TYCHO_SC_ROOT variable, the folders the RSI Launcher's log names (most recent fi
 the default folder, then common folders on each fixed drive.
 """
 
-import ctypes
 import os
 import re
 import sys
@@ -78,7 +77,9 @@ def fixed_drives() -> tuple[str, ...]:
     drives, which can be slow or ask for a disc."""
     if sys.platform != "win32":
         return ()
-    kernel32 = ctypes.WinDLL("kernel32")
+    from tycho import win32
+
+    kernel32 = win32.kernel32()
     mask: int = kernel32.GetLogicalDrives()
     letters = (f"{chr(ord('A') + i)}:\\" for i in range(26) if mask >> i & 1)
     return tuple(d for d in letters if kernel32.GetDriveTypeW(d) == DRIVE_FIXED)

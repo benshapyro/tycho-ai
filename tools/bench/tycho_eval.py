@@ -618,7 +618,7 @@ def _export(path: Path) -> None:
     store = KeybindStore.load(install)
     stamp = install.data_p4k.stat()
     game = f"{install.channel} {stamp.st_size}-{int(stamp.st_mtime)}"
-    own = paths.commands_file()
+    own = paths.commands_file(STAR_CITIZEN)
     commands = own.read_text("utf-8-sig") if own.is_file() else ""
     export_keybinds(store.keybinds, path, game, commands)
     bound = sum(a.bound for a in store.keybinds)

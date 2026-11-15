@@ -4,6 +4,7 @@ import ctypes
 import os
 from ctypes import wintypes
 
+from tycho import win32
 from tycho.input.keys import Code
 
 _INPUT_MOUSE, _INPUT_KEYBOARD = 0, 1
@@ -54,14 +55,8 @@ class _INPUT(ctypes.Structure):
     _fields_ = (("type", wintypes.DWORD), ("union", _INPUTUNION))
 
 
-_user32 = ctypes.WinDLL("user32", use_last_error=True)
-_kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-_user32.SendInput.argtypes = (wintypes.UINT, ctypes.POINTER(_INPUT), ctypes.c_int)
-_user32.SendInput.restype = wintypes.UINT
-
-
 def _send(event: _INPUT) -> None:
-    if _user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(_INPUT)) != 1:
+    if win32.user32().SendInput(1, ctypes.byref(event), ctypes.sizeof(_INPUT)) != 1:
         raise ctypes.WinError(ctypes.get_last_error())
 
 
@@ -109,19 +104,20 @@ class WindowsFocusCheck:
 
 def foreground_executable() -> str:
     """The file name of the program whose window is in front, or "" if unknown."""
-    window = _user32.GetForegroundWindow()
+    user32, kernel32 = win32.user32(), win32.kernel32()
+    window = user32.GetForegroundWindow()
     if not window:
         return ""
     pid = wintypes.DWORD()
-    _user32.GetWindowThreadProcessId(window, ctypes.byref(pid))
-    process = _kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
+    user32.GetWindowThreadProcessId(window, ctypes.byref(pid))
+    process = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
     if not process:
         return ""
     try:
         size = wintypes.DWORD(1024)
         path = ctypes.create_unicode_buffer(size.value)
-        if not _kernel32.QueryFullProcessImageNameW(process, 0, path, ctypes.byref(size)):
+        if not kernel32.QueryFullProcessImageNameW(process, 0, path, ctypes.byref(size)):
             return ""
         return os.path.basename(path.value)
     finally:
-        _kernel32.CloseHandle(process)
+        kernel32.CloseHandle(process)

@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from tycho import brain_choice, safety
+from tycho import brain_choice, paths, safety
 from tycho.brain import briefing
 from tycho.brain.claude import ClaudeBrain
 from tycho.brain.decisions import commands_for
@@ -64,6 +64,9 @@ REQUIRED: list[tuple[Callable[..., Any], str]] = [
     (accent_for, "tile"),
     (accent_for_maker, "tile"),
     (built_in.__wrapped__, "pack_id"),
+    (paths.pack_dir, "pack"),
+    (paths.commands_file, "pack"),
+    (paths.fleet_file, "pack"),
 ]
 
 
@@ -93,3 +96,11 @@ print(pack.built_in.cache_info().currsize)
         [sys.executable, "-c", script], capture_output=True, text=True, check=True
     )
     assert done.stdout.strip() == "0", done.stderr
+
+
+def test_the_session_s_own_words_are_heard_with_the_game_s_words() -> None:
+    # #405: a phrase is compared as that game's session hears it, after its own
+    # lexicon, and one game's words never stand in for another's.
+    assert reserved_for("konfirmed", ("Confirmed",)) == "question"
+    assert reserved_for("konfirmed", built_in("star-citizen").terms) is None
+    assert reserved_for("konfirmed", ("Confirmed",)) == "question"

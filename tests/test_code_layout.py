@@ -90,14 +90,7 @@ TOP_BREAKS = {
     ("tycho.desktop.bridge", "tycho.app"),
     ("tycho.desktop.setup", "tycho.app"),
 }
-DLL_BREAKS = {
-    "tycho.app",
-    "tycho.game.install",
-    "tycho.input.windows",
-    "tycho.ptt.windows",
-    "tycho.runtime.console",
-    "tycho.runtime.instance",
-}
+DLL_BREAKS = set[str]()  # none since #298
 
 
 def _files() -> Iterator[Path]:
@@ -119,37 +112,41 @@ def _within(name: str, packages: tuple[str, ...]) -> str | None:
 
 def _imports(name: str, tree: ast.Module) -> Iterator[str]:
     """Every tycho module ``name`` imports, at the top or inside a function."""
-    package = name if MODULES[name].name == "__init__.py" else name.rpartition(".")[0]
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             yield from (alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
-            if node.level:
-                base = ".".join(package.split(".")[: len(package.split(".")) - node.level + 1])
-                base = f"{base}.{node.module}" if node.module else base
-            else:
-                base = node.module or ""
+            base = _base(name, node)
             for alias in node.names:
                 # `from tycho.knowledge import ships` imports a module; `from x import f` doesn't.
                 full = f"{base}.{alias.name}"
                 yield full if full in MODULES else _origin(base, alias.name)
 
 
-def _origin(package: str, name: str) -> str:
+def _base(name: str, node: ast.ImportFrom) -> str:
+    """The module ``from ... import`` reads from, inside the module ``name``."""
+    if not node.level:
+        return node.module or ""
+    package = name if MODULES[name].name == "__init__.py" else name.rpartition(".")[0]
+    base = ".".join(package.split(".")[: len(package.split(".")) - node.level + 1])
+    return f"{base}.{node.module}" if node.module else base
+
+
+def _origin(package: str, name: str, depth: int = 0) -> str:
     """Where a name imported from ``package`` comes from: the module its ``__init__``
     took it from (``from tycho.knowledge import UexApi`` reaches ``tycho.knowledge.uex``),
-    or the package itself."""
+    through relative imports and packages that pass it on, or the package itself."""
     path = MODULES.get(package)
-    if path is None or path.name != "__init__.py":
+    if path is None or path.name != "__init__.py" or depth > 5:
         return package
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-        if (
-            isinstance(node, ast.ImportFrom)
-            and node.module
-            and not node.level
-            and any((alias.asname or alias.name) == name for alias in node.names)
-        ):
-            return node.module
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        for alias in node.names:
+            if (alias.asname or alias.name) == name:
+                base = _base(package, node)
+                full = f"{base}.{alias.name}"
+                return full if full in MODULES else _origin(base, alias.name, depth + 1)
     return package
 
 
@@ -207,6 +204,9 @@ def _top_breaks() -> set[tuple[str, str]]:
 
 
 def _loads_a_dll(tree: ast.Module) -> bool:
+    """Whether a module calls a DLL class or reads a loader. A class passed along
+    uncalled (``functools.partial(ctypes.WinDLL, ...)``) isn't seen: nothing does that,
+    and catching every bare name would also catch type hints."""
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             called = node.func

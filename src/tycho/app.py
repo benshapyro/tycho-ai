@@ -563,14 +563,14 @@ class _Starting:
     def say(self) -> None:
         """A second start, while this one starts: on the event's thread, so waiting on
         the box blocks nothing else."""
-        import ctypes
+        from tycho import win32
 
         text = (
             f"Tycho is still starting: {self._now.lower()}. Its window opens from the "
             "star by the clock once it's listening."
         )
         # MB_ICONINFORMATION, MB_SETFOREGROUND and MB_TOPMOST: in front of the game.
-        ctypes.windll.user32.MessageBoxW(None, text, "Tycho", 0x40 | 0x10000 | 0x40000)
+        win32.message_box(text, "Tycho", 0x40 | 0x10000 | 0x40000)
 
     def close(self) -> None:
         if self._requests is not None and self._requests.target == self.say:
