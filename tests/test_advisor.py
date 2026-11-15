@@ -244,10 +244,12 @@ def test_the_advisor_briefing_says_tycho_presses_nothing_and_why() -> None:
 
 def test_with_keys_off_star_citizens_briefing_lists_nothing_to_press() -> None:
     pack = _star_citizen_off()
-    text = briefing(KEYS, CommandMatcher.default(pack=pack), pack)
+    text = briefing(LABELLED, CommandMatcher.default(pack=pack), pack)
     assert f"Key actions are off: {STAR_CITIZEN_OFF}" in text
+    # Nothing to pick: no action is offered by name, and no list says what one presses.
     assert "v_toggle_landing_system" not in text
     assert "The player's commands (the action it presses" not in text
+    assert "The player's bound actions" not in text
     # With keys on, the text is the pinned one (tests/test_packs.py).
     assert instructions(built_in(STAR_CITIZEN)) != instructions(pack)
 
@@ -287,6 +289,64 @@ def test_with_keys_off_star_citizen_s_briefing_has_no_line_about_pressing() -> N
     assert "though you can't press them" in off
     assert "Answer on your best reading. Ask only" in off
     assert "weapons preset).\n" in off
+
+
+def _labelled(name: str, label: str, key: str) -> Action:
+    parsed = KeyInput.parse(key)
+    assert parsed is not None
+    return Action(name=name, actionmap="spaceship_general", label=label, inputs=(parsed,))
+
+
+LABELLED = Keybinds(
+    [
+        _labelled("v_toggle_landing_system", "Landing System (Toggle)", "n"),
+        _labelled("v_atc_request", "Request Landing", "lalt+n"),
+        _labelled("v_space_brake", "Spacebrake", "x"),
+    ]
+)
+
+
+def test_with_keys_off_the_briefing_ends_with_the_player_s_own_keys() -> None:
+    """#392: only a phrase the fast path matched got the player's key (a line with the
+    request). "Hit the brakes" reached the brain with nothing, and it said "check your
+    keybinds". Now the briefing lists the keys, for commands and for everything else."""
+    pack = _star_citizen_off()
+    text = briefing(LABELLED, CommandMatcher.default(pack=pack), pack)
+    commands, actions = text.split("The player's own keys for everything else")
+    # A command, by how it's said; a sequence, each step's key in order.
+    assert "landing gear; gear; toggle the gear | Landing System on N\n" in commands
+    assert "| Request Landing on Left Alt + N; Landing System on N\n" in commands
+    # A command with no key says so, rather than leaving the brain to guess.
+    assert "| doors open: no keyboard or mouse key Tycho can see\n" in commands
+    # "Hit the brakes" is no command: the action's own words, and never its name.
+    assert "\nSpacebrake | X\n" in actions
+    assert "v_space_brake" not in text
+    # It's part of the cached briefing: the same bytes every time.
+    assert text == briefing(LABELLED, CommandMatcher.default(pack=pack), pack)
+
+
+def test_with_keys_on_the_briefing_still_names_no_key() -> None:
+    pack = built_in(STAR_CITIZEN)
+    text = briefing(LABELLED, CommandMatcher.default(pack=pack), pack)
+    assert "The player's own keys" not in text
+    assert "Left Alt + N" not in text
+
+
+def test_a_game_tycho_reads_no_keybinds_for_gets_no_lists_of_keys() -> None:
+    pack = advisor_pack()
+    text = briefing(Keybinds([]), CommandMatcher.default(pack=pack), pack)
+    assert "The player's own keys" not in text
+    # The briefing still says where keys could come from, and what to do with neither.
+    assert "With no lists and no bracketed line, you don't know their keys" in text
+
+
+def test_the_advisor_briefing_says_its_notes_are_never_read_aloud() -> None:
+    """#392: "head lights" got "The player's request is "head lights" with their own key
+    bound: Headlights on L...", read aloud."""
+    for pack in (advisor_pack(), _star_citizen_off()):
+        text = instructions(pack)
+        assert "notes for you alone, never the player's words" in text
+        assert "never read them out or quote them" in text
 
 
 def test_with_keys_off_star_citizen_still_looks_things_up_before_a_card() -> None:
