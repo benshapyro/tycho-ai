@@ -23,8 +23,19 @@
 # tools:     look-ups that must be used.   no_tools: look-ups that mustn't be.
 # no_errors: no look-up may come back as an error (Claude retries those).
 #
+# max_words: (replies) the most words the spoken reply may have: one short sentence
+#            for a simple question (docs/voice-and-tone.md, #363).
+#
 # Action names are from the author's bound keys. Actions with no key can't be
 # chosen, so requests for them should get a reply explaining that.
+
+# Words from another game: any reply that says one fails (#349, #363). Each pack's
+# cases name the other packs' games (tests/test_wording.py checks).
+never_say = ['World of Warcraft', '\bWoW\b', '\bAzeroth\b', '\bBlizzard\b']
+
+# The most words in the line said with a press: "a few words" (core.md's voice rules,
+# docs/voice-and-tone.md). "Gear down, lights on." is four; fifteen is already a speech.
+say_words = 15
 
 # --- Single actions, loosely worded -------------------------------------------
 

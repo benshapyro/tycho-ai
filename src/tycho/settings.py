@@ -100,14 +100,14 @@ class Settings(BaseModel):
     )
     game_root: Path | None = Field(
         default=None,
-        description="The Star Citizen folder that contains LIVE. Empty means Tycho finds it "
-        "from the RSI Launcher, the default folder, or common folders on each drive.",
+        description="For Star Citizen: the folder that contains LIVE. Empty means Tycho "
+        "finds it from the RSI Launcher, the default folder, or common folders on each drive.",
         json_schema_extra=_rule("no", how=FILE_FOR_NOW),
     )
     game_channel: Channel = Field(
         default="LIVE",
-        description="Which version of the game you play: LIVE, PTU, EPTU, TECH-PREVIEW or "
-        "HOTFIX. Tycho reads that version's keybinds.",
+        description="For Star Citizen: which version of the game you play: LIVE, PTU, EPTU, "
+        "TECH-PREVIEW or HOTFIX. Tycho reads that version's keybinds.",
         json_schema_extra=_rule("yes"),
     )
     transcription_device: Device = Field(
@@ -167,17 +167,17 @@ class Settings(BaseModel):
     )
     web_search: bool = Field(
         default=True,
-        description="Let Tycho search Star Citizen sites for news, upcoming patches and new "
-        "ships. Each search costs about 1 cent of your Anthropic credit.",
+        description="Let Tycho search the game's own sites for news and what's coming, "
+        "in games that have them. Each search costs about 1 cent of your Anthropic credit.",
         json_schema_extra=_rule("lower_only", how=FILE_OR_APP),
     )
     web_search_open: bool = Field(
         default=True,
-        description="When the Star Citizen sites have no clear answer, let web search look "
+        description="When the game's own sites have no clear answer, let web search look "
         "on any website (guides, forums, Reddit's search results) and read a page, for where "
         "things are and how to do things. Answers from players' posts say so. That search "
-        "takes longer (about 11 s, at most 25 s) and costs about 3 cents. Off: the Star "
-        "Citizen sites only.",
+        "takes longer (about 11 s, at most 25 s) and costs about 3 cents. Off: the game's "
+        "own sites only.",
         json_schema_extra=_rule("lower_only", how=FILE_OR_APP),
     )
     brain_provider: Provider = Field(
@@ -242,7 +242,7 @@ class Settings(BaseModel):
         ge=0.0,
         le=0.4,
         description="How far in from the side the Tile sits, as a share of the screen's "
-        "width, to clear a ship's own display.",
+        "width, to clear the game's own displays.",
         json_schema_extra=_rule("yes", "now"),
     )
     tile_nudge_down: float = Field(
@@ -255,7 +255,7 @@ class Settings(BaseModel):
     )
     tile_colour: TileColour = Field(
         default="ship",
-        description="The Tile's highlight colour: the ship's own (from the one you said "
+        description="The Tile's highlight colour: ship (in Star Citizen, the ship you said "
         "you're flying), Tycho's, or one you pick. Warnings keep their own colours.",
         json_schema_extra=_rule("yes", "now"),
     )
