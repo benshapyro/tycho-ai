@@ -20,7 +20,6 @@ OVER_LIMIT = {
     "games/star_citizen/items.py": 566,
     "commands/matcher.py": 537,
     "games/star_citizen/ships.py": 519,
-    "settings.py": 506,
 }
 
 # Star Citizen's code, all in one package since #397.
