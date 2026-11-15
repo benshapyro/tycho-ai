@@ -14,7 +14,7 @@ names is needed.
 from dataclasses import dataclass
 from typing import Final
 
-from tycho.packs import Tile
+from tycho.packs import PackError, Tile, built_in
 
 TYCHO_ACCENT: Final = "#9fd8ff"
 """Tycho's own accent: when no ship is known, or the player picks it."""
@@ -48,6 +48,14 @@ PICKS: Final[dict[str, str]] = {
     "pink": "#ff8fc8",
 }
 """Colours the player can pick for the Tile ("keep the Tile orange")."""
+
+
+def game_accent(game: str) -> str:
+    """The accent of the game pack ``game``, or Tycho's own if it names none (ADR 17)."""
+    try:
+        return built_in(game).accent or TYCHO_ACCENT
+    except PackError:
+        return TYCHO_ACCENT
 
 
 def accent_for_maker(maker: str, tile: Tile) -> str:

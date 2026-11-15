@@ -66,7 +66,7 @@ _FILES = frozenset(
 )
 _TOP = frozenset(
     {"id", "name", "version", "format", "mode", "why", "window", "parts", "web", "briefing"}
-    | {"call_me", "setup"}
+    | {"call_me", "setup", "accent"}
 )
 _PARTS = frozenset({"install", "keybinds", "game_state", "lookups"})
 
@@ -160,6 +160,9 @@ class GamePack:
     None keeps Tycho's default. A name the player chose always wins (``address``)."""
     setup: Setup = field(default_factory=Setup)
     """What setup says about this game: the pack's own words (#364)."""
+    accent: str | None = None
+    """The game's accent colour for the window and the Tile (ADR 17), like ``#f0c674``;
+    None keeps Tycho's own. A ship's accent, where the Tile knows one, comes first."""
 
 
 def load_pack(folder: Traversable, *, built_in: bool, registry: Registry | None = None) -> GamePack:
@@ -264,7 +267,16 @@ def load_pack(folder: Traversable, *, built_in: bool, registry: Registry | None 
         built_in=built_in,
         call_me=" ".join(call_me.split()) if call_me is not None else None,
         setup=setup,
+        accent=_accent(manifest.get("accent"), where),
     )
+
+
+def _accent(value: object, where: str) -> str | None:
+    if value is None:
+        return None
+    if not (isinstance(value, str) and _COLOUR.fullmatch(value)):
+        raise PackError(f"{where}: accent must be a colour like #4fb3ff")
+    return value
 
 
 YOU_TURNED_THEM_OFF = "You turned key actions off in Tycho's settings."

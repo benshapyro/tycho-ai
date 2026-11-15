@@ -16,6 +16,7 @@ from tycho.desktop.bridge.state import (
 )
 from tycho.packs import PackError, built_in, installed
 from tycho.settings import Settings, SettingsError
+from tycho.tile.design import TYCHO_ACCENT
 
 log = logging.getLogger(__name__)
 
@@ -251,7 +252,15 @@ def shown_packs() -> list[dict[str, str]]:
         except PackError:
             log.exception("Game pack %s didn't load", pack_id)
             continue
-        shown.append({"id": pack.id, "name": pack.name, "mode": pack.mode, "why": pack.why})
+        shown.append(
+            {
+                "id": pack.id,
+                "name": pack.name,
+                "mode": pack.mode,
+                "why": pack.why,
+                "accent": pack.accent or TYCHO_ACCENT,
+            }
+        )
     return shown
 
 

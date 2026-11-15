@@ -17,7 +17,7 @@ from collections.abc import Callable
 from tycho.settings import Settings
 from tycho.tile.board import Board
 from tycho.tile.cards import ALL_KINDS, Card, Kind, confirm, notice
-from tycho.tile.design import PICKS, TEXT_SIZES, TYCHO_ACCENT
+from tycho.tile.design import PICKS, TEXT_SIZES, TYCHO_ACCENT, game_accent
 from tycho.tile.draw import Light, Look, draw
 from tycho.tile.window import SAME, Frame, Screen, TileWindow
 
@@ -201,15 +201,16 @@ class TileDisplay:
 
     def _accent_now(self, now: float) -> str:
         colour = self._settings.tile_colour
+        own = game_accent(self._settings.game)
         if colour != "ship":
-            return accent(colour)
+            return accent(colour, own=own)
         if now - self._accent_at >= ACCENT_SECONDS:
             self._accent_at = now
             try:
-                self._accent = self.ship_accent() or TYCHO_ACCENT
+                self._accent = self.ship_accent() or own
             except Exception:  # which ship it is mustn't stop the Tile
                 log.debug("Couldn't tell the ship's colour", exc_info=True)
-                self._accent = TYCHO_ACCENT
+                self._accent = own
         return self._accent
 
     def _look(self, screen: Screen, accent: str) -> Look:
@@ -223,13 +224,14 @@ class TileDisplay:
 # window's preview (ADR 17), so the preview is the Tile, not a copy of it.
 
 
-def accent(colour: str, ship: str | None = None) -> str:
-    """The Tile's accent for its colour setting: the ship's (if known), Tycho's, or a pick."""
+def accent(colour: str, ship: str | None = None, own: str = TYCHO_ACCENT) -> str:
+    """The Tile's accent for its colour setting: the ship's (if known), Tycho's, or a
+    pick. ``own`` is Tycho's colour in this game (``game_accent``)."""
     if colour == "ship":
-        return ship or TYCHO_ACCENT
+        return ship or own
     if colour == "tycho":
-        return TYCHO_ACCENT
-    return PICKS.get(colour, TYCHO_ACCENT)
+        return own
+    return PICKS.get(colour, own)
 
 
 def look(s: Settings, screen: Screen, accent: str) -> Look:

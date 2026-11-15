@@ -17,6 +17,7 @@ class TilePage(State):
 
         from tycho.tile.board import Board
         from tycho.tile.cards import Card, Row
+        from tycho.tile.design import game_accent
         from tycho.tile.display import accent, look, place
         from tycho.tile.draw import draw
         from tycho.tile.window import Screen
@@ -43,7 +44,9 @@ class TilePage(State):
             ship = None
         image = _cockpit(screen.width, screen.height)
         if current.tile:
-            tile_look = look(current, screen, accent(current.tile_colour, ship))
+            tile_look = look(
+                current, screen, accent(current.tile_colour, ship, game_accent(current.game))
+            )
             light = "thinking" if current.tile_talk_light else None
             tile = draw(board.view(), tile_look, now=1.0, light=light)
             image.alpha_composite(tile, place(current, screen, tile.width, tile.height))

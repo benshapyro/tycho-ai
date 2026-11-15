@@ -523,6 +523,20 @@ def test_the_game_box_says_tycho_only_talks_with_key_actions_off(
     setup.close()
 
 
+def test_the_window_takes_the_games_own_colour(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """ADR 17 (amended): one accent per game, from the game's pack."""
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, game="wow-forever"), path
+    )
+    setup = Setup(browser, path, first_run=False)
+    expect(setup.page.locator("#gameBox")).to_contain_text("World of Warcraft")
+    accent = "getComputedStyle(document.documentElement).getPropertyValue('--acc').trim()"
+    assert setup.page.evaluate(accent) == "#f0c674"
+    setup.close()
+
+
 def test_setup_run_again_shows_another_game_before_switching(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:

@@ -658,6 +658,8 @@
     const pressing = rows.find((r) => r.name === "key_actions")?.value !== false;
     const p = game && game.packs && game.packs.find((x) => x.id === game.value);
     const box = $("#gameBox");
+    // The game's own colour (ADR 17): the rest of the look follows --acc.
+    if (p && p.accent) document.documentElement.style.setProperty("--acc", p.accent);
     box.hidden = !p;
     if (!p) return;
     box.innerHTML = `<span class="label">Game</span><b>${esc(p.name)}</b><span>${p.mode === "advisor" || !pressing ? "Tycho only talks" : "Tycho presses your keys"}</span>
