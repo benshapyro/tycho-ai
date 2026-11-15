@@ -123,3 +123,19 @@ def test_its_eval_cases_never_expect_a_press() -> None:
         assert case["expect"] == ["reply"]
         refusals = [w for group in case.get("mentions", []) for w in group]
         assert case["heard"] == "jump" or set(REFUSALS) <= set(refusals), case["heard"]
+
+
+def test_setup_says_how_to_see_the_tile_over_the_game() -> None:
+    """#381: the Tile can't show over exclusive fullscreen, so setup names the game's own
+    setting for a borderless window, in the game's words, not Star Citizen's."""
+    tips = built_in(WOW).setup.tips
+    assert any("Windowed (Fullscreen)" in tip and "Tile" in tip for tip in tips)
+    assert not any("Borderless Window" in tip for tip in tips)
+
+
+def test_every_pack_with_a_tile_says_how_to_see_it() -> None:
+    """#381: each game whose Tile shows over it tells the player, in setup, how to play
+    so the Tile isn't hidden."""
+    for name in installed():
+        pack = built_in(name)
+        assert any("Tile" in tip for tip in pack.setup.tips), name
