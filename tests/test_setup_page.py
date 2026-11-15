@@ -345,7 +345,7 @@ def test_a_player_set_up_before_crash_reports_is_asked_once(
     setup = Setup(browser, path, first_run=False)
     page = setup.page
     setup.at("Privacy")
-    expect(page.locator(".lede")).to_contain_text("One new question since you set Tycho up")
+    expect(page.locator(".lede")).to_contain_text("One question left: crash reports")
     crash = page.locator("#crashCard")
     expect(crash.locator("[data-crash][aria-pressed='true']")).to_have_count(0)
     crash.locator("[data-crash='no']").click()
