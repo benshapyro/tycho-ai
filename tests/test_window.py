@@ -351,6 +351,7 @@ def test_the_tile_preview_shows_the_games_own_sample_card(path: Path) -> None:
     from tycho.desktop.bridge import tile_page
 
     bridge, _ = _bridge(path)
+    settings.update({"tile_colour": "green"}, path)  # one colour: only the card differs
     star_citizen = bridge.tile_preview(640)
     settings.update({"game": "wow-forever"}, path)
     assert bridge.tile_preview(640) != star_citizen
@@ -358,6 +359,12 @@ def test_the_tile_preview_shows_the_games_own_sample_card(path: Path) -> None:
     assert wow is not None
     assert wow.title == "Where to level"
     assert tile_page._sample("no-such-game") is None  # pyright: ignore[reportPrivateUsage]
+    # Cleaned and cut like a card from the brain (review of #461).
+    long = tile_page.Sample("x" * 99, rows=(("a\x07b", "", "1"),) * 9)
+    card = tile_page._card(long)  # pyright: ignore[reportPrivateUsage]
+    assert len(card.title) <= 40
+    assert len(card.rows) == 6
+    assert card.rows[0].text == "a b"
     assert not any(
         word in tile_page.OWN_SAMPLE.title + str(tile_page.OWN_SAMPLE.rows)
         for word in ("ship", "Laranite", "Azeroth")
