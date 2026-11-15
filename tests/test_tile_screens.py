@@ -186,3 +186,14 @@ def test_a_new_screen_shows_a_sample_there_in_plain_words() -> None:
     shown = str(display._board.view())  # pyright: ignore[reportPrivateUsage]
     assert "The Tile shows here now" in shown
     assert "DISPLAY" not in shown
+
+
+def test_a_hidden_notice_doesnt_redraw_a_still_card() -> None:
+    """#469 review: trying to say a missing screen every frame, with notices hidden,
+    mustn't redraw a pinned card 15 times a second."""
+    settings = Settings(tile_hidden_cards="notice")
+    display = TileDisplay(settings, clock=lambda: 0.0, window=FakeWindow)  # type: ignore[arg-type]
+    display.show(Card("list", body=("Kept.",)), pinned=True)
+    assert display.frame(GAMES) not in (None, SAME)
+    assert not display._screen_missing(r"\\.\DISPLAY2")  # pyright: ignore[reportPrivateUsage]
+    assert display.frame(GAMES) is SAME

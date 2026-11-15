@@ -127,7 +127,7 @@ class TileDisplay:
             return False
         with self._lock:
             shown = self._board.show(card, pinned=pinned)
-            self._changed = True
+            self._changed = self._changed or shown  # a hidden kind redraws nothing
         return shown
 
     def ask(self, question: str, seconds: float) -> None:
