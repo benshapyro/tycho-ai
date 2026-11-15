@@ -36,7 +36,8 @@ from tycho.packs import STAR_CITIZEN, Safety, as_run, built_in
 from tycho.ptt.binding import Binding
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime import AlreadyRunning, RecognitionUnavailable, Result, Session, SingleInstance
-from tycho.runtime.session import CHECKING, FILLERS, FOLLOW_UP_SECONDS, KEEP_CHARACTERS
+from tycho.runtime.conversation import FOLLOW_UP_SECONDS
+from tycho.runtime.speaking import CHECKING, FILLERS, KEEP_CHARACTERS
 from tycho.tile import Card, Row
 
 SC = built_in(STAR_CITIZEN)
@@ -895,7 +896,7 @@ def test_shutdown_doesnt_wait_for_tycho_to_finish_talking() -> None:
 def test_push_to_talk_keeps_working_after_a_joystick_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("tycho.runtime.session.POLL_RETRY_SECONDS", 0.001)
+    monkeypatch.setattr("tycho.runtime.listening.POLL_RETRY_SECONDS", 0.001)
 
     class Flaky:
         binding = PTT
@@ -1699,17 +1700,17 @@ def test_a_sequence_that_needs_a_fact_presses_nothing_without_it(tmp_path: Path)
 
 def test_a_failed_warm_up_goes_to_tychos_log(caplog: pytest.LogCaptureFixture) -> None:
     # Not asyncio's "Task exception was never retrieved" on stderr (audit, 2026-11-03).
-    from tycho.runtime import session
+    from tycho.runtime import speaking
 
     async def fails() -> None:
         raise RuntimeError("no network")
 
     async def scenario() -> None:
         task = asyncio.create_task(fails())
-        task.add_done_callback(session._log_failure)  # pyright: ignore[reportPrivateUsage]
+        task.add_done_callback(speaking.log_failure)
         await asyncio.gather(task, return_exceptions=True)
 
-    caplog.set_level(logging.ERROR, logger="tycho.runtime.session")
+    caplog.set_level(logging.ERROR, logger="tycho.runtime.speaking")
     asyncio.run(scenario())
     assert "Warming up failed: no network" in caplog.text
 

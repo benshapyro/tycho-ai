@@ -249,7 +249,8 @@ def test_setup_and_requirements_are_ones_the_gate_knows() -> None:
 
 
 def test_no_command_uses_a_reply_to_a_question_as_a_phrase() -> None:
-    from tycho.runtime.session import CANCEL_WORDS, CONFIRM_WORDS, reply_to_question
+    from tycho.commands.reserved import CANCEL_WORDS, CONFIRM_WORDS
+    from tycho.runtime.routing import reply_to_question
 
     for command in CommandMatcher.default(pack=SC).commands:
         for phrase in command.say:
@@ -282,7 +283,8 @@ def test_phrases_too_far_off_in_length_are_never_compared(
 
 
 def test_no_command_uses_the_tiles_words_as_a_phrase() -> None:
-    from tycho.runtime.session import TILE_WORDS, tile_command
+    from tycho.commands.reserved import TILE_WORDS
+    from tycho.runtime.routing import tile_command
 
     words = {phrase for phrases in TILE_WORDS.values() for phrase in phrases}
     for command in CommandMatcher.default(pack=SC).commands:
@@ -294,7 +296,8 @@ def test_no_command_uses_the_tiles_words_as_a_phrase() -> None:
 
 
 def test_no_command_uses_say_that_again_as_a_phrase() -> None:
-    from tycho.runtime.session import SAY_AGAIN_WORDS, TILE_WORDS, is_say_again
+    from tycho.commands.reserved import SAY_AGAIN_WORDS, TILE_WORDS
+    from tycho.runtime.routing import is_say_again
 
     tile = {phrase for phrases in TILE_WORDS.values() for phrase in phrases}
     assert not SAY_AGAIN_WORDS & tile
