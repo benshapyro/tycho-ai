@@ -2,11 +2,13 @@
 as voice does, undo, and storing a key (which never comes back out)."""
 
 import logging
+import time
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 from tycho import crash_reports, credentials, settings
 from tycho.desktop.bridge.state import (
+    DEVICES_SECONDS,
     SETUP_CHOICES,
     UNDO_DEPTH,
     State,
@@ -78,6 +80,8 @@ class SettingsPage(State):
             for row in rows:
                 if row["name"] == "tile_hidden_cards":  # a switch for each kind (#422)
                     row["kind"], row["cards"] = "cards", card_kinds(current.game)
+                if row["name"] == "tile_screen":  # the screens plugged in now (#447)
+                    row["kind"], row["screens"] = "screen", self._screens(current.tile_screen)
             groups.append({"name": group, "rows": rows})
         return {"groups": groups, "can_undo": bool(self._undo)}
 
@@ -102,6 +106,16 @@ class SettingsPage(State):
             if key in prop:
                 row[key] = prop[key]
         return row
+
+    def _screens(self, chosen: str) -> list[dict[str, str]]:
+        """Follow the game, then each screen; a chosen one that isn't plugged in is
+        still listed, as itself, so it isn't lost by opening the page (#447)."""
+        now = int(time.monotonic() // DEVICES_SECONDS)  # a screen plugged in shows soon
+        found = cast(list[dict[str, str]], self._cached("screens", now, self._pc.screens))
+        shown = [{"value": "game", "name": "Follow the game"}, *found]
+        if all(s["value"] != chosen for s in shown):
+            shown.append({"value": chosen, "name": f"{chosen} (not plugged in now)"})
+        return shown
 
     def keys(self) -> dict[str, dict[str, object]]:
         """Which keys are stored, and their last four characters: never the key."""

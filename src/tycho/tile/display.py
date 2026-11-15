@@ -19,7 +19,8 @@ from tycho.tile.board import Board
 from tycho.tile.cards import ALL_KINDS, Card, Kind, confirm, notice
 from tycho.tile.design import PICKS, TEXT_SIZES, TYCHO_ACCENT, game_accent
 from tycho.tile.draw import Light, Look, draw
-from tycho.tile.window import SAME, Frame, Screen, TileWindow
+from tycho.tile.screens import Where, connected
+from tycho.tile.window import SAME, Frame, Screen, TileWindow, screen_of_foreground
 
 log = logging.getLogger(__name__)
 
@@ -27,6 +28,10 @@ MARGIN = 0.022
 """The gap between the Tile and the screen's edge, as a share of the screen's width."""
 STAY: dict[str, float] = {"shorter": 0.6, "normal": 1.0, "longer": 1.6}
 SAMPLE_SECONDS = 3.0
+SCREEN_MISSING = (
+    "The Tile's screen isn't plugged in, so the Tile follows the game. Pick another "
+    "screen in Tycho's window, on the Tile's page."
+)
 """How long the sample card shows after a Tile setting changes."""
 PERIOD = {"listening": 1.0, "thinking": 1.1}
 """Seconds per pulse of the talk light."""
@@ -63,6 +68,12 @@ class TileDisplay:
         (#297). From then the Tile is off: ``show`` says no, so answers are spoken."""
         self._window = window(self.frame)
         self._window.on_stopped = self._window_stopped
+        self._window.where = Where(
+            lambda: self._settings.tile_screen,
+            foreground=screen_of_foreground,
+            connected=connected,
+            on_missing=self._screen_missing,
+        )
 
     def start(self) -> bool:
         """Open the window. False if it can't, and the Tile stays off."""
@@ -82,6 +93,13 @@ class TileDisplay:
     def stopped(self) -> bool:
         """The window stopped while Tycho ran (#297): the Tile is off until a restart."""
         return self._stopped
+
+    def _screen_missing(self, _choice: str) -> None:
+        """The chosen screen isn't plugged in (#447): said once, and the Tile follows
+        the game meanwhile."""
+        with self._lock:
+            self._board.show(notice(SCREEN_MISSING))
+            self._changed = True
 
     def _window_stopped(self, why: str) -> None:
         self._stopped = True
@@ -148,11 +166,11 @@ class TileDisplay:
             shown = f"{value:.0%}" if isinstance(value, float) else str(value)
             if isinstance(value, bool):
                 shown = "on" if value else "off"
+            said = f"The Tile's {words}: {shown}. Say undo to put it back."
+            if name == "tile_screen":  # Windows' name for a screen means nothing to read
+                said = "The Tile shows here now. Say undo to put it back."
             with self._lock:
-                self._board.show(
-                    notice(f"The Tile's {words}: {shown}. Say undo to put it back."),
-                    seconds=SAMPLE_SECONDS,
-                )
+                self._board.show(notice(said), seconds=SAMPLE_SECONDS)
 
     # On the window's thread.
 

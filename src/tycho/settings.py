@@ -26,7 +26,7 @@ from tycho import paths
 from tycho.brain.providers import BrainModel, Provider, choose
 from tycho.ptt.binding import Binding
 from tycho.settings_toml import to_toml, toml_value
-from tycho.tile.cards import ALL_KINDS
+from tycho.tile.values import CardKinds, ScreenName
 from tycho.voice import voices
 
 CURRENT_VERSION = 1
@@ -232,6 +232,13 @@ class Settings(BaseModel):
         description="How big the Tile's text is. The Tile grows with it.",
         json_schema_extra=_rule("yes", "now"),
     )
+    tile_screen: ScreenName = Field(
+        default="game",
+        description="Which screen the Tile shows on: game, for the screen the game is on, "
+        "or a screen as Windows names it, such as \\\\.\\DISPLAY2 (pick it on the "
+        "window's Tile page). If that screen isn't plugged in, the Tile follows the game.",
+        json_schema_extra=_rule("no", "now", how=FILE_OR_APP),
+    )
     tile_corner: Corner = Field(
         default="top right",
         description="Which corner of the screen the Tile sits in.",
@@ -292,12 +299,11 @@ class Settings(BaseModel):
         description="Quiet mode: only questions waiting on you, warnings and notices show.",
         json_schema_extra=_rule("yes", "now"),
     )
-    tile_hidden_cards: str = Field(
+    tile_hidden_cards: CardKinds = Field(
         default="",
         description="Kinds of card not to show while the Tile is on, separated by commas "
         "(to hide the whole Tile, turn tile off), such as list, steps, warning, notice "
-        "or long. The window's Tile page lists your game's. Tycho still says them. "
-        "Questions waiting on you always show.",
+        "or long. Tycho still says them. Questions waiting on you always show.",
         json_schema_extra=_rule("yes", "now"),
     )
     crash_reports: bool | None = Field(
@@ -352,14 +358,6 @@ class Settings(BaseModel):
                 "ElevenLabs voice ID"
             )
         return value
-
-    @field_validator("tile_hidden_cards")
-    @classmethod
-    def _card_kinds(cls, value: str) -> str:
-        kinds = [k.strip().lower() for k in value.replace(";", ",").split(",") if k.strip()]
-        if unknown := [k for k in kinds if k not in ALL_KINDS]:
-            raise ValueError(f"no card is called {', '.join(unknown)}")
-        return ", ".join(dict.fromkeys(k for k in kinds if k != "confirm"))
 
     @field_validator("version")
     @classmethod
