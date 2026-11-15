@@ -526,3 +526,16 @@ def test_a_packs_commands_are_checked_against_its_own_facts(tmp_path: Path) -> N
 def test_a_packs_lists_cant_be_changed_once_loaded() -> None:
     with pytest.raises(TypeError):
         built_in(STAR_CITIZEN).safety.mode_guards["v_eject"] = frozenset()  # pyright: ignore[reportIndexIssue]
+
+
+def test_a_pack_s_sample_card_is_checked(tmp_path: Path) -> None:
+    """#422: each game's own card for the window's Tile preview."""
+    folder = _copy(tmp_path)
+    (folder / "tile.toml").write_text('[sample]\ntitle = "T"\nrows = [["a", "b"]]\n', "utf-8")
+    with pytest.raises(PackError, match="three pieces of text"):
+        load_pack(folder, built_in=False, registry=REGISTRY)
+    (folder / "tile.toml").write_text('[sample]\ntitle = "T"\nrows = [["a", "b", "1"]]\n', "utf-8")
+    sample = load_pack(folder, built_in=False, registry=REGISTRY).tile.sample
+    assert sample is not None
+    assert sample.rows == (("a", "b", "1"),)
+    assert built_in("wow-forever").tile.sample is not None

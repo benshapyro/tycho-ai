@@ -346,6 +346,31 @@ def test_the_tile_preview_is_drawn_by_the_tile(path: Path) -> None:
     assert bridge.tile_preview(640) != on  # off: the cockpit alone
 
 
+def test_the_tile_preview_shows_the_games_own_sample_card(path: Path) -> None:
+    """#422: a World of Warcraft player saw a Star Citizen trade card in the preview."""
+    from tycho.desktop.bridge import tile_page
+
+    bridge, _ = _bridge(path)
+    star_citizen = bridge.tile_preview(640)
+    settings.update({"game": "wow-forever"}, path)
+    assert bridge.tile_preview(640) != star_citizen
+    wow = tile_page._sample("wow-forever")  # pyright: ignore[reportPrivateUsage]
+    assert wow is not None
+    assert wow.title == "Where to level"
+    assert tile_page._sample("no-such-game") is None  # pyright: ignore[reportPrivateUsage]
+    assert not any(
+        word in tile_page.OWN_SAMPLE.title + str(tile_page.OWN_SAMPLE.rows)
+        for word in ("ship", "Laranite", "Azeroth")
+    )
+
+
+def test_an_older_settings_file_s_ship_colour_reads_as_the_game_s(path: Path) -> None:
+    """#422: the colour choice ``ship`` is now ``game``; a file that says ship still loads."""
+    path.write_text('tile_colour = "ship"\n', "utf-8")
+    assert settings.load(path).tile_colour == "game"
+    assert Settings().tile_colour == "game"
+
+
 def test_a_broken_check_doesnt_break_the_status_page(path: Path) -> None:
     def broken() -> list[dict[str, str]]:
         raise RuntimeError("the game folder vanished")

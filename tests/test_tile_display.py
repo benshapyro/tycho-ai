@@ -216,7 +216,7 @@ def test_tychos_own_colour_is_the_games_where_it_names_one() -> None:
     gold = "#f0c674"
     wow, clock = _display(game="wow-forever", tile_colour="tycho")
     assert wow._accent_now(clock.now) == gold  # pyright: ignore[reportPrivateUsage]
-    unknown_ship, clock = _display(game="wow-forever", tile_colour="ship")
+    unknown_ship, clock = _display(game="wow-forever", tile_colour="game")
     assert unknown_ship._accent_now(clock.now) == gold  # pyright: ignore[reportPrivateUsage]
     picked, clock = _display(game="wow-forever", tile_colour="green")
     assert picked._accent_now(clock.now) == PICKS["green"]  # pyright: ignore[reportPrivateUsage]

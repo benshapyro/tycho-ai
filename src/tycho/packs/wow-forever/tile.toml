@@ -1,0 +1,11 @@
+# The Tile in World of Warcraft: Forever (ADR 16, ADR 18). Only the window's preview card
+# for now: the Tile over the game is #381.
+
+[sample]
+title = "Where to level"
+label = "Levels 20 to 30"
+rows = [
+    ["Hillsbrad Foothills", "Eastern Kingdoms", "20-30"],
+    ["Ashenvale", "Kalimdor", "18-30"],
+    ["Stonetalon Mountains", "Kalimdor", "15-27"],
+]
