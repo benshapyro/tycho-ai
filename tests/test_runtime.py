@@ -32,12 +32,14 @@ from tycho.game.gamelog import QUANTUM_ROUTE
 from tycho.input import Presser, code_for
 from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.lexicon import Lexicon
-from tycho.packs import Safety, as_run, built_in
+from tycho.packs import STAR_CITIZEN, Safety, as_run, built_in
 from tycho.ptt.binding import Binding
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime import AlreadyRunning, RecognitionUnavailable, Result, Session, SingleInstance
 from tycho.runtime.session import CHECKING, FILLERS, FOLLOW_UP_SECONDS, KEEP_CHARACTERS
 from tycho.tile import Card, Row
+
+SC = built_in(STAR_CITIZEN)
 
 RATE = 16_000
 PTT = Binding.parse("mouse:0x06")
@@ -70,8 +72,8 @@ KEYBINDS = Keybinds(
     MODES,
 )
 
-_MATCHER = CommandMatcher.default()
-_LEXICON = Lexicon.default()
+_MATCHER = CommandMatcher.default(pack=SC)
+_LEXICON = Lexicon.default(pack=SC)
 
 
 @dataclass
@@ -116,7 +118,7 @@ def rig(
     matcher: CommandMatcher = _MATCHER,
     address: Callable[[], str] = lambda: "",
     display: FakeDisplay | None = None,
-    safety_lists: Safety | None = None,
+    safety_lists: Safety = SC.safety,
 ) -> Rig:
     audio, keys, feedback = FakeAudioSource(RATE), FakeKeySender(), FakeFeedback()
     actions = FakeActionLog()
@@ -135,7 +137,7 @@ def rig(
         lexicon=_LEXICON,
         matcher=matcher,
         keybinds=keybinds_now or (lambda: keybinds),
-        presser=Presser(keys, focus or FakeFocus(True)),
+        presser=Presser(keys, focus or FakeFocus(True), game="Star Citizen"),
         feedback=feedback,
         game_state=game_state,
         action_log=actions,
@@ -418,7 +420,7 @@ def test_a_sequence_with_a_step_that_has_no_key_presses_nothing() -> None:
 
 # --- Advisor mode: key actions off (#191) ---------------------------------------------------
 
-KEYS_OFF = as_run(built_in(), key_actions=False).safety
+KEYS_OFF = as_run(built_in(STAR_CITIZEN), key_actions=False).safety
 
 
 @pytest.mark.parametrize(
@@ -997,11 +999,13 @@ def test_what_was_said_is_logged_only_if_the_player_allows_it(
 
 
 def test_the_gate_catches_dangerous_actions_it_has_never_seen() -> None:
-    assert safety.is_confirm_grade("v_eject")
-    assert safety.is_confirm_grade("v_eject_seat_v2")  # a renamed action after a patch
-    assert safety.is_confirm_grade("v_self_destruct_now")
-    assert not safety.is_confirm_grade("v_toggle_landing_system")
-    assert not safety.is_confirm_grade("v_lights")
+    assert safety.is_confirm_grade("v_eject", lists=SC.safety)
+    assert safety.is_confirm_grade(
+        "v_eject_seat_v2", lists=SC.safety
+    )  # a renamed action after a patch
+    assert safety.is_confirm_grade("v_self_destruct_now", lists=SC.safety)
+    assert not safety.is_confirm_grade("v_toggle_landing_system", lists=SC.safety)
+    assert not safety.is_confirm_grade("v_lights", lists=SC.safety)
 
 
 @pytest.mark.parametrize(
@@ -1014,7 +1018,7 @@ def test_the_gate_catches_dangerous_actions_it_has_never_seen() -> None:
     ],
 )
 def test_the_backstop_spares_harmless_lookalikes(name: str) -> None:
-    assert not safety.is_confirm_grade(name)
+    assert not safety.is_confirm_grade(name, lists=SC.safety)
 
 
 def test_only_one_tycho_runs_at_a_time() -> None:
@@ -1037,7 +1041,7 @@ def _engage(game_state: FakeGameState | None, keybinds: Keybinds = KEYBINDS) -> 
 
 
 def test_quantum_engage_sets_nav_and_quantum_mode_then_engages() -> None:
-    assert not safety.is_confirm_grade("v_toggle_qdrive_engagement")
+    assert not safety.is_confirm_grade("v_toggle_qdrive_engagement", lists=SC.safety)
     r = _engage(FakeGameState(QUANTUM_ROUTE))
     assert r.results[0].status == "done"
     assert r.results[0].pressed == (
@@ -1050,7 +1054,7 @@ def test_quantum_engage_sets_nav_and_quantum_mode_then_engages() -> None:
 
 
 def test_jumps_are_routine_not_confirm_grade() -> None:
-    assert not safety.is_confirm_grade("v_toggle_jump_request")
+    assert not safety.is_confirm_grade("v_toggle_jump_request", lists=SC.safety)
 
 
 @pytest.mark.parametrize("game_state", [None, FakeGameState()], ids=["no log", "nothing logged"])
@@ -1061,14 +1065,14 @@ def test_quantum_engage_needs_nothing_from_the_log(game_state: FakeGameState | N
 
 
 def test_on_foot_firing_is_refused_unless_the_command_accepts_it() -> None:
-    engage = next(c for c in CommandMatcher.default().commands if c.id == "quantum_engage")
+    engage = next(c for c in CommandMatcher.default(pack=SC).commands if c.id == "quantum_engage")
     assert engage.accepted_risks == ("player",)
     keybinds = Keybinds(LEFT_CLICK, MODES)
     click = keybinds.get("v_toggle_qdrive_engagement")
     assert click is not None
-    assert safety.check(engage, click, keybinds).allowed
+    assert safety.check(engage, click, keybinds, lists=SC.safety).allowed
     unaccepted = dataclasses.replace(engage, accepted_risks=())
-    verdict = safety.check(unaccepted, click, keybinds)
+    verdict = safety.check(unaccepted, click, keybinds, lists=SC.safety)
     assert not verdict.allowed
     assert "attack1" in verdict.reason
 
@@ -1116,14 +1120,14 @@ def test_a_players_file_cant_take_eject_out_of_confirming(tmp_path: Path) -> Non
         '[[sequence]]\nid = "bye"\nsay = ["goodbye ship"]\nsteps = ["eject"]\n',
         "utf-8",
     )
-    matcher = CommandMatcher.default(file)
+    matcher = CommandMatcher.default(file, pack=SC)
     for name in ("eject", "bye"):
         command = matcher.get(name)
         assert command is not None
         for step in command.expand():
             action = KEYBINDS.get("v_eject")
             assert action is not None
-            assert safety.check(step.command, action, KEYBINDS).ask
+            assert safety.check(step.command, action, KEYBINDS, lists=SC.safety).ask
 
 
 def test_setup_needs_its_own_keys() -> None:
@@ -1135,13 +1139,13 @@ def test_setup_needs_its_own_keys() -> None:
 
 
 def test_confirming_never_unlocks_a_shared_dangerous_key() -> None:
-    eject = next(c for c in CommandMatcher.default().commands if c.id == "eject")
+    eject = next(c for c in CommandMatcher.default(pack=SC).commands if c.id == "eject")
     keybinds = Keybinds([_action("v_eject", "ralt+y"), _action("v_self_destruct", "ralt+y")])
     action = keybinds.get("v_eject")
     assert action is not None
-    assert safety.check(eject, action, Keybinds([action])).ask
-    assert safety.check(eject, action, Keybinds([action]), confirmed=True).allowed
-    shared = safety.check(eject, action, keybinds, confirmed=True)
+    assert safety.check(eject, action, Keybinds([action]), lists=SC.safety).ask
+    assert safety.check(eject, action, Keybinds([action]), confirmed=True, lists=SC.safety).allowed
+    shared = safety.check(eject, action, keybinds, confirmed=True, lists=SC.safety)
     assert not shared.allowed
     assert not shared.ask
 
@@ -1158,8 +1162,10 @@ def test_confirming_never_unlocks_a_shared_dangerous_key() -> None:
 def test_a_modifier_pressed_on_its_own_counts_as_its_key(danger: str, refused: bool) -> None:
     lights = _action("v_lights", "ralt+x")
     keybinds = Keybinds([lights, _action("v_eject", danger)])
-    command = next(c for c in CommandMatcher.default().commands if c.actions == ("v_lights",))
-    verdict = safety.check(command, lights, keybinds)
+    command = next(
+        c for c in CommandMatcher.default(pack=SC).commands if c.actions == ("v_lights",)
+    )
+    verdict = safety.check(command, lights, keybinds, lists=SC.safety)
     assert verdict.allowed is not refused
     assert ("v_eject" in verdict.reason) is refused
 
@@ -1168,17 +1174,23 @@ def test_the_refusal_names_the_key_that_clashes() -> None:
     """#208: "Lights is on ralt+x, which is also Eject" sent the player to rebind the
     wrong key, when Eject was on ralt alone."""
     lights = _action("v_lights", "ralt+x")
-    command = next(c for c in CommandMatcher.default().commands if c.actions == ("v_lights",))
-    alone = safety.check(command, lights, Keybinds([lights, _action("v_eject", "ralt")]))
+    command = next(
+        c for c in CommandMatcher.default(pack=SC).commands if c.actions == ("v_lights",)
+    )
+    alone = safety.check(
+        command, lights, Keybinds([lights, _action("v_eject", "ralt")]), lists=SC.safety
+    )
     assert "ralt+x, which holds down ralt, and ralt is v_eject" in alone.reason
-    same = safety.check(command, lights, Keybinds([lights, _action("v_eject", "ralt+x")]))
+    same = safety.check(
+        command, lights, Keybinds([lights, _action("v_eject", "ralt+x")]), lists=SC.safety
+    )
     assert "ralt+x, which is also v_eject" in same.reason
 
 
 def test_modifiers_bound_together_are_caught_when_the_press_holds_them_all() -> None:
     lights = _action("v_lights", "lctrl+lalt+x")
     keybinds = Keybinds([lights, _action("v_self_destruct", "lalt+lctrl")])
-    assert safety.shares_key_with_danger(lights, keybinds) is not None
+    assert safety.shares_key_with_danger(lights, keybinds, lists=SC.safety) is not None
 
 
 # --- The voice (ADR 14) ------------------------------------------------------------------
@@ -1668,7 +1680,7 @@ def _careful(tmp_path: Path, extra: str) -> CommandMatcher:
         f'{extra}\nsteps = ["landing_gear", "request_landing"]\n',
         "utf-8",
     )
-    return CommandMatcher.default(file)
+    return CommandMatcher.default(file, pack=SC)
 
 
 def test_a_confirm_sequence_asks_once_then_runs_every_step(tmp_path: Path) -> None:

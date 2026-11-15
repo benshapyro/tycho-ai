@@ -5,6 +5,7 @@ page can say when a phrase is one of them (#227): the session would answer it fi
 so a command given it never runs.
 """
 
+from collections.abc import Iterable
 from functools import cache
 from typing import Literal
 
@@ -54,15 +55,16 @@ USES: dict[Use, str] = {
 
 
 @cache
-def _lexicon() -> Lexicon:
-    """The lexicon the session corrects what's heard with (``app.py`` uses the default)."""
-    return Lexicon.default()
+def _lexicon(terms: tuple[str, ...]) -> Lexicon:
+    """The lexicon the session corrects what's heard with: the game pack's words."""
+    return Lexicon(terms)
 
 
-def reserved_for(phrase: str) -> Use | None:
+def reserved_for(phrase: str, terms: Iterable[str]) -> Use | None:
     """Which of the session's words ``phrase`` is, compared as the session compares
-    what's said: after the lexicon's corrections (#236). None if it isn't one."""
-    for text in (phrase, _lexicon().correct(phrase).text):
+    what's said: after the correction by ``terms``, the game pack's words (#236). None
+    if it isn't one."""
+    for text in (phrase, _lexicon(tuple(terms)).correct(phrase).text):
         if (use := _use(" ".join(normalize(text)))) is not None:
             return use
     return None

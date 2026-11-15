@@ -20,7 +20,7 @@ from tycho import app, brain_choice, credentials
 from tycho.brain.claude import ClaudeBrain
 from tycho.commands import CommandMatcher
 from tycho.knowledge.web import WebSearch
-from tycho.packs import GamePack, built_in, load_pack
+from tycho.packs import STAR_CITIZEN, GamePack, built_in, load_pack
 from tycho.ptt import InputSource
 from tycho.ptt.binding import Binding
 from tycho.settings import Settings
@@ -55,7 +55,7 @@ def _with_web(tmp_path: Path) -> GamePack:
 
 def test_the_brain_gets_only_the_look_ups_the_pack_names_and_no_web_search_without_it() -> None:
     assert _offered(_brain(fake_pack())) == {"settings"}
-    star_citizen = _offered(_brain(built_in()))
+    star_citizen = _offered(_brain(built_in(STAR_CITIZEN)))
     assert {"settings", "web_search", "update_fleet"} <= star_citizen
 
 
@@ -102,7 +102,7 @@ def test_the_session_gets_the_pack_s_safety_lists(monkeypatch: pytest.MonkeyPatc
     store = SimpleNamespace(keybinds=FakeGameKeybinds().keybinds)
     session = _session(pack, store, monkeypatch)
     assert session._safety_lists is pack.safety
-    assert session._safety_lists != built_in().safety
+    assert session._safety_lists != built_in(STAR_CITIZEN).safety
 
 
 def test_game_log_is_read_only_for_a_pack_with_a_game_state_part(
@@ -116,7 +116,7 @@ def test_game_log_is_read_only_for_a_pack_with_a_game_state_part(
     assert pack.parts.game_state is None
     assert _session(pack, store, monkeypatch)._game_state is None
 
-    star_citizen = built_in()
+    star_citizen = built_in(STAR_CITIZEN)
     assert star_citizen.parts.game_state is not None
     session = _session(star_citizen, store, monkeypatch)
     assert type(session._game_state).__name__ == "GameLog"

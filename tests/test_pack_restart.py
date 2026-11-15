@@ -20,7 +20,7 @@ from tycho.desktop.bridge import Bridge
 from tycho.desktop.host import Host
 from tycho.game.store import GameDataError
 from tycho.keybinds import Keybinds
-from tycho.packs import GamePack, built_in
+from tycho.packs import STAR_CITIZEN, GamePack, built_in
 from tycho.settings import Settings
 
 OTHER = "other-game"
@@ -176,7 +176,7 @@ def test_the_commands_page_reads_the_new_game_s_keybinds_at_once(
         return now["settings"]
 
     def star_citizen(_current: Settings) -> GamePack:
-        return built_in()
+        return built_in(STAR_CITIZEN)
 
     def find_install(current: Settings) -> Settings:
         return current

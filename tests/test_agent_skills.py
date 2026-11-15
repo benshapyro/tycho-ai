@@ -10,6 +10,9 @@ import pytest
 
 from tycho import app
 from tycho.commands import CommandMatcher
+from tycho.packs import STAR_CITIZEN, built_in
+
+SC = built_in(STAR_CITIZEN)
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILL_FOLDERS = (ROOT / "plugins", ROOT / ".claude" / "skills", ROOT / ".agents" / "skills")
@@ -98,7 +101,7 @@ def test_the_commands_skill_examples_load(tmp_path: Path) -> None:
     assert len(commands) == 3
     file = tmp_path / "commands.toml"
     file.write_text("\n".join(commands), "utf-8")
-    matcher = CommandMatcher.default(file)
+    matcher = CommandMatcher.default(file, pack=SC)
     assert matcher.get("space_mode") is not None
     gear = matcher.get("landing_gear")
     assert gear is not None

@@ -14,7 +14,7 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from tycho.packs import GamePack, built_in
+from tycho.packs import GamePack
 from tycho.text import similarity
 
 _WORD = re.compile(r"[A-Za-z0-9']+")
@@ -112,9 +112,9 @@ class Lexicon:
         self._max_words = max_words
 
     @classmethod
-    def default(cls, pack: GamePack | None = None) -> Lexicon:
-        """The game pack's words (Star Citizen's when none is given)."""
-        return cls((pack or built_in()).terms)
+    def default(cls, pack: GamePack) -> Lexicon:
+        """The game pack's words."""
+        return cls(pack.terms)
 
     def __len__(self) -> int:
         return len(self._terms)

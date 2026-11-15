@@ -25,11 +25,21 @@ from tycho.brain.rounds import Round, Turn
 from tycho.commands import CommandMatcher, Match
 from tycho.input import Presser, plan
 from tycho.keybinds import Action, Keybinds, KeyInput
-from tycho.packs import YOU_TURNED_THEM_OFF, GamePack, PackError, as_run, built_in, load_pack
+from tycho.packs import (
+    STAR_CITIZEN,
+    YOU_TURNED_THEM_OFF,
+    GamePack,
+    PackError,
+    as_run,
+    built_in,
+    load_pack,
+)
 from tycho.runtime.planning import Refusal, plan_request
 from tycho.settings import Settings
 from tycho.settings import rule as settings_rule
 from tycho.spoken_settings import Refused, check_rule
+
+SC = built_in(STAR_CITIZEN)
 
 FAKE_ADVISOR = (
     "Tycho doesn't press keys in Fake Advisor. "
@@ -39,7 +49,7 @@ STAR_CITIZEN_OFF = f"Tycho doesn't press keys in Star Citizen. {YOU_TURNED_THEM_
 
 
 def _star_citizen_off() -> GamePack:
-    return as_run(built_in(), key_actions=False)
+    return as_run(built_in(STAR_CITIZEN), key_actions=False)
 
 
 # --- The pack says so, and the player can only turn it off ---------------------------------
@@ -53,7 +63,7 @@ def test_an_advisor_pack_says_why_and_its_gate_lists_say_keys_are_off() -> None:
     )
     assert pack.safety.keys_off == FAKE_ADVISOR
     assert not fake_pack().safety.keys_off
-    assert not built_in().safety.keys_off
+    assert not built_in(STAR_CITIZEN).safety.keys_off
 
 
 def test_an_advisor_pack_must_say_why(tmp_path: Path) -> None:
@@ -82,8 +92,8 @@ def test_the_player_can_turn_key_actions_off_in_a_game_that_allows_them() -> Non
         STAR_CITIZEN_OFF,
     )
     # The rest of its lists stay: "off" adds a refusal, it doesn't swap the lists.
-    assert pack.safety.confirm == built_in().safety.confirm
-    assert as_run(built_in(), key_actions=True) is built_in()
+    assert pack.safety.confirm == built_in(STAR_CITIZEN).safety.confirm
+    assert as_run(built_in(STAR_CITIZEN), key_actions=True) is built_in(STAR_CITIZEN)
 
 
 def test_the_player_cant_turn_key_actions_on_where_the_rules_forbid_them() -> None:
@@ -118,7 +128,7 @@ KEYS = Keybinds([_bound("v_toggle_landing_system", "n"), _bound("v_eject", "ralt
 
 def test_the_gates_first_check_refuses_every_press_whatever_asks() -> None:
     lists = _star_citizen_off().safety
-    matcher = CommandMatcher.default()
+    matcher = CommandMatcher.default(pack=SC)
     for said, action in (("landing gear", "v_toggle_landing_system"), ("eject", "v_eject")):
         found = matcher.match(said)
         assert isinstance(found, Match)
@@ -142,7 +152,7 @@ def test_the_gates_first_check_refuses_every_press_whatever_asks() -> None:
 def test_the_fast_path_and_confirm_plan_no_presses_with_keys_off(
     said: str, confirmed: bool
 ) -> None:
-    found = CommandMatcher.default().match(said)
+    found = CommandMatcher.default(pack=SC).match(said)
     assert isinstance(found, Match)
     planned = plan_request(
         found.commands, KEYS, confirmed=confirmed, lists=_star_citizen_off().safety
@@ -164,7 +174,7 @@ def test_a_sequence_plans_no_presses_with_keys_off() -> None:
 
 def test_an_advisor_packs_own_commands_press_nothing() -> None:
     # A player's own commands.toml for an advisor game: refused with why, not "no key".
-    found = CommandMatcher.default().match("landing gear")
+    found = CommandMatcher.default(pack=SC).match("landing gear")
     assert isinstance(found, Match)
     planned = plan_request(found.commands, KEYS, lists=advisor_pack().safety)
     assert planned == Refusal("refused", FAKE_ADVISOR)
@@ -193,7 +203,7 @@ def test_the_brain_has_no_tool_to_press_with_in_advisor_mode() -> None:
         names = _tool_names(router._body([])["tools"])  # pyright: ignore[reportPrivateUsage]
         assert not {"run_actions", "run_sequence"} & set(names)
     # With key actions on, both are still offered, first.
-    claude = ClaudeBrain(CommandMatcher.default(), api_key="test")
+    claude = ClaudeBrain(CommandMatcher.default(pack=SC), api_key="test", pack=SC)
     assert _tool_names(claude._offered())[:2] == ["run_sequence", "run_actions"]  # pyright: ignore[reportPrivateUsage]
 
 
@@ -238,7 +248,7 @@ def test_with_keys_off_star_citizens_briefing_lists_nothing_to_press() -> None:
     assert "v_toggle_landing_system" not in text
     assert "The player's commands (the action it presses" not in text
     # With keys on, the text is the pinned one (tests/test_packs.py).
-    assert instructions(built_in()) != instructions(pack)
+    assert instructions(built_in(STAR_CITIZEN)) != instructions(pack)
 
 
 @pytest.mark.parametrize("pack", [advisor_pack(), _star_citizen_off()], ids=["advisor", "sc-off"])
@@ -255,7 +265,7 @@ def test_with_keys_off_no_line_of_the_briefing_tells_the_brain_to_press(pack: Ga
 
 
 def test_with_keys_off_star_citizen_s_own_lines_take_their_advisor_words() -> None:
-    off, on = instructions(_star_citizen_off()), instructions(built_in())
+    off, on = instructions(_star_citizen_off()), instructions(built_in(STAR_CITIZEN))
     assert "call update_fleet first and then answer the action as you would alone" in off
     assert "call update_fleet first and run_actions after it, in the same reply" in on
     assert "say to open the star map, set the destination there and engage quantum" in off
@@ -265,7 +275,7 @@ def test_with_keys_off_star_citizen_s_own_lines_take_their_advisor_words() -> No
 def test_with_keys_off_star_citizen_s_briefing_has_no_line_about_pressing() -> None:
     """#347: three lines still talked about pressing: the listed commands, acting on a
     best reading, and launching missiles. Keys on, they read as before (the pinned hash)."""
-    off, on = instructions(_star_citizen_off()), instructions(built_in())
+    off, on = instructions(_star_citizen_off()), instructions(built_in(STAR_CITIZEN))
     for pressing in (
         "The player's commands are listed below",
         "Act on your best reading when the actions are harmless",

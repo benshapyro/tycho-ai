@@ -22,11 +22,13 @@ from tycho.knowledge.web import (
     OPEN_PAGE_TOKENS,
     OPEN_SECONDS,
     SECONDS,
-    SITES,
     WEB_FETCH,
     WEB_SEARCH,
     WebSearch,
 )
+from tycho.packs import STAR_CITIZEN, built_in
+
+SC = built_in(STAR_CITIZEN)
 
 # --- The search request -------------------------------------------------------------------------
 
@@ -68,7 +70,9 @@ def _found(*texts: str, stop_reason: str = "end_turn") -> Any:
 
 
 def _search(client: _Client, query: object = "Star Citizen 4.11") -> tuple[bool, Any]:
-    search = WebSearch(cast(Any, client), today=lambda: datetime.date(2026, 11, 2))
+    search = WebSearch(
+        cast(Any, client), today=lambda: datetime.date(2026, 11, 2), sites=SC.web_sites
+    )
     result = asyncio.run(search.run({"query": query}))
     return result.is_error, json.loads(result.content)
 
@@ -83,10 +87,10 @@ def test_it_searches_only_star_citizen_sites_once() -> None:
             "type": WEB_SEARCH,
             "name": "web_search",
             "max_uses": 1,
-            "allowed_domains": list(SITES),
+            "allowed_domains": list(SC.web_sites),
         }
     ]
-    assert "robertsspaceindustries.com" in SITES
+    assert "robertsspaceindustries.com" in SC.web_sites
     assert request["messages"] == [
         {"role": "user", "content": "[2 November 2026] Star Citizen 4.11"}
     ]
@@ -231,7 +235,7 @@ def test_a_failed_or_empty_search_says_so() -> None:
 
 
 def test_the_brain_treats_it_as_from_the_web() -> None:
-    search = WebSearch(cast(Any, _Client()))
+    search = WebSearch(cast(Any, _Client()), sites=SC.web_sites)
     assert search.from_the_web
     assert search.seconds == SECONDS
     assert search.input_schema["additionalProperties"] is False
@@ -245,7 +249,7 @@ def test_the_query_reaches_the_log_only_with_transcripts_kept(
     # It's the player's question, reworded (audit, 2026-11-03).
     caplog.set_level(logging.DEBUG, logger="tycho.knowledge.web")
     client = _Client(_found("RSI's roadmap has 4.11 for Q4 2026."))
-    search = WebSearch(cast(Any, client), log_queries=kept)
+    search = WebSearch(cast(Any, client), log_queries=kept, sites=SC.web_sites)
     asyncio.run(search.run({"query": "is the Polaris getting nerfed"}))
     assert ("Polaris" in caplog.text) is kept
     assert "Web search" in caplog.text
@@ -304,7 +308,7 @@ class _Turns(_Client):
 
 def test_the_open_web_trial_searches_any_site_and_reads_pages() -> None:
     client = _Client(_read_page("Players report the fines terminal is in the admin office."))
-    search = WebSearch(cast(Any, client), open_web=True)
+    search = WebSearch(cast(Any, client), open_web=True, sites=SC.web_sites)
     result = json.loads(asyncio.run(search.run({"query": "Levski pay fines"})).content)
     (request,) = client.requests
     assert request["system"] == OPEN_BRIEF
@@ -327,7 +331,7 @@ def test_the_open_web_trial_searches_any_site_and_reads_pages() -> None:
 
 def test_the_open_web_goes_on_after_a_paused_turn_and_keeps_only_the_answer() -> None:
     client = _Turns(_read_page(paused=True), _read_page("It's in the admin office."))
-    search = WebSearch(cast(Any, client), open_web=True)
+    search = WebSearch(cast(Any, client), open_web=True, sites=SC.web_sites)
     result = json.loads(asyncio.run(search.run({"query": "Levski pay fines"})).content)
     first, second = client.requests
     assert second["messages"][-1]["role"] == "assistant"
@@ -356,7 +360,7 @@ SLOW = object()
 
 def _fallback(*messages: Any, seconds: float = OPEN_SECONDS) -> tuple[_Turns, bool, Any]:
     client = _Turns(*messages)
-    search = WebSearch(cast(Any, client), fallback=True)
+    search = WebSearch(cast(Any, client), fallback=True, sites=SC.web_sites)
     assert search.seconds == OPEN_SECONDS
     search.seconds = seconds
     result = asyncio.run(search.run({"query": "Levski pay fines"}))
@@ -369,7 +373,7 @@ def test_a_clear_answer_from_the_game_sites_needs_no_open_web() -> None:
     )
     assert not error
     (request,) = client.requests
-    assert request["tools"][0]["allowed_domains"] == list(SITES)
+    assert request["tools"][0]["allowed_domains"] == list(SC.web_sites)
     assert "FOUND" in request["system"]
     assert result["answer"] == "The fines terminal is in Levski's admin office."
     assert result["source"] == "web search of Star Citizen sites"

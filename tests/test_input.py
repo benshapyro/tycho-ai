@@ -93,7 +93,9 @@ def test_wheel_notches_are_not_held() -> None:
 
 def _presser(sender: FakeKeySender, focus: FakeFocus | None = None) -> tuple[Presser, FakeClock]:
     clock = FakeClock()
-    return Presser(sender, focus or FakeFocus(True), sleep=clock.sleep, clock=clock), clock
+    return Presser(
+        sender, focus or FakeFocus(True), sleep=clock.sleep, clock=clock, game="Star Citizen"
+    ), clock
 
 
 def test_a_chord_is_pressed_in_order_and_released_in_reverse() -> None:
@@ -188,7 +190,7 @@ def test_a_long_hold_cancelled_past_the_window_lets_go_at_once() -> None:
         if clock.now >= 0.5:
             cancel.set()
 
-    presser = Presser(sender, FakeFocus(True), sleep=sleep, clock=clock)
+    presser = Presser(sender, FakeFocus(True), sleep=sleep, clock=clock, game="Star Citizen")
     receipt = presser.press(plan(_action("n", "delayed_press_long"), MODES), cancel)
     assert receipt.outcome == "cancelled"
     assert clock.now == pytest.approx(0.5, abs=0.02)  # not the full 1.62 s
@@ -224,7 +226,7 @@ def test_cancelling_between_taps_never_sends_the_second_tap() -> None:
         if clock.now > 0.1:  # part way through the 80 ms gap after the first 60 ms tap
             cancel.set()
 
-    presser = Presser(sender, FakeFocus(True), sleep=sleep, clock=clock)
+    presser = Presser(sender, FakeFocus(True), sleep=sleep, clock=clock, game="Star Citizen")
     receipt = presser.press(plan(_action("capslock", "double_tap"), MODES), cancel)
     assert receipt.outcome == "cancelled"
     assert receipt.taps_done == 1

@@ -372,7 +372,9 @@ def _start(
             focus=WindowsFocusCheck(pack.window or GAME_EXECUTABLE),
             feedback=feedback,
             action_log=action_log,
-            make_brain=lambda matcher: load_brain(matcher, current, live, address, display, pack),
+            make_brain=lambda matcher: load_brain(
+                matcher, current, live, address, display, pack=pack
+            ),
             speaker=speaker,
             address=address,
             display=display,
@@ -759,7 +761,7 @@ def actions_command(current: Settings, words: list[str]) -> int:
     # so Tycho's own commands that are said with those words are shown too.
     try:
         pack = built_in(current.game)
-        matcher = CommandMatcher.default(paths.commands_file(pack.id), pack)
+        matcher = CommandMatcher.default(paths.commands_file(pack.id), pack=pack)
     except CommandFileError:  # tycho check explains it; the built-in ones still help here
         matcher = CommandMatcher.default(pack=built_in(current.game))
     said = [
@@ -922,12 +924,11 @@ def load_speaker(
     )
 
 
-def load_commands(pack: GamePack | None = None) -> CommandMatcher:
+def load_commands(pack: GamePack) -> CommandMatcher:
     """The game's built-in commands plus the player's own file for that game. A broken
     file is reported and skipped, so a typo never stops Tycho starting."""
-    pack = pack or built_in()
     try:
-        matcher = CommandMatcher.default(paths.commands_file(pack.id), pack)
+        matcher = CommandMatcher.default(paths.commands_file(pack.id), pack=pack)
     except CommandFileError as e:
         log.warning("Your commands file can't be used, so only the built-in ones are: %s", e)
         return CommandMatcher.default(pack=pack)
@@ -953,18 +954,17 @@ def build_session(
     on_result: Callable[[Result], None] | None = None,
     address: Address | None = None,
     display: Display | None = None,
-    pack: GamePack | None = None,
+    pack: GamePack,
 ) -> Session:
-    """The talking loop, wired the way ``tycho run`` wires it, for ``pack``'s game (Star
-    Citizen when None): its commands, words and safety lists, which say whether key
-    actions are off (#191). ``store`` is None for a pack with no keybinds part."""
+    """The talking loop, wired the way ``tycho run`` wires it, for ``pack``'s game: its
+    commands, words and safety lists, which say whether key actions are off (#191).
+    ``store`` is None for a pack with no keybinds part."""
     from tycho.game.gamelog import GameLog
     from tycho.input import Presser
     from tycho.lexicon import Lexicon
     from tycho.ptt.monitor import PushToTalk
     from tycho.runtime import Session
 
-    pack = pack or built_in()
     if game_state is None and store is not None and pack.parts.game_state is not None:
         # "star-citizen", the only game-state part built in: Game.log.
         game_log = GameLog(store.install.game_log)
@@ -1168,7 +1168,7 @@ def _checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Findin
 
     commands_file = paths.commands_file(pack.id)
     try:
-        matcher = CommandMatcher.default(commands_file, pack)
+        matcher = CommandMatcher.default(commands_file, pack=pack)
     except CommandFileError as e:
         # A warning, not a failure: run starts anyway, with the built-in commands.
         yield Finding("warn", "Your commands", f"{e} (only the built-in ones are used)")

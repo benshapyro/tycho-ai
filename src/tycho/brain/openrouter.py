@@ -293,7 +293,7 @@ class OpenRouterBrain:
         hosts: Sequence[str] = (),
         sort: str | None = None,
         traces: TraceFile | None = None,
-        pack: GamePack | None = None,
+        pack: GamePack,
     ) -> None:
         """``model`` is OpenRouter's id ("anthropic/claude-haiku-5.5"). ``effort`` asks a
         model that reasons to reason that hard ("low"); by default nothing is asked, so
@@ -308,7 +308,7 @@ class OpenRouterBrain:
         self._client: ChatClient = client or OpenRouterClient(api_key or "")
         self._matcher = matcher
         self._pack = pack
-        """The game the briefing is for (Star Citizen when None, ADR 18)."""
+        """The game the briefing is for (ADR 18)."""
         self._model = model
         self._today = today
         self._effort = effort
@@ -316,7 +316,7 @@ class OpenRouterBrain:
         if sort is not None and sort not in SORTS:
             raise ValueError(f"OpenRouter can't sort hosts by {sort!r}")
         self._route = route(hosts, sort)
-        self._keys = pack is None or pack.mode == "keys"
+        self._keys = pack.mode == "keys"
         """Whether the brain may press: in advisor mode it has no tool to (#191)."""
         self._sequences = (
             sorted(c.id for c in matcher.commands if c.is_sequence) if self._keys else []

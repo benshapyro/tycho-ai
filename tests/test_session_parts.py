@@ -9,6 +9,7 @@ from tycho.commands import Command, CommandMatcher
 from tycho.commands.reserved import TILE_WORDS
 from tycho.game.gamelog import QUANTUM_ROUTE
 from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput
+from tycho.packs import STAR_CITIZEN, built_in
 from tycho.runtime.planning import (
     CHAIN_BEAT_SECONDS,
     Questions,
@@ -29,7 +30,9 @@ from tycho.runtime.routing import (
     tile_command,
 )
 
-MATCHER = CommandMatcher.default()
+SC = built_in(STAR_CITIZEN)
+
+MATCHER = CommandMatcher.default(pack=SC)
 MODES = {"press": ActivationMode("press")}
 
 
@@ -154,27 +157,31 @@ def test_what_the_fast_path_cant_match_goes_to_the_brain_if_there_is_one() -> No
 
 
 def test_the_brains_actions_become_commands_like_the_fast_paths() -> None:
-    picked = from_brain(RunActions(("v_toggle_landing_system",), say="Gear down."), MATCHER)
+    picked = from_brain(
+        RunActions(("v_toggle_landing_system",), say="Gear down."), MATCHER, lists=SC.safety
+    )
     assert isinstance(picked, Picked)
     assert picked.by_brain
     assert picked.say == "Gear down."
-    assert plan_request(picked.commands, KEYBINDS) == plan_request(_commands("gear down"), KEYBINDS)
+    assert plan_request(picked.commands, KEYBINDS, lists=SC.safety) == plan_request(
+        _commands("gear down"), KEYBINDS, lists=SC.safety
+    )
 
 
 def test_the_brains_reply_passes_through() -> None:
     reply = Reply("About 3 million aUEC.")
-    assert from_brain(reply, MATCHER) is reply
+    assert from_brain(reply, MATCHER, lists=SC.safety) is reply
 
 
 def test_a_sequence_the_brain_made_up_is_an_error() -> None:
     with pytest.raises(BrainError):
-        from_brain(RunSequence("make_coffee"), MATCHER)
+        from_brain(RunSequence("make_coffee"), MATCHER, lists=SC.safety)
 
 
 def test_an_action_the_brain_made_up_presses_nothing() -> None:
-    picked = from_brain(RunActions(("v_make_coffee",)), MATCHER)
+    picked = from_brain(RunActions(("v_make_coffee",)), MATCHER, lists=SC.safety)
     assert isinstance(picked, Picked)
-    planned = plan_request(picked.commands, KEYBINDS)
+    planned = plan_request(picked.commands, KEYBINDS, lists=SC.safety)
     assert isinstance(planned, Refusal)
     assert planned.status == "no_key"
 
@@ -183,14 +190,14 @@ def test_an_action_the_brain_made_up_presses_nothing() -> None:
 
 
 def test_a_chain_is_planned_whole_with_a_beat_between_actions() -> None:
-    planned = plan_request(_commands("gear down and request landing"), KEYBINDS)
+    planned = plan_request(_commands("gear down and request landing"), KEYBINDS, lists=SC.safety)
     assert isinstance(planned, Steps)
     assert planned.actions == ("v_toggle_landing_system", "v_atc_request")
     assert [wait for wait, _ in planned.presses] == [0.0, CHAIN_BEAT_SECONDS]
 
 
 def test_a_confirm_grade_action_asks_in_the_gates_own_words() -> None:
-    planned = plan_request(_commands("eject"), KEYBINDS)
+    planned = plan_request(_commands("eject"), KEYBINDS, lists=SC.safety)
     assert isinstance(planned, Questions)
     assert planned.question() == "v_eject? Say confirm."
     assert planned.question("Commander") == "v_eject? Say confirm, Commander."
@@ -198,13 +205,13 @@ def test_a_confirm_grade_action_asks_in_the_gates_own_words() -> None:
 
 
 def test_once_confirmed_it_is_pressed() -> None:
-    planned = plan_request(_commands("eject"), KEYBINDS, confirmed=True)
+    planned = plan_request(_commands("eject"), KEYBINDS, confirmed=True, lists=SC.safety)
     assert isinstance(planned, Steps)
     assert planned.actions == ("v_eject",)
 
 
 def test_an_unbound_action_presses_nothing() -> None:
-    planned = plan_request(_commands("gear down"), Keybinds([], MODES))
+    planned = plan_request(_commands("gear down"), Keybinds([], MODES), lists=SC.safety)
     assert isinstance(planned, Refusal)
     assert planned.status == "no_key"
 
@@ -218,15 +225,17 @@ def test_a_missing_fact_is_refused_and_found_only_when_needed() -> None:
     assert not needs_facts(gear)
     routed = (_needs_a_route(gear[0]),)
     assert needs_facts(routed)
-    refused = plan_request(routed, KEYBINDS)
+    refused = plan_request(routed, KEYBINDS, lists=SC.safety)
     assert isinstance(refused, Refusal)
     assert refused.status == "refused"
-    assert isinstance(plan_request(routed, KEYBINDS, frozenset({QUANTUM_ROUTE})), Steps)
+    assert isinstance(
+        plan_request(routed, KEYBINDS, frozenset({QUANTUM_ROUTE}), lists=SC.safety), Steps
+    )
 
 
 def test_a_refusal_outranks_any_question() -> None:
     commands = (*_commands("eject"), _needs_a_route(_commands("gear down")[0]))
-    planned = plan_request(commands, KEYBINDS)
+    planned = plan_request(commands, KEYBINDS, lists=SC.safety)
     assert isinstance(planned, Refusal)
     assert planned.status == "refused"
 

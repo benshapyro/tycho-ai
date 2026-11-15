@@ -44,8 +44,11 @@ from tycho.brain.rounds import (
 )
 from tycho.commands import CommandMatcher
 from tycho.keybinds import Action, Keybinds, KeyInput
+from tycho.packs import STAR_CITIZEN, built_in
 
-MATCHER = CommandMatcher.default()
+SC = built_in(STAR_CITIZEN)
+
+MATCHER = CommandMatcher.default(pack=SC)
 ACTIONS = {"v_toggle_landing_system", "v_eject", "v_toggle_qdrive_engagement", "v_lights"}
 SEQUENCES = {"startup", "prepare_to_land"}
 
@@ -115,12 +118,12 @@ def test_a_long_say_line_is_cut() -> None:
 
 
 def test_an_action_runs_as_the_command_that_owns_it() -> None:
-    (gear,) = commands_for(RunActions(("v_toggle_landing_system",)), MATCHER)
+    (gear,) = commands_for(RunActions(("v_toggle_landing_system",)), MATCHER, lists=SC.safety)
     assert gear.id == "landing_gear"
 
 
 def test_quantum_picked_by_the_brain_gets_its_setup_and_asks_first() -> None:
-    (engage,) = commands_for(RunActions(("v_toggle_qdrive_engagement",)), MATCHER)
+    (engage,) = commands_for(RunActions(("v_toggle_qdrive_engagement",)), MATCHER, lists=SC.safety)
     assert engage.id == "quantum_engage"
     assert engage.setup == ("v_master_mode_set_nav", "v_set_quantum_mode")
     assert engage.confirm
@@ -130,7 +133,7 @@ def test_quantum_picked_by_the_brain_gets_its_setup_and_asks_first() -> None:
 
 
 def test_an_action_no_command_owns_runs_bare() -> None:
-    (bare,) = commands_for(RunActions(("v_some_new_action",)), MATCHER)
+    (bare,) = commands_for(RunActions(("v_some_new_action",)), MATCHER, lists=SC.safety)
     assert (bare.id, bare.actions, bare.setup, bare.accepted_risks) == (
         "v_some_new_action",
         ("v_some_new_action",),
@@ -149,7 +152,9 @@ def test_a_fallback_action_keeps_the_players_confirm(tmp_path: Any) -> None:
         'actions = ["v_not_bound_anywhere", "v_lock_rotation"]\n',
         "utf-8",
     )
-    (picked,) = commands_for(RunActions(("v_lock_rotation",)), CommandMatcher.default(file))
+    (picked,) = commands_for(
+        RunActions(("v_lock_rotation",)), CommandMatcher.default(file, pack=SC), lists=SC.safety
+    )
     assert picked.actions == ("v_lock_rotation",)
     assert picked.confirm
     assert picked.requires == ("quantum_route_set",)
@@ -162,13 +167,17 @@ def test_a_players_confirm_holds_on_an_action_a_built_in_starts_with(tmp_path: A
         'actions = ["v_toggle_landing_system"]\n',
         "utf-8",
     )
-    (gear,) = commands_for(RunActions(("v_toggle_landing_system",)), CommandMatcher.default(file))
+    (gear,) = commands_for(
+        RunActions(("v_toggle_landing_system",)),
+        CommandMatcher.default(file, pack=SC),
+        lists=SC.safety,
+    )
     assert gear.id == "landing_gear"  # still the built-in command, with its setup and waits
     assert gear.confirm
 
 
 def test_picks_nobody_marked_stay_as_they_were() -> None:
-    (gear,) = commands_for(RunActions(("v_toggle_landing_system",)), MATCHER)
+    (gear,) = commands_for(RunActions(("v_toggle_landing_system",)), MATCHER, lists=SC.safety)
     assert not gear.confirm
     assert gear.requires == ()
 
@@ -180,8 +189,8 @@ def test_a_sequence_with_travel_asks_when_the_brain_picked_it(tmp_path: Any) -> 
         'steps = ["flight_ready", "quantum_engage"]\n',
         "utf-8",
     )
-    matcher = CommandMatcher.default(file)
-    (depart,) = commands_for(RunSequence("depart"), matcher)
+    matcher = CommandMatcher.default(file, pack=SC)
+    (depart,) = commands_for(RunSequence("depart"), matcher, lists=SC.safety)
     assert [s.command.confirm for s in depart.steps] == [False, True]
 
 
@@ -189,14 +198,14 @@ def test_a_sequence_with_travel_asks_when_the_brain_picked_it(tmp_path: Any) -> 
 
 
 def test_the_briefing_lists_only_actions_tycho_can_press() -> None:
-    actions = bound_actions(KEYBINDS)
+    actions = bound_actions(KEYBINDS, pack=SC)
     assert set(actions) == {"v_toggle_landing_system", "v_eject"}
     assert actions["v_eject"] == "v_eject | Eject"  # what it does, not its key
 
 
 def test_the_briefing_is_the_same_every_time_so_the_cache_holds() -> None:
-    first = briefing(KEYBINDS, MATCHER)
-    assert first == briefing(Keybinds(list(reversed(list(KEYBINDS)))), MATCHER)
+    first = briefing(KEYBINDS, MATCHER, pack=SC)
+    assert first == briefing(Keybinds(list(reversed(list(KEYBINDS)))), MATCHER, pack=SC)
     assert "startup | flight_ready, then request_departure" in first
 
 
@@ -206,7 +215,7 @@ def test_the_briefing_tells_claude_how_players_say_each_command() -> None:
     assert len(gear) == 3  # toggle, down and up all fall back to the toggle here
     assert any("gear down" in line for line in gear)
     assert not any("v_lights" in line for line in lines)  # no key, so not offered
-    assert "how it's said" in briefing(KEYBINDS, MATCHER)
+    assert "how it's said" in briefing(KEYBINDS, MATCHER, pack=SC)
 
 
 def test_the_briefing_names_commands_with_no_key_and_what_to_bind() -> None:
@@ -219,27 +228,29 @@ def test_the_briefing_names_commands_with_no_key_and_what_to_bind() -> None:
     assert "doors_lock | lock the doors; lock doors | Lock All Doors" in unbound_commands(
         labelled, MATCHER
     )
-    text = briefing(KEYBINDS, MATCHER)
+    text = briefing(KEYBINDS, MATCHER, pack=SC)
     assert "commands with no key" in text
     assert "Never press another action in its place" in text
 
 
 def test_actions_nobody_says_are_left_out_unless_a_command_presses_them() -> None:
-    assert not briefed("v_pitch_up", "spaceship_movement")  # held steering
-    assert not briefed("emote_cs_yes", "player_emotes")
-    assert briefed("v_strafe_trim_reset_short", "spaceship_movement")
-    assert briefed("v_master_mode_set_scm", "spaceship_movement")
+    assert not briefed("v_pitch_up", "spaceship_movement", pack=SC)  # held steering
+    assert not briefed("emote_cs_yes", "player_emotes", pack=SC)
+    assert briefed("v_strafe_trim_reset_short", "spaceship_movement", pack=SC)
+    assert briefed("v_master_mode_set_scm", "spaceship_movement", pack=SC)
     camera = Action(
         name="view_cycle", actionmap="view_director_mode", label="Cycle", inputs=(KeyInput("f4"),)
     )
     keybinds = Keybinds([camera])
-    assert bound_actions(keybinds) == {}
-    assert set(bound_actions(keybinds, keep=frozenset({"view_cycle"}))) == {"view_cycle"}
+    assert bound_actions(keybinds, pack=SC) == {}
+    assert set(bound_actions(keybinds, keep=frozenset({"view_cycle"}), pack=SC)) == {"view_cycle"}
 
 
 def test_each_request_carries_todays_date_outside_the_cached_briefing() -> None:
     client = _Client([_tool_stop("run_sequence", {"name": "startup", "say": ""})])
-    brain = ClaudeBrain(MATCHER, client=cast(Any, client), today=lambda: datetime.date(2026, 11, 1))
+    brain = ClaudeBrain(
+        MATCHER, client=cast(Any, client), today=lambda: datetime.date(2026, 11, 1), pack=SC
+    )
     asyncio.run(brain.decide(BrainRequest("start us up", KEYBINDS)))
     (request,) = client.requests
     assert request["messages"][-1]["content"][0] == {"type": "text", "text": "[1 November 2026]"}
@@ -248,8 +259,8 @@ def test_each_request_carries_todays_date_outside_the_cached_briefing() -> None:
 
 
 def test_the_briefing_carries_the_current_game_facts_and_no_keys() -> None:
-    text = briefing(KEYBINDS, MATCHER)
-    facts = game_facts()
+    text = briefing(KEYBINDS, MATCHER, pack=SC)
+    facts = game_facts(pack=SC)
     assert facts in text
     assert facts.startswith("Patch: Alpha ")  # dated, so Claude can say "as of"
     assert "Port Olisar is gone" in facts
@@ -332,7 +343,7 @@ def _final(text: str, stop_reason: str = "end_turn") -> Any:
 
 
 def _decide(client: _Client, text: str = "gear please") -> Any:
-    brain = ClaudeBrain(MATCHER, client=cast(Any, client))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), pack=SC)
     return asyncio.run(brain.decide(BrainRequest(text, KEYBINDS)))
 
 
@@ -433,7 +444,10 @@ def _card(**fields: Any) -> dict[str, Any]:
 
 def test_a_whole_card_is_shown() -> None:
     brain = ClaudeBrain(
-        MATCHER, client=cast(Any, _Client([_tool_stop("show_card", _card())])), cards=lambda: True
+        MATCHER,
+        client=cast(Any, _Client([_tool_stop("show_card", _card())])),
+        cards=lambda: True,
+        pack=SC,
     )
     decided = asyncio.run(brain.decide(BrainRequest("teach me how to salvage", KEYBINDS)))
     assert isinstance(decided, Reply)
@@ -461,22 +475,22 @@ def test_a_whole_card_is_shown() -> None:
 )
 def test_an_act_cut_off_at_the_output_limit_is_not_used(name: str, arguments: Any) -> None:
     stop = _tool_stop(name, arguments)
-    brain = ClaudeBrain(MATCHER, client=cast(Any, _Client([stop])), cards=lambda: True)
+    brain = ClaudeBrain(MATCHER, client=cast(Any, _Client([stop])), cards=lambda: True, pack=SC)
     decided = asyncio.run(brain.decide(BrainRequest("teach me how to salvage", KEYBINDS)))
     assert decided == Reply(CUT_SHORT)
 
 
 def test_a_bare_action_an_announced_command_uses_counts_as_announced() -> None:
-    (lights,) = commands_for(RunActions(("v_lights",), ""), MATCHER)
+    (lights,) = commands_for(RunActions(("v_lights",), ""), MATCHER, lists=SC.safety)
     assert not lights.announced
-    (toggle,) = commands_for(RunActions(("v_power_toggle",), ""), MATCHER)
+    (toggle,) = commands_for(RunActions(("v_power_toggle",), ""), MATCHER, lists=SC.safety)
     assert toggle.id == "v_power_toggle"  # not power_on's own first action, so it runs bare
     assert toggle.announced
 
 
 def test_warming_up_caches_exactly_what_a_real_request_sends() -> None:
     client = _Client([_tool_stop("run_sequence", {"name": "startup", "say": ""})], _final(""))
-    brain = ClaudeBrain(MATCHER, client=cast(Any, client))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), pack=SC)
 
     async def scenario() -> None:
         await brain.warm(KEYBINDS)
@@ -518,7 +532,7 @@ def _looks_up(name: str = "ship_lookup", use_id: str = "toolu_1") -> tuple[list[
 
 
 def _ask(client: _Calls, *lookups: FakeLookup) -> Any:
-    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=lookups)
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=lookups, pack=SC)
     return asyncio.run(brain.decide(BrainRequest("who makes the Andromeda", KEYBINDS)))
 
 
@@ -628,7 +642,7 @@ def test_settings_and_the_fleet_dont_say_checking() -> None:
     instant = FakeLookup("settings", '{"done": true}', instant=True)
     looked: list[str] = []
     client = _Calls(_looks_up("settings"), ([], _final("Done.")))
-    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=(instant,))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=(instant,), pack=SC)
     request = BrainRequest("voice down a bit", KEYBINDS, looking=lambda: looked.append(""))
     assert asyncio.run(brain.decide(request)) == Reply("Done.")
     assert looked == []
@@ -649,7 +663,7 @@ def test_each_look_up_is_told_to_the_session() -> None:
     looked: list[str] = []
     calls = [_looks_up(use_id=f"toolu_{n}") for n in range(2)]
     client = _Calls(*calls, ([], _final("Area 18.")))
-    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=(FakeLookup(),))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=(FakeLookup(),), pack=SC)
     request = BrainRequest("where do I sell gold", KEYBINDS, looking=lambda: looked.append(""))
     assert asyncio.run(brain.decide(request)) == Reply("Area 18.")
     assert len(looked) == 2
@@ -657,12 +671,16 @@ def test_each_look_up_is_told_to_the_session() -> None:
 
 def test_a_look_up_cant_take_the_name_of_an_act() -> None:
     with pytest.raises(ValueError, match="run_actions"):
-        ClaudeBrain(MATCHER, client=cast(Any, _Calls()), lookups=[FakeLookup(name="run_actions")])
+        ClaudeBrain(
+            MATCHER, client=cast(Any, _Calls()), lookups=[FakeLookup(name="run_actions")], pack=SC
+        )
 
 
 def test_warming_up_also_loads_the_look_ups_data() -> None:
     lookup = FakeLookup()
-    brain = ClaudeBrain(MATCHER, client=cast(Any, _Client([], _final(""))), lookups=[lookup])
+    brain = ClaudeBrain(
+        MATCHER, client=cast(Any, _Client([], _final(""))), lookups=[lookup], pack=SC
+    )
     asyncio.run(brain.warm(KEYBINDS))
     assert lookup.prepared
 
@@ -671,7 +689,7 @@ def test_warming_again_after_a_rebind_writes_the_cache_but_loads_nothing_twice()
     """#60: the briefing lists the keybinds, so a rebind needs the cache warmed again."""
     lookup = FakeLookup()
     client = _Client([], _final(""))
-    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=[lookup])
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=[lookup], pack=SC)
 
     async def scenario() -> None:
         await brain.warm(KEYBINDS)
@@ -694,7 +712,9 @@ def test_a_rebind_during_the_first_warm_up_still_loads_the_look_ups() -> None:
             self.prepared = True
 
     lookup = SlowLookup()
-    brain = ClaudeBrain(MATCHER, client=cast(Any, _Client([], _final(""))), lookups=[lookup])
+    brain = ClaudeBrain(
+        MATCHER, client=cast(Any, _Client([], _final(""))), lookups=[lookup], pack=SC
+    )
 
     async def scenario() -> None:
         first = asyncio.create_task(brain.warm(KEYBINDS))
@@ -711,7 +731,7 @@ def test_a_rebind_during_the_first_warm_up_still_loads_the_look_ups() -> None:
 
 def test_closing_the_brain_closes_its_own_connection(monkeypatch: pytest.MonkeyPatch) -> None:
     """#60: the connection pool was never closed."""
-    brain = ClaudeBrain(MATCHER, api_key="test")
+    brain = ClaudeBrain(MATCHER, api_key="test", pack=SC)
     closed: list[bool] = []
 
     async def close() -> None:
@@ -721,13 +741,15 @@ def test_closing_the_brain_closes_its_own_connection(monkeypatch: pytest.MonkeyP
     asyncio.run(brain.close())
     assert closed == [True]
     lent = _Client([], _final(""))
-    asyncio.run(ClaudeBrain(MATCHER, client=cast(Any, lent)).close())  # a lent one is left open
+    asyncio.run(
+        ClaudeBrain(MATCHER, client=cast(Any, lent), pack=SC).close()
+    )  # a lent one is left open
 
 
 def test_reference_text_goes_at_the_end_of_the_cached_briefing() -> None:
     client = _Client([], _final("RSI."))
     brain = ClaudeBrain(
-        MATCHER, client=cast(Any, client), reference="ship | maker\nAndromeda | RSI"
+        MATCHER, client=cast(Any, client), reference="ship | maker\nAndromeda | RSI", pack=SC
     )
     asyncio.run(brain.decide(BrainRequest("who makes the Andromeda", KEYBINDS)))
     (system,) = client.requests[0]["system"]
@@ -752,7 +774,7 @@ def _web() -> FakeLookup:
 
 def _ask_web(client: _Calls, *lookups: FakeLookup) -> tuple[Any, list[str]]:
     waited: list[str] = []
-    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=lookups)
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=lookups, pack=SC)
     request = BrainRequest("whats in the next patch", KEYBINDS, waiting=lambda: waited.append(""))
     return asyncio.run(brain.decide(request)), waited
 
@@ -819,7 +841,7 @@ def test_claude_sees_a_few_phrases_per_command_the_short_ones_first() -> None:
 
 def test_claude_is_told_to_name_what_was_sent_not_a_result() -> None:
     # The game ignores some keys in the wrong state, and Tycho can't see it (#29).
-    text = briefing(KEYBINDS, MATCHER)
+    text = briefing(KEYBINDS, MATCHER, pack=SC)
     assert "Name what was sent, never a result" in text
     assert '"Max power to engines", not "Engines are at' in text
 
@@ -865,7 +887,7 @@ def test_a_card_claude_cant_show_is_a_brain_error(change: dict[str, Any], proble
 
 def _offered(tile: bool) -> list[str]:
     client = _Client([_tool_stop("show_card", _CARD)] if tile else [], _final("Fine."))
-    brain = ClaudeBrain(MATCHER, client=cast(Any, client), cards=lambda: tile)
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), cards=lambda: tile, pack=SC)
     asyncio.run(brain.decide(BrainRequest("where to sell laranite", KEYBINDS)))
     return [t["name"] for t in client.requests[0]["tools"]]
 
@@ -878,7 +900,7 @@ def test_claude_may_show_a_card_only_while_the_tile_is_on() -> None:
 def test_turning_the_tile_on_or_off_takes_effect_at_the_next_request() -> None:
     tile = [False]
     client = _Calls(([], _final("Fine.")), ([], _final("Fine.")))
-    brain = ClaudeBrain(MATCHER, client=cast(Any, client), cards=lambda: tile[0])
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), cards=lambda: tile[0], pack=SC)
     asyncio.run(brain.decide(BrainRequest("hello", KEYBINDS)))
     tile[0] = True
     asyncio.run(brain.decide(BrainRequest("hello", KEYBINDS)))
@@ -890,7 +912,9 @@ def test_turning_the_tile_on_or_off_takes_effect_at_the_next_request() -> None:
 def test_a_card_after_a_web_search_is_shown_since_nothing_is_pressed() -> None:
     card = _CARD | {"kind": "headlines", "say": "Three things stand out."}
     client = _Calls(_searches(), ([_tool_stop("show_card", card, "toolu_2")], None))
-    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=[_web()], cards=lambda: True)
+    brain = ClaudeBrain(
+        MATCHER, client=cast(Any, client), lookups=[_web()], cards=lambda: True, pack=SC
+    )
     decision = asyncio.run(brain.decide(BrainRequest("whats in the next patch", KEYBINDS)))
     assert isinstance(decision, Reply)
     assert decision.card is not None
@@ -899,11 +923,13 @@ def test_a_card_after_a_web_search_is_shown_since_nothing_is_pressed() -> None:
 
 def test_a_look_up_cant_take_the_cards_name() -> None:
     with pytest.raises(ValueError, match="show_card"):
-        ClaudeBrain(MATCHER, client=cast(Any, _Client([])), lookups=[FakeLookup("show_card")])
+        ClaudeBrain(
+            MATCHER, client=cast(Any, _Client([])), lookups=[FakeLookup("show_card")], pack=SC
+        )
 
 
 def test_the_briefing_says_when_the_eye_beats_the_ear() -> None:
-    text = briefing(KEYBINDS, MATCHER)
+    text = briefing(KEYBINDS, MATCHER, pack=SC)
     assert "show_card" in text
     assert "Two more on the Tile" in text
     assert "Never a card for a one-line answer" in " ".join(text.split())
@@ -914,7 +940,7 @@ def test_the_briefing_says_what_not_to_guess() -> None:
     callouts (shields, targeting), "jump to Hurston" (quantum to wherever was set) and
     "fire everything" (weapon power). The briefing's examples are other wordings than
     the eval's cases, so the eval still measures what a model makes of new ones."""
-    text = " ".join(briefing(KEYBINDS, MATCHER).split())
+    text = " ".join(briefing(KEYBINDS, MATCHER, pack=SC).split())
     assert "Never guess a sequence, a boost or the throttle" in text
     assert "call no tool, not even for shields or targeting" in text
     assert 'reply with exactly "Copy." and nothing else' in text
@@ -1001,7 +1027,7 @@ def test_no_checking_line_for_a_look_up_an_act_cuts_short() -> None:
         "run_actions", {"actions": ["v_toggle_landing_system"], "say": "Gear."}, "toolu_2"
     )
     brain = ClaudeBrain(
-        MATCHER, client=cast(Any, _Calls(_reply(lookup, act))), lookups=(FakeLookup(),)
+        MATCHER, client=cast(Any, _Calls(_reply(lookup, act))), lookups=(FakeLookup(),), pack=SC
     )
     request = BrainRequest(
         "gear",
@@ -1036,7 +1062,7 @@ def test_the_deadline_moves_when_a_look_up_starts_not_when_the_reply_ends() -> N
     reply still streaming past the usual deadline failed where it used to get more time."""
     seen: list[str] = []
     client = _ends_noted(seen, _looks_up(), ([], _final("Area 18.")))
-    brain = ClaudeBrain(MATCHER, client=client, lookups=(FakeLookup(),))
+    brain = ClaudeBrain(MATCHER, client=client, lookups=(FakeLookup(),), pack=SC)
     request = BrainRequest("where do I sell gold", KEYBINDS, looking=lambda: seen.append("looking"))
     assert asyncio.run(brain.decide(request)) == Reply("Area 18.")
     assert seen == ["looking", "reply ends", "reply ends"]
@@ -1046,7 +1072,7 @@ def test_checking_is_said_once_after_the_reply_ends_without_an_act() -> None:
     seen: list[str] = []
     calls = [_looks_up(use_id=f"toolu_{n}") for n in range(2)]
     client = _ends_noted(seen, *calls, ([], _final("Area 18.")))
-    brain = ClaudeBrain(MATCHER, client=client, lookups=(FakeLookup(),))
+    brain = ClaudeBrain(MATCHER, client=client, lookups=(FakeLookup(),), pack=SC)
     request = BrainRequest(
         "where do I sell gold",
         KEYBINDS,
@@ -1181,7 +1207,9 @@ def _refused_beside_a_look_up(seen: list[str], then: tuple[list[Any], Any]) -> A
         _tool_stop("ship_lookup", {"name": "Cutlass"}, "toolu_1"),
         _tool_stop("run_actions", {"actions": ["v_unbound"], "say": "Done."}, "toolu_2"),
     )
-    brain = ClaudeBrain(MATCHER, client=cast(Any, _Calls(first, then)), lookups=(FakeLookup(),))
+    brain = ClaudeBrain(
+        MATCHER, client=cast(Any, _Calls(first, then)), lookups=(FakeLookup(),), pack=SC
+    )
     request = BrainRequest(
         "gear",
         KEYBINDS,
@@ -1220,7 +1248,9 @@ def test_closing_the_brain_closes_its_look_ups() -> None:
             Closing.closed += 1
 
     lent = _Client([], _final(""))
-    brain = ClaudeBrain(MATCHER, client=cast(Any, lent), lookups=(Closing(), FakeLookup("plain")))
+    brain = ClaudeBrain(
+        MATCHER, client=cast(Any, lent), lookups=(Closing(), FakeLookup("plain")), pack=SC
+    )
     asyncio.run(brain.close())
     assert Closing.closed == 1
 
@@ -1261,7 +1291,7 @@ def test_an_empty_run_actions_with_a_line_is_a_reply_through_the_adapter() -> No
         yield Streaming(events, final)
 
     client = SimpleNamespace(messages=SimpleNamespace(stream=stream))
-    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=(Hanging(hang=True),))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=(Hanging(hang=True),), pack=SC)
 
     async def scenario() -> Any:
         decided = await brain.decide(BrainRequest("nice shot, squad", KEYBINDS))
@@ -1345,7 +1375,7 @@ def test_a_card_cut_mid_field_in_the_real_stream_is_cut_short() -> None:
         *_end("max_tokens"),
     )
     client, _ = _real_client(body)
-    brain = ClaudeBrain(MATCHER, client=client, cards=lambda: True)
+    brain = ClaudeBrain(MATCHER, client=client, cards=lambda: True, pack=SC)
     decision = asyncio.run(brain.decide(BrainRequest("plan me a route", KEYBINDS)))
     assert decision == Reply(CUT_SHORT)
 
@@ -1363,7 +1393,7 @@ def test_a_call_cut_with_no_block_end_after_a_look_up_ends_the_request() -> None
         *_end("max_tokens"),
     )
     client, sent = _real_client(body)
-    brain = ClaudeBrain(MATCHER, client=client, lookups=[FakeLookup()], cards=lambda: True)
+    brain = ClaudeBrain(MATCHER, client=client, lookups=[FakeLookup()], cards=lambda: True, pack=SC)
     decision = asyncio.run(brain.decide(BrainRequest("who makes the Andromeda", KEYBINDS)))
     assert decision == Reply(CUT_SHORT)
     assert len(sent) == 1  # never sent back without the cut call's result

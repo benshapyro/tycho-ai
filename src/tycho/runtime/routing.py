@@ -128,9 +128,7 @@ def route(
     return ToBrain(match.reason) if brain else NotUnderstood(match.reason)
 
 
-def from_brain(
-    decision: Decision, matcher: CommandMatcher, lists: Safety | None = None
-) -> Picked | Reply:
+def from_brain(decision: Decision, matcher: CommandMatcher, lists: Safety) -> Picked | Reply:
     """The brain's decision as commands to plan, exactly as the fast path's are, or
     its reply. Raises ``BrainError`` if it picked something that isn't a command."""
     if isinstance(decision, Reply):

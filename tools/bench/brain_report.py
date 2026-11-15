@@ -34,6 +34,7 @@ from tycho.game.install import GameInstall
 from tycho.game.store import KeybindStore
 from tycho.keybinds import Keybinds
 from tycho.lexicon import Lexicon
+from tycho.packs import STAR_CITIZEN, built_in
 
 EXPECTED = Path(__file__).resolve().parents[1] / "spike" / "brain_expected.toml"
 # Actions that fail any case unless the case lists them under "allow".
@@ -423,7 +424,7 @@ def main() -> None:
     actions = action_list(keybinds)
     valid = {line.split(" | ")[0] for line in actions.splitlines()}
     system = INSTRUCTIONS + actions
-    lexicon, brains = Lexicon.default(), Brains()
+    lexicon, brains = Lexicon.default(built_in(STAR_CITIZEN)), Brains()
     print(f"{len(cases)} cases, {len(valid)} bound actions in the briefing\n")
 
     calls: list[Call] = []

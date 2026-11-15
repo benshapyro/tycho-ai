@@ -47,6 +47,7 @@ import anthropic
 from tycho.brain_choice import anthropic_key
 from tycho.knowledge import web
 from tycho.knowledge.web import WebSearch
+from tycho.packs import STAR_CITIZEN, built_in
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "recordings" / "web_trial.jsonl"
@@ -330,7 +331,10 @@ async def main() -> int:
                 for mode in modes:
                     web.OPEN_BRIEF = plain_brief + (READ_FIRST if mode == "read" else "")
                     search = WebSearch(
-                        client, open_web=mode in ("open", "read"), fallback=mode == "fallback"
+                        client,
+                        sites=built_in(STAR_CITIZEN).web_sites,
+                        open_web=mode in ("open", "read"),
+                        fallback=mode == "fallback",
                     )
                     row = {"round": round_, "mode": mode, **await _ask(search, calls, question)}
                     spent += float(row["cost"])

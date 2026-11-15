@@ -222,10 +222,10 @@ class Session:
         address: Callable[[], str] = lambda: "",
         display: Display | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
-        safety_lists: Safety | None = None,
+        safety_lists: Safety,
     ) -> None:
-        """``safety_lists`` are the game pack's lists for the safety gate (Star Citizen's
-        when None): every plan and every brain pick uses them (ADR 18)."""
+        """``safety_lists`` are the game pack's lists for the safety gate: every plan and
+        every brain pick uses them (ADR 18)."""
         self._safety_lists = safety_lists
         self._tail_seconds = tail_seconds
         self._tail_pending = False
@@ -494,7 +494,7 @@ class Session:
             self._matcher,
             tile=self._display is not None and self._display.on,
             brain=self._brain is not None,
-            keys=not (self._safety_lists is not None and self._safety_lists.keys_off),
+            keys=not self._safety_lists.keys_off,
         )
         trace.mark("match")
         if isinstance(routed, Reserved):
@@ -771,7 +771,7 @@ class Session:
     def _keys_off_first(self, result: Result) -> bool:
         """Whether this is the session's first press refused because key actions are off."""
         lists = self._safety_lists
-        if self._told_keys_off or lists is None or not lists.keys_off:
+        if self._told_keys_off or not lists.keys_off:
             return False
         if result.status != "refused" or result.detail != lists.keys_off:
             return False

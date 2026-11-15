@@ -34,7 +34,6 @@ from tycho.commands.matcher import built_in_commands
 from tycho.commands.reserved import USES, reserved_for
 from tycho.keybinds import Keybinds, key_text
 from tycho.packs import GamePack, Safety
-from tycho.packs import built_in as built_in_pack
 from tycho.safety import is_confirm_grade
 from tycho.text import normalize
 
@@ -68,14 +67,14 @@ class Commands:
         self,
         user_file: Path,
         keybinds: Callable[[], Keybinds | None],
-        pack: GamePack | None = None,
+        pack: GamePack,
     ) -> None:
         """``keybinds`` gives the player's keybinds, or None if the game wasn't found.
-        ``pack`` is the game the page is for (Star Citizen when None, #295): its
+        ``pack`` is the game the page is for (#295): its
         commands, and its safety lists for which ones ask first."""
         self._path = user_file
         self._keybinds = keybinds
-        self._pack = pack or built_in_pack()
+        self._pack = pack
 
     # --- reading -------------------------------------------------------------------
 
@@ -83,7 +82,7 @@ class Commands:
         """Every command and sequence, for the page; and the file's problem, if any."""
         problem = ""
         try:
-            matcher = CommandMatcher.default(self._path, self._pack)
+            matcher = CommandMatcher.default(self._path, pack=self._pack)
         except CommandFileError as e:
             problem = f"Your commands file can't be used, so only the built-in ones are: {e}"
             matcher = CommandMatcher.default(pack=self._pack)
@@ -180,7 +179,9 @@ class Commands:
             return {"ok": False, "problem": "Type the words you'll say."}
         if len(said) > MAX_PHRASE:
             return {"ok": False, "problem": f"Keep it under {MAX_PHRASE} characters."}
-        if (use := reserved_for(said)) is not None:  # the session answers it first (#227)
+        if (
+            use := reserved_for(said, self._pack.terms)
+        ) is not None:  # the session answers it first (#227)
             return {
                 "ok": False,
                 "problem": f"“{said}” is one of Tycho's own words, for {USES[use]}, so the "
@@ -258,7 +259,7 @@ class Commands:
         overwrite what the player meant (a ``[phrases]`` table with one bracket pair),
         or be refused for a clash that isn't the new phrase's."""
         try:
-            CommandMatcher.default(self._path, self._pack)
+            CommandMatcher.default(self._path, pack=self._pack)
         except CommandFileError as e:
             return f"Your commands file has a mistake; fix it first ({str(e).split(': ', 1)[-1]})."
         return ""
@@ -266,7 +267,7 @@ class Commands:
     def _said(self, command_id: str) -> tuple[str, ...]:
         """Every phrase the command has now, built-in and the player's."""
         try:
-            command = CommandMatcher.default(self._path, self._pack).get(command_id)
+            command = CommandMatcher.default(self._path, pack=self._pack).get(command_id)
         except CommandFileError:
             return ()
         return command.say if command is not None else ()
@@ -291,7 +292,7 @@ class Commands:
             with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
                 f.write(text)
             try:
-                CommandMatcher.default(Path(temp), self._pack)
+                CommandMatcher.default(Path(temp), pack=self._pack)
             except CommandFileError as e:
                 return {"ok": False, "problem": _readable(str(e), temp, str(command_id))}
             os.replace(temp, self._path)
@@ -324,7 +325,7 @@ def _by_id(data: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     return entries
 
 
-def _phrases(data: Mapping[str, Any], pack: GamePack | None = None) -> dict[str, list[str]]:
+def _phrases(data: Mapping[str, Any], pack: GamePack) -> dict[str, list[str]]:
     """The player's own phrases for each id: their ``[[phrases]]``, and those of their
     entries not in the built-in entry with the same id (an older copy of it)."""
     built_in = _built_in(pack)
@@ -349,7 +350,7 @@ def _key(phrase: str) -> tuple[str, ...]:
     return tuple(normalize(phrase))
 
 
-def _asks(command: Command, keybinds: Keybinds | None, lists: Safety | None = None) -> bool:
+def _asks(command: Command, keybinds: Keybinds | None, lists: Safety) -> bool:
     """Whether Tycho asks first, as the safety gate decides it: the command says so,
     or something it presses always asks. That's its ``setup`` actions and the action
     it resolves to (any of its actions, without keybinds). A sequence asks if any step
@@ -375,7 +376,7 @@ def _tables(doc: Any, command_id: str) -> list[Table]:
     return found
 
 
-def _built_in(pack: GamePack | None = None) -> dict[str, dict[str, Any]]:
+def _built_in(pack: GamePack) -> dict[str, dict[str, Any]]:
     text = built_in_commands(pack)
     return _by_id(tomllib.loads(text))
 

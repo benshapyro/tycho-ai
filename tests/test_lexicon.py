@@ -3,6 +3,9 @@ from pathlib import Path
 import pytest
 
 from tycho.lexicon import Lexicon, sound_key
+from tycho.packs import STAR_CITIZEN, built_in
+
+SC = built_in(STAR_CITIZEN)
 
 LEXICON = Lexicon(["ArcCorp", "mobiGlas", "Cutlass", "QT", "Ita", "Hurston", "quantum"])
 
@@ -51,7 +54,7 @@ def test_leaves_ordinary_speech_alone(text: str) -> None:
     ],
 )
 def test_default_lexicon_leaves_real_phrases_alone(text: str) -> None:
-    assert Lexicon.default().correct(text).replacements == ()
+    assert Lexicon.default(pack=SC).correct(text).replacements == ()
 
 
 def _ordinary_speech() -> list[str]:
@@ -62,11 +65,11 @@ def _ordinary_speech() -> list[str]:
 
 @pytest.mark.parametrize("text", _ordinary_speech())
 def test_default_lexicon_leaves_ordinary_speech_alone(text: str) -> None:
-    assert Lexicon.default().correct(text).replacements == ()
+    assert Lexicon.default(pack=SC).correct(text).replacements == ()
 
 
 def test_a_single_sound_alike_word_is_a_hint_not_a_rewrite() -> None:
-    corrected = Lexicon.default().correct("the station is right ahead")
+    corrected = Lexicon.default(pack=SC).correct("the station is right ahead")
     assert corrected.text == "the station is right ahead"
     assert [(h.heard, h.term) for h in corrected.hints] == [("station", "Stanton")]
 
@@ -86,4 +89,4 @@ def test_case_only_changes_are_not_reported() -> None:
 
 
 def test_default_lexicon_loads() -> None:
-    assert len(Lexicon.default()) > 100
+    assert len(Lexicon.default(pack=SC)) > 100

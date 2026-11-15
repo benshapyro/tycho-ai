@@ -275,7 +275,7 @@ def _keys_off(name: str, why: str) -> str:
 
 
 @cache
-def built_in(pack_id: str = STAR_CITIZEN) -> GamePack:
+def built_in(pack_id: str) -> GamePack:
     """A pack that ships inside Tycho, by id."""
     folder = resources.files("tycho.packs").joinpath(pack_id)
     if not _ID.fullmatch(pack_id) or not folder.is_dir():

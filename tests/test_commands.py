@@ -2,8 +2,11 @@ import pytest
 
 from tycho.commands import Command, CommandMatcher, Defer, Match, resolve
 from tycho.keybinds import Action, Keybinds, KeyInput
+from tycho.packs import STAR_CITIZEN, built_in
 
-MATCHER = CommandMatcher.default()
+SC = built_in(STAR_CITIZEN)
+
+MATCHER = CommandMatcher.default(pack=SC)
 
 
 def _ids(text: str) -> str:
@@ -230,25 +233,25 @@ def test_no_two_commands_are_confusable() -> None:
 def test_opposites_and_neighbours_never_cross(text: str, expected: str) -> None:
     from tycho.lexicon import Lexicon
 
-    assert _ids(Lexicon.default().correct(text).text) == expected
+    assert _ids(Lexicon.default(pack=SC).correct(text).text) == expected
 
 
 def test_setup_and_requirements_are_ones_the_gate_knows() -> None:
     from tycho import safety
 
-    for command in CommandMatcher.default().commands:
+    for command in CommandMatcher.default(pack=SC).commands:
         for name in command.setup:
-            assert not safety.is_confirm_grade(name), (command.id, name)
+            assert not safety.is_confirm_grade(name, lists=SC.safety), (command.id, name)
         for fact in command.requires:
-            assert fact in safety.known_facts(), (command.id, fact)
+            assert fact in safety.known_facts(lists=SC.safety), (command.id, fact)
         assert 0 <= command.settle_seconds <= 3, command.id
-        assert set(command.accepted_risks) <= safety.ACCEPTABLE_RISKS, command.id
+        assert set(command.accepted_risks) <= SC.safety.accepted_risks, command.id
 
 
 def test_no_command_uses_a_reply_to_a_question_as_a_phrase() -> None:
     from tycho.runtime.session import CANCEL_WORDS, CONFIRM_WORDS, reply_to_question
 
-    for command in CommandMatcher.default().commands:
+    for command in CommandMatcher.default(pack=SC).commands:
         for phrase in command.say:
             assert phrase not in CONFIRM_WORDS | CANCEL_WORDS, (command.id, phrase)
     assert reply_to_question("Confirm.") == "confirm"
@@ -272,7 +275,7 @@ def test_phrases_too_far_off_in_length_are_never_compared(
         return real(a, b)
 
     monkeypatch.setattr(module, "similarity", counted)
-    matcher = CommandMatcher.default()
+    matcher = CommandMatcher.default(pack=SC)
     result = matcher.match("can you tell me how the refining process works in star citizen")
     assert isinstance(result, Defer)
     assert len(calls) < 20  # of about 450 phrases
@@ -282,7 +285,7 @@ def test_no_command_uses_the_tiles_words_as_a_phrase() -> None:
     from tycho.runtime.session import TILE_WORDS, tile_command
 
     words = {phrase for phrases in TILE_WORDS.values() for phrase in phrases}
-    for command in CommandMatcher.default().commands:
+    for command in CommandMatcher.default(pack=SC).commands:
         for phrase in command.say:
             assert phrase not in words, (command.id, phrase)
     assert tile_command("Keep that up.") == "pin"
@@ -295,7 +298,7 @@ def test_no_command_uses_say_that_again_as_a_phrase() -> None:
 
     tile = {phrase for phrases in TILE_WORDS.values() for phrase in phrases}
     assert not SAY_AGAIN_WORDS & tile
-    for command in CommandMatcher.default().commands:
+    for command in CommandMatcher.default(pack=SC).commands:
         for phrase in command.say:
             assert phrase not in SAY_AGAIN_WORDS, (command.id, phrase)
     assert is_say_again("Say that again?")

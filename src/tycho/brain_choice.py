@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from tycho import paths
 from tycho.brain.providers import Choice, choose
 from tycho.findings import Finding, key_finding, key_help, stored_key
-from tycho.packs import GamePack, built_in
+from tycho.packs import GamePack, Tile
 
 if TYPE_CHECKING:
     from tycho.address import Address
@@ -57,15 +57,15 @@ def load_brain(
     live: Live | None = None,
     address: Address | None = None,
     display: TileDisplay | None = None,
-    pack: GamePack | None = None,
+    *,
+    pack: GamePack,
 ) -> Brain | None:
     """The brain the settings pick, if the player stored its provider's key. Without
     one, the fast path only. ``live`` applies settings changed by voice to the running
     session; ``address`` is what to call the player (#15), read fresh for each request.
     With a ``display``, the brain may show cards while the Tile is on, in the colour of
-    the ship being flown. ``pack`` is the game (Star Citizen when None): its briefing,
+    the ship being flown. ``pack`` is the game: its briefing,
     and only the look-ups it names (ADR 18)."""
-    pack = pack or built_in()
     choice = chosen(current)
     key = brain_key(choice)
     if key is None:
@@ -130,7 +130,7 @@ def load_brain(
         return "\n".join(p for p in parts if p)
 
     if display is not None and fleet is not None and ships is not None:
-        display.ship_accent = lambda: ship_accent(fleet.flying, ships.library)
+        display.ship_accent = lambda: ship_accent(fleet.flying, ships.library, pack.tile)
     return make_brain(
         choice,
         key,
@@ -156,7 +156,7 @@ def make_brain(
     lookups: Sequence[Lookup] = (),
     about: Callable[[], str] = lambda: "",
     cards: Callable[[], bool] = lambda: False,
-    pack: GamePack | None = None,
+    pack: GamePack,
 ) -> Brain:
     """The adapter for the chosen provider, on the chosen model, briefed for ``pack``."""
     if choice.provider == "openrouter":
@@ -198,19 +198,20 @@ def _traces() -> TraceFile | None:
     return traces
 
 
-def ship_accent(flying: str, library: ShipLibrary | None) -> str | None:
-    """The Tile's colour for the ship the player said they're flying, if Tycho knows it."""
+def ship_accent(flying: str, library: ShipLibrary | None, tile: Tile) -> str | None:
+    """The Tile's colour for the ship the player said they're flying, if Tycho knows it,
+    from the game pack's ``tile``."""
     from tycho.knowledge.ships import Ship
-    from tycho.tile.design import MAKER_ACCENTS, accent_for, accent_for_maker
+    from tycho.tile.design import accent_for, accent_for_maker
 
     if not flying or library is None:
         return None
     found = library.find(flying)
     if not isinstance(found, Ship):
         return None
-    if found.key.split("_", 1)[0].upper() in MAKER_ACCENTS:
-        return accent_for(found.key)
-    return accent_for_maker(found.maker)
+    if found.key.split("_", 1)[0].upper() in tile.accents:
+        return accent_for(found.key, tile)
+    return accent_for_maker(found.maker, tile)
 
 
 def brain_findings(

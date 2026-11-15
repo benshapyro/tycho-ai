@@ -13,7 +13,7 @@ import pytest
 
 from tycho.address import Address
 from tycho.brain.briefing import instructions
-from tycho.packs import built_in, installed
+from tycho.packs import STAR_CITIZEN, built_in, installed
 from tycho.settings import Settings
 
 WOW = "wow-forever"
@@ -98,8 +98,8 @@ def test_tycho_calls_the_player_nothing_here_unless_they_choose_a_name() -> None
     assert Address.from_settings(Settings(call_me="Ace"), pack).name == "Ace"
     assert Address.for_pack(pack).name == ""
     # Star Citizen keeps Tycho's own default.
-    assert built_in().call_me is None
-    assert Address.from_settings(Settings(), built_in()).name == "Commander"
+    assert built_in(STAR_CITIZEN).call_me is None
+    assert Address.from_settings(Settings(), built_in(STAR_CITIZEN)).name == "Commander"
 
 
 def test_its_eval_fails_a_reply_with_another_game_s_words() -> None:

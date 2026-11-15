@@ -11,11 +11,10 @@ own files and Game.log give a ship (``DRAK_Cutlass_Black``), so no lookup table 
 names is needed.
 """
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final
 
-from tycho.packs import built_in
+from tycho.packs import Tile
 
 TYCHO_ACCENT: Final = "#9fd8ff"
 """Tycho's own accent: when no ship is known, or the player picks it."""
@@ -38,11 +37,6 @@ class Core:
 
 CORE: Final = Core()
 
-MAKER_ACCENTS: Final[Mapping[str, str]] = built_in().tile.accents
-"""Estimated HUD colour by the manufacturer prefix of a ship's game name (the game
-pack's tile.toml)."""
-
-
 PICKS: Final[dict[str, str]] = {
     "orange": "#f5901e",
     "amber": "#f2b84b",
@@ -55,24 +49,24 @@ PICKS: Final[dict[str, str]] = {
 }
 """Colours the player can pick for the Tile ("keep the Tile orange")."""
 
-MAKER_NAMES: Final[Mapping[str, str]] = built_in().tile.makers
-"""A maker's name, by its first word, to its prefix: for ships still in concept,
-which have no game name yet."""
 
-
-def accent_for_maker(maker: str) -> str:
-    """The accent for a maker's name ("Drake Interplanetary"), or Tycho's own."""
+def accent_for_maker(maker: str, tile: Tile) -> str:
+    """The accent for a maker's name ("Drake Interplanetary"), or Tycho's own. ``tile``
+    is the game pack's tile.toml: ``makers`` maps a maker's first word to its prefix, for
+    ships still in concept, which have no game name yet."""
     first = maker.strip().split(" ", 1)[0].lower() if maker.strip() else ""
-    prefix = MAKER_NAMES.get(first)
-    return MAKER_ACCENTS[prefix] if prefix else TYCHO_ACCENT
+    prefix = tile.makers.get(first)
+    return tile.accents[prefix] if prefix else TYCHO_ACCENT
 
 
-def accent_for(ship: str | None) -> str:
-    """The accent for a ship's game name (``DRAK_Cutlass_Black``), or Tycho's own."""
+def accent_for(ship: str | None, tile: Tile) -> str:
+    """The accent for a ship's game name (``DRAK_Cutlass_Black``), or Tycho's own. ``tile``
+    is the game pack's tile.toml: ``accents`` is the estimated HUD colour by the maker
+    prefix of a ship's game name."""
     if not ship:
         return TYCHO_ACCENT
     prefix = ship.split("_", 1)[0].upper()
-    return MAKER_ACCENTS.get(prefix, TYCHO_ACCENT)
+    return tile.accents.get(prefix, TYCHO_ACCENT)
 
 
 @dataclass(frozen=True, slots=True)
