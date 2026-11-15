@@ -309,7 +309,7 @@ def test_while_starting_the_star_says_what_its_doing_and_a_second_start_says_wai
         lambda text, title, flags: User32.MessageBoxW(None, text, title, flags),
     )
     requests = _Requests()
-    starting = shell.Starting(requests)  # type: ignore[arg-type]  # pyright: ignore[reportPrivateUsage]
+    starting = shell.Starting(requests)  # type: ignore[arg-type]
     starting.doing("Getting the speech model (2.5 GB, once): 42%")
     assert _Tray.made[-1].tip() == "Tycho: Getting the speech model (2.5 GB, once): 42%…"
     requests.target()
@@ -321,7 +321,7 @@ def test_while_starting_the_star_says_what_its_doing_and_a_second_start_says_wai
 
 def test_download_progress_reaches_the_star() -> None:
     seen: list[str] = []
-    show = assemble.download_progress(doing=seen.append)  # pyright: ignore[reportPrivateUsage]
+    show = assemble.download_progress(doing=seen.append)
     show("encoder-model.onnx.data", 1_200_000_000, 2_400_000_000)
     show("vocab.txt", 10, 20)  # a small file isn't the wait
     assert seen == ["Getting the speech model (2.5 GB, once): 50%"]
@@ -371,7 +371,7 @@ def test_tycho_can_be_quit_while_it_starts(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(tycho.desktop.tray, "TrayIcon", _Tray)
     quit_with: list[int] = []
     monkeypatch.setattr(shell.os, "_exit", quit_with.append)
-    starting = shell.Starting(None)  # pyright: ignore[reportPrivateUsage]
+    starting = shell.Starting(None)
     keys = [item.key for item in _Tray.made[-1].menu()]
     assert "quit" in keys
     _Tray.made[-1].chosen("quit")  # as the tray calls it (review of #180)
@@ -397,7 +397,7 @@ def test_the_still_starting_message_comes_to_the_front(monkeypatch: pytest.Monke
         "message_box",
         lambda text, title, flags: User32.MessageBoxW(None, text, title, flags),
     )
-    starting = shell.Starting(None)  # pyright: ignore[reportPrivateUsage]
+    starting = shell.Starting(None)
     starting.say()
     starting.close()
     assert flags[0] & 0x10000  # MB_SETFOREGROUND
