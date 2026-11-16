@@ -22,6 +22,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - **Quit Tycho** is now a button in Tycho's window too (Settings, Updates). Before, the only Quit was on the icon by the clock, which Windows can hide and which can stop working. ([#424](https://github.com/benshapyro/tycho-ai/issues/424))
 
 ### Changed
+- Home in Tycho's window says how Tycho is in a much bigger word, so you can read it from across the room: amber when something needs fixing, grey when paused. Settings rows light up on their left edge under the pointer, and section labels are smaller.
 - The Tile page in Tycho's window now has a switch for each kind of card your game uses, instead of a box to type card names into. World of Warcraft: Forever no longer lists Star Citizen's ship and fleet cards. ([#422](https://github.com/benshapyro/tycho-ai/issues/422))
 - The Tile's preview in Tycho's window shows a card in your game's own words: World of Warcraft: Forever no longer shows a Star Citizen trade card. The Tile's colour choice that follows the game is now called `game` (it was `ship`; an older `settings.toml` still works). ([#422](https://github.com/benshapyro/tycho-ai/issues/422))
 - Tycho's window and the Tile now use their own fonts, so they look the same on every PC.

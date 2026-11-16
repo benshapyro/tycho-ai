@@ -1,5 +1,6 @@
 /* Tycho's design system (tycho.tile.design): one dark look, cut corners, condensed caps.
-   The approved mockup: https://claude.ai/artifact/YE76DV4n7sKBKDaKAztEYJ */
+   The approved mockup: https://claude.ai/artifact/YE76DV4n7sKBKDaKAztEYJ
+   Console plus (Ben, 16 Nov 2026): https://claude.ai/artifact/W51HBuru2jRTiiMEyBqhcf, mode 2 */
 :root {
   color-scheme: dark;
   --void: #070a10;
@@ -86,6 +87,9 @@ h1 { margin: 0 0 4px; font-family: var(--f-label); font-weight: 600; font-size: 
 .tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; cursor: pointer; color: var(--dim); font-family: var(--f-label); letter-spacing: .1em; text-transform: uppercase; font-size: 14px; }
 .tabs button[aria-selected="true"] { color: var(--acc); border-bottom-color: var(--acc); }
 .set { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 280px); gap: 6px 18px; align-items: center; padding: 12px 14px; background: var(--well); }
+/* Console plus: a row lights its left edge under the pointer. */
+.set, .check:not(.warn):not(.fail) { border-left: 2px solid var(--rule); transition: border-color .12s, background .12s; }
+.set:hover, .check:not(.warn):not(.fail):hover { border-left-color: var(--acc); background: var(--acc-soft); }
 .set b { font-weight: 600; }
 .set p { margin: 2px 0 6px; color: var(--dim); font-size: 13px; max-width: 60ch; }
 .meta { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -131,6 +135,7 @@ input[type="range"] { width: 150px; accent-color: var(--acc); }
   .ctl { justify-content: flex-start; }
   .tilepage { grid-template-columns: minmax(0, 1fr); }
   main { padding: 18px 14px; }
+  .state h1 { font-size: 36px; }
 }
 @media (max-width: 900px) {
   body { grid-template-columns: 168px minmax(0, 1fr); }
@@ -141,10 +146,18 @@ input[type="range"] { width: 150px; accent-color: var(--acc); }
 .state { --fill: var(--panel); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; padding: 20px 22px; max-width: 860px; }
 .light { width: 16px; height: 16px; background: var(--good); transform: rotate(45deg); box-shadow: 0 0 16px color-mix(in srgb, var(--good) 60%, transparent); }
 .state.stuck .light { background: var(--caution); box-shadow: 0 0 16px color-mix(in srgb, var(--caution) 55%, transparent); }
-.state h1 { margin: 0; }
+.state.paused .light { background: var(--dim); box-shadow: none; }
+/* Console plus: the state word reads from across the room, in the light's colour when it isn't ready. */
+.state { padding: 24px 26px; gap: 22px; }
+.state .light { width: 22px; height: 22px; }
+.state h1 { margin: 0; font-size: 54px; line-height: 1; letter-spacing: .05em; }
+.state.stuck h1 { color: var(--caution); }
+.state.paused h1 { color: var(--dim); }
 .state p { margin: 2px 0 0; color: var(--dim); }
 .state p b { color: var(--acc); font-family: var(--f-num); font-weight: 400; }
-h2.label { margin: 22px 0 8px; font-family: var(--f-label); font-weight: 600; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+/* Console plus: a section label is small machine text with a slash mark. */
+h2.label { margin: 22px 0 8px; font-family: var(--f-num); font-weight: 400; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
+h2.label::before { content: "// "; color: var(--acc); }
 .recent { list-style: none; margin: 0; padding: 0; max-width: 860px; display: grid; gap: 2px; }
 .recent li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 8px 14px; background: var(--well); border-left: 2px solid var(--acc-line); }
 .recent li.no { border-left-color: var(--caution); }
