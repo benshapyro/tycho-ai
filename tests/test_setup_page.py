@@ -583,6 +583,26 @@ def test_home_says_its_listening_and_shows_the_last_exchanges_from_memory(
     setup.close()
 
 
+def test_home_state_word_is_big_and_coloured_by_state_console_plus(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """Console plus (Ben, 16 Nov 2026): Home's state word reads from across the room,
+    paused shows grey rather than as a problem, and section labels carry a slash mark."""
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    setup = Setup(browser, path, first_run=False, recent=Recent(), listening=True)
+    page = setup.page
+    word = page.locator("#homeState h1")
+    expect(word).to_have_text("Listening")
+    assert word.evaluate("e => parseFloat(getComputedStyle(e).fontSize)") >= 48
+    label = page.locator("h2.label").first
+    assert "//" in label.evaluate("e => getComputedStyle(e, '::before').content")
+    setup.listening = False
+    expect(word).to_have_text("Paused", timeout=6000)
+    expect(page.locator("#homeState")).to_have_class(re.compile(r"\bpaused\b"))
+    expect(page.locator("#homeState")).not_to_have_class(re.compile(r"\bstuck\b"))
+    setup.close()
+
+
 def test_after_a_first_run_try_it_is_real_and_sends_nothing(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:

@@ -77,7 +77,8 @@
     const [title, line] = stuck ? ["Not ready yet", "Tycho can't do everything yet: the first thing to fix is below."]
       : paused ? ["Paused", "Tycho isn't listening. Resume from Tycho's icon by the clock."]
       : [listening ? "Listening" : "Ready", `${hold} Tycho listens while this window is closed, too.`];
-    box.classList.toggle("stuck", stuck || paused);
+    box.classList.toggle("stuck", stuck);
+    box.classList.toggle("paused", paused && !stuck);
     $("h1", box).textContent = title;
     $("p", box).innerHTML = line;
     box.dataset.listening = String(listening);
