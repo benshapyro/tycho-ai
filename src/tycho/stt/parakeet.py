@@ -12,7 +12,7 @@ import numpy as np
 
 from tycho.audio.clip import Samples
 from tycho.runtime.ports import RecognitionUnavailable
-from tycho.stt.models import PARAKEET_V2, ModelError
+from tycho.stt.models import PARAKEET_V2, PARAKEET_V2_INT8, ModelError
 
 if TYPE_CHECKING:
     from onnx_asr.adapters import TextResultsAsrAdapter
@@ -38,6 +38,12 @@ SMALL_PARTS_ON_CPU = False
 """Run the preprocessor and the small decoder on the processor, and only the encoder on
 the graphics card: the decoder runs about 30 times a phrase, and each tiny GPU call waits
 behind the game's frames (#58). Off until measured with the game running."""
+CPU_THREADS = 6
+"""Threads for the 8-bit model on the processor, leaving the rest to the game. On the
+maintainer's i9-13900HX (8 performance and 16 efficiency cores, game closed, 2026-11-16)
+4 to 6 threads were fastest, p50 about 250-500 ms over the 30 replay clips; 8 was
+slower and 16 two to four times slower, the extra threads landing on efficiency cores.
+ONNX Runtime's default (every physical core) was 470 ms (#188)."""
 CUDA_OPTIONS: Mapping[str, str] = LEAN_CUDA
 """What Tycho uses: see tools/bench/gpu_memory.py for the measurements behind it."""
 RETRY_SECONDS = 30.0
@@ -74,16 +80,19 @@ class ParakeetTranscriber:
         won't start it, or fails on the warm-up: free memory is only a guess, and the game
         may take more between the check and the first run (Ben's run, 2026-11-03)."""
         if device == "gpu":
-            failure = ""
+            failure, broken, gpu = "", False, None
             try:
                 gpu = cls._open(folder, "gpu")
                 gpu._warm_up()
                 return gpu
             except Exception as e:  # ONNX Runtime raises its own unrelated exception types
-                failure = _first_line(e)
+                failure, broken = _first_line(e), card_broken(str(e))
             # Out of the except block: the error's traceback, which holds the frames that
             # hold the half-built GPU session, is gone. Drop our own reference too, then
-            # collect, so the card's memory is free before the CPU copy loads (#204).
+            # collect, so the card's memory is free before the CPU copy loads (#204);
+            # unless the card itself broke, when releasing it can abort Tycho (#473).
+            if gpu is not None and broken:
+                _KEPT.append(gpu._model)
             gpu = None
             gc.collect()
             log.warning(
@@ -117,13 +126,18 @@ class ParakeetTranscriber:
         providers: list[str | tuple[str, dict[str, str]]] = ["CPUExecutionProvider"]
         split = SMALL_PARTS_ON_CPU if small_parts_on_cpu is None else small_parts_on_cpu
         extra: dict[str, Any] = {}
+        spec = PARAKEET_V2 if device == "gpu" else PARAKEET_V2_INT8
         if device == "gpu":
             options = CUDA_OPTIONS if cuda_options is None else cuda_options
             providers.insert(0, ("CUDAExecutionProvider", dict(options)))
             if split:  # the features, computed in NumPy on the processor
                 extra["preprocessor_config"] = {"use_numpy_preprocessors": True}
+        else:
+            session = ort.SessionOptions()  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+            session.intra_op_num_threads = CPU_THREADS  # leave the rest to the game
+            extra["sess_options"] = session
         model = onnx_asr.load_model(  # pyright: ignore[reportUnknownMemberType] - ORT's types
-            PARAKEET_V2.name, folder, providers=providers, **extra
+            spec.name, folder, quantization=spec.quantization, providers=providers, **extra
         )
         if device == "gpu" and split:
             _decoder_on_cpu(model, folder)
@@ -153,13 +167,13 @@ class ParakeetTranscriber:
             log.info("Trying again to load speech recognition on the processor")
             self._move_to_processor(retry)
             raise RecognitionUnavailable("speech recognition is still switching to the processor")
-        failure, folder = "", self._folder
+        failure, broken, folder = "", False, self._folder
         try:
             return _recognize(model, samples)
         except Exception as e:
             if device != "gpu" or self._folder is None:
                 raise
-            failure, folder = _first_line(e), self._folder
+            failure, broken, folder = _first_line(e), card_broken(str(e)), self._folder
         # The game took the card's memory mid-session, or the driver reset. Fail this
         # request now rather than load the CPU copy here (about 20 s) and then act on
         # a command that old. Outside the except block, so the error's traceback, which
@@ -170,14 +184,17 @@ class ParakeetTranscriber:
             failure,
         )
         del model
-        self._move_to_processor(folder)
+        self._move_to_processor(folder, keep=broken)
         raise RecognitionUnavailable(
             "speech recognition failed on the graphics card; switching to the processor"
         )
 
-    def _move_to_processor(self, folder: Path) -> None:
-        """Load the CPU copy on a thread of its own, for the requests after this one."""
+    def _move_to_processor(self, folder: Path, *, keep: bool = False) -> None:
+        """Load the CPU copy on a thread of its own, for the requests after this one.
+        ``keep``: the card broke, so the GPU session is kept, never released (#473)."""
         with self._lock:
+            if keep and self._model is not None:
+                _KEPT.append(self._model)
             self._model, self.device = None, "cpu"  # the GPU session's last reference
             self._switching = threading.Thread(
                 target=self._load_processor, args=(folder,), name="tycho-stt-switch", daemon=True
@@ -235,6 +252,34 @@ def _decoder_on_cpu(model: Any, folder: Path) -> None:
     asr._decoder_joint = ort.InferenceSession(  # pyright: ignore[reportUnknownMemberType]
         str(folder / DECODER_FILE), providers=["CPUExecutionProvider"]
     )
+
+
+_KEPT: list[object] = []
+"""GPU sessions that failed because the card itself broke, kept for as long as Tycho runs.
+After an error like CUDA's 999 ("unknown error") the card's context is gone, and freeing
+a session on it can call ``abort()`` inside ONNX Runtime, which no ``except`` catches: it
+ended Tycho mid-game on 2026-11-15 (#473). What it held on the card is lost with the
+context anyway, so keeping it costs nothing there."""
+
+_BROKEN_CARD = (
+    "cuda failure 999",
+    "unknown error",
+    "illegal memory access",
+    "illegal address",
+    "unspecified launch failure",
+    "launch timed out",
+    "launch timeout",
+    "device-side assert",
+    "uncorrectable ecc",
+)
+
+
+def card_broken(error: str) -> bool:
+    """Whether a CUDA error's whole text means the card's context is gone (a driver
+    reset or a fault), not just that it's short of memory, which is safe to free and
+    worth freeing."""
+    text = error.lower()
+    return any(sign in text for sign in _BROKEN_CARD)
 
 
 def _first_line(error: Exception) -> str:

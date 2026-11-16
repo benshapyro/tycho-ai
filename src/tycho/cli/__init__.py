@@ -80,7 +80,7 @@ def _dispatch(args: argparse.Namespace, current: Settings) -> int:
                 return check_json(current, quick=args.quick)
             return check_command(current, quick=args.quick)
         case "model":
-            return model_command(args.action)
+            return model_command(args.action, current)
         case "actions":
             return actions_command(current, args.words)
         case "bind":

@@ -25,7 +25,7 @@ from tycho.ptt.binding import DeviceKind
 from tycho.ptt.conflicts import conflict_warnings
 from tycho.ptt.devices import describe
 from tycho.settings import Settings
-from tycho.stt import PARAKEET_V2, ModelStore
+from tycho.stt import PARAKEET_V2, ModelStore, download_size, speech_models
 from tycho.stt.choice import GPU_HELP, MODEL_HELP, device_choice, device_name, gpu_hint
 from tycho.voice import choice as voice_choice
 from tycho.voice.choice import VOICE_KEY_HELP, choose_voice, elevenlabs_key
@@ -60,7 +60,7 @@ def speech_finding(current: Settings) -> Finding:
 
     choice = device_choice(current)
     detail = f"on the {device_name(choice.device)}: {choice.reason}"
-    if choice.device == "gpu" or current.transcription_device == "cpu":
+    if choice.device == "gpu" or current.transcription_device != "gpu":
         return Finding("ok", "Speech recognition", detail)
     if hint := gpu_hint():
         fix = GPU_HELP if hint.endswith(GPU_HELP) else ""
@@ -156,10 +156,11 @@ def checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Finding
             yield Finding("ok", "Push-to-talk conflict", "not bound to anything in game")
 
     model = ModelStore(paths.models_dir())
-    if model.ready(PARAKEET_V2) or not model.missing(PARAKEET_V2):
+    specs = speech_models(device_choice(current).device)
+    if model.has(specs):
         yield Finding("ok", "Speech model", str(model.folder(PARAKEET_V2)))
     else:
-        size = PARAKEET_V2.size / 1e9
+        size = download_size(specs) / 1e9
         yield Finding(
             "warn",
             "Speech model",

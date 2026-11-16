@@ -15,7 +15,7 @@ import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol
 
 _CHUNK = 1 << 20
 RESUME_ATTEMPTS = 5
@@ -45,6 +45,8 @@ class ModelSpec:
     repo: str
     revision: str
     files: tuple[ModelFile, ...]
+    quantization: str | None = None
+    """onnx-asr's name for a smaller copy of the weights ("int8"); None for full precision."""
 
     @property
     def folder(self) -> str:
@@ -91,7 +93,41 @@ PARAKEET_V2 = ModelSpec(
         ),
     ),
 )
-"""The speech model Tycho uses (ADR 2 outcome): full precision, as benchmarked."""
+"""The speech model at full precision (ADR 2 outcome), for the graphics card."""
+
+PARAKEET_V2_INT8 = ModelSpec(
+    name=PARAKEET_V2.name,
+    repo=PARAKEET_V2.repo,
+    revision=PARAKEET_V2.revision,
+    files=(
+        *PARAKEET_V2.files[:3],  # config, vocabulary and features: the same files, shared
+        ModelFile(
+            "decoder_joint-model.int8.onnx",
+            8_998_286,
+            "a449f49acd68979d418651dd2dcb737cc0f1bf0225e009e29ee326354edbf7d3",
+        ),
+        ModelFile(
+            "encoder-model.int8.onnx",
+            652_184_014,
+            "3e0581fda6ab843888b51e56d7ee78b6d5bc3237ec113af1f732d1d5286aa155",
+        ),
+    ),
+    quantization="int8",
+)
+"""The same model with 8-bit weights, for the processor: a quarter of the size, faster
+there than full precision, and as accurate on the replay set (#188, tools/bench README,
+2026-11-16). In the same folder as the full model, so the shared files download once."""
+
+
+def speech_models(device: Literal["gpu", "cpu"]) -> tuple[ModelSpec, ...]:
+    """What a device needs on disk. The graphics card also needs the processor's copy,
+    to fall back to if the card fails (``ParakeetTranscriber``)."""
+    return (PARAKEET_V2, PARAKEET_V2_INT8) if device == "gpu" else (PARAKEET_V2_INT8,)
+
+
+def download_size(specs: tuple[ModelSpec, ...]) -> int:
+    """Bytes for all of ``specs``, counting a file they share once."""
+    return sum({f.name: f.size for spec in specs for f in spec.files}.values())
 
 
 class Downloader(Protocol):
@@ -227,6 +263,10 @@ class ModelStore:
         folder = self.folder(spec)
         checked = _read_marker(folder)
         return all(checked.get(f.name) == [*_stamp(folder / f.name), f.sha256] for f in spec.files)
+
+    def has(self, specs: tuple[ModelSpec, ...]) -> bool:
+        """Every file of ``specs`` is here and right: quick when already checked."""
+        return all(self.ready(spec) or not self.missing(spec) for spec in specs)
 
     def ensure(self, spec: ModelSpec, progress: Progress | None = None) -> Path:
         """The model's folder, downloading and checking whatever is missing first."""
