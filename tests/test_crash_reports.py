@@ -384,6 +384,6 @@ def test_tycho_s_project_is_a_sentry_dsn_with_no_secret_key() -> None:
     assert parts.path.strip("/").isdigit()
 
 
-def test_tests_never_send_to_tycho_s_project() -> None:
+def test_tests_never_send_to_tycho_s_project(hooks: None) -> None:
     """conftest blanks DSN, so a test that turns reports on can't reach Sentry."""
     assert not crash_reports.start(True, lambda: True, CONTEXT)
