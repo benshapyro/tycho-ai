@@ -9,8 +9,10 @@ import keyring
 import pytest
 
 from tests.fakes.fake_keyring import MemoryKeyring
-from tycho import crashes, paths
+from tycho import crash_reports, crashes, paths
 
+REAL_DSN = crash_reports.DSN
+"""Tycho's real Sentry project, before every test blanks it."""
 REAL_MODELS = paths.models_dir()
 """The developer's real speech model folder, worked out before any test changes the
 environment. Only the replay tests (``-m replay``) are given it."""
@@ -24,6 +26,13 @@ def _no_real_keys() -> Iterator[None]:
     keyring.set_keyring(MemoryKeyring())
     yield
     keyring.set_keyring(previous)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_crash_reports(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test sends to Tycho's real Sentry project (#450): tests that send pass their
+    own ``dsn``."""
+    monkeypatch.setattr(crash_reports, "DSN", "")
 
 
 @pytest.fixture(autouse=True)

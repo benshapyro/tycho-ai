@@ -121,7 +121,7 @@ def serve_with_tray(
     if reopen or try_it:
         host.ask("open")  # the window asked for the restart: it's back, on the new loop
     elif _crash_reports_unasked():
-        host.ask("open")  # set up before crash reports: the window asks, once (ADR 4, #442)
+        host.ask("open")  # set up before crash reports: asks until answered (ADR 4, #442)
     try:
         host.run(window.open)
     finally:
