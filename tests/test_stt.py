@@ -299,22 +299,17 @@ def test_the_downloader_refuses_plain_http_by_default(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("setting", "cuda", "free_mb", "device", "reason"),
+    ("setting", "cuda", "device", "reason"),
     [
-        ("auto", True, 12_000, "gpu", "11.7 GB free"),
-        ("auto", True, 3_000, "cpu", "needs 3.9 GB"),
-        ("auto", True, 4_200, "gpu", "4.1 GB free"),  # enough with the lean CUDA settings
-        ("auto", True, None, "cpu", "couldn't read"),
-        ("auto", False, 12_000, "cpu", "CUDA isn't available"),
-        ("cpu", True, 12_000, "cpu", "settings"),
-        ("gpu", True, 1_000, "gpu", "settings"),  # the player knows best
-        ("gpu", False, None, "cpu", "but CUDA isn't available"),
+        ("auto", True, "cpu", "game keeps the graphics card"),  # even with room on it
+        ("auto", False, "cpu", "game keeps the graphics card"),
+        ("cpu", True, "cpu", "settings"),
+        ("gpu", True, "gpu", "settings"),  # the player knows best
+        ("gpu", False, "cpu", "but CUDA isn't available"),
     ],
 )
-def test_device_choice(
-    setting: str, cuda: bool, free_mb: int | None, device: str, reason: str
-) -> None:
-    choice = choose_device(setting, cuda=cuda, free_mb=free_mb)  # pyright: ignore[reportArgumentType]
+def test_device_choice(setting: str, cuda: bool, device: str, reason: str) -> None:
+    choice = choose_device(setting, cuda=cuda)  # pyright: ignore[reportArgumentType]
     assert choice.device == device
     assert reason in choice.reason
 
@@ -422,21 +417,29 @@ def test_nvidia_smi_from_an_absolute_path_folder(tmp_path: Path) -> None:
 # --- The graphics card failing (Ben's run, 2026-11-03) -----------------------------------
 
 
+_OUT_OF_MEMORY = (
+    "[ONNXRuntimeError] : 6 : RUNTIME_EXCEPTION : Non-zero status code returned while "
+    "running Conv node.\nCUDA failure 2: out of memory"
+)
+_CARD_BROKE = (  # Ben's run, 2026-11-15 (#473)
+    "[ONNXRuntimeError] : 1 : FAIL : CUDA failure 999: unknown error ; GPU=0 ; "
+    "expr=cudaMemcpyAsync(dst_data, src_data, bytes, cudaMemcpyHostToDevice, stream);"
+)
+
+
 class _Model:
     """Stands in for onnx-asr's model: fails like CUDA did, or answers."""
 
-    def __init__(self, fails: int = 0) -> None:
+    def __init__(self, fails: int = 0, error: str = _OUT_OF_MEMORY) -> None:
         self.fails = fails
         self.calls = 0
+        self.error = error
 
     def recognize(self, samples: object, sample_rate: int) -> str:
         self.calls += 1
         if self.fails:
             self.fails -= 1
-            raise RuntimeError(
-                "[ONNXRuntimeError] : 1 : FAIL : Non-zero status code returned while running "
-                "Div node.\nCUDA error cudaErrorUnknown:unknown error"
-            )
+            raise RuntimeError(self.error)
         return " hello "
 
 
@@ -462,14 +465,18 @@ def test_a_graphics_card_that_fails_the_warm_up_falls_back_to_the_processor(
     assert transcriber.device == "cpu"
     assert opened == ["gpu", "cpu"]
     assert "using the processor instead" in caplog.text
-    assert "cudaErrorUnknown" not in caplog.text  # one plain line, not ONNX Runtime's essay
+    assert "out of memory" not in caplog.text  # one plain line, not ONNX Runtime's essay
 
 
 _QUIET = np.zeros(16_000, dtype=np.float32)
 
 
 def _gpu_then_cpu(
-    gpu_fails: int, gpu_alive: list[bool], cpu: _Model, cpu_ready: threading.Event | None = None
+    gpu_fails: int,
+    gpu_alive: list[bool],
+    cpu: _Model,
+    cpu_ready: threading.Event | None = None,
+    error: str = _OUT_OF_MEMORY,
 ) -> Callable[..., object]:
     """An ``_open`` whose GPU model only the transcriber holds: when the CPU copy starts
     loading, ``gpu_alive`` records whether the GPU one was still in memory (#204)."""
@@ -479,7 +486,7 @@ def _gpu_then_cpu(
 
     def _open(cls: type[ParakeetTranscriber], folder: Path, device: Device) -> ParakeetTranscriber:
         if device == "gpu":
-            gpu = _Model(fails=gpu_fails)
+            gpu = _Model(fails=gpu_fails, error=error)
             gpu_ref.append(weakref.ref(gpu))
             return ParakeetTranscriber(gpu, "gpu", folder)  # type: ignore[arg-type]
         gpu_alive.append(bool(gpu_ref) and gpu_ref[0]() is not None)
@@ -530,6 +537,61 @@ def test_a_mid_session_failure_fails_that_request_instead_of_acting_late(
     assert transcriber.transcribe(_QUIET, 16_000) == "hello"
     assert transcriber.device == "cpu"
     assert cpu.calls == 2  # and it stays on the processor
+
+
+def test_a_card_that_broke_keeps_its_session_so_freeing_it_cant_abort_tycho(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # CUDA error 999 mid-game, then freeing the GPU session aborted Tycho in native code,
+    # which no except catches (#473). Out of memory still frees it: the game wants it.
+    from tycho.stt import parakeet
+    from tycho.stt.parakeet import ParakeetTranscriber
+
+    monkeypatch.setattr(parakeet, "_KEPT", [])
+    cpu, gpu_alive = _Model(), list[bool]()
+    monkeypatch.setattr(
+        ParakeetTranscriber, "_open", _gpu_then_cpu(0, gpu_alive, cpu, error=_CARD_BROKE)
+    )
+    transcriber = ParakeetTranscriber.load(tmp_path, "gpu")
+    transcriber._model.fails = 1  # type: ignore[union-attr]  # pyright: ignore[reportPrivateUsage, reportOptionalMemberAccess, reportAttributeAccessIssue]
+    with pytest.raises(RecognitionUnavailable, match="failed on the graphics card"):
+        transcriber.transcribe(_QUIET, 16_000)
+    _switched(transcriber)
+    assert gpu_alive == [True]  # never released
+    assert len(parakeet._KEPT) == 1  # pyright: ignore[reportPrivateUsage]
+    assert transcriber.transcribe(_QUIET, 16_000) == "hello"  # and on the processor now
+
+
+def test_a_card_that_breaks_on_the_warm_up_keeps_its_session_too(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tycho.stt import parakeet
+    from tycho.stt.parakeet import ParakeetTranscriber
+
+    monkeypatch.setattr(parakeet, "_KEPT", [])
+    gpu_alive: list[bool] = []
+    monkeypatch.setattr(
+        ParakeetTranscriber, "_open", _gpu_then_cpu(1, gpu_alive, _Model(), error=_CARD_BROKE)
+    )
+    assert ParakeetTranscriber.load(tmp_path, "gpu").device == "cpu"
+    assert gpu_alive == [True]
+
+
+@pytest.mark.parametrize(
+    ("error", "broken"),
+    [
+        (_CARD_BROKE, True),
+        ("Div node failed.\nCUDA error cudaErrorUnknown:unknown error", True),  # 2nd line
+        ("CUDA error: an illegal memory access was encountered", True),
+        ("CUDA error: unspecified launch failure", True),
+        (_OUT_OF_MEMORY, False),  # the card is fine, only full
+        ("Failed to allocate memory for requested buffer of size 1048576", False),
+    ],
+)
+def test_which_cuda_errors_mean_the_card_broke(error: str, broken: bool) -> None:
+    from tycho.stt.parakeet import card_broken
+
+    assert card_broken(error) is broken
 
 
 def test_a_request_while_switching_to_the_processor_is_refused(
@@ -633,18 +695,39 @@ def test_the_graphics_card_gets_the_lean_settings(
 
     asked: list[object] = []
 
-    def load_model(name: str, folder: Path, providers: list[object]) -> object:
-        asked.append(providers)
+    def load_model(
+        name: str, folder: Path, quantization: str | None, providers: list[object]
+    ) -> object:
+        asked.append((quantization, providers))
         return _Model()
 
     monkeypatch.setattr(onnx_asr, "load_model", load_model)
     ParakeetTranscriber._open(tmp_path, "gpu")  # pyright: ignore[reportPrivateUsage]
-    ParakeetTranscriber._open(tmp_path, "cpu")  # pyright: ignore[reportPrivateUsage]
     assert CUDA_OPTIONS == LEAN_CUDA
-    assert asked == [
-        [("CUDAExecutionProvider", dict(LEAN_CUDA)), "CPUExecutionProvider"],
-        ["CPUExecutionProvider"],
-    ]
+    assert asked == [(None, [("CUDAExecutionProvider", dict(LEAN_CUDA)), "CPUExecutionProvider"])]
+
+
+def test_the_processor_gets_the_8_bit_model_and_a_few_threads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # About 0.4 s a phrase and as accurate as full precision; more threads were slower,
+    # landing on the efficiency cores the game also wants (#188).
+    import onnx_asr
+
+    from tycho.stt.parakeet import CPU_THREADS, ParakeetTranscriber
+
+    asked: list[dict[str, object]] = []
+
+    def load_model(name: str, folder: Path, **kwargs: object) -> object:
+        asked.append(kwargs)
+        return _Model()
+
+    monkeypatch.setattr(onnx_asr, "load_model", load_model)
+    ParakeetTranscriber._open(tmp_path, "cpu")  # pyright: ignore[reportPrivateUsage]
+    assert asked[0]["quantization"] == "int8"
+    assert asked[0]["providers"] == ["CPUExecutionProvider"]
+    options = asked[0]["sess_options"]
+    assert options.intra_op_num_threads == CPU_THREADS == 6  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
 
 
 def test_the_small_parts_can_run_on_the_processor(
@@ -685,3 +768,26 @@ def test_a_decoder_that_cant_be_found_is_left_where_it_is(
 
     parakeet._decoder_on_cpu(_Model(), tmp_path)  # pyright: ignore[reportPrivateUsage]
     assert "stays where it is" in caplog.text
+
+
+def test_the_processor_needs_only_the_8_bit_copy_and_the_card_needs_both() -> None:
+    # The card falls back to the processor when it fails, so it needs that copy too.
+    from tycho.stt import PARAKEET_V2, PARAKEET_V2_INT8, download_size, speech_models
+
+    assert speech_models("cpu") == (PARAKEET_V2_INT8,)
+    assert speech_models("gpu") == (PARAKEET_V2, PARAKEET_V2_INT8)
+    assert PARAKEET_V2_INT8.folder == PARAKEET_V2.folder  # shared files download once
+    assert PARAKEET_V2_INT8.revision == PARAKEET_V2.revision  # pinned like the full one
+    assert download_size(speech_models("cpu")) < 0.7e9  # was 2.5 GB for every player
+    shared = sum(f.size for f in PARAKEET_V2.files[:3])
+    assert download_size(speech_models("gpu")) == (
+        PARAKEET_V2.size + PARAKEET_V2_INT8.size - shared
+    )
+
+
+def test_has_checks_every_copy(tmp_path: Path) -> None:
+    one, two = _spec({"a.bin": b"one"}), _spec({"b.bin": b"two"})
+    store = ModelStore(tmp_path, FakeDownloader(serve={"a.bin": b"one", "b.bin": b"two"}))
+    store.ensure(one)
+    assert store.has((one,))
+    assert not store.has((one, two))

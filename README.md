@@ -30,7 +30,7 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
 - **The Tile:** a small see-through panel over the game for what's better read than heard: prices, routes, specs, recipes, steps, and the countdown when Tycho asks you to confirm. In Star Citizen its colour follows your ship; in World of Warcraft: Forever it's gold. It needs a borderless window: Borderless Window mode in Star Citizen, Windowed (Fullscreen) in World of Warcraft: Forever.
 - **Its own window and a tray icon:** a guided first run that starts with your game (then your keys and what they cost, your push-to-talk button, a microphone test, Tycho's voice, and what leaves your PC), Status, Settings, and Commands, where you see everything you can say and add your own phrases.
 - **A log of every key it pressed.**
-- **Speech recognition on your PC,** on the graphics card when it has room and on the processor otherwise.
+- **Speech recognition on your PC,** on the processor, so the game keeps the graphics card. You can move it to an NVIDIA card in Settings if you want it faster.
 - **Claude through Anthropic or OpenRouter,** with one OpenRouter key if you prefer.
 - **An installer, an update notice in its window, and setup by an AI agent.**
 
@@ -91,7 +91,7 @@ The skills are [tycho-setup](plugins/tycho/skills/tycho-setup/SKILL.md) (install
    ```powershell
    uv run tycho check   # finds the game, reads your keybinds, tests the microphone and keys
    uv run tycho bind    # press the button you'll hold to talk (a mouse side button works well)
-   uv run tycho run     # downloads the speech model the first time (2.5 GB)
+   uv run tycho run     # downloads the speech model the first time (0.7 GB)
    ```
 
 Tycho finds the game where the RSI Launcher last installed or launched it, in the default folder, or in common folders on each drive. If it still can't, `tycho check` asks for the folder and saves it as `game_root` in `%APPDATA%\tycho\settings.toml`. To use PTU's keybinds instead of LIVE's, set `game_channel = "PTU"` there (or EPTU, TECH-PREVIEW, HOTFIX). `uv run tycho check` explains anything else that's wrong, in plain words.

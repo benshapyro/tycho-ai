@@ -1,10 +1,13 @@
-"""Choosing where speech recognition runs: the graphics card if it has room, else the processor.
+"""Choosing where speech recognition runs: the processor unless the player picks the
+graphics card.
 
-With ONNX Runtime's default CUDA settings the model took about 3.5 GB of graphics
-memory; with Tycho's lean ones (stt/parakeet.py) it peaks at 3.0 GB, at the same speed
-(tools/bench/gpu_memory.py, 2026-11-04). Star Citizen takes most of the rest, and frees
-and takes memory as it plays, so this is a guess: if the card fails anyway, the
-transcriber falls back to the processor.
+Tycho runs while a game plays, and the game wants the graphics card. The full model took
+3.0 GB of its memory with Tycho's lean CUDA settings (tools/bench/gpu_memory.py,
+2026-11-04), and the game frees and takes memory as it plays. On 2026-11-15 the
+maintainer's PC had GPU hangs in two games, and one full freeze, with Tycho's model on
+the same card. The 8-bit copy on the processor is about 0.4 s a phrase and as accurate
+(#188), so "auto" uses it and leaves the card to the game. "gpu" is still there for a
+player who wants the speed and has the memory.
 """
 
 import importlib.util
@@ -15,9 +18,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-GPU_MEMORY_NEEDED_MB = 4_000
-"""The 3.0 GB the model takes at its peak, plus room so the game isn't squeezed."""
-
 type Setting = Literal["auto", "gpu", "cpu"]
 
 
@@ -27,26 +27,17 @@ class DeviceChoice:
     reason: str
 
 
-def choose_device(setting: Setting, *, cuda: bool, free_mb: int | None) -> DeviceChoice:
-    """Decide from the setting, whether CUDA works, and the graphics card's free memory."""
+def choose_device(setting: Setting, *, cuda: bool) -> DeviceChoice:
+    """Decide from the setting and whether CUDA works."""
     if setting == "cpu":
         return DeviceChoice("cpu", "set to the processor in settings")
+    if setting == "auto":
+        return DeviceChoice("cpu", "the game keeps the graphics card to itself")
     if not cuda:
-        why = "CUDA isn't available"
-        if setting == "gpu":
-            return DeviceChoice("cpu", f"set to the graphics card, but {why}; using the processor")
-        return DeviceChoice("cpu", f"{why}, so using the processor")
-    if setting == "gpu":
-        return DeviceChoice("gpu", "set to the graphics card in settings")
-    if free_mb is None:
-        return DeviceChoice("cpu", "couldn't read the graphics card's free memory")
-    if free_mb < GPU_MEMORY_NEEDED_MB:
         return DeviceChoice(
-            "cpu",
-            f"the graphics card has {free_mb / 1024:.1f} GB free and needs "
-            f"{GPU_MEMORY_NEEDED_MB / 1024:.1f} GB",
+            "cpu", "set to the graphics card, but CUDA isn't available; using the processor"
         )
-    return DeviceChoice("gpu", f"the graphics card has {free_mb / 1024:.1f} GB free")
+    return DeviceChoice("gpu", "set to the graphics card in settings")
 
 
 def gpu_free_mb() -> int | None:

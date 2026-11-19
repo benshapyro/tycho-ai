@@ -112,8 +112,8 @@ class Settings(BaseModel):
     )
     transcription_device: Device = Field(
         default="auto",
-        description="Where speech recognition runs. Auto uses the graphics card when it has "
-        "room, otherwise the processor.",
+        description="Where speech recognition runs. Auto uses the processor, so the game "
+        "keeps the graphics card; the graphics card is faster but shares it with the game.",
         json_schema_extra=_rule("yes"),
     )
     feedback_volume: float = Field(

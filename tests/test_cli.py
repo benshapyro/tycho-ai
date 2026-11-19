@@ -288,16 +288,19 @@ def test_tycho_credits_names_the_sources_and_says_its_unofficial(
 
 
 @pytest.mark.parametrize(
-    ("device", "driver", "hint", "level", "says"),
+    ("setting", "device", "driver", "hint", "level", "says"),
     [
-        ("gpu", 617, None, "ok", "graphics card"),
-        ("cpu", None, None, "ok", "no NVIDIA card"),  # nothing to do about it
-        ("cpu", 617, "Run: tycho gpu install", "warn", "tycho gpu install"),
-        ("cpu", 617, None, "warn", "short of memory"),  # a card, but no room on it
+        ("gpu", "gpu", 617, None, "ok", "graphics card"),
+        ("gpu", "cpu", None, None, "ok", "no NVIDIA card"),  # nothing to do about it
+        ("gpu", "cpu", 617, "Run: tycho gpu install", "warn", "tycho gpu install"),
+        ("gpu", "cpu", 617, None, "warn", "short of memory"),  # a card, but it failed
+        # Auto means the processor on purpose (#188): no nudge towards the card.
+        ("auto", "cpu", 617, "Run: tycho gpu install", "ok", "processor"),
     ],
 )
 def test_check_says_how_to_move_speech_to_the_graphics_card(
     monkeypatch: pytest.MonkeyPatch,
+    setting: Literal["auto", "gpu"],
     device: Literal["gpu", "cpu"],
     driver: int | None,
     hint: str | None,
@@ -313,7 +316,7 @@ def test_check_says_how_to_move_speech_to_the_graphics_card(
     monkeypatch.setattr(doctor, "device_choice", choice)
     monkeypatch.setattr(doctor, "gpu_hint", lambda: hint)
     monkeypatch.setattr(tycho.stt, "nvidia_driver", lambda: driver)
-    finding = doctor.speech_finding(settings.Settings())
+    finding = doctor.speech_finding(settings.Settings(transcription_device=setting))
     assert finding.level == level
     assert says in finding.detail
 
