@@ -6,6 +6,7 @@ import threading
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import urlsplit
 
 import httpx2
 import pytest
@@ -352,15 +353,37 @@ def test_the_start_menu_app_keeps_a_report_of_the_crash_it_shows(
     monkeypatch.setattr(ctypes, "windll", type("Windll", (), {"user32": User32})(), raising=False)
     monkeypatch.setattr(sys, "stdout", sys.stdout)
     monkeypatch.setattr(sys, "stderr", sys.stderr)
-    assert _entry_point().windowed([]) == 1
-    kept = list(paths.crash_reports_dir().glob("*.json"))
-    assert len(kept) == 1
-    assert "tycho.settings.SettingsError" in kept[0].read_text("utf-8")
-    for added in set(logging.getLogger("tycho").handlers) - set(before):
-        added.close()  # logs.setup's file handler, in this test's folder
+    try:
+        assert _entry_point().windowed([]) == 1
+        kept = list(paths.crash_reports_dir().glob("*.json"))
+        assert len(kept) == 1
+        assert "tycho.settings.SettingsError" in kept[0].read_text("utf-8")
+    finally:  # even when an assert fails (#445)
+        for added in set(logging.getLogger("tycho").handlers) - set(before):
+            added.close()  # logs.setup's file handler, in this test's folder
 
 
 def test_a_name_inside_an_unspaced_word_is_found(report: dict[str, Any]) -> None:
     """#434: "田中" inside "田中さん" is still the name."""
     named = {**report, "frames": [{"module": "tycho.x", "function": "田中さん", "line": 1}]}
     assert scrub(named, ["田中"]) is None
+
+
+# --- The real project (#450) -----------------------------------------------------------------
+
+
+def test_tycho_s_project_is_a_sentry_dsn_with_no_secret_key() -> None:
+    from tests.conftest import REAL_DSN
+
+    parts = urlsplit(REAL_DSN)
+    assert parts.scheme == "https"
+    assert parts.hostname is not None
+    assert parts.hostname.endswith(".ingest.us.sentry.io")
+    assert parts.username  # the public key only
+    assert parts.password is None
+    assert parts.path.strip("/").isdigit()
+
+
+def test_tests_never_send_to_tycho_s_project(hooks: None) -> None:
+    """conftest blanks DSN, so a test that turns reports on can't reach Sentry."""
+    assert not crash_reports.start(True, lambda: True, CONTEXT)
