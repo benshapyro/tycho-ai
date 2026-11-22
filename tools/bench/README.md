@@ -27,6 +27,7 @@ $r = "recordings/<session>"
 uv run --script tools/bench/engines/onnx_asr_engine.py $r                     # Parakeet TDT v2, GPU
 uv run --script tools/bench/engines/onnx_asr_engine.py $r --model nemo-parakeet-tdt-0.6b-v3
 uv run --script tools/bench/engines/onnx_asr_engine.py $r --device cpu
+uv run --script tools/bench/engines/onnx_asr_engine.py $r --device cpu --int8   # the 8-bit model (#188)
 uv run --script tools/bench/engines/faster_whisper_engine.py $r              # Whisper large-v3-turbo
 uv run --script tools/bench/engines/qwen_asr_engine.py $r                    # Qwen3-ASR-1.7B
 uv run python tools/bench/report.py $r --misses
@@ -36,6 +37,19 @@ uv run python tools/bench/commands_report.py $r      # what each transcript woul
 `commands_report.py` scores every transcript against [`tools/spike/expected.toml`](../spike/expected.toml): **right**, **slow** (handed to the language model when the fast path should have caught it) or **wrong** (the wrong action, or acting when it should have asked). Wrong must stay at zero. It then lists the key each command would press with your own keybinds, read from your game install.
 
 Models go to `%LOCALAPPDATA%\tycho\models`. Set `TYCHO_MODELS` to put them elsewhere, and `UV_CACHE_DIR` and `HF_HOME` to move the package and download caches.
+
+### 8-bit (int8) Parakeet (#188)
+
+`--int8` loads the 8-bit copy of the model from the same repository, about a quarter of the size. Measured on 2026-11-16 on the maintainer's PC (RTX 4080 Laptop, 32 threads), Star Citizen closed, the 30 clips of `2026-10-30_070326`:
+
+| Parakeet TDT v2 | p50 ms | p90 ms | exact | exact + lexicon | VRAM MB |
+|---|---|---|---|---|---|
+| full, graphics card (what Tycho uses) | 23 | 30 | 26/30 | 29/30 | 3515 |
+| **int8, processor** | **388** | **516** | **27/30** | **29/30** | **0** |
+| full, processor | 560 | 719 | 26/30 | 29/30 | 0 |
+| int8, graphics card | 535 | 882 | 27/30 | 29/30 | 441 |
+
+int8 on the processor is about 30% faster than the full model there, and as accurate (it heard "Cutlass" where the full model heard "cut list"). int8 on the graphics card is the slowest: most of its 8-bit operations have no CUDA kernel, so ONNX Runtime moves the work back and forth. That evening's GPU crashes in Star Citizen and Lichii, with Tycho's model holding 3 GB of the same card, are why this was measured: the next step is a run with the game open.
 
 ### Graphics memory
 
