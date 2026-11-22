@@ -250,6 +250,16 @@ def test_todays_route_and_seat_lines(tmp_path: Path) -> None:
     assert [f.said for f in situation.now] == ["Last at the controls of the ORIG m80"]
 
 
+def test_leaving_the_seat_in_another_shape_still_ends_the_route(tmp_path: Path) -> None:
+    # A signed node id, or a patch's new wording: the ship's name can't be read, but a
+    # route kept on foot would let "engage quantum" fire the handgun (review of #526).
+    odd = M80_LEFT.replace("[2001234567]", "[-2001234567]").replace("releasing", "dropping")
+    situation = GameLog(_log(tmp_path, PYRO_ROUTE, odd)).situation()
+    assert situation.facts == frozenset()
+    assert situation.recent[-1].said == "Left a ship's controls"
+    assert situation.now == ()
+
+
 def test_no_route_loaded_changes_nothing(tmp_path: Path) -> None:
     # The game logs it now and then, even with a route plotted (it did at 07:19:50).
     assert GameLog(_log(tmp_path, PYRO_ROUTE, NO_ROUTE)).facts() == {QUANTUM_ROUTE}

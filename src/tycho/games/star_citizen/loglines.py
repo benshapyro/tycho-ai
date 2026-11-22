@@ -125,11 +125,15 @@ def _arrived(_line: str) -> Line | None:
 
 
 def _left_seat(line: str) -> Line | None:
-    if "<Vehicle Control Flow>" in line and (match := _RELEASED.search(line)):
-        own = ship(match.group(1))
-        said = f"Left the controls of the {own}"
-        return Line(LEFT_SEAT, said, clears=(ROUTE,), set_route=False, ship=own)
-    return None
+    # Any such line clears the route, whatever its exact shape: a route kept while the
+    # player is on foot would let "engage quantum" click the handgun's trigger (ADR 12).
+    # The full shape is only needed for the ship's name.
+    if "<Vehicle Control Flow>" not in line:
+        return None
+    match = _RELEASED.search(line)
+    own = ship(match.group(1)) if match else ""
+    said = f"Left the controls of the {own}" if own else "Left a ship's controls"
+    return Line(LEFT_SEAT, said, clears=(ROUTE,), set_route=False, ship=own)
 
 
 def _notification(line: str) -> Line | None:

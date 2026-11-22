@@ -20,7 +20,8 @@ class Logged:
     at: datetime | None
     """When the game logged it (UTC), if the line said."""
     number: int
-    """Counts up through a game session: something with a higher number is newer."""
+    """Counts up for as long as the reader runs, across game restarts: something with a
+    higher number is newer, so speaking up can tell what it hasn't seen."""
 
 
 @dataclass(frozen=True, slots=True)
