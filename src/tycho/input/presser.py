@@ -83,6 +83,10 @@ class Presser:
         self._sleep = sleep
         self._clock = clock
 
+    def game_in_front(self) -> bool:
+        """Whether the game has focus now."""
+        return self._focus.game_has_focus()
+
     def press(
         self,
         press: Press,

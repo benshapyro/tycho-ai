@@ -23,12 +23,25 @@ RECEIPT_STATUS: dict[str, Status] = {
 
 TRIED = "Try it: nothing was sent to the game"
 """The detail of a request planned during setup's Try it, for the log."""
+TRYING_IN_GAME = "Try it is still on, so nothing was sent. Turn it off in Tycho's window."
+"""Try it was on, but the game was in front: the window didn't hear the switch (#467).
+Not done, so the player doesn't think it worked."""
 
 
 def _shown(press: Press) -> str:
     """ "Landing System (N)": the action in the game's words, and the player's key."""
-    name = press.label or press.action
+    name = press.label or readable(press.action)
     return f"{name} ({press.key})" if press.key else name
+
+
+def readable(action: str) -> str:
+    """An action with no label in the game's files, as words (#465):
+    "v_toggle_landing_system" is "Toggle landing system", not the raw id."""
+    words = action.replace("-", "_").split("_")
+    if len(words) > 1 and len(words[0]) == 1:  # a one-letter group, such as "v_"
+        words = words[1:]
+    said = " ".join(word for word in words if word)
+    return said[:1].upper() + said[1:] if said else action
 
 
 async def press_all(
@@ -44,12 +57,16 @@ async def press_all(
 ) -> tuple[Status, str]:
     """Press each in turn, after its wait, adding what was pressed to ``progress``: how
     the request ended, and why if it didn't finish. ``trying``: setup's Try it (ADR 17),
-    so nothing is sent and ``progress`` says what would have been pressed."""
-    if trying:
-        progress.would_press = [_shown(press) for _wait, press in presses]
-        trace.mark("press")
-        return "done", TRIED
+    so nothing is sent and ``progress`` says what would have been pressed; with the
+    game in front it isn't done either (#467)."""
     loop = asyncio.get_running_loop()
+    if trying:
+        in_front = await loop.run_in_executor(keys, presser.game_in_front)
+        trace.mark("press")
+        if in_front:  # a second guard: the player is playing, and nothing was pressed
+            return "refused", TRYING_IN_GAME
+        progress.would_press = [_shown(press) for _wait, press in presses]
+        return "done", TRIED
 
     def first_key_down() -> None:  # on the key thread, as the key goes down
         if progress.keydown_ms is None:

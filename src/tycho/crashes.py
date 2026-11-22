@@ -7,13 +7,17 @@ finds that file, keeps it under a dated name and tells the player where it is.
 
 The file holds function names, file names and line numbers: no keys, and nothing the
 player said. A clean stop removes it, whatever is in it: some Windows exceptions are
-written there and then handled (.NET does this), and they aren't crashes.
+written there and then handled (.NET does this), and they aren't crashes. When Tycho
+was ended from outside (Task Manager) after one of those, the next start finds only
+handled exceptions in the file, and doesn't call that a crash either (#474).
 """
 
 import atexit
 import contextlib
 import faulthandler
 import logging
+import re
+import threading
 import time
 from pathlib import Path
 from typing import TextIO
@@ -33,7 +37,17 @@ RECENT_SECONDS = 3 * 24 * 3600.0
 """How long ``tycho check`` and the window's status keep saying Tycho crashed."""
 STOPPED = "Tycho stopped unexpectedly last time. What it was doing is in {file}."
 
+HANDLED = frozenset({"code 0x8001010d"})
+"""Windows exceptions ``faulthandler`` writes that Windows or .NET then handles (#474).
+0x8001010d: a COM call refused during an input-synchronous call, which the app
+window's message loop (WebView2 under WinForms) recovers from. Python itself already
+leaves out C++ and .NET's own exceptions."""
+_HEADER = re.compile(r"^(?:Windows fatal exception: (.+)|Fatal Python error: .*)$", re.M)
+
 _file: TextIO | None = None
+_lock = threading.RLock()
+"""``stop`` runs on Windows' threads too: the console's close and ``WM_ENDSESSION``
+(#440)."""
 
 
 def watch(folder: Path | None = None) -> Path | None:
@@ -41,32 +55,42 @@ def watch(folder: Path | None = None) -> Path | None:
     last run's record, under its dated name, if that run crashed."""
     folder = folder or paths.logs_dir()
     live = folder / LIVE
-    stop()
-    found = _keep(live)
     global _file
-    try:
-        folder.mkdir(parents=True, exist_ok=True)
-        _file = live.open("w", encoding="utf-8")
-    except OSError as e:
-        log.warning("Couldn't open %s, so a crash wouldn't be recorded: %s", live, e)
+    with _lock:
+        stop()
+        found = _keep(live)
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            _file = live.open("w", encoding="utf-8")
+        except OSError as e:
+            log.warning("Couldn't open %s, so a crash wouldn't be recorded: %s", live, e)
+            return found
+        faulthandler.enable(_file, all_threads=True)
+        atexit.register(stop)
         return found
-    faulthandler.enable(_file, all_threads=True)
-    atexit.register(stop)
-    return found
 
 
 def stop() -> None:
-    """Tycho is stopping cleanly: nothing crashed, so the file goes."""
+    """Tycho is stopping cleanly: nothing crashed, so the file goes. Safe from any
+    thread, and more than once."""
     global _file
-    if _file is None:
-        return
-    faulthandler.disable()
-    path = Path(_file.name)
-    _file.close()
-    _file = None
-    atexit.unregister(stop)
+    with _lock:
+        if _file is None:
+            return
+        faulthandler.disable()
+        path = Path(_file.name)
+        _file.close()
+        _file = None
+        atexit.unregister(stop)
     with contextlib.suppress(OSError):
         path.unlink()
+
+
+def only_handled(record: str) -> bool:
+    """Whether a record holds nothing but exceptions that get handled (``HANDLED``):
+    Tycho went on after each, so it didn't crash there (#474)."""
+    headers = list(_HEADER.finditer(record))
+    return bool(headers) and all(header.group(1) in HANDLED for header in headers)
 
 
 def _keep(live: Path) -> Path | None:
@@ -78,6 +102,10 @@ def _keep(live: Path) -> Path | None:
             return None
         stat = live.stat()
         if stat.st_size == 0:
+            live.unlink()
+            return None
+        if only_handled(live.read_text(encoding="utf-8", errors="replace")):
+            log.info("The last run's %s held only handled Windows exceptions", live.name)
             live.unlink()
             return None
         when = time.strftime("%Y-%m-%d-%H%M%S", time.localtime(stat.st_mtime))

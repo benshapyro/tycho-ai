@@ -94,22 +94,24 @@ class Speaking:
         """The line being said; ``idle`` and ``close`` wait for it."""
         self._filling: asyncio.Task[None] | None = None
         """The filler line, while it plays; the answer waits for it rather than cut it off."""
+        self._then: asyncio.Task[None] | None = None
+        """A notice queued with ``then``; the answer waits for it too (#440)."""
         self._fillers = itertools.cycle(FILLERS)
         self._checking = itertools.cycle(CHECKING)
         self.warming: asyncio.Task[None] | None = None
         self.closed = False
 
     def start(self, speaker: Speaker, text: str, instead: Callable[[], None]) -> None:
-        """Say ``text``, after the filler line if one is playing; if nothing can be
-        spoken, play the ``instead`` sound."""
-        filler = self._filling if self.speech is self._filling else None
-        if filler is None or filler.done():
-            filler = None
+        """Say ``text``, after the filler line if one is playing, and after a notice
+        queued behind it (#440); if nothing can be spoken, play the ``instead`` sound."""
+        after = self.speech
+        if after is None or after.done() or after not in (self._filling, self._then):
+            after = None
             self.stop()
-        self._filling = None
+        self._filling = self._then = None
         keep = len(text.strip()) <= KEEP_CHARACTERS
         self.speech = asyncio.create_task(
-            self._speak(speaker, text, instead, keep=keep, after=filler)
+            self._speak(speaker, text, instead, keep=keep, after=after)
         )
 
     def then(self, speaker: Speaker, text: str, instead: Callable[[], None]) -> None:
@@ -118,7 +120,9 @@ class Speaking:
         stops both."""
         current = self.speech if self.speech is not None and not self.speech.done() else None
         self._filling = None
-        self.speech = asyncio.create_task(self._speak(speaker, text, instead, after=current))
+        self.speech = self._then = asyncio.create_task(
+            self._speak(speaker, text, instead, after=current)
+        )
 
     def tell(self, result: Result, feedback: Feedback, *, speak: bool, keys_off: bool) -> None:
         """Who speaks when (ADR 14): the line about how a request ended, or its sound.

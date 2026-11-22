@@ -163,7 +163,8 @@ def _run(
                 # The new game needs setting up (its folder isn't found): the window asks.
                 log.info("Opening Tycho's window to set up %s", current.game)
                 if shell.first_run(requests) == "done":
-                    current = settings.load()
+                    # Set up like a first run, so the window opens on Try it (#467).
+                    current, try_it = settings.load(), True
                 else:
                     current, notices = _back_to(previous, current, "its setup wasn't finished")
                     previous = None

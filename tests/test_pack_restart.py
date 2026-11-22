@@ -135,6 +135,32 @@ def test_a_new_game_that_needs_setting_up_opens_setup_and_goes_back_if_it_isn_t_
     assert two_games["now"].game == "star-citizen"
 
 
+def test_a_new_game_set_up_after_a_restart_opens_on_try_it(
+    two_games: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#467: like a first run, a new game's finished setup goes on to Try it."""
+    tried: list[bool] = []
+    answers = [start_run.RESTART, 0]
+
+    def start(current: Settings, **options: Any) -> int:
+        tried.append(options["try_it"])
+        return answers.pop(0)
+
+    def setup(_requests: object) -> str:
+        return "done"
+
+    def needs_setup(current: Settings) -> bool:
+        return str(current.game) == OTHER
+
+    monkeypatch.setattr(start_run, "_start", start)
+    monkeypatch.setattr(shell, "Starting", _nothing)
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(tycho.desktop.setup, "needs_setup", needs_setup)
+    monkeypatch.setattr(shell, "first_run", setup)
+    assert start_run._run(Settings(), tmp_path / "log", window=True) == 0
+    assert tried == [False, True]
+
+
 # --- A quit just after picking a game (#330) --------------------------------------------
 
 
