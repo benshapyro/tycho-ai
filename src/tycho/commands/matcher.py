@@ -80,16 +80,16 @@ class Command:
     settle_seconds: float = 0.0
     """How long to wait after setup for the game to change mode."""
     requires: tuple[str, ...] = ()
-    """Facts the game state must show (e.g. ``tycho.games.star_citizen.gamelog.QUANTUM_ROUTE``),
-    or nothing is pressed."""
+    """Facts the game state must show (e.g. a plotted quantum route), or nothing is pressed."""
     accepted_risks: tuple[str, ...] = ()
     """Control contexts where the key could still do something dangerous, which the
     author has decided to accept for this command (e.g. ``"player"``, on foot)."""
     steps: tuple[Step, ...] = ()
     """A sequence: these commands in order, instead of actions of its own."""
     announced: bool = False
-    """The game itself says when this is done (engines, landing gear, power), so
-    Tycho doesn't talk over it."""
+    """The game itself says when this is done (engines, gear, power): Tycho stays quiet."""
+    blind: bool = False
+    """A toggle the brain picked by name for a direction: which way it went is unseen (#29)."""
 
     @property
     def is_sequence(self) -> bool:

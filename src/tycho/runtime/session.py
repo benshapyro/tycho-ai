@@ -60,6 +60,7 @@ from tycho.runtime.planning import (
     announced,
     needs_facts,
     plan_request,
+    toggle_receipt,
 )
 from tycho.runtime.ports import (
     ActionLog,
@@ -450,6 +451,8 @@ class Session:
             trying=trying,
             still_trying=lambda: self._trying,
         )
+        if status == "done" and planned.toggled and not trying and not progress.announced:
+            progress.say, progress.toggled = toggle_receipt(planned.toggled), True
         return end(status, detail)
 
     async def _ask_brain(self, text: str, own_keys: str = "") -> Picked | Reply | str:
