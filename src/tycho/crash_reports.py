@@ -38,9 +38,9 @@ from tycho import __version__, logs, paths
 
 log = logging.getLogger(__name__)
 
-DSN = ""
-"""Tycho's Sentry project. Empty until the maintainer creates it, and while it's empty
-nothing is written or sent, whatever the setting says."""
+DSN = "https://830c04e72704a76bc5521984b59e4083@o4512456666382336.ingest.us.sentry.io/4512457059860480"
+"""Tycho's Sentry project (tycho-to/tycho, #450). A DSN is public by design: it only lets
+a client send to the project. Reports go there only if the player said yes."""
 MAX_WAITING = 5
 """Reports kept to send at the next start; a crash loop doesn't fill the disk."""
 MAX_FRAMES = 40
@@ -337,11 +337,13 @@ def start(
     context: Context,
     call_me: Iterable[str] = (),
     *,
-    dsn: str = DSN,
+    dsn: str | None = None,
 ) -> bool:
     """At Tycho's start: with reports on (and a project to send to), keep crashes from
     now on and send earlier ones in the background. Otherwise delete any waiting.
-    Returns whether reports are on for this run."""
+    Returns whether reports are on for this run. ``dsn`` defaults to :data:`DSN`, read
+    at the call so tests can blank it."""
+    dsn = DSN if dsn is None else dsn
     if setting is not True or not dsn:
         forget()
         return False
