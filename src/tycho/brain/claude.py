@@ -25,7 +25,7 @@ import datetime
 import json
 import logging
 import time
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import AsyncGenerator, Callable, Iterable, Mapping, Sequence
 from typing import Any, cast
 
 import anthropic
@@ -269,16 +269,21 @@ class ClaudeBrain:
         round_ = Round(turn, self._lookups, self._actions, self._sequences, started)
         tools = self._offered()
         try:
-            async with self._client.messages.stream(
-                model=self._model,
-                system=self._system,
-                tools=tools,
-                tool_choice=TOOL_CHOICE,
-                output_config={"effort": EFFORT},
-                max_tokens=MAX_TOKENS,
-                messages=messages,
-            ) as stream:
-                async for event in stream:
+            async with (
+                self._client.messages.stream(
+                    model=self._model,
+                    system=self._system,
+                    tools=tools,
+                    tool_choice=TOOL_CHOICE,
+                    output_config={"effort": EFFORT},
+                    max_tokens=MAX_TOKENS,
+                    messages=messages,
+                ) as stream,
+                contextlib.aclosing(_events(stream)) as events,
+            ):
+                # Closed here, not by the garbage collector after an act leaves it:
+                # that printed "async generator already executing" (#443).
+                async for event in events:
                     round_.streaming()
                     if (
                         event.type == "content_block_stop"
@@ -404,3 +409,8 @@ def _log_usage(
     )
     names = ("input", "output", "cache_read", "cache_write")
     return dict(zip(names, tokens, strict=True)), round(cost, 7)
+
+
+def _events(stream: Any) -> AsyncGenerator[Any]:
+    """The stream's events as the async generator the SDK makes, so it can be closed."""
+    return cast(AsyncGenerator[Any], aiter(stream))

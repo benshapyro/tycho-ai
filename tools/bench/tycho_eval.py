@@ -355,8 +355,10 @@ def grade(
     if outcome.kind == "reply" and rule.get("answer") and DODGE.search(said):
         return "dodged the question"
     if outcome.kind == "reply":
+        # What the player gets: the line, and the card when there is one (#490).
+        shown = " ".join([said, *outcome.card_rows])
         for group in rule.get("mentions", []):
-            if not any(re.search(p, said, re.IGNORECASE) for p in group):
+            if not any(re.search(p, shown, re.IGNORECASE) for p in group):
                 return f"missing {'/'.join(group)}"
     if rule.get("no_card") and outcome.card:
         return f"showed a {outcome.card} card, expected none"
