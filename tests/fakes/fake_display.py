@@ -44,6 +44,10 @@ class FakeDisplay:
         self.calls.append("again")
         return self.board.again()
 
+    def forward(self) -> bool:
+        self.calls.append("forward")
+        return self.board.forward()
+
     def clear(self) -> None:
         self.calls.append("clear")
         self.board.clear()

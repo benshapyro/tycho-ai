@@ -23,6 +23,7 @@ import threading
 import time
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 
 from tycho.audio.clip import Samples, trim_silence
 from tycho.audio.source import AudioError, AudioSource
@@ -48,10 +49,7 @@ from tycho.runtime.asking import (
     answered,
     say_again,
 )
-from tycho.runtime.conversation import (
-    Conversation,
-    would_speak,
-)
+from tycho.runtime.conversation import Conversation, would_speak
 from tycho.runtime.listening import TAIL_SECONDS, poll, tail
 from tycho.runtime.look import ANSWER_ONLY, LOOK, Eyes, Unseen, look, wants_a_look
 from tycho.runtime.messages import Progress, Result, Status, Trace
@@ -75,12 +73,7 @@ from tycho.runtime.ports import (
 )
 from tycho.runtime.pressing import press_all
 from tycho.runtime.reporter import Reporter
-from tycho.runtime.routing import (
-    NotUnderstood,
-    Picked,
-    Reserved,
-    route,
-)
+from tycho.runtime.routing import NotUnderstood, Picked, Reserved, route
 from tycho.runtime.speaking import Speaking, Telling, log_failure, refused_keys_off
 from tycho.runtime.tiling import tile_request, to_tile
 from tycho.tile.cards import notice
@@ -127,8 +120,7 @@ class Session:
         eyes: Eyes | None = None,
         looking: bool = False,
     ) -> None:
-        """``safety_lists``: the pack's lists for the safety gate, for every plan (ADR 18).
-        ``eyes`` (None: the game can't be seen) and ``looking`` (it's on): #31."""
+        """``safety_lists``: the pack's lists for the gate (ADR 18). ``eyes``, ``looking``: #31."""
         self._eyes, self._looking = eyes, looking
         self._safety_lists = safety_lists
         self._tail_seconds = tail_seconds
@@ -152,7 +144,7 @@ class Session:
         self._brain_warming: asyncio.Task[None] | None = None
         self._conversation = Conversation(clock)
         times = Times(brain_seconds, search_seconds, search_limit, looking_seconds, looking_limit)
-        lately, voice, may = self._conversation.follow_ups, self._voice, self._may_look
+        lately, voice, may = self._conversation.follow_ups, self._voice, bool(eyes and looking)
         self._asker = Asker(brain, times, matcher, safety_lists, voice, keybinds, lately, may)
         self._confirm_seconds = confirm_seconds
         self._question: Question | None = None
@@ -196,9 +188,7 @@ class Session:
     def set_looking(self, on: bool) -> None:
         """Looking at the game window turned on or off, from the next request (#31)."""
         self._looking = on
-
-    def _may_look(self) -> bool:
-        return self._eyes is not None and self._looking
+        self._asker = replace(self._asker, may_look=self._eyes is not None and on)
 
     def set_confirm_seconds(self, seconds: float) -> None:
         """How long to wait for "confirm", from the next question on (#111)."""
@@ -376,14 +366,13 @@ class Session:
         question, self._question = self._question, None
         if question is not None and self._display is not None:
             self._display.answered()
-        offered = self._conversation.offered_look()
         routed = route(
             text,
             self._matcher,
             tile=self._display is not None and self._display.on,
             brain=self._brain is not None,
             keys=not self._safety_lists.keys_off,
-            look=wants_a_look(text, self._eyes, offered=offered, on=self._looking),
+            look=wants_a_look(text, self._eyes, self._conversation.offered_look(), self._looking),
         )
         trace.mark("match")
         if isinstance(routed, Reserved):
@@ -472,7 +461,8 @@ class Session:
             still_trying=lambda: self._trying,
         )
         if status == "done" and planned.toggled and not trying and not progress.announced:
-            progress.say, progress.toggled = toggle_receipt(planned.toggled), True
+            said = toggle_receipt(planned.toggled, progress.say, others=planned.others)
+            progress.say, progress.toggled = said, True
         return end(status, detail)
 
     def _report(self, result: Result) -> None:
@@ -492,6 +482,17 @@ class Session:
         self._voice.tell(result, self._feedback, speak=speak, keys_off=keys_off)
         if self._on_result is not None:
             self._on_result(result)
+
+    def busy(self) -> bool:
+        """Whether speaking up now would talk over someone (#4): push-to-talk is held, a
+        request runs, Tycho is talking or waiting for "confirm", or it's paused."""
+        asking = self._question is not None and self._clock() < self._question.deadline
+        running = self._current is not None and not self._current.done()
+        return self._listening or running or asking or self._voice.talking or self._paused
+
+    def call_out(self, line: str) -> None:
+        """Speak up (#4), on the loop: said like any line, so push-to-talk stops it."""
+        self._telling.call_out(line)
 
     def tell(self, said: str) -> None:
         """From any thread: something the player must know that no request asked for,

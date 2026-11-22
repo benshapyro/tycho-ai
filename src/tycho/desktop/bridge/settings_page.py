@@ -30,6 +30,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
         "call_me",
         "call_me_says",
         "call_me_how_often",
+        "callouts",
     ),
     "Game and controls": ("game", "push_to_talk", "microphone"),
     "Safety": ("key_actions", "confirm_seconds"),
@@ -81,6 +82,8 @@ class SettingsPage(State):
             for row in rows:
                 if row["name"] == "tile_hidden_cards":  # a switch for each kind (#422)
                     row["kind"], row["cards"] = "cards", card_kinds(current.game)
+                if row["name"] == "callouts":  # a switch for each kind, with its line (#4)
+                    row["kind"], row["callouts"] = "callouts", callout_kinds(current.game)
                 if row["name"] == "tile_screen":  # the screens plugged in now (#447)
                     row["kind"], row["screens"] = "screen", self._screens(current.tile_screen)
             groups.append({"name": group, "rows": rows})
@@ -261,6 +264,16 @@ def card_kinds(game: str) -> list[dict[str, str]]:
         own = {}
     names = {**NAMES, **own}
     return [{"kind": k, "name": names[k]} for k in ALL_KINDS if k in names]
+
+
+def callout_kinds(game: str) -> list[dict[str, str]]:
+    """The kinds of event ``game`` can tell the player about unasked, each with its name
+    and a line as it's said (#4). None for a game whose pack offers none."""
+    try:
+        offered = built_in(game).callouts
+    except PackError:
+        offered = ()
+    return [{"kind": c.id, "name": c.name, "example": c.example} for c in offered]
 
 
 def _not_for(game: str) -> frozenset[str]:

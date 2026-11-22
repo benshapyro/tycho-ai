@@ -75,6 +75,17 @@ class Telling:
         for said in waiting:
             self._tell(said)
 
+    def call_out(self, line: str) -> None:
+        """Speaking up (#4), on the loop: said aloud; with no voice, a notice on the Tile
+        if it's on, else nowhere (ADR 14's amendment)."""
+        voice = self._voice
+        if voice.closed:
+            return
+        if voice.speaker is not None:
+            voice.start(voice.speaker, line, lambda: None)
+        elif self._display is not None:
+            self._display.show(notice(line))
+
     def _tell(self, said: str) -> None:
         voice = self._voice
         if voice.closed or (self._display is not None and self._display.show(notice(said))):
@@ -100,6 +111,11 @@ class Speaking:
         self._checking = itertools.cycle(CHECKING)
         self.warming: asyncio.Task[None] | None = None
         self.closed = False
+
+    @property
+    def talking(self) -> bool:
+        """Whether a line is being said, or waits to be."""
+        return self.speech is not None and not self.speech.done()
 
     def start(self, speaker: Speaker, text: str, instead: Callable[[], None]) -> None:
         """Say ``text``, after the filler line if one is playing, and after a notice

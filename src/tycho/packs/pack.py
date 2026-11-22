@@ -31,7 +31,8 @@ from importlib.resources.abc import Traversable
 from types import MappingProxyType
 from typing import Literal, cast
 
-from tycho.packs import onboarding, tiles
+from tycho.packs import callouts, onboarding, tiles
+from tycho.packs.callouts import Callout
 from tycho.packs.onboarding import Setup
 from tycho.packs.parts import Registry
 from tycho.packs.tiles import Tile
@@ -68,7 +69,7 @@ _FILES = frozenset(
 )
 _TOP = frozenset(
     {"id", "name", "version", "format", "mode", "why", "window", "parts", "web", "briefing"}
-    | {"call_me", "setup", "accent", "look"}
+    | {"call_me", "setup", "accent", "callouts", "look"}
 )
 _PARTS = frozenset({"install", "keybinds", "game_state", "lookups"})
 
@@ -90,7 +91,7 @@ class Parts:
 LOOSENING = ("not_danger", "mode_guards", "state_guards", "accepted_risks")
 """The safety lists that make a check let something through. Only a pack that ships
 inside Tycho, reviewed like code, may set them (ADR 18)."""
-_SAFETY = frozenset({"confirm", "travel", "facts", *LOOSENING})
+_SAFETY = frozenset({"confirm", "travel", "facts", "toggles", *LOOSENING})
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,11 +113,20 @@ class Safety:
     """Facts, and the control contexts they rule out (built-in packs only)."""
     accepted_risks: frozenset[str] = frozenset()
     """Contexts a command may accept the risk of (built-in packs only)."""
+    toggles: tuple[str, ...] = ()
+    """Words in an action's name or label that mean it flips or cycles a state, so
+    Tycho says it can't see which way it went (#29). Any pack may list them: they only
+    make Tycho claim less."""
     keys_off: str = ""
     """Set when Tycho may press nothing (advisor mode, #191), to the sentence that says
     why. The gate's first check refuses every press while it's set. It comes from the
     pack's mode or the player's ``key_actions`` setting (``as_run``), never from
     ``safety.toml``."""
+
+    def flips(self, name: str, label: str) -> bool:
+        """Whether the action ``name`` (``label``) is one of the pack's toggles."""
+        said = f"{name} {label}".lower()
+        return any(word in said for word in self.toggles)
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +173,8 @@ class GamePack:
     look: tuple[str, ...] = ()
     """What the player says to have Tycho look at the game window ("take a look"), with
     looking turned on (ADR 14, #31). Only a pack with a ``window`` can look."""
+    callouts: tuple[Callout, ...] = ()
+    """What Tycho may say about the game unasked, if the player turns it on (#4)."""
 
 
 def load_pack(folder: Traversable, *, built_in: bool, registry: Registry | None = None) -> GamePack:
@@ -247,6 +259,9 @@ def load_pack(folder: Traversable, *, built_in: bool, registry: Registry | None 
         setup = onboarding.read(
             manifest.get("setup", {}), where, has_folder=parts.install is not None
         )
+        told = callouts.read(_table(manifest, "callouts", where), where)
+        if told and parts.game_state is None:
+            raise ValueError(f"{where}: callouts follow the game's state: name a game_state part")
     except ValueError as e:
         raise PackError(str(e)) from e
     return GamePack(
@@ -273,6 +288,7 @@ def load_pack(folder: Traversable, *, built_in: bool, registry: Registry | None 
         setup=setup,
         accent=_accent(manifest.get("accent"), where),
         look=look,
+        callouts=told,
     )
 
 
@@ -469,6 +485,7 @@ def _safety(table: Mapping[str, object], where: str, *, built_in: bool) -> Safet
         mode_guards=MappingProxyType(_guards(table, "mode_guards", where)),
         state_guards=MappingProxyType(state_guards),
         accepted_risks=frozenset(_strings(table, "accepted_risks", where)),
+        toggles=tuple(word.lower() for word in _strings(table, "toggles", where)),
     )
 
 

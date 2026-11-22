@@ -29,13 +29,14 @@ from tycho.commands.reserved import (
 from tycho.packs import Safety
 from tycho.text import normalize
 
-type TileWord = Literal["pin", "clear", "again", "show"]
+type TileWord = Literal["pin", "clear", "again", "forward", "show"]
 type ReservedWord = TileWord | Literal["say_again", "confirm", "cancel"]
 
 _TILE: dict[TileWord, frozenset[str]] = {
     "pin": TILE_WORDS["pin"],
     "clear": TILE_WORDS["clear"],
     "again": TILE_WORDS["again"],
+    "forward": TILE_WORDS["forward"],
     "show": TILE_WORDS["show"],
 }
 
@@ -83,7 +84,7 @@ NO_BRAIN_TO_LOOK = "looking at the game needs the brain: an Anthropic or OpenRou
 
 
 def tile_command(text: str) -> TileWord | None:
-    """``"pin"``, ``"clear"``, ``"again"`` or ``"show"`` if the whole utterance is one."""
+    """The Tile word (``"pin"``, ``"again"``...) if the whole utterance is one."""
     said = " ".join(normalize(text))
     return next((what for what, phrases in _TILE.items() if said in phrases), None)
 

@@ -18,7 +18,14 @@ from tycho.packs import GameDataError, built_in
 from tycho.ptt.devices import describe, input_sources
 from tycho.runtime.recent import Recent
 from tycho.settings import Settings, SettingsError
-from tycho.start.assemble import build_session, game_pack, load_keybinds, load_transcriber
+from tycho.start.assemble import (
+    build_session,
+    game_pack,
+    game_state_for,
+    load_keybinds,
+    load_transcriber,
+    watch_for_callouts,
+)
 from tycho.start.serve import serve
 from tycho.stt import ModelError
 from tycho.voice.choice import load_speaker
@@ -269,11 +276,13 @@ def _start(
     recent = Recent()  # Home's last exchanges: memory only (ADR 17)
     with Microphone(device=microphone_device(current.microphone)) as mic:
         log.info("Microphone: %s", mic.name)
+        game_state = game_state_for(pack, store)
         session = build_session(
             current,
             binding,
             store,
             transcriber,
+            game_state=game_state,
             audio=mic,
             sender=WindowsKeySender(),
             focus=WindowsFocusCheck(pack.window or GAME_EXECUTABLE),
@@ -291,6 +300,9 @@ def _start(
         )
         live["confirm_seconds"] = lambda v: session.set_confirm_seconds(_float(v))
         live["look_at_screen"] = lambda v: session.set_looking(v is True)
+        callouts = watch_for_callouts(current, pack, game_state, session)
+        if callouts is not None:
+            live["callouts"] = callouts.turn_on
         tile.on_stopped = lambda _why: session.tell(TILE_STOPPED)  # said, once (#297)
         for said in unseen:  # the Tile is off or didn't open: said aloud once listening
             session.tell(said)
@@ -305,7 +317,7 @@ def _start(
                     live,
                     display,
                     requests,
-                    serve=lambda stop: serve(session, store, stop),
+                    serve=lambda stop: serve(session, store, stop, callouts),
                     reopen=reopen,
                     windowed=WINDOWED,
                     recent=recent.exchanges,
@@ -315,7 +327,7 @@ def _start(
                     return 1
                 restart = outcome == "restart"
             else:
-                asyncio.run(serve(session, store))
+                asyncio.run(serve(session, store, callouts=callouts))
         finally:
             action_log.close()
             if display is not None:

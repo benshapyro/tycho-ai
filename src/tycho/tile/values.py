@@ -1,7 +1,7 @@
-"""What two Tile settings may hold, checked as the settings file is read (ADR 16). Out of
+"""What the Tile's settings may hold, checked as the settings file is read (ADR 16). Out of
 ``settings.py`` (ADR 19's line limit)."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import AfterValidator
 
@@ -28,3 +28,11 @@ def _screen(value: str) -> str:
 CardKinds = Annotated[str, AfterValidator(_card_kinds)]
 """Kinds of card, by comma; never the question, which always shows."""
 ScreenName = Annotated[str, AfterValidator(_screen)]
+
+type TileSize = Literal["small", "medium", "large", "extra large"]
+type Corner = Literal["top right", "top left", "bottom right", "bottom left"]
+type TileColour = Literal[
+    "game", "tycho", "orange", "amber", "green", "teal", "blue", "white", "red", "pink"
+]
+type CardsAtOnce = Literal["one", "two"]
+type CardsStay = Literal["shorter", "normal", "longer"]

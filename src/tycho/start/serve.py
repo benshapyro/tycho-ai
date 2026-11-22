@@ -11,6 +11,7 @@ from tycho.packs import GameKeys
 
 if TYPE_CHECKING:
     from tycho.runtime import Session
+    from tycho.runtime.callouts import Callouts
 
 log = logging.getLogger("tycho")
 
@@ -19,10 +20,13 @@ KEYBIND_REFRESH_SECONDS = 2.0
 
 
 async def serve(
-    session: Session, store: GameKeys | None, stop: asyncio.Event | None = None
+    session: Session,
+    store: GameKeys | None,
+    stop: asyncio.Event | None = None,
+    callouts: Callouts | None = None,
 ) -> None:
     """Run the session until ``stop``, Ctrl+C, or the console window closing. ``store``
-    is reread now and then, if the pack has keybinds."""
+    is reread now and then, if the pack has keybinds. ``callouts`` watch beside it (#4)."""
     from tycho.runtime.console import CloseGuard
 
     stop = stop or asyncio.Event()
@@ -30,6 +34,7 @@ async def serve(
     refresher = asyncio.create_task(
         _refresh_keybinds(store, session.warm_brain) if store is not None else stop.wait()
     )
+    watching = asyncio.create_task(callouts.run() if callouts is not None else stop.wait())
 
     def request_stop() -> None:
         loop.call_soon_threadsafe(stop.set)
@@ -39,8 +44,9 @@ async def serve(
         try:
             await session.run(stop)
         finally:
-            refresher.cancel()
-            await asyncio.gather(refresher, return_exceptions=True)
+            for task in (refresher, watching):
+                task.cancel()
+            await asyncio.gather(refresher, watching, return_exceptions=True)
 
 
 async def _refresh_keybinds(store: GameKeys, changed: Callable[[], None]) -> None:

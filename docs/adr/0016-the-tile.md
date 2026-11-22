@@ -30,7 +30,7 @@ pywebview was ruled out earlier: its docs say transparent windows aren't support
 
 | Claude's kinds | Tycho's own |
 |---|---|
-| list, route, recipe, ship, fleet, steps, headlines, warning | confirm (the gate's question), notice, long answer ("show me that") |
+| list, route, recipe, ship, fleet, steps, headlines, warning, compare, loadout (the last two since 22 November 2026, #491) | confirm (the gate's question), notice, long answer ("show me that") |
 
 - **`show_card` is an act.** Like `run_actions`, it ends the request and carries the spoken line. So a card costs no extra call to Claude.
 - **Nothing is pressed.** A card may follow a web search, though a press may not (ADR 15).
@@ -49,7 +49,7 @@ Built-in commands, one-line answers and small talk stay audio-only. The briefing
 
 **The rules live apart from the window.** `tycho.tile.board` decides what shows, so it is tested with no screen:
 - **Fading:** cards fade by themselves, longer ones staying longer (6 to 20 s, times the player's "cards stay").
-- **One at a time:** a new card replaces the last, except that a pinned card shrinks to a strip ("show that again").
+- **One at a time:** a new card replaces the last, except that a pinned card shrinks to a strip ("show that again"). Since 22 November 2026 every card that gives way shrinks to a strip (see the amendment below).
 - **Exceptions:** a confirm card lasts as long as its question, and a long answer is pinned.
 - **The player chooses which kinds show.** Confirm always shows while the Tile is on. Quiet mode leaves confirm, warnings and notices.
 - **Hiding a card never hides the answer:** it is still said out loud.
@@ -88,3 +88,15 @@ The maintainer asked whether a player can choose which screen the Tile shows on 
 - **The rules stay apart from the window.** Which screen to use is `tycho.tile.screens`, tested with no screen. Only listing the screens asks Windows (`EnumDisplayMonitors`), and the list is kept for 2 seconds because the Tile asks for a frame 15 times a second.
 
 What does not change: a separate window, never anything in the game, clicks passing through, and never taking focus.
+
+## Amendment, 22 November 2026: recent cards as strips, and going back by voice
+
+The maintainer asked whether the Tile can show more than one card ([#491](https://github.com/benshapyro/tycho-ai/issues/491)). Until now, with one card at a time, a new card took the old one's place and the old one was gone unless the player had pinned it. "Two at once" was a setting, but two full cards cover much more of the game. The maintainer looked at three drawn options (two full cards, one card with recent strips, and a stack to flip through) and chose one card with recent strips.
+
+- **The newest card in full, the last two as strips.** When a new card comes, the one showing shrinks to a strip with its title, as a pinned card already did. At most two strips are kept, newest first.
+- **Strips fade too.** A strip stays for 60 seconds, times the player's "cards stay". A pinned card's strip stays until it's cleared or pushed out by newer strips.
+- **Not every card leaves a strip.** A confirm question that gives way has been answered or has run out. A notice is about Tycho itself. Both just go.
+- **Back and forward by voice.** "Go back a card", "last card" or "show that again" brings up the card before the one showing, and that one becomes a strip. "Next card" or "go forward a card" goes the other way. A card brought back stays until another one takes its place. More ways to say the existing words were added too: "hide the tile", "keep the tile there".
+- **Two at once is unchanged.** It's still a setting, with no strips.
+
+What does not change: the board's rules stay apart from the window (`tycho.tile.board`, tested with no screen), hiding a card never hides the answer, and confirm always shows while the Tile is on.

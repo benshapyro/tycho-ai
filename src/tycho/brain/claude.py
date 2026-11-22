@@ -217,7 +217,8 @@ class ClaudeBrain:
         if self._preparing is None:
             lookups = self._lookups.values()
             self._preparing = asyncio.gather(*(lookup.prepare() for lookup in lookups))
-        await asyncio.gather(self._warm_cache(keybinds), asyncio.shield(self._preparing))
+        warming = self._primer.warming(lambda: self._warm_cache(keybinds))
+        await asyncio.gather(warming, asyncio.shield(self._preparing))
 
     async def close(self) -> None:
         """Stop any loading still running, and close the connection to Claude, if it's
@@ -268,11 +269,10 @@ class ClaudeBrain:
             turn.trace = self._traces.start(
                 "anthropic", self._model, self._briefed, request.text, len(request.recent)
             )
-        self._primer.used()  # this request opens the connection and reads the cache
-        try:
-            return await traced(self._traces, turn, self._decide(request, turn))
-        finally:
-            self._primer.used()
+        await self._primer.going()
+        decided = await traced(self._traces, turn, self._decide(request, turn))
+        self._primer.used()  # and it read the cache
+        return decided
 
     async def _decide(self, request: BrainRequest, turn: Turn) -> Decision:
         started = time.perf_counter()

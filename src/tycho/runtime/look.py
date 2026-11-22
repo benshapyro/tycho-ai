@@ -108,7 +108,7 @@ def only_a_look(text: str, phrases: Sequence[str]) -> bool:
     return False
 
 
-def wants_a_look(text: str, eyes: Eyes | None, *, offered: bool, on: bool = True) -> bool:
+def wants_a_look(text: str, eyes: Eyes | None, offered: bool, on: bool = True) -> bool:
     """Whether the player asked to look: a look phrase, or "yes" just after an offer.
     With looking off, only a request that is all a look is (to say it's off): a
     question that also says "take a look" goes on to be answered as before."""
