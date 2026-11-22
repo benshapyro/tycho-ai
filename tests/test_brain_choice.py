@@ -2,7 +2,6 @@
 look-ups it gets, and what ``tycho check`` says. Fakes only: no key is sent anywhere."""
 
 import asyncio
-import json
 from pathlib import Path
 
 import pytest
@@ -16,7 +15,8 @@ from tycho.brain.openrouter import OpenRouterBrain
 from tycho.brain.providers import ANTHROPIC_HAIKU, OFFERED, OPENROUTER_HAIKU, choose
 from tycho.commands import CommandMatcher
 from tycho.keybinds import Action, Keybinds, KeyInput
-from tycho.knowledge.web import SearchNeedsAnthropic, WebSearch
+from tycho.knowledge.web import WebSearch
+from tycho.knowledge.web_plugin import PluginSearch
 from tycho.packs import STAR_CITIZEN, built_in
 from tycho.runtime.planning import Questions, plan_request
 from tycho.runtime.routing import Picked, from_brain
@@ -153,19 +153,29 @@ def test_claude_direct_still_runs_on_the_anthropic_key() -> None:
     _close(brain)
 
 
-def test_through_openrouter_without_an_anthropic_key_search_says_it_needs_one() -> None:
+def test_through_openrouter_alone_search_runs_on_the_openrouter_key() -> None:
+    # #365: before, a player with only an OpenRouter key had no web search (#112).
     _store(openrouter=OPENROUTER)
     brain = _load(Settings(brain_provider="openrouter"))
     assert isinstance(brain, OpenRouterBrain)
-    search = brain._lookups["web_search"]  # pyright: ignore[reportPrivateUsage]
-    assert isinstance(search, SearchNeedsAnthropic)
+    assert isinstance(brain._lookups["web_search"], PluginSearch)  # pyright: ignore[reportPrivateUsage]
     _close(brain)
 
 
-def test_through_openrouter_search_uses_the_anthropic_key_when_there_is_one() -> None:
+@pytest.mark.parametrize("provider", ["anthropic", "openrouter"])
+def test_with_an_openrouter_key_search_runs_through_it_whatever_the_brain(provider: str) -> None:
+    # #365 (Ben, 22 Nov 2026): OpenRouter's web plugin first, whoever runs the brain.
     _store(openrouter=OPENROUTER, anthropic=ANTHROPIC)
-    brain = _load(Settings(brain_provider="openrouter"))
-    assert isinstance(brain, OpenRouterBrain)
+    brain = _load(Settings(brain_provider=provider))  # pyright: ignore[reportArgumentType]
+    assert brain is not None
+    assert isinstance(brain._lookups["web_search"], PluginSearch)  # pyright: ignore[reportPrivateUsage]
+    _close(brain)
+
+
+def test_with_only_an_anthropic_key_search_stays_anthropic_s_own() -> None:
+    _store(anthropic=ANTHROPIC)
+    brain = _load(Settings())
+    assert brain is not None
     assert isinstance(brain._lookups["web_search"], WebSearch)  # pyright: ignore[reportPrivateUsage]
     _close(brain)
 
@@ -189,23 +199,6 @@ def test_with_web_search_off_there_is_no_search_at_all() -> None:
     assert isinstance(brain, OpenRouterBrain)
     assert "web_search" not in brain._lookups  # pyright: ignore[reportPrivateUsage]
     _close(brain)
-
-
-def test_the_stand_in_search_answers_plainly_and_isnt_an_error() -> None:
-    stand_in = SearchNeedsAnthropic()
-    result = asyncio.run(stand_in.run({"query": "Star Citizen 4.11 patch"}))
-    assert not result.is_error  # an error would make the model try again
-    assert "needs an Anthropic key" in json.loads(result.content)["not_available"]
-    # The same tool as the real search, so the briefing and tools don't change.
-    real = WebSearch.__new__(WebSearch)
-    assert (stand_in.name, stand_in.description, stand_in.input_schema) == (
-        real.name,
-        real.description,
-        real.input_schema,
-    )
-
-
-# --- The safety gate on the OpenRouter route --------------------------------------------------
 
 
 def _action(name: str, key: str, label: str) -> Action:
@@ -282,11 +275,7 @@ def test_the_quick_check_asks_nobody() -> None:
     assert check.checked == []
 
 
-def test_check_says_search_needs_an_anthropic_key_through_openrouter() -> None:
+def test_check_no_longer_asks_for_an_anthropic_key_to_search_through_openrouter() -> None:
+    # #365: search runs on the OpenRouter key now, so there's nothing to warn about.
     _store(openrouter=OPENROUTER)
-    found = _findings(Settings(brain_provider="openrouter"), quick=True)
-    assert found["Web search"].level == "warn"
-    assert "needs an Anthropic key" in found["Web search"].detail
-    assert "Web search" not in _findings(
-        Settings(brain_provider="openrouter", web_search=False), quick=True
-    )
+    assert "Web search" not in _findings(Settings(brain_provider="openrouter"), quick=True)

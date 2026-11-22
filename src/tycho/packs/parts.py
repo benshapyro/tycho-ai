@@ -89,6 +89,8 @@ class Workshop:
     brain_provider: str = "anthropic"
     search_key: Callable[[], str | None] = lambda: None
     """The Anthropic key web search runs on, if the player has one (read when asked)."""
+    openrouter_key: Callable[[], str | None] = lambda: None
+    """The OpenRouter key, if the player has one: web search runs on it first (#365)."""
     _made: dict[str, object] = field(default_factory=dict[str, object])
 
     def shared[T](self, name: str, make: Callable[[], T]) -> T:

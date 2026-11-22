@@ -91,7 +91,7 @@ A key is a password for an online service, from your own account there. You past
 |---|---|---|
 | None | The built-in commands, said the usual way, with a click or a tone for each | Free |
 | [Anthropic](https://console.anthropic.com) (Claude) | Anything said differently, misheard words, two-part requests, and questions | About $0.0002 a request, plus about $0.002 each time Tycho starts. An evening of play is usually a few cents. |
-| [OpenRouter](https://openrouter.ai) (instead of Anthropic) | The same Claude, through one OpenRouter key: set `brain_provider = "openrouter"`. Web search still needs an Anthropic key; without one, Tycho says it can't search. | About what Anthropic charges, on your OpenRouter credit |
+| [OpenRouter](https://openrouter.ai) (instead of Anthropic) | The same Claude, through one OpenRouter key: set `brain_provider = "openrouter"`. With an OpenRouter key, web search runs through it too (about half a cent a search), whichever runs the brain. | About what Anthropic charges, on your OpenRouter credit |
 | [ElevenLabs](https://elevenlabs.io) (voice) | Tycho speaks its answers, what it did, and its questions. The key needs text-to-speech permission. | About 0.5 credits a character: a chatty hour is about 4,000 credits. The free plan is non-commercial and requires attribution. |
 
 Without an ElevenLabs key, Tycho's replies are shown in its window and it plays its sounds instead.
@@ -133,7 +133,8 @@ The full list:
 | ElevenLabs | The text Tycho speaks; at start, which voice you chose, to check your key can use it | When Tycho speaks, and once when it starts |
 | The key's own provider (Anthropic, OpenRouter or ElevenLabs) | A key you store, to check it works | When you store it, and when you run `tycho check` |
 | Star Citizen Wiki API, UEX Corp | Nothing about you: Tycho downloads their ship lists | On first run, and when a new patch goes live |
-| Anthropic (web search) | A short search query Claude writes from your question | Questions about news, upcoming patches, events and new ships, and where something is or how to do something when Tycho's look-ups don't cover it; off with `web_search = false`. When those sites have no clear answer, any website, and Anthropic reads up to two of the pages it finds (never Reddit's pages, only its search snippets); `web_search_open = false` keeps it to the Star Citizen sites. Always Anthropic directly, with your Anthropic key, even when the brain runs through OpenRouter |
+| OpenRouter and Perplexity (web search, with an OpenRouter key) | A short search query Claude writes from your question. OpenRouter passes it to Perplexity's search and the results to Claude on Anthropic, and asks both to keep nothing | Questions about news, upcoming patches, events and new ships, and where something is or how to do something when Tycho's look-ups don't cover it; off with `web_search = false`. Any website; `web_search_open = false` keeps it to the Star Citizen sites. Whenever you've stored an OpenRouter key, whichever runs the brain |
+| Anthropic (web search, with only an Anthropic key) | The same search query | The same questions. The Star Citizen sites first; when they have no clear answer, any website, and Anthropic reads up to two of the pages it finds (never Reddit's pages, only its search snippets); `web_search_open = false` keeps it to the Star Citizen sites |
 | UEX Corp | Which commodity or trading place you asked about | Trade questions |
 | Star Citizen Wiki API | The item names you ask about | Weapon, armor, component and crafting questions |
 | GitHub | Nothing about you: Tycho asks whether a newer version is out | When Tycho starts and when its window opens, off with `check_for_updates = false`; and when you press **Check for updates** |
