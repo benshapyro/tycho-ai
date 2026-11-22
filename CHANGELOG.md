@@ -14,7 +14,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ### Changed
 - Tycho gets the brain ready while you hold push-to-talk, so its answer starts a little sooner, and the first question after a break of an hour or more is no longer about 3 seconds slower. ([#21](https://github.com/benshapyro/tycho-ai/issues/21))
-- When Tycho can only reach an action through a toggle (say, "open the doors" with only Open/Close Doors bound), it now says "Toggled Open/Close Doors. I can't see which way it went." instead of a line that claims the doors are open. Give the action its own key and the line goes away. Actions the game announces itself, like the landing gear, stay quiet as before. ([#29](https://github.com/benshapyro/tycho-ai/issues/29))
+- When Tycho can only reach an action through a toggle (say, "open the doors" with only Open/Close Doors bound), it now says "Toggled Open/Close Doors. I can't see which way it went." instead of a line that claims the doors are open. If it pressed something else as well, the rest of its line stays and this follows it. Give the action its own key and the line goes away. Actions the game announces itself, like the landing gear, stay quiet as before. ([#29](https://github.com/benshapyro/tycho-ai/issues/29), [#537](https://github.com/benshapyro/tycho-ai/issues/537))
 - A slow web search gives up sooner (18 s instead of 25 s), so Tycho always has time to answer from it rather than running out of time just after it finishes. Searches took 15 s at most when measured. ([#365](https://github.com/benshapyro/tycho-ai/issues/365))
 
 ## [0.9.0] - 2026-11-22
