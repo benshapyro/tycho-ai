@@ -3,6 +3,7 @@
 import threading
 
 from tycho.audio.clip import Samples
+from tycho.situation import Logged, Situation
 
 
 class FakeTranscriber:
@@ -64,7 +65,12 @@ class FakeGameState:
     def __init__(self, *facts: str) -> None:
         self.current = frozenset(facts)
         self.calls = 0
+        self.now: tuple[Logged, ...] = ()
+        self.recent: tuple[Logged, ...] = ()
 
     def facts(self) -> frozenset[str]:
         self.calls += 1
         return self.current
+
+    def situation(self) -> Situation:
+        return Situation(self.facts(), self.now, self.recent)

@@ -28,7 +28,7 @@ Tycho should work for any Star Citizen player, not just its author. Players diff
 
 **Measured on more than one voice.** The test set grows beyond the author's voice, through community recordings contributed with explicit consent.
 
-**Private by default.** No telemetry. Diagnostics are opt-in bundles the user reviews before sharing. *Amended 14 November 2026: crash reports may be sent, only if the player says yes (see the end).*
+**Private by default.** No telemetry. Diagnostics are opt-in bundles the user reviews before sharing. *Amended 14 November 2026: crash reports may be sent, only if the player says yes (see the end).* *Amended 22 November 2026: a picture of the game window, only when the player asks Tycho to look and has turned it on, goes to the brain with the question, like what they said (ADR 14's amendment). It is part of answering them, not telemetry, and is never kept.*
 
 ## Consequences
 

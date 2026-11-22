@@ -1,5 +1,5 @@
 """An OpenAI-style streaming chat client from a script, for the OpenRouter brain
-(satisfies ``brain.openrouter.ChatClient``)."""
+(satisfies ``brain.openrouter_http.ChatClient``)."""
 
 import json
 from collections.abc import AsyncGenerator, AsyncIterator, Mapping, Sequence
@@ -20,6 +20,7 @@ class FakeChat:
         self.requests: list[dict[str, Any]] = []
         self.read: list[int] = []
         self.closed = False
+        self.connected = 0
         self._script = list(calls)
 
     @asynccontextmanager
@@ -41,6 +42,9 @@ class FakeChat:
                 yield chunk
 
         yield chunks()
+
+    async def connect(self) -> None:
+        self.connected += 1
 
     async def close(self) -> None:
         self.closed = True

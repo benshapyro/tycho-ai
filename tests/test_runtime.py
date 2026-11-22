@@ -2269,3 +2269,64 @@ def test_the_brain_is_told_what_a_misheard_word_may_be() -> None:
     (asked,) = brain.asked
     assert asked.text.startswith("how do you shoot the guns on the address")
     assert asked.text.endswith('[Speech-to-text: "address" may be "Idris".]')
+
+
+def test_push_to_talk_going_down_gets_the_brain_ready() -> None:
+    """#21: the brain opens its connection (or writes its cache again) while the player
+    talks, not after they let go."""
+    brain = FakeBrain(RunActions(("v_toggle_landing_system",), "Gear down."))
+    _conversation("put the wheels out would you", brain=brain)
+    assert brain.primed == 1
+
+
+# --- A toggle pressed for a direction (#13, #29) ---------------------------------------
+
+DOORS_TOGGLE = Keybinds(
+    [
+        Action(
+            name="v_toggle_all_doors",
+            actionmap="spaceship_general",
+            label="Open/Close Doors (Toggle)",
+            inputs=(KeyInput.parse("k"),),  # pyright: ignore[reportArgumentType]
+        ),
+        _action("v_toggle_landing_system", "n"),
+    ],
+    MODES,
+)
+
+
+def test_a_toggle_for_a_direction_says_it_cant_see_which_way() -> None:
+    speaker = FakeSpeaker()
+    r = _conversation("open the doors", keybinds=DOORS_TOGGLE, speaker=speaker)
+    result = r.results[0]
+    assert result.status == "done"
+    assert result.pressed == ("v_toggle_all_doors",)
+    assert result.toggled
+    assert result.say == "Toggled Open/Close Doors. I can't see which way it went."
+    assert speaker.spoken == [result.say]  # the fast path speaks for once: it's not "done"
+
+
+def test_the_doors_own_key_needs_no_such_line() -> None:
+    doors = Keybinds([_action("v_open_all_doors", "k"), *DOORS_TOGGLE], MODES)
+    speaker = FakeSpeaker()
+    r = _conversation("open the doors", keybinds=doors, speaker=speaker)
+    assert r.results[0].pressed == ("v_open_all_doors",)
+    assert not r.results[0].toggled
+    assert speaker.spoken == []
+
+
+def test_the_brain_naming_the_toggle_doesnt_claim_the_doors_are_open() -> None:
+    brain = FakeBrain(RunActions(("v_toggle_all_doors",), "Doors open."))
+    speaker = FakeSpeaker()
+    r = _conversation("let me out", brain=brain, keybinds=DOORS_TOGGLE, speaker=speaker)
+    assert r.results[0].say == "Toggled Open/Close Doors. I can't see which way it went."
+    assert speaker.spoken == [r.results[0].say]
+
+
+def test_a_toggle_the_game_announces_is_left_to_the_game() -> None:
+    # The game says "landing gear deployed" itself, so Tycho keeps quiet as before.
+    speaker = FakeSpeaker()
+    r = _conversation("gear down", keybinds=DOORS_TOGGLE, speaker=speaker)
+    assert r.results[0].pressed == ("v_toggle_landing_system",)
+    assert not r.results[0].toggled
+    assert speaker.spoken == []

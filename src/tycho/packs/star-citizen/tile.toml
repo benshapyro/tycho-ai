@@ -49,6 +49,7 @@ tumbril = "TMBL"
 [cards]
 ship = "Ship specs"
 fleet = "Your fleet"
+loadout = "Ship loadouts"
 
 # The card the window's Tile preview shows (#422): Star Citizen's own words.
 [sample]

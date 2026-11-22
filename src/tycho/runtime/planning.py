@@ -21,6 +21,7 @@ from tycho.commands import Command, resolve
 from tycho.input import NotPressable, Press, UnsupportedKey, plan
 from tycho.keybinds import Action, Keybinds
 from tycho.packs import Safety
+from tycho.runtime.pressing import readable
 
 CHAIN_BEAT_SECONDS = 0.15
 """A pause between the actions of a chain, so the game registers each one."""
@@ -31,6 +32,9 @@ class Steps:
     """Every press, in order, each with how long to wait before it."""
 
     presses: tuple[tuple[float, Press], ...]
+    toggled: tuple[str, ...] = ()
+    """The spoken names of toggles pressed for a direction, whose result Tycho can't
+    see (#13, #29): "Doors" for "open the doors" with only Open/Close Doors bound."""
 
     @property
     def actions(self) -> tuple[str, ...]:
@@ -100,6 +104,7 @@ def plan_request(
         # player hears why Tycho presses nothing here. safety.check refuses it too.
         return Refusal("refused", lists.keys_off)
     steps: list[tuple[float, Press]] = []
+    toggled: list[str] = []
     reasons: list[str] = []
     asking_about: list[str] = []
     for part in (step for command in commands for step in command.expand()):
@@ -109,6 +114,8 @@ def plan_request(
             return Refusal(
                 "no_key", f"{command.id}: none of {', '.join(command.actions)} has a key"
             )
+        if resolved.blind:
+            toggled.append(_toggle_name(resolved.action))
         setup: list[Action] = []
         for name in command.setup:
             action = keybinds.get(name)
@@ -141,4 +148,20 @@ def plan_request(
             return Refusal("no_key", str(e))
     if reasons:
         return Questions(tuple(reasons), tuple(asking_about))
-    return Steps(tuple(steps))
+    return Steps(tuple(steps), tuple(dict.fromkeys(toggled)))
+
+
+def _toggle_name(action: Action) -> str:
+    """ "Headlights (Toggle)" is "Headlights"; "v_toggle_all_doors", with no label, is
+    "All doors"."""
+    name = safety.spoken_name(action) if action.label else readable(action.name)
+    return name.removeprefix("Toggle ").strip() or name
+
+
+def toggle_receipt(toggled: tuple[str, ...]) -> str:
+    """What Tycho says after pressing toggles for a direction (#13, #29): that it
+    pressed them and can't see which way they went, never that it's done. It takes the
+    place of the brain's line, which would name the direction ("Doors open")."""
+    names = " and ".join(toggled)
+    which = "it" if len(toggled) == 1 else "they"
+    return f"Toggled {names}. I can't see which way {which} went."

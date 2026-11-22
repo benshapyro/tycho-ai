@@ -29,6 +29,7 @@ EXAMPLES: dict[str, Card] = {
             Row("Everus Harbor", "Hurston orbit", "3,048"),
             Row("Area18 TDD", "ArcCorp", "3,012"),
             Row("Port Tressler", "microTech orbit", "2,987"),
+            Row("Levski", "Delamar", "2,140"),
         ),
     ),
     "route": Card(
@@ -69,6 +70,33 @@ EXAMPLES: dict[str, Card] = {
         rows=(
             Row("Prospector", "Built for it: mining laser, 32 SCU ore", "Mines"),
             Row("Cutlass Black", "Can't mine; can carry ore", "Hauls", dim=True),
+        ),
+    ),
+    "compare": Card(
+        "compare",
+        title="For cargo runs",
+        label="Compare",
+        source="Game files",
+        hero=("Cutlass Black", "Freelancer"),
+        rows=(
+            Row("Cargo", "46 SCU", "66 SCU"),
+            Row("Crew", "1 to 3", "1 to 4"),
+            Row("Top speed", "1,255 m/s", "1,165 m/s"),
+            Row("Shields", "2 x S2", "2 x S2"),
+        ),
+    ),
+    "loadout": Card(
+        "loadout",
+        title="Cutlass Black",
+        label="Loadout · Stock",
+        source="Star Citizen Wiki",
+        rows=(
+            Row("CF-337 Panther x2", "Weapons", "S3"),
+            Row("M4A Laser Cannon x2", "Turret", "S2"),
+            Row("FR-66", "Shields", "S2"),
+            Row("JS-300", "Power plant", "S2"),
+            Row("Bracer x2", "Coolers", "S2"),
+            Row("Atlas", "Quantum drive", "S2"),
         ),
     ),
     "steps": Card(

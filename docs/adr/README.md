@@ -17,7 +17,7 @@ Each record explains one decision: the context, what was decided, and what follo
 | [11](0011-runtime-architecture.md) | Runtime architecture | Accepted; roadmap amended by 14 |
 | [12](0012-modes-before-shared-keys.md) | Keep the player's bindings; set the mode before a shared key | Accepted |
 | [13](0013-spoken-confirmation-and-action-log.md) | Spoken confirmation and the action log | Accepted |
-| [14](0014-the-brain-voice-and-sequences.md) | The brain, its voice, and sequences | Accepted |
+| [14](0014-the-brain-voice-and-sequences.md) | The brain, its voice, and sequences | Accepted; amended 22 Nov 2026 (looking when asked, speaking up) |
 | [15](0015-knowledge.md) | Knowledge: look-ups, sources and the player's fleet | Accepted; amended after the source checks |
 | [16](0016-the-tile.md) | The Tile: a panel over the game, drawn by Tycho | Accepted; in-game checks to do |
 | [17](0017-the-app.md) | The app: one Tycho, a tray icon and a window | Accepted; amended 15 Nov 2026 (the window's second layout) |
