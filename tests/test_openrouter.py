@@ -53,9 +53,9 @@ GEAR = {"actions": ["v_toggle_landing_system"], "say": "Gear."}
 
 def _brain(client: FakeChat, *lookups: FakeLookup, **kwargs: Any) -> OpenRouterBrain:
     kwargs.setdefault("pack", SC)
+    kwargs.setdefault("model", MODEL)
     return OpenRouterBrain(
         MATCHER,
-        model=MODEL,
         client=client,
         lookups=lookups,
         today=lambda: datetime.date(2026, 11, 9),
@@ -90,7 +90,7 @@ def test_the_request_is_openai_shaped_with_the_same_briefing_and_tools() -> None
     assert "reasoning" not in body  # each model as its provider runs it, unless asked
     system, user = body["messages"]
     assert system["role"] == "system"
-    assert system["content"][0]["cache_control"] == {"type": "ephemeral"}
+    assert system["content"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
     assert "v_toggle_landing_system" in system["content"][0]["text"]
     assert user["content"][0]["text"] == "[9 November 2026]"
     assert user["content"][1]["text"] == "gear down"
@@ -495,3 +495,10 @@ def test_a_whole_card_at_the_output_limit_is_still_shown() -> None:
     )
     assert isinstance(decided, Reply)
     assert decided.card is not None
+
+
+def test_only_claude_keeps_its_briefing_cached_for_an_hour() -> None:
+    # OpenRouter's default is 5 minutes, shorter than the gaps in play.
+    other = FakeChat(text("Hi."))
+    asyncio.run(_brain(other, model="google/gemini-3.8-flash").decide(BrainRequest("hi", KEYBINDS)))
+    assert other.requests[0]["messages"][0]["content"][0]["cache_control"] == {"type": "ephemeral"}

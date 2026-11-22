@@ -508,9 +508,9 @@ class OpenRouterBrain:
         text = briefing(keybinds, self._matcher, self._pack)
         if self._reference:
             text += f"\n{self._reference.strip()}\n"
-        # cache_control is for the models that need it marked (Anthropic's, Gemini's);
-        # OpenRouter drops it for the rest, which cache by themselves or not at all.
-        part = {"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}
+        # Marked for the models that need it (OpenRouter drops it for others); Claude's: 1 h.
+        cache = {"type": "ephemeral"} | ({"ttl": "1h"} if "anthropic/" in self._model else {})
+        part = {"type": "text", "text": text, "cache_control": cache}
         self._system = {"role": "system", "content": [part]}
         self._briefed = briefing_hash(text)
 
