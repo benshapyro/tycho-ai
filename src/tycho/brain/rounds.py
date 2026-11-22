@@ -54,8 +54,9 @@ LAST_CALL = (
 )
 """Added to the results before the last call, so a third look-up isn't the end."""
 CARD_NOTE = (
-    "If your answer has more than about three items or numbers (prices, a route, "
-    "specs, steps), answer with show_card: one sentence to say, the rest on the card."
+    "If your answer needs more than about three items or numbers (prices, a route, "
+    "specs, steps), answer with show_card: one sentence to say, the rest on the card. "
+    "An answer that fits in one short sentence (who makes it, one pick) is only said."
 )
 """Added to a look-up's results while the Tile is on (#490). The briefing's rule is far
 from the answer: in play, a trade route and a loadout were spoken, numbers and all."""

@@ -196,6 +196,7 @@ KNOWN = {
     "no_tools",
     "no_errors",
     "max_words",
+    "key_for",
 }
 
 
@@ -1158,3 +1159,22 @@ def test_the_model_benchmark_asks_for_the_hour_long_cache_tycho_does() -> None:
 def test_a_question_longer_than_a_sentence_is_measured(say: str, sentences: int) -> None:
     """#430: a clarifying question is one sentence; the eval counts the ones that aren't."""
     assert _eval().long_question(say) == sentences
+
+
+def test_a_number_on_the_card_counts_as_mentioned() -> None:
+    """#490: with the numbers on the Tile, the spoken line names the place and "UEX";
+    the player still gets the price, on the card."""
+    e = _eval()
+    rule = {"expect": ["reply"], "mentions": [["UEX"], [r"\d"]]}
+    said = "UEX has the best gold route from Rod's to the city. The rest is on the Tile."
+    assert e.grade(_outcome(say=said), rule, set()) == "missing \\d"
+    carded = _outcome(say=said, card="route", card_rows=["Rod's | Buy | 3,450"])
+    assert e.grade(carded, rule, set()) == "pass"
+
+
+def test_a_key_for_case_fails_a_reply_that_names_no_key() -> None:
+    """#357: calling player_keys and still saying "the primary fire button" passed."""
+    e = _eval()
+    rule = {"expect": ["reply"], "key_for": ["v_attack1_group1"]}
+    assert e.grade(_outcome(named_key=False), rule, set()) == "didn't name the player's key"
+    assert e.grade(_outcome(named_key=True), rule, set()) == "pass"

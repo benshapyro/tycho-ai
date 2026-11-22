@@ -38,6 +38,7 @@ from tycho.brain.briefing import briefing, offered_actions
 from tycho.brain.claude import history
 from tycho.brain.decisions import BrainError, BrainRequest, Decision, Exchange, Reply
 from tycho.brain.lookups import Lookup
+from tycho.brain.player_keys import keyed
 from tycho.brain.rounds import (
     ACTS,
     MAX_CALLS,
@@ -321,7 +322,7 @@ class OpenRouterBrain:
         self._sequences = (
             sorted(c.id for c in matcher.commands if c.is_sequence) if self._keys else []
         )
-        self._lookups = {lookup.name: lookup for lookup in lookups}
+        lookups, self._lookups = keyed(lookups, self._keys, lambda: self._for)
         if clash := ACTS & self._lookups.keys():
             raise ValueError(f"a look-up can't be named {', '.join(sorted(clash))}")
         specs = tool_specs(self._sequences, lookups, keys=self._keys)

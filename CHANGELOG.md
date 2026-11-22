@@ -10,6 +10,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ### Added
 - New commands for remote turrets, such as the Idris's: "enter remote turret" (or "enter remote turret two" or "three") and "exit remote turret". The game has no key for entering one by default, so bind Enter Remote Turret 1, 2 and 3 in the game's keybinds first. ([#356](https://github.com/benshapyro/tycho-ai/issues/356))
+- Ask Tycho which key does something ("how do I fire the guns?", "what's my strafe key?") and it names your own key, from your keybinds. ([#357](https://github.com/benshapyro/tycho-ai/issues/357))
 
 ### Fixed
 - A card the brain left empty no longer ends in the not-done sound: Tycho says its line without the card. ([#443](https://github.com/benshapyro/tycho-ai/issues/443))
