@@ -37,7 +37,7 @@ from tycho.ptt.binding import Binding
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime import AlreadyRunning, RecognitionUnavailable, Result, Session, SingleInstance
 from tycho.runtime.conversation import FOLLOW_UP_SECONDS
-from tycho.runtime.pressing import TRYING_IN_GAME
+from tycho.runtime.pressing import SAID_DURING_TRY_IT, TRYING_IN_GAME
 from tycho.runtime.speaking import CHECKING, FILLERS, KEEP_CHARACTERS
 from tycho.tile import Card, Row
 
@@ -788,6 +788,31 @@ def test_try_it_is_decided_when_the_button_is_let_go() -> None:
     assert r.keys.events == []
     assert r.results[0].status == "done"
     assert r.results[0].would_press == ("v_toggle_landing_system (N)",)
+
+
+def test_try_it_turned_off_by_the_switch_to_the_game_says_so() -> None:
+    """#507: the real switch. Said in the window while trying, then the game comes to the
+    front, which turns Try it off before the press is planned. Nothing is sent, and the
+    line doesn't say Try it is still on, since the toggle already shows it off."""
+    hold = threading.Event()
+
+    async def scenario() -> Rig:
+        r = rig("landing gear", hold=hold, focus=FakeFocus(True))
+        r.session.try_it(True)
+        r.say()
+        await asyncio.sleep(0.05)  # transcribing
+        r.session.try_it(False)
+        hold.set()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert r.keys.events == []
+    (result,) = r.results
+    assert result.status == "refused"
+    assert result.detail == SAID_DURING_TRY_IT
+    assert result.would_press == ()
 
 
 def test_try_it_with_the_game_in_front_isnt_done() -> None:

@@ -26,6 +26,10 @@ TRIED = "Try it: nothing was sent to the game"
 TRYING_IN_GAME = "Try it is still on, so nothing was sent. Turn it off in Tycho's window."
 """Try it was on, but the game was in front: the window didn't hear the switch (#467).
 Not done, so the player doesn't think it worked."""
+SAID_DURING_TRY_IT = "That was said during Try it, so nothing was sent."
+"""Said with Try it on, which was turned off (the switch to the game) before the press
+was planned: the game is in front, but Try it is already off, so "still on" would be
+wrong (#507). Not done either."""
 
 
 def _shown(press: Press) -> str:
@@ -54,17 +58,19 @@ async def press_all(
     progress: Progress,
     trace: Trace,
     trying: bool = False,
+    still_trying: Callable[[], bool] = lambda: True,
 ) -> tuple[Status, str]:
     """Press each in turn, after its wait, adding what was pressed to ``progress``: how
     the request ended, and why if it didn't finish. ``trying``: setup's Try it (ADR 17),
     so nothing is sent and ``progress`` says what would have been pressed; with the
-    game in front it isn't done either (#467)."""
+    game in front it isn't done either (#467). ``still_trying``: whether Try it is on now,
+    which picks what that refusal says (#507)."""
     loop = asyncio.get_running_loop()
     if trying:
         in_front = await loop.run_in_executor(keys, presser.game_in_front)
         trace.mark("press")
         if in_front:  # a second guard: the player is playing, and nothing was pressed
-            return "refused", TRYING_IN_GAME
+            return "refused", TRYING_IN_GAME if still_trying() else SAID_DURING_TRY_IT
         progress.would_press = [_shown(press) for _wait, press in presses]
         return "done", TRIED
 
