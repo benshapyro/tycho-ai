@@ -87,7 +87,7 @@ Claude was asked for one tool a reply (`disable_parallel_tool_use`). In the play
 
 **Decision.** Tycho looks at the game only when the player asks, and only if they have turned it on.
 
-- **Off by default.** A `look_at_screen` setting, off until the player turns it on in the window's privacy settings or in `settings.toml`. Setup doesn't ask; it stays short. By voice it only turns off (`lower_only`, ADR 5): "stop looking at my screen" works, nothing said turns it on. Asked to look while it's off, Tycho says it's off and where to turn it on, and sends nothing.
+- **Off by default, asked once at setup** *(maintainer, 22 November 2026)*. A `look_at_screen` setting, off until the player says yes. Setup's privacy step asks it next to the crash reports question, in plain words, for example "Let Tycho look at your game window when you ask it to? Only the game window, never saved. You can turn this off any time." Yes and no are equal choices; neither is picked for them, and skipping leaves it off. Players who set Tycho up before this ships are asked once, on the next start. It can be changed any time in the window's privacy settings or in `settings.toml`. By voice it only turns off (`lower_only`, ADR 5): "stop looking at my screen" works, nothing said turns it on. Asked to look while it's off, Tycho says it's off and where to turn it on, and sends nothing.
 - **Only when asked, and the code decides, not the model.** A look happens only when what the player said asks for one: the pack's look phrases ("take a look", "look at this", "what am I looking at"), matched in the transcript like the fast path, before the brain is called. The brain gets the picture; it can't take one. When the brain thinks a look would help and none was asked for, it may ask "Want me to take a look?", and a "yes" within the follow-up window (30 s) counts as asking.
 - **The game window only.** One frame of the pack's game window (`window` in `pack.toml`) through the Windows Graphics Capture API (ADR 3), never the desktop or another window. The Tile is a separate window, so it isn't in the picture. If the game window isn't found, nothing is captured and Tycho says so. A pack without a `window` can't look.
 - **Kept in memory, then gone.** The frame is scaled down to what the model needs, sent with that one request, and dropped. It is never written to disk, never kept for follow-ups (a follow-up that needs it again asks again), and never put in the log, the brain traces (#282, which record only that a picture was sent and its size), the action log or a crash report. "Save that" stays for later.
@@ -99,6 +99,7 @@ Claude was asked for one tool a reply (`disable_parallel_tool_use`). In the play
 
 **Consequences.**
 - The README's "What leaves your PC" table gains a row when this ships: "A picture of the game window, only when you ask Tycho to look, with look-at-screen on".
+- One more setup question in the privacy step (#364's onboarding), with the same "what's sent" detail as crash reports.
 - A capture boundary (a Protocol with a fake, ADR 4) and the camera sound. Vision cases join the brain eval: asked to look, not asked, and asked while off.
 - Each look costs more than a text request (the picture's tokens); the cost and the time to an answer are measured before it ships (architecture 6: under 4 s).
 
