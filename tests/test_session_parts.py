@@ -11,6 +11,8 @@ from tycho.commands.reserved import TILE_WORDS
 from tycho.games.star_citizen.gamelog import QUANTUM_ROUTE
 from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.packs import STAR_CITIZEN, built_in
+from tycho.runtime import Result
+from tycho.runtime.conversation import Conversation
 from tycho.runtime.planning import (
     CHAIN_BEAT_SECONDS,
     Questions,
@@ -20,6 +22,7 @@ from tycho.runtime.planning import (
     needs_facts,
     plan_request,
 )
+from tycho.runtime.pressing import TRIED, readable
 from tycho.runtime.routing import (
     NotUnderstood,
     Picked,
@@ -246,3 +249,30 @@ def test_announced_only_when_the_game_announces_every_part() -> None:
     quiet = dataclasses.replace(gear, announced=False)
     assert announced((loud,))
     assert not announced((loud, quiet))
+
+
+# --- Try it (#465) ----------------------------------------------------------------------
+
+
+def test_an_action_with_no_label_reads_as_words_not_its_id() -> None:
+    assert readable("v_toggle_landing_system") == "Toggle landing system"
+    assert readable("ui_toggle_map") == "Ui toggle map"
+    assert readable("eject") == "Eject"
+    assert readable("_") == "_"
+
+
+def test_a_try_it_result_isnt_a_follow_up_the_brain_takes_as_done() -> None:
+    conversation = Conversation(lambda: 0.0)
+    tried = Result(
+        1,
+        "done",
+        text="gear down",
+        commands=("landing_gear",),
+        detail=TRIED,
+        would_press=("Landing System (N)",),
+    )
+    conversation.heard(tried)
+    (exchange,) = conversation.follow_ups()
+    assert exchange.outcome.startswith("only tried landing_gear in setup")
+    assert "nothing was pressed" in exchange.outcome
+    assert "did " not in exchange.outcome

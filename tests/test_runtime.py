@@ -37,6 +37,7 @@ from tycho.ptt.binding import Binding
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime import AlreadyRunning, RecognitionUnavailable, Result, Session, SingleInstance
 from tycho.runtime.conversation import FOLLOW_UP_SECONDS
+from tycho.runtime.pressing import TRYING_IN_GAME
 from tycho.runtime.speaking import CHECKING, FILLERS, KEEP_CHARACTERS
 from tycho.tile import Card, Row
 
@@ -765,6 +766,49 @@ def test_closing_the_window_off_try_it_keeps_an_open_question() -> None:
 
     r = run(scenario)
     assert [x.status for x in r.results] == ["asking", "done"]
+
+
+def test_try_it_is_decided_when_the_button_is_let_go() -> None:
+    """#467: said in the window while trying, then a switch to the game before the
+    press is planned (Try it turns off): still nothing is sent."""
+    hold = threading.Event()
+
+    async def scenario() -> Rig:
+        r = rig("landing gear", hold=hold, focus=FakeFocus(False))
+        r.session.try_it(True)
+        r.say()
+        await asyncio.sleep(0.05)  # transcribing
+        r.session.try_it(False)
+        hold.set()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert r.keys.events == []
+    assert r.results[0].status == "done"
+    assert r.results[0].would_press == ("v_toggle_landing_system (N)",)
+
+
+def test_try_it_with_the_game_in_front_isnt_done() -> None:
+    """#467: the window may not hear the switch to the game, leaving Try it on. A
+    command said in the game then sends nothing, and isn't reported as done."""
+
+    async def scenario() -> Rig:
+        r = rig("landing gear", focus=FakeFocus(True))
+        r.session.try_it(True)
+        r.say()
+        await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert r.keys.events == []
+    (result,) = r.results
+    assert result.status == "refused"
+    assert result.detail == TRYING_IN_GAME
+    assert result.would_press == ()
+    assert r.feedback.played == ["not_done"]
 
 
 def test_after_try_it_tycho_presses_again() -> None:

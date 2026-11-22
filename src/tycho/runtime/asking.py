@@ -15,7 +15,7 @@ from tycho.commands import Command, CommandMatcher
 from tycho.keybinds import Keybinds
 from tycho.packs import Safety
 from tycho.runtime.conversation import Line
-from tycho.runtime.messages import Status
+from tycho.runtime.messages import Progress, Result, Status, Trace
 from tycho.runtime.ports import Brain
 from tycho.runtime.routing import Picked, from_brain
 
@@ -129,6 +129,11 @@ class Answer:
     """The question, asked again."""
     reopened: Question | None = None
     """The question asked again, waiting afresh for "confirm"."""
+
+    def result(self, request: int, trace: Trace, heard: str, text: str) -> Result:
+        """The request this answer ends."""
+        progress = Progress(self.commands, say=self.say, question=self.question)
+        return progress.result(request, self.status, trace, heard, text, self.detail)
 
 
 def answered(word: str, question: Question | None, now: float) -> Answer | Question:

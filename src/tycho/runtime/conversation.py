@@ -76,6 +76,11 @@ class Conversation:
             outcome = f"said: {result.say}"
         elif result.status == "asking":
             outcome = f"asked the player to confirm {', '.join(result.commands)}"
+        elif result.would_press:
+            # Setup's Try it (#465): nothing reached the game, so a follow-up such as
+            # "and the lights" mustn't take the gear as down.
+            tried = ", ".join(result.commands)
+            outcome = f"only tried {tried} in setup: nothing was pressed in the game"
         elif result.done and result.pressed:
             outcome = f"did {', '.join(result.commands)} (pressed {', '.join(result.pressed)})"
         else:
