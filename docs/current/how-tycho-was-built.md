@@ -10,6 +10,23 @@ Tycho is built by one maintainer directing AI coding agents. The maintainer make
 
 A language model picks what to do with anything the built-in commands don't match. Its output is treated as untrusted input.
 
+```mermaid
+flowchart TD
+    S["What the player said, as text"] --> M{"A built-in<br>command?"}
+    M -- "yes, in a few ms" --> G
+    M -- no --> B["The model picks: actions,<br>a named sequence, or a reply"]
+    B -- "a reply or a card" --> R["Spoken or shown.<br>Nothing pressed"]
+    B -- "after a web search" --> R
+    B -- "actions or a sequence" --> V{"Every name is one<br>the player has bound?"}
+    V -- no --> R2["Answered, never pressed"]
+    V -- yes --> G{"The safety gate,<br>outside the model"}
+    G -- "key actions off" --> R3["Refused: Tycho<br>only advises"]
+    G -- "can be undone" --> P["Keys pressed, logged"]
+    G -- "can't be undone" --> Q["Asks, and waits for<br>a spoken 'confirm'"]
+    Q -- "confirm" --> P
+    Q -- "anything else" --> X["Dropped"]
+```
+
 - Every action the model names is checked against the keys the player has actually bound. A name that isn't there is answered, never pressed ([`brain/decisions.py`](../../src/tycho/brain/decisions.py), [`brain/AGENTS.md`](../../src/tycho/brain/AGENTS.md): "Never trust a pick").
 - Every press, from any path, then goes through one safety gate ([`safety.py`](../../src/tycho/safety.py)). Anything that can't be undone waits for a spoken "confirm". A game pack can add to the gate's danger list and can never take away from it.
 - The model can choose a multi-step sequence only by name. The steps come from a file, never from the model ([ADR 14](../adr/0014-the-brain-voice-and-sequences.md)).
@@ -84,6 +101,22 @@ Older numbers still quoted in the decision records come from smaller runs: 97% o
 **The maintainer decides** what Tycho is and isn't: the product, the safety bar, which model, what leaves the PC, money, releases, and every decision record. Decisions made by the maintainer are marked as the author's in the [decision records](../adr/README.md).
 
 **AI coding agents do the building**: the code, the tests, the pull requests and most of this documentation. They work under [`AGENTS.md`](../../AGENTS.md), which holds the hard rules (clean-room code, no game memory, every action through the safety gate, keys never in files) and a map of the code.
+
+```mermaid
+flowchart LR
+    D["The maintainer decides:<br>what to build, the safety bar,<br>money, releases"] --> A["An AI agent writes<br>the code and tests"]
+    A --> PR["Pull request"]
+    PR --> CI["CI on Windows:<br>tests, types, layout<br>and wording rules"]
+    PR --> RV["Review by a second<br>Claude session"]
+    RV -- "blocking finding" --> A
+    RV -- "everything else" --> I["An issue, cleared<br>before the release"]
+    CI --> MG["Merged"]
+    RV --> MG
+    MG --> EV["Before a release: the eval<br>and checks at the PC"]
+    EV --> D
+    A -. "stops unfinished" .-> H["Handover note<br>for the next session"]
+    H -.-> A
+```
 
 What keeps that honest:
 

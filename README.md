@@ -26,6 +26,21 @@ Your job is to play. Star Citizen hands you two other jobs on top: hundreds of a
 
 Tycho takes those two jobs. You say what you want and keep flying. You stay in the seat and make every call that matters; Tycho does the remembering and the looking up.
 
+**How one request travels:**
+
+```mermaid
+flowchart LR
+    A["You hold the button<br>and speak"] --> B["Speech becomes text<br>on your PC"]
+    B --> C{"A built-in<br>command?"}
+    C -- yes --> E{"Safety check:<br>can it be undone?"}
+    C -- no --> D["Claude works out<br>what you meant"]
+    D -- "a question" --> H["Tycho answers aloud,<br>or shows a card"]
+    D -- "an action" --> E
+    E -- yes --> F["Tycho presses<br>your keys"]
+    E -- no --> G["Tycho asks.<br>You say 'confirm'"]
+    G --> F
+```
+
 **What makes it different:**
 - **It reads your real keybinds,** so it presses what you bound and never guesses a key. It tells you when an action has no key.
 - **Live data, not memory.** Prices, routes, ships and recipes come from this patch's game files, UEX and the Star Citizen Wiki, and it says where an answer came from.
