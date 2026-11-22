@@ -63,6 +63,9 @@ EFFORT = "low"
 MAX_TOKENS = 2048
 """Replies are a sentence or two and tool calls a few dozen tokens, but a how-to or a
 plan on a card ran past 1024 (#266). It's a cap: a short reply pays nothing for it."""
+DRAIN_SECONDS = 10.0
+"""The most a stream an act left is read for, in the background, before it's closed
+(#518): longer than the client's 8 s read timeout."""
 # Haiku 5.5 per million tokens: input, output, cache read, cache write (1 hour).
 _PRICES = (0.10, 0.50, 0.01, 0.20)
 
@@ -163,6 +166,8 @@ class ClaudeBrain:
         self._system: list[TextBlockParam] = []
         self._actions: frozenset[str] = frozenset()
         self._preparing: asyncio.Future[list[None]] | None = None
+        self._draining: set[asyncio.Task[None]] = set()
+        """Streams an act left, being read to the end (``_drain``)."""
 
     async def warm(self, keybinds: Keybinds) -> None:
         """Warm the cache, and load what the look-ups need, side by side.
@@ -181,6 +186,7 @@ class ClaudeBrain:
         if self._preparing is not None and not self._preparing.done():
             self._preparing.cancel()
             await asyncio.gather(self._preparing, return_exceptions=True)
+        await asyncio.gather(*self._draining, return_exceptions=True)  # within DRAIN_SECONDS
         for lookup in self._lookups.values():  # fetches that outlived their look-up (#240)
             if (close := getattr(lookup, "close", None)) is not None:
                 with contextlib.suppress(Exception):
@@ -268,21 +274,23 @@ class ClaudeBrain:
         otherwise the whole message and the round, with the look-ups it started."""
         round_ = Round(turn, self._lookups, self._actions, self._sequences, started)
         tools = self._offered()
+        opened = contextlib.AsyncExitStack()
         try:
-            async with (
-                self._client.messages.stream(
-                    model=self._model,
-                    system=self._system,
-                    tools=tools,
-                    tool_choice=TOOL_CHOICE,
-                    output_config={"effort": EFFORT},
-                    max_tokens=MAX_TOKENS,
-                    messages=messages,
-                ) as stream,
-                contextlib.aclosing(_events(stream)) as events,
-            ):
+            async with opened:
+                stream = await opened.enter_async_context(
+                    self._client.messages.stream(
+                        model=self._model,
+                        system=self._system,
+                        tools=tools,
+                        tool_choice=TOOL_CHOICE,
+                        output_config={"effort": EFFORT},
+                        max_tokens=MAX_TOKENS,
+                        messages=messages,
+                    )
+                )
                 # Closed here, not by the garbage collector after an act leaves it:
                 # that printed "async generator already executing" (#443).
+                events = await opened.enter_async_context(contextlib.aclosing(_events(stream)))
                 async for event in events:
                     round_.streaming()
                     if (
@@ -292,10 +300,12 @@ class ClaudeBrain:
                         block = event.content_block
                         if _cut_off(block.name, block.input, tools):
                             round_.left(*_written(stream.current_message_snapshot))
+                            self._drain(events, opened.pop_all())
                             return await round_.cut_short(block.name), None, round_
                         decided = await round_.tool_call(block.id, block.name, block.input)
                         if decided is not None:
                             round_.left(*_written(stream.current_message_snapshot))
+                            self._drain(events, opened.pop_all())
                             return decided, None, round_
                 message = await stream.get_final_message()
             round_.finished()
@@ -303,6 +313,28 @@ class ClaudeBrain:
             round_.cancel()
             raise
         return None, message, round_
+
+    def _drain(self, events: AsyncGenerator[Any], opened: contextlib.AsyncExitStack) -> None:
+        """Read the rest of a stream an act left, then close it, in the background.
+
+        Closing it at the act left the SDK's inner generators (the SSE decoder, httpx's
+        byte streams) to the garbage collector, which closed them out of order and
+        printed "async generator already executing" during later look-ups (#518). Read
+        to the end, each finishes in turn. The act doesn't wait: it's pressed at once."""
+
+        async def drain() -> None:
+            try:
+                async with asyncio.timeout(DRAIN_SECONDS):
+                    async for _ in events:
+                        pass
+            except Exception as e:  # the answer is already decided
+                log.debug("Reading the rest of a stream an act left: %s", e)
+            finally:
+                await opened.aclose()
+
+        task = asyncio.get_running_loop().create_task(drain())
+        self._draining.add(task)
+        task.add_done_callback(self._draining.discard)
 
     def _offered(self) -> list[ToolParam]:
         """The tools for this call: ``show_card`` only while the Tile is on. Turning

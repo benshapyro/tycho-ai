@@ -10,6 +10,7 @@ With key actions off the briefing already ends with every key (#392, #437), so t
 brain isn't offered it then.
 """
 
+import asyncio
 import json
 from collections.abc import Callable, Mapping, Sequence
 
@@ -72,14 +73,10 @@ class PlayerKeys:
         keybinds = self._keybinds()
         if keybinds is None or not len(keybinds):
             return LookupResult(json.dumps({"not_found": "Tycho can't read this game's keys"}))
-        found: dict[str, Action] = {}
-        missing: list[str] = []
-        for wanted in [str(a) for a in asked[:MAX_ASKED] if str(a).strip()]:  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
-            matches = _matches(wanted, keybinds)
-            found |= {a.name: a for a in matches}
-            if not matches:
-                missing.append(wanted)
-        result: dict[str, object] = {"keys": _entries(list(found.values()))}
+        words = [str(a) for a in asked[:MAX_ASKED] if str(a).strip()]  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
+        # Scoring every bound action's label is blocking work: off the loop (#518).
+        found, missing = await asyncio.to_thread(_look_up, words, keybinds)
+        result: dict[str, object] = {"keys": _entries(found)}
         if missing:
             result["not_found"] = missing
             result["say"] = (
@@ -97,6 +94,18 @@ def keyed(
     extra: list[Lookup] = [PlayerKeys(keybinds)] if keys else []
     every = [*lookups, *extra]
     return every, {lookup.name: lookup for lookup in every}
+
+
+def _look_up(words: list[str], keybinds: Keybinds) -> tuple[list[Action], list[str]]:
+    """The actions the words mean, once each, and the words that mean none."""
+    found: dict[str, Action] = {}
+    missing: list[str] = []
+    for wanted in words:
+        matches = _matches(wanted, keybinds)
+        found |= {a.name: a for a in matches}
+        if not matches:
+            missing.append(wanted)
+    return list(found.values()), missing
 
 
 def _matches(wanted: str, keybinds: Keybinds) -> list[Action]:

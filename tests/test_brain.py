@@ -1474,3 +1474,94 @@ def test_a_call_cut_with_no_block_end_after_a_look_up_ends_the_request() -> None
     decision = asyncio.run(brain.decide(BrainRequest("who makes the Andromeda", KEYBINDS)))
     assert decision == Reply(CUT_SHORT)
     assert len(sent) == 1  # never sent back without the cut call's result
+
+
+def _sse_chunks(events: list[dict[str, Any]]) -> list[bytes]:
+    return [f"event: {e['type']}\ndata: {json.dumps(e)}\n\n".encode() for e in events]
+
+
+class _SlowToClose(httpx2.AsyncByteStream):
+    """A response body that, like a real connection, awaits as it closes."""
+
+    def __init__(self, chunks: list[bytes]) -> None:
+        self._chunks = chunks
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        try:
+            for chunk in self._chunks:
+                await asyncio.sleep(0.001)
+                yield chunk
+        finally:
+            await asyncio.sleep(0.005)
+
+    async def aclose(self) -> None:
+        return None
+
+
+def test_a_stream_an_act_left_is_closed_in_order_not_by_the_garbage_collector() -> None:
+    """#518: closing the SDK's event generator at an act still left its inner generators
+    (the SSE decoder, httpx's byte streams) to the garbage collector, which closed them
+    at once, out of order: "async generator already executing" in the PC eval."""
+    import gc
+    import sys
+
+    act = {"actions": ["v_toggle_landing_system"], "say": "Gear."}
+    usage = {"input_tokens": 1, "output_tokens": 1}
+    message: dict[str, Any] = {
+        "id": "m",
+        "type": "message",
+        "role": "assistant",
+        "model": "x",
+        "content": [],
+    }
+    events: list[dict[str, Any]] = [
+        {"type": "message_start", "message": {**message, "stop_reason": None, "usage": usage}},
+        {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {"type": "tool_use", "id": "t", "name": "run_actions", "input": {}},
+        },
+        {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {"type": "input_json_delta", "partial_json": json.dumps(act)},
+        },
+        {"type": "content_block_stop", "index": 0},
+        {"type": "content_block_start", "index": 1, "content_block": {"type": "text", "text": ""}},
+        {"type": "content_block_delta", "index": 1, "delta": {"type": "text_delta", "text": "x"}},
+        {"type": "content_block_stop", "index": 1},
+        {"type": "message_delta", "delta": {"stop_reason": "tool_use"}, "usage": usage},
+        {"type": "message_stop"},
+    ]
+
+    def respond(request: httpx2.Request) -> httpx2.Response:
+        body = _SlowToClose(_sse_chunks(events))
+        return httpx2.Response(200, headers={"content-type": "text/event-stream"}, stream=body)
+
+    problems: list[str] = []
+
+    async def scenario() -> list[Any]:
+        loop = asyncio.get_running_loop()
+        loop.set_exception_handler(lambda _, context: problems.append(str(context)))
+        http = httpx2.AsyncClient(transport=httpx2.MockTransport(respond))
+        client = anthropic.AsyncAnthropic(api_key="test", http_client=http)
+        brain = ClaudeBrain(MATCHER, client=client, pack=SC)
+        decided: list[Any] = []
+        for _ in range(10):
+            decided.append(await brain.decide(BrainRequest("gear please", KEYBINDS)))
+            gc.collect()
+            await asyncio.sleep(0.02)
+        await brain.close()
+        gc.collect()
+        await asyncio.sleep(0.05)
+        await http.aclose()
+        return decided
+
+    before = sys.unraisablehook
+    sys.unraisablehook = lambda u: problems.append(f"{u.err_msg}: {u.exc_value!r}")
+    try:
+        decided = asyncio.run(scenario())
+    finally:
+        sys.unraisablehook = before
+    assert decided == [RunActions(("v_toggle_landing_system",), "Gear.")] * 10
+    assert problems == []
