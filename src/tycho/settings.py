@@ -161,10 +161,9 @@ class Settings(BaseModel):
     )
     web_search: bool = Field(
         default=True,
-        description="Let Tycho search the web for news, what's coming, where things are and "
-        "how to do things, in games that have web search. With an OpenRouter key it searches "
-        "through it, for about half a cent; otherwise about 1 to 3 cents of your Anthropic "
-        "credit.",
+        description="Let Tycho search the web for news, where things are and how to do "
+        "things, in games that have web search. With an OpenRouter key, about half a cent a "
+        "search through it; otherwise 1 to 3 cents of your Anthropic credit.",
         json_schema_extra=_rule("lower_only", how=FILE_OR_APP),
     )
     web_search_open: bool = Field(
