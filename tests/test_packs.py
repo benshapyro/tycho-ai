@@ -110,6 +110,19 @@ def test_a_second_game_loads_with_its_own_parts() -> None:
     )
     assert pack.web_sites == ("fakegame.example",)
     assert pack.terms == ("Glimmerhold", "Quillback")
+    assert pack.misheard == ()
+
+
+def test_terms_can_say_what_a_term_is_misheard_as() -> None:
+    """#509: "Idris = address" in terms.txt: the term, and everyday words it's heard as."""
+    from tycho.packs.pack import _misheard, _terms  # pyright: ignore[reportPrivateUsage]
+
+    text = "# Ships\nIdris = address, a dress\nCarrack\n# a = b is a comment\n"
+    assert _terms(text) == ("Idris", "Carrack")
+    assert _misheard(text) == (("address", "Idris"), ("a dress", "Idris"))
+    sc = built_in(STAR_CITIZEN)
+    assert "Idris" in sc.terms
+    assert ("address", "Idris") in sc.misheard
 
 
 def test_a_pack_naming_a_part_tycho_doesnt_have_is_refused() -> None:

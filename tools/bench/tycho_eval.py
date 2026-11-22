@@ -513,7 +513,8 @@ async def run_case(
 ) -> Outcome:
     """One case through Tycho's path. ``lists`` are the pack's safety lists."""
     outcome = Outcome(rule["heard"], str(rule.get("tag", "")))
-    text = lexicon.correct(rule["heard"]).text
+    corrected = lexicon.correct(rule["heard"])
+    text = corrected.text
     matcher = matcher or MATCHER
     # The session's own routing (#55), so the eval grades the path the words really take.
     routed = routing.route(text, matcher, tile=tile, keys=not lists.keys_off)
@@ -544,7 +545,7 @@ async def run_case(
         # the brain with the player's own keys for it.
         keys = own_keys(routed.matched, keybinds) if routed.matched else ""
         decision = await brain.decide(
-            BrainRequest(text, keybinds, tuple(recent), keys, waiting=searching)
+            BrainRequest(corrected.for_brain, keybinds, tuple(recent), keys, waiting=searching)
         )
     except BrainError as e:
         outcome.kind, outcome.notes = "error", [str(e)]

@@ -84,6 +84,21 @@ class Corrected:
     replacements: tuple[Replacement, ...]
     hints: tuple[Replacement, ...] = ()
     """Possible terms left in place, e.g. "station" might be Stanton."""
+    misheard: tuple[Replacement, ...] = ()
+    """Words the pack says a term is often heard as ("address" for the Idris), left in
+    place: the brain is told what they may be (#509)."""
+
+    @property
+    def for_brain(self) -> str:
+        """The text, with what its misheard words may be, for the brain to judge in
+        context (#509): "address" alone is a real word, but "the guns on the address" is
+        the Idris. Only the brain can tell, so it's told, never rewritten. Only the
+        pack's own list: sound-alike hints such as "station" are too common (review of
+        #522)."""
+        if not self.misheard:
+            return self.text
+        maybe = "; ".join(f'"{h.heard}" may be "{h.term}"' for h in self.misheard)
+        return f"{self.text}\n[Speech-to-text: {maybe}.]"
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,8 +120,14 @@ class Lexicon:
         min_word_spelling_similarity: float = 0.75,
         min_fuzzy_length: int = 5,
         max_words: int = 3,
+        misheard: Iterable[tuple[str, str]] = (),
     ) -> None:
+        """``misheard``: everyday words and the term each is often heard for (the pack's
+        ``Idris = address``), which come back only as hints (#509)."""
         self._terms = [_Term(t, _collapse(t), sound_key(t)) for t in terms]
+        self._misheard = [
+            (re.compile(rf"\b{re.escape(word)}\b", re.IGNORECASE), term) for word, term in misheard
+        ]
         self._threshold = threshold
         self._min_spelling_similarity = min_spelling_similarity
         self._min_word_spelling_similarity = min_word_spelling_similarity
@@ -116,7 +137,7 @@ class Lexicon:
     @classmethod
     def default(cls, pack: GamePack) -> Lexicon:
         """The game pack's words."""
-        return cls(pack.terms)
+        return cls(pack.terms, misheard=pack.misheard)
 
     def __len__(self) -> int:
         return len(self._terms)
@@ -162,7 +183,13 @@ class Lexicon:
             if heard.lower() != term.spelling.lower():
                 replacements.append(change)
         out.append(text[cursor:])
-        return Corrected("".join(out), tuple(replacements), tuple(hints))
+        fixed = "".join(out)
+        misheard = tuple(
+            Replacement(found.group(), term, 0.0)
+            for word, term in self._misheard
+            if (found := word.search(fixed))
+        )
+        return Corrected(fixed, tuple(replacements), tuple(hints), misheard)
 
     def _match(self, heard: list[str]) -> tuple[_Term, float] | None:
         """The closest term to these words, if close enough."""

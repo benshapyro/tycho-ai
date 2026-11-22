@@ -87,3 +87,23 @@ def test_one_label_in_two_maps_gives_both_keys_with_their_maps() -> None:
 
 def test_it_answers_at_once_with_no_filler() -> None:
     assert PlayerKeys(lambda: None).instant is True
+
+
+def test_labels_are_scored_off_the_event_loop(monkeypatch: Any) -> None:
+    """#518: scoring every bound action's label (about 650 in Star Citizen) is blocking
+    work, so it runs in a worker thread, not on the loop."""
+    import threading
+
+    from tycho.brain import player_keys
+
+    where: list[threading.Thread] = []
+    real = player_keys._matches  # pyright: ignore[reportPrivateUsage]
+
+    def matches(wanted: str, keybinds: Keybinds) -> list[Action]:
+        where.append(threading.current_thread())
+        return real(wanted, keybinds)
+
+    monkeypatch.setattr(player_keys, "_matches", matches)
+    assert _ask("strafe up")["keys"] == [{"does": "Strafe Up", "key": "Space"}]
+    assert where
+    assert threading.main_thread() not in where

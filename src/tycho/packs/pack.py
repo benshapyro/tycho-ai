@@ -135,6 +135,9 @@ class GamePack:
     """The game part of the briefing, with its ``{{core:...}}`` markers."""
     facts: str
     terms: tuple[str, ...]
+    misheard: tuple[tuple[str, str], ...]
+    """Everyday words a term is misheard as (``Idris = address`` in terms.txt), each with
+    its term: never rewritten, only a hint for the brain (#509)."""
     commands: str | None
     """The built-in commands file's text, or None for a pack without key actions."""
     tile: Tile
@@ -251,6 +254,7 @@ def load_pack(folder: Traversable, *, built_in: bool, registry: Registry | None 
         briefing=briefing,
         facts=_read(folder, "facts.md").strip() if "facts.md" in names else "",
         terms=_terms(_read(folder, "terms.txt")) if "terms.txt" in names else (),
+        misheard=_misheard(_read(folder, "terms.txt")) if "terms.txt" in names else (),
         commands=commands,
         tile=_tile(_toml(folder, "tile.toml") if "tile.toml" in names else {}, folder.name),
         safety=lists,
@@ -397,7 +401,14 @@ def _pattern(value: object, where: str) -> re.Pattern[str] | None:
 
 def _terms(text: str) -> tuple[str, ...]:
     lines = (line.strip() for line in text.splitlines())
-    return tuple(line for line in lines if line and not line.startswith("#"))
+    return tuple(line.split("=")[0].strip() for line in lines if line and line[0] != "#")
+
+
+def _misheard(text: str) -> tuple[tuple[str, str], ...]:
+    """``Idris = address, a dress``: the everyday words each term is misheard as."""
+    lines = (line.strip() for line in text.splitlines() if "=" in line)
+    pairs = (line.split("=", 1) for line in lines if line[0] != "#")
+    return tuple((w.strip(), t.strip()) for t, said in pairs for w in said.split(",") if w.strip())
 
 
 def _tile(table: Mapping[str, object], name: str) -> Tile:

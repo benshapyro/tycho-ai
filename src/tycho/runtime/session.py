@@ -353,7 +353,8 @@ class Session:
         if not heard.strip():
             return Progress().result(request, "empty", trace, detail="nothing heard")
 
-        text = self._lexicon.correct(heard).text
+        corrected = self._lexicon.correct(heard)
+        text = corrected.text
         trace.mark("correct")
         # A question lasts until the player next says something, whatever it is,
         # except "say that again", which asks it again (ADR 13, amended for #226).
@@ -396,7 +397,7 @@ class Session:
             confirmed = False
             progress.by_brain = True
             keys = own_keys(routed.matched, self._keybinds()) if routed.matched else ""
-            picked = await self._ask_brain(text, keys)
+            picked = await self._ask_brain(corrected.for_brain, keys)
             trace.mark("brain")
             if isinstance(picked, Reply):
                 progress.say, progress.card = picked.text, picked.card
