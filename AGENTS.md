@@ -2,13 +2,15 @@
 
 Instructions for AI coding agents working on Tycho, an unofficial voice co-pilot for Star Citizen. Read [docs/architecture.md](docs/architecture.md) for what we're building, and [docs/adr](docs/adr) for why.
 
+**People:** start with [CONTRIBUTING.md](CONTRIBUTING.md). It has everything a pull request needs; this file adds the map of the code and the rules for agents the maintainer directs (the roadmap, review costs, releases).
+
 This is the one instructions file for every coding agent: Claude Code reads it directly (there's no CLAUDE.md), as do Codex, Cursor and others. Some folders have their own AGENTS.md with the rules for that part, read when you work there: `src/tycho/brain/`, `src/tycho/knowledge/`, `src/tycho/desktop/` and `tools/bench/`.
 
 **What to work on next:** the pinned roadmap issue, [#200](https://github.com/benshapyro/tycho-ai/issues/200) (`gh issue view 200`), lists the order of work by milestone. Read it before picking up an issue, and tick its line when you close one.
 
 ## Commands
 
-- Install: `uv sync`
+- Install: `uv sync --no-group gpu` (plain `uv sync` adds about 2 GB of CUDA libraries, only needed to run speech recognition on an NVIDIA card)
 - Test: `uv run pytest`
 - Build the installed app: `uv sync --group build`, then `uv run pyinstaller packaging/tycho.spec --noconfirm` (dist/tycho/tycho.exe for the terminal, and tycho-app.exe, the Start menu's Tycho, with no terminal), then `uv run python tools/notices.py dist/tycho` for THIRD-PARTY-NOTICES.txt (it fails on any GPL, LGPL or non-commercial licence). The installer is built in CI (`.github/workflows/build.yml`) with Inno Setup from `packaging/tycho.iss`. The build must never include CUDA libraries, pygame or pysdl2-dll's DLLs other than SDL2.dll: CI fails if it does.
 - Lint: `uv run ruff check`
@@ -61,8 +63,6 @@ A change a player can notice also adds a line under **Unreleased** in `CHANGELOG
 - `src/tycho/credentials.py`: API keys.
 - `plugins/tycho/` and `.claude-plugin/marketplace.json`: the skills players' agents use to set Tycho up (`tycho-setup`) and write their own commands (`tycho-commands`), shipped as a Claude Code plugin; the README links them for other agents. `tests/test_agent_skills.py` keeps them true to the command line and file formats: change them with the CLI.
 - `tools/bench/`: benchmarks and the brain eval (see its README). `tools/spike/`: the recorder, phrase lists, expected results and brain cases, the recommended-keybinds profile builder (`make_layout.py`), the in-game press tool (`press.py`), the self-test (`selftest.py`), and the Tile's window test (`tile/`).
-
-The project folder may still be named `ultimo` locally; the project is Tycho ([ADR 7](docs/adr/0007-name-tycho.md)).
 
 ## Brain traces: what the brain did, and why
 
