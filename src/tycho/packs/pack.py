@@ -30,7 +30,8 @@ from importlib.resources.abc import Traversable
 from types import MappingProxyType
 from typing import Literal, cast
 
-from tycho.packs import onboarding, tiles
+from tycho.packs import callouts, onboarding, tiles
+from tycho.packs.callouts import Callout
 from tycho.packs.onboarding import Setup
 from tycho.packs.parts import Registry
 from tycho.packs.tiles import Tile
@@ -67,7 +68,7 @@ _FILES = frozenset(
 )
 _TOP = frozenset(
     {"id", "name", "version", "format", "mode", "why", "window", "parts", "web", "briefing"}
-    | {"call_me", "setup", "accent"}
+    | {"call_me", "setup", "accent", "callouts"}
 )
 _PARTS = frozenset({"install", "keybinds", "game_state", "lookups"})
 
@@ -168,6 +169,8 @@ class GamePack:
     accent: str | None = None
     """The game's accent colour for the window and the Tile (ADR 17), like ``#f0c674``;
     None keeps Tycho's own. A ship's accent, where the Tile knows one, comes first."""
+    callouts: tuple[Callout, ...] = ()
+    """What Tycho may say about the game unasked, if the player turns it on (#4)."""
 
 
 def load_pack(folder: Traversable, *, built_in: bool, registry: Registry | None = None) -> GamePack:
@@ -249,6 +252,9 @@ def load_pack(folder: Traversable, *, built_in: bool, registry: Registry | None 
         setup = onboarding.read(
             manifest.get("setup", {}), where, has_folder=parts.install is not None
         )
+        told = callouts.read(_table(manifest, "callouts", where), where)
+        if told and parts.game_state is None:
+            raise ValueError(f"{where}: callouts follow the game's state: name a game_state part")
     except ValueError as e:
         raise PackError(str(e)) from e
     return GamePack(
@@ -274,6 +280,7 @@ def load_pack(folder: Traversable, *, built_in: bool, registry: Registry | None 
         call_me=" ".join(call_me.split()) if call_me is not None else None,
         setup=setup,
         accent=_accent(manifest.get("accent"), where),
+        callouts=told,
     )
 
 

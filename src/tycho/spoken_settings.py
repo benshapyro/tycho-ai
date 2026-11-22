@@ -24,7 +24,7 @@ import math
 import threading
 import time
 import typing
-from collections.abc import Callable, Mapping, MutableMapping
+from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -32,8 +32,9 @@ from typing import cast
 import annotated_types
 from pydantic import ValidationError
 
-from tycho import settings
+from tycho import callouts, settings
 from tycho.brain.lookups import LookupResult, failure
+from tycho.packs.callouts import Callout
 from tycho.settings import Settings, SettingsError
 from tycho.voice import voices
 
@@ -66,7 +67,9 @@ Read or change Tycho's own settings, when the player asks about or for a change 
 how Tycho works: its voice (George, Sarah, Lily or Brian) and sound volumes, how \
 long they have to say "confirm", \
 web search, keeping transcripts, update checks, crash reports, game channel, speech recognition \
-device. action "get" reads them all, with which can change by voice. action "set" \
+device, and callouts: the kinds of game event Tycho tells the player about unasked \
+("get" lists them; set a kind to add it, "-kind" to take it away, "only kind", "off" for "stop the \
+callouts"). action "get" reads them all, with which can change by voice. action "set" \
 changes the ones named; a value can be relative ("-10%" for a bit quieter, "+2" \
 seconds). action "undo" puts back the last change made by voice. Some settings only \
 go down or off by voice: the result says so, and how to change them instead. Never by \
@@ -207,8 +210,11 @@ class SettingsTool:
         path: Path | None = None,
         live: Live | None = None,
         clock: Callable[[], float] = time.monotonic,
+        offered: Sequence[Callout] = (),
     ) -> None:
+        """``offered``: the kinds of callout the game's pack offers (#4)."""
         self._path = path
+        self._offered = tuple(offered)
         self._live: Live = live if live is not None else {}
         self._clock = clock
         self._undo: list[tuple[float, dict[str, object]]] = []
@@ -282,7 +288,10 @@ class SettingsTool:
             if name != "version":
                 now = called(current) if name == "call_me" else getattr(current, name)
                 said = "not set" if value is None else shown(name, now)
-                out[name] = {"value": said, "by_voice": settings.rule(name)["voice"]}
+                entry: dict[str, object] = {"value": said, "by_voice": settings.rule(name)["voice"]}
+                if name == "callouts":  # the kinds this game offers (#4)
+                    entry["kinds"] = {c.id: c.name for c in self._offered}
+                out[name] = entry
         return out
 
     def _set(self, asked: list[tuple[str, str]]) -> LookupResult:
@@ -294,7 +303,10 @@ class SettingsTool:
         problems: list[dict[str, str]] = []
         for name, said in asked:
             try:
-                parsed = parse(name, said, getattr(current, name, None))
+                if name == "callouts":
+                    parsed = self._callouts(said, current.callouts)
+                else:
+                    parsed = parse(name, said, getattr(current, name, None))
                 check_rule(name, getattr(current, name), parsed.value)
             except Refused as e:
                 problems.append({"name": name, "problem": str(e)})
@@ -321,6 +333,12 @@ class SettingsTool:
         if problems:
             result["problems"] = problems
         return _result(result)
+
+    def _callouts(self, said: str, current: str) -> Parsed:
+        try:
+            return Parsed(callouts.said(said, current, self._offered))
+        except ValueError as e:
+            raise Refused(f"callouts: {e}") from e
 
     def _undo_last(self) -> LookupResult:
         fresh = self._clock() - UNDO_SECONDS
