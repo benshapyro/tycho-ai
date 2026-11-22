@@ -103,7 +103,7 @@ Without an ElevenLabs key, Tycho's replies are shown in its window and it plays 
 
 ## What it does today
 
-- **Almost 90 built-in commands** that run instantly on your PC, through your own keybinds. Add your own phrases and sequences.
+- **Almost 90 built-in commands** that run instantly on your PC, through your own keybinds. Add your own phrases and sequences. Ask which key does something ("what's my strafe key?") and it names yours.
 - **Claude for anything said differently,** for multi-step requests ("flight ready and request landing"), and for questions. It takes about 1.3 seconds.
 - **Answers from live data:** ships from the current patch's game files; trade prices, routes, refining and where to buy a ship from UEX; mining, weapons, armor, components and crafting from the Star Citizen Wiki; news and upcoming patches from RSI's sites; and "where is" and "how do I" from the web, with community answers marked as such.
 - **Knows your fleet,** so "which of my ships is best for mining?" is about your ships.
