@@ -35,6 +35,8 @@ class Steps:
     toggled: tuple[str, ...] = ()
     """The spoken names of toggles pressed for a direction, whose result Tycho can't
     see (#13, #29): "Doors" for "open the doors" with only Open/Close Doors bound."""
+    others: bool = False
+    """Something else was pressed too, so the line keeps the rest of what was said."""
 
     @property
     def actions(self) -> tuple[str, ...]:
@@ -105,6 +107,7 @@ def plan_request(
         return Refusal("refused", lists.keys_off)
     steps: list[tuple[float, Press]] = []
     toggled: list[str] = []
+    others = False
     reasons: list[str] = []
     asking_about: list[str] = []
     for part in (step for command in commands for step in command.expand()):
@@ -114,8 +117,10 @@ def plan_request(
             return Refusal(
                 "no_key", f"{command.id}: none of {', '.join(command.actions)} has a key"
             )
-        if resolved.blind:
-            toggled.append(_toggle_name(resolved.action))
+        if resolved.for_direction and lists.flips(resolved.action.name, resolved.action.label):
+            toggled.append(toggle_name(resolved.action))
+        else:
+            others = True
         setup: list[Action] = []
         for name in command.setup:
             action = keybinds.get(name)
@@ -148,20 +153,24 @@ def plan_request(
             return Refusal("no_key", str(e))
     if reasons:
         return Questions(tuple(reasons), tuple(asking_about))
-    return Steps(tuple(steps), tuple(dict.fromkeys(toggled)))
+    return Steps(tuple(steps), tuple(dict.fromkeys(toggled)), others=others)
 
 
-def _toggle_name(action: Action) -> str:
-    """ "Headlights (Toggle)" is "Headlights"; "v_toggle_all_doors", with no label, is
-    "All doors"."""
+def toggle_name(action: Action) -> str:
+    """ "Headlights (Toggle)" is "Headlights"; with no label, "v_toggle_all_doors" is
+    "All doors" and "v_power_toggle_shields" is "Power shields"."""
     name = safety.spoken_name(action) if action.label else readable(action.name)
-    return name.removeprefix("Toggle ").strip() or name
+    said = " ".join(w for w in name.split() if w.strip("()").lower() != "toggle") or name
+    return said[:1].upper() + said[1:]
 
 
-def toggle_receipt(toggled: tuple[str, ...]) -> str:
+def toggle_receipt(toggled: tuple[str, ...], said: str = "", *, others: bool = False) -> str:
     """What Tycho says after pressing toggles for a direction (#13, #29): that it
-    pressed them and can't see which way they went, never that it's done. It takes the
-    place of the brain's line, which would name the direction ("Doors open")."""
+    pressed them and can't see which way they went, never that it's done. With only
+    toggles pressed it takes the place of the brain's line (``said``), which would name
+    the direction ("Doors open"); with ``others`` pressed too, it follows that line, so
+    the rest of what was said isn't lost (#537)."""
     names = " and ".join(toggled)
     which = "it" if len(toggled) == 1 else "they"
-    return f"Toggled {names}. I can't see which way {which} went."
+    receipt = f"Toggled {names}. I can't see which way {which} went."
+    return f"{said.rstrip()} {receipt}" if others and said.strip() else receipt

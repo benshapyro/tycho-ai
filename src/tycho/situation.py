@@ -22,6 +22,9 @@ class Logged:
     number: int
     """Counts up for as long as the reader runs, across game restarts: something with a
     higher number is newer, so speaking up can tell what it hasn't seen."""
+    name: str = ""
+    """One short name the line carried, if any (a jurisdiction's), for a callout's line
+    (#4). Untrusted, like ``said``."""
 
 
 @dataclass(frozen=True, slots=True)

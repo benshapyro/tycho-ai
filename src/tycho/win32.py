@@ -1,6 +1,7 @@
 """Every Windows DLL Tycho calls, loaded here and nowhere else (#298, ADR 19): the
 Tile's window (ADR 16), the tray icon (ADR 17), key presses and the focus check, push
-to talk, the single-instance lock, the console's close guard, and the game's drives.
+to talk, the single-instance lock, the console's close guard, the game's drives, and
+finding the game's window to look at (``eyes``, #31).
 One copy, so a fix to a structure or an argument type reaches every caller.
 
 Each DLL is loaded and typed on first use. Every function a caller uses has its
@@ -21,6 +22,8 @@ WNDPROC = _FUNCTYPE(
 )
 HANDLER_ROUTINE = _FUNCTYPE(wintypes.BOOL, wintypes.DWORD)
 """A console control handler (SetConsoleCtrlHandler)."""
+WNDENUMPROC = _FUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+"""Called for each top-level window (EnumWindows)."""
 
 
 class WNDCLASSEXW(ctypes.Structure):
@@ -270,6 +273,15 @@ def _type_user32(u: ctypes.WinDLL) -> None:
     u.AllowSetForegroundWindow.argtypes = [wintypes.DWORD]
     u.MessageBoxW.restype = i
     u.MessageBoxW.argtypes = [H, wintypes.LPCWSTR, wintypes.LPCWSTR, U]
+    # Finding the game's window to look at (eyes/windows.py, #31).
+    u.EnumWindows.restype = B
+    u.EnumWindows.argtypes = [WNDENUMPROC, wintypes.LPARAM]
+    u.IsWindowVisible.restype = B
+    u.IsWindowVisible.argtypes = [H]
+    u.IsIconic.restype = B
+    u.IsIconic.argtypes = [H]
+    u.GetWindowRect.restype = B
+    u.GetWindowRect.argtypes = [H, ctypes.POINTER(wintypes.RECT)]
 
 
 def _type_gdi32(g: ctypes.WinDLL) -> None:

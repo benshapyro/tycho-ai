@@ -8,6 +8,19 @@ version = "1.0.0"          # the pack's own version, shown by tycho check and in
 format = 1                 # the folder format; Tycho refuses a format it doesn't know
 mode = "keys"              # Tycho may press keys, through the safety gate
 window = "StarCitizen.exe" # the program whose window must be in front to press
+# What asks Tycho to look at the game window, anywhere in what's said (ADR 14, #31). Only
+# with look_at_screen on; the picture goes to the brain with the question, and is never kept.
+look = [
+    "take a look",
+    "have a look",
+    "look at this",
+    "look at that",
+    "look at my screen",
+    "look at the screen",
+    "what am i looking at",
+    "what is on my screen",
+    "what is on the screen",
+]
 
 [parts]                     # built-in code, by id
 install = "star-citizen"    # find the game folder and its channels
@@ -60,3 +73,30 @@ unbriefed_actionmaps = [
 ]
 # Steering and movement held down for as long as it should last: one press means nothing.
 continuous = '''v_(pitch|yaw|roll)_\w+|v_strafe_(up|down|left|right|forward|back)|v_move_\w+|eva_(strafe|roll)_\w+|zgt_roll_\w+|move(forward|back|left|right)|lean(left|right)'''
+
+# Speaking up (#4, ADR 14's amendment of 22 Nov 2026): what Tycho may say without being
+# asked, each kind only if the player turns it on. Each follows things Game.log records
+# (the kinds in games/star_citizen/loglines.py), with a short fixed line; {name} is the
+# one short name the log gave, cleaned. Missions aren't here: the 22 Nov survey found no
+# mission lines in the log yet.
+[callouts.quantum]
+name = "Quantum jump ended"
+lines = { arrived = "Quantum jump complete." }
+
+[callouts.monitored_space]
+name = "Monitored space"
+lines = { monitored = "In monitored space.", left_monitored = "Out of monitored space." }
+example = "Out of monitored space."
+
+[callouts.jurisdiction]
+name = "Jurisdiction changes"
+lines = { jurisdiction = "Now in {name} jurisdiction." }
+example = "Now in UEE jurisdiction."
+
+[callouts.armistice]
+name = "Armistice zones"
+lines = { armistice = "Entering an armistice zone. No combat here." }
+
+[callouts.private_property]
+name = "Private property"
+lines = { private_property = "Entering private property.", left_private_property = "Leaving private property." }

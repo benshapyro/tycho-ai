@@ -1,9 +1,11 @@
-"""The runtime's boundaries: speech recognition, sound, game state (ADR 4: each a Protocol)."""
+"""The runtime's boundaries: speech recognition, sound, game state, the game window's
+picture (ADR 4: each a Protocol)."""
 
 from typing import Protocol
 
 from tycho.audio.clip import Samples
 from tycho.brain import BrainRequest, Decision
+from tycho.eyes import Picture
 from tycho.keybinds import Keybinds
 from tycho.situation import Situation
 from tycho.tile import Card
@@ -32,6 +34,18 @@ class Feedback(Protocol):
     def ask(self) -> None:
         """Tycho wants the player to say "confirm" before it acts."""
         ...
+
+    def camera(self) -> None:
+        """A picture of the game window was just taken (#31): never silently."""
+        ...
+
+
+class Camera(Protocol):
+    """One picture of the game window, for a player who asked Tycho to look (ADR 14,
+    #31). Blocking; the session calls it off the event loop. Raises
+    ``tycho.eyes.CaptureError`` with why, if there's no picture to take."""
+
+    def take(self) -> Picture: ...
 
 
 class Brain(Protocol):
@@ -128,7 +142,11 @@ class Display(Protocol):
         ...
 
     def again(self) -> bool:
-        """ "Show that again": a kept card that gave way. False if there's none."""
+        """ "Show that again", "go back a card": the card before. False if there's none."""
+        ...
+
+    def forward(self) -> bool:
+        """ "Next card", after going back: the card after. False if there's none."""
         ...
 
     def clear(self) -> None: ...

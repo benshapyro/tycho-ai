@@ -12,7 +12,7 @@ The session keeps the threads, cancellation and barge-in, and the open confirm
 question (ADR 13). Where words go is ``routing``, what gets pressed is ``planning``
 (both pure, so the brain eval grades the same code, #55), asking the brain and
 answering the question is ``asking``, the log is the ``Reporter``, what was said
-lately is the ``Conversation``, and the Tile's part is ``tiling``.
+lately is the ``Conversation``, the Tile's part is ``tiling``, and looking is ``look``.
 """
 
 import asyncio
@@ -23,6 +23,7 @@ import threading
 import time
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 
 from tycho.audio.clip import Samples, trim_silence
 from tycho.audio.source import AudioError, AudioSource
@@ -42,17 +43,15 @@ from tycho.runtime.asking import (
     SEARCH_LIMIT,
     SEARCH_SECONDS,
     Answer,
+    Asker,
     Question,
     Times,
     answered,
-    ask_brain,
     say_again,
 )
-from tycho.runtime.conversation import (
-    Conversation,
-    would_speak,
-)
+from tycho.runtime.conversation import Conversation, would_speak
 from tycho.runtime.listening import TAIL_SECONDS, poll, tail
+from tycho.runtime.look import ANSWER_ONLY, LOOK, Eyes, Unseen, look, wants_a_look
 from tycho.runtime.messages import Progress, Result, Status, Trace
 from tycho.runtime.planning import (
     Questions,
@@ -74,12 +73,7 @@ from tycho.runtime.ports import (
 )
 from tycho.runtime.pressing import press_all
 from tycho.runtime.reporter import Reporter
-from tycho.runtime.routing import (
-    NotUnderstood,
-    Picked,
-    Reserved,
-    route,
-)
+from tycho.runtime.routing import NotUnderstood, Picked, Reserved, route
 from tycho.runtime.speaking import Speaking, Telling, log_failure, refused_keys_off
 from tycho.runtime.tiling import tile_request, to_tile
 from tycho.tile.cards import notice
@@ -123,8 +117,11 @@ class Session:
         display: Display | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         safety_lists: Safety,
+        eyes: Eyes | None = None,
+        looking: bool = False,
     ) -> None:
-        """``safety_lists``: the pack's lists for the safety gate, for every plan (ADR 18)."""
+        """``safety_lists``: the pack's lists for the gate (ADR 18). ``eyes``, ``looking``: #31."""
+        self._eyes, self._looking = eyes, looking
         self._safety_lists = safety_lists
         self._tail_seconds = tail_seconds
         self._tail_pending = False
@@ -139,9 +136,6 @@ class Session:
         self._game_state = game_state
         self._reporter = Reporter(log_transcripts=log_transcripts, action_log=action_log)
         self._brain = brain
-        self._times = Times(
-            brain_seconds, search_seconds, search_limit, looking_seconds, looking_limit
-        )
         self._speaker = speaker
         self._voice = Speaking(speaker)
         self._telling = Telling(display, self._voice, feedback)
@@ -149,6 +143,9 @@ class Session:
         """Whether this session has said why a press was refused with key actions off."""
         self._brain_warming: asyncio.Task[None] | None = None
         self._conversation = Conversation(clock)
+        times = Times(brain_seconds, search_seconds, search_limit, looking_seconds, looking_limit)
+        lately, voice, may = self._conversation.follow_ups, self._voice, bool(eyes and looking)
+        self._asker = Asker(brain, times, matcher, safety_lists, voice, keybinds, lately, may)
         self._confirm_seconds = confirm_seconds
         self._question: Question | None = None
         self._samplerate = samplerate
@@ -187,6 +184,11 @@ class Session:
     @property
     def paused(self) -> bool:
         return self._paused
+
+    def set_looking(self, on: bool) -> None:
+        """Looking at the game window turned on or off, from the next request (#31)."""
+        self._looking = on
+        self._asker = replace(self._asker, may_look=self._eyes is not None and on)
 
     def set_confirm_seconds(self, seconds: float) -> None:
         """How long to wait for "confirm", from the next question on (#111)."""
@@ -370,6 +372,7 @@ class Session:
             tile=self._display is not None and self._display.on,
             brain=self._brain is not None,
             keys=not self._safety_lists.keys_off,
+            look=wants_a_look(text, self._eyes, self._conversation.offered_look(), self._looking),
         )
         trace.mark("match")
         if isinstance(routed, Reserved):
@@ -400,7 +403,11 @@ class Session:
             confirmed = False
             progress.by_brain = True
             keys = own_keys(routed.matched, self._keybinds()) if routed.matched else ""
-            picked = await self._ask_brain(corrected.for_brain, keys)
+            seen = await look(self._eyes, self._looking, self._feedback, text, routed.look)
+            progress.commands = (LOOK,) if seen is not None else ()
+            if isinstance(seen, Unseen):  # off, or no game window: nothing is sent
+                return seen.result(progress, request, trace, heard, text)
+            picked = await self._asker.ask(corrected.for_brain, keys, seen)
             trace.mark("brain")
             if isinstance(picked, Reply):
                 progress.say, progress.card = picked.text, picked.card
@@ -412,6 +419,8 @@ class Session:
             if isinstance(picked, str):
                 detail = f"the brain couldn't answer: {picked}"
                 return progress.result(request, "failed", trace, heard, text, detail)
+            if seen is not None:  # a look only answers (ADR 14): nothing is pressed
+                return ANSWER_ONLY.result(progress, request, trace, heard, text)
             commands, progress.say = picked.commands, picked.say
 
         progress.commands = tuple(command.id for command in commands)
@@ -452,25 +461,9 @@ class Session:
             still_trying=lambda: self._trying,
         )
         if status == "done" and planned.toggled and not trying and not progress.announced:
-            progress.say, progress.toggled = toggle_receipt(planned.toggled), True
+            said = toggle_receipt(planned.toggled, progress.say, others=planned.others)
+            progress.say, progress.toggled = said, True
         return end(status, detail)
-
-    async def _ask_brain(self, text: str, own_keys: str = "") -> Picked | Reply | str:
-        """What the brain decides, within its time (``asking.ask_brain``)."""
-        assert self._brain is not None  # noqa: S101 - only routed here with a brain
-        self._voice.warm()  # while the brain thinks, so speech starts sooner
-        return await ask_brain(
-            self._brain,
-            text,
-            self._keybinds(),
-            self._conversation.follow_ups(),
-            own_keys,
-            times=self._times,
-            matcher=self._matcher,
-            lists=self._safety_lists,
-            searching=self._voice.fill,
-            checking=self._voice.check,
-        )
 
     def _report(self, result: Result) -> None:
         speak = self._speaker is not None and would_speak(result)
@@ -489,6 +482,17 @@ class Session:
         self._voice.tell(result, self._feedback, speak=speak, keys_off=keys_off)
         if self._on_result is not None:
             self._on_result(result)
+
+    def busy(self) -> bool:
+        """Whether speaking up now would talk over someone (#4): push-to-talk is held, a
+        request runs, Tycho is talking or waiting for "confirm", or it's paused."""
+        asking = self._question is not None and self._clock() < self._question.deadline
+        running = self._current is not None and not self._current.done()
+        return self._listening or running or asking or self._voice.talking or self._paused
+
+    def call_out(self, line: str) -> None:
+        """Speak up (#4), on the loop: said like any line, so push-to-talk stops it."""
+        self._telling.call_out(line)
 
     def tell(self, said: str) -> None:
         """From any thread: something the player must know that no request asked for,

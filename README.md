@@ -121,7 +121,7 @@ Each of these is explained in the [player's guide](docs/current/players-guide.md
 
 In short:
 - **Your voice never leaves your PC.** Speech is turned into text on your PC.
-- **Only text is sent, and only to services you gave a key for:** what you said goes to Claude, and what Tycho says goes to ElevenLabs.
+- **Only text is sent, and only to services you gave a key for:** what you said goes to Claude, and what Tycho says goes to ElevenLabs. The one exception is a picture of the game window, only if you turned looking on and only when you ask Tycho to look.
 - **Tycho counts and tracks nothing about how you use it.** Crash reports are sent only if you say yes.
 
 The full list:
@@ -140,7 +140,7 @@ The full list:
 | GitHub | Nothing about you: Tycho asks whether a newer version is out | When Tycho starts and when its window opens, off with `check_for_updates = false`; and when you press **Check for updates** |
 | Hugging Face | Nothing about you: Tycho downloads its speech model | Once, the first time Tycho starts |
 | Sentry (crash reports) | Only if you said yes: the kind of error and where in Tycho's own code it happened, Tycho's version, the Windows version, the game and the brain provider. Never what you or Tycho said, your keys, your name, your files or folders, or anything that identifies you or your PC | The next time Tycho starts after a crash. Saying no deletes any report still waiting |
-| *Planned:* Anthropic (Claude) | A capture of the game window | Only if you turn vision on and ask Tycho to look |
+| Anthropic (Claude), or OpenRouter instead | A picture of the game's own window (never the desktop or another window), with your question. Never saved or logged | Only if you said yes to looking (`look_at_screen`, off until you do), and only when you ask Tycho to look ("take a look") or say yes when it offers. You hear a camera click each time |
 
 ## Set up with an AI agent
 

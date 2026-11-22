@@ -29,10 +29,17 @@ from collections.abc import AsyncGenerator, Callable, Iterable, Mapping, Sequenc
 from typing import Any, cast
 
 import anthropic
-from anthropic.types import MessageParam, TextBlockParam, ToolParam, ToolResultBlockParam
+from anthropic.types import (
+    ImageBlockParam,
+    MessageParam,
+    TextBlockParam,
+    ToolParam,
+    ToolResultBlockParam,
+)
 
 from tycho.brain.briefing import briefing, offered_actions
 from tycho.brain.decisions import BrainError, BrainRequest, Decision, Exchange, Reply
+from tycho.brain.looking import MAY_OFFER, SEEN, picture_block
 from tycho.brain.lookups import Lookup, LookupResult
 from tycho.brain.player_keys import keyed
 from tycho.brain.priming import Primer
@@ -52,6 +59,7 @@ from tycho.brain.rounds import (
 )
 from tycho.brain.traces import TraceFile, briefing_hash
 from tycho.commands import CommandMatcher
+from tycho.eyes import Picture
 from tycho.keybinds import Keybinds
 from tycho.packs import GamePack
 from tycho.tile.cards import TOOL_DESCRIPTION, TOOL_SCHEMA
@@ -93,11 +101,16 @@ def history(
     today: datetime.date | None = None,
     about: str = "",
     own_keys: str = "",
+    *,
+    picture: Picture | None = None,
+    may_look: bool = False,
 ) -> list[MessageParam]:
     """Earlier exchanges as turns, then this request, headed by today's date, what
     Tycho knows about the player (``about``: their ships) and, with key actions off,
-    their own keys for what they asked (#386). All live here, not in the briefing, so
-    the cached briefing never changes."""
+    their own keys for what they asked (#386). With a look (#31), the picture of the
+    game window goes before the words; with looking on and no picture, the brain is
+    told it may offer one. All live here, not in the briefing, so the cached briefing
+    never changes, and the picture is in this request's turn only."""
     messages: list[MessageParam] = []
     for exchange in recent:
         messages.append({"role": "user", "content": exchange.said})
@@ -108,13 +121,24 @@ def history(
         header = f"[{today.day} {today:%B %Y}]" + (f"\n{about}" if about else "")
         if own_keys:
             header += f"\n[The player's own keys for this: {own_keys}]"
-        messages.append(
-            {
-                "role": "user",
-                "content": [{"type": "text", "text": header}, {"type": "text", "text": text}],
-            }
-        )
+        if picture is not None:
+            header += f"\n{SEEN}"
+        elif may_look:
+            header += f"\n{MAY_OFFER}"
+        content: list[TextBlockParam | ImageBlockParam] = [{"type": "text", "text": header}]
+        if picture is not None:
+            content.append(picture_block(picture))
+        content.append({"type": "text", "text": text})
+        messages.append({"role": "user", "content": content})
     return messages
+
+
+def turns(request: BrainRequest, today: datetime.date, about: str) -> list[MessageParam]:
+    """``history`` for one request: its earlier exchanges, words, keys and picture."""
+    r = request
+    return history(
+        r.recent, r.text, today, about, r.own_keys, picture=r.picture, may_look=r.may_look
+    )
 
 
 class ClaudeBrain:
@@ -193,7 +217,8 @@ class ClaudeBrain:
         if self._preparing is None:
             lookups = self._lookups.values()
             self._preparing = asyncio.gather(*(lookup.prepare() for lookup in lookups))
-        await asyncio.gather(self._warm_cache(keybinds), asyncio.shield(self._preparing))
+        warming = self._primer.warming(lambda: self._warm_cache(keybinds))
+        await asyncio.gather(warming, asyncio.shield(self._preparing))
 
     async def close(self) -> None:
         """Stop any loading still running, and close the connection to Claude, if it's
@@ -239,22 +264,21 @@ class ClaudeBrain:
 
     async def decide(self, request: BrainRequest) -> Decision:
         self._brief(request.keybinds)
-        turn = Turn(waiting=request.waiting, looking=request.looking, checking=request.checking)
+        turn = Turn.of(request)
         if self._traces is not None:
             turn.trace = self._traces.start(
                 "anthropic", self._model, self._briefed, request.text, len(request.recent)
             )
-        self._primer.used()  # this request opens the connection and reads the cache
-        try:
-            return await traced(self._traces, turn, self._decide(request, turn))
-        finally:
-            self._primer.used()
+        await self._primer.going()
+        decided = await traced(self._traces, turn, self._decide(request, turn))
+        self._primer.used()  # and it read the cache
+        return decided
 
     async def _decide(self, request: BrainRequest, turn: Turn) -> Decision:
         started = time.perf_counter()
         # The fleet line matches ship names, which is too slow for the event loop.
         about = await asyncio.to_thread(self._about)
-        messages = history(request.recent, request.text, self._today(), about, request.own_keys)
+        messages = turns(request, self._today(), about)
         try:
             for call in range(MAX_CALLS):
                 decided, message, round_ = await self._call(messages, started, turn)

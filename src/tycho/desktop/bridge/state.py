@@ -116,6 +116,7 @@ def setting_label(name: str) -> str:
         "call_me": "What Tycho calls you",
         "call_me_says": "How to say it",
         "call_me_how_often": "How often",
+        "callouts": "Speaking up",
         "confirm_seconds": "Time to say confirm",
         "feedback_volume": "Sound volume",
         "game": "Game",

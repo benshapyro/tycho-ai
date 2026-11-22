@@ -30,6 +30,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
         "call_me",
         "call_me_says",
         "call_me_how_often",
+        "callouts",
     ),
     "Game and controls": ("game", "push_to_talk", "microphone"),
     "Safety": ("key_actions", "confirm_seconds"),
@@ -39,6 +40,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
         "web_search_open",
         "check_for_updates",
         "crash_reports",
+        "look_at_screen",
     ),
     "The Tile": tuple(n for n in Settings.model_fields if n == "tile" or n.startswith("tile_")),
     "Advanced": (
@@ -80,6 +82,8 @@ class SettingsPage(State):
             for row in rows:
                 if row["name"] == "tile_hidden_cards":  # a switch for each kind (#422)
                     row["kind"], row["cards"] = "cards", card_kinds(current.game)
+                if row["name"] == "callouts":  # a switch for each kind, with its line (#4)
+                    row["kind"], row["callouts"] = "callouts", callout_kinds(current.game)
                 if row["name"] == "tile_screen":  # the screens plugged in now (#447)
                     row["kind"], row["screens"] = "screen", self._screens(current.tile_screen)
             groups.append({"name": group, "rows": rows})
@@ -262,14 +266,26 @@ def card_kinds(game: str) -> list[dict[str, str]]:
     return [{"kind": k, "name": names[k]} for k in ALL_KINDS if k in names]
 
 
+def callout_kinds(game: str) -> list[dict[str, str]]:
+    """The kinds of event ``game`` can tell the player about unasked, each with its name
+    and a line as it's said (#4). None for a game whose pack offers none."""
+    try:
+        offered = built_in(game).callouts
+    except PackError:
+        offered = ()
+    return [{"kind": c.id, "name": c.name, "example": c.example} for c in offered]
+
+
 def _not_for(game: str) -> frozenset[str]:
     """The settings that mean nothing in the chosen game, so its Settings leave them out:
-    a game whose pack reads nothing from its folder has no folder to choose."""
+    a game whose pack reads nothing from its folder has no folder to choose, and one
+    with no window to look at has no looking (#31)."""
     try:
         pack = built_in(game)
     except PackError:  # tycho check and Status say why; show everything
         return frozenset()
-    return FOLDER_SETTINGS if pack.parts.install is None else frozenset()
+    hidden = FOLDER_SETTINGS if pack.parts.install is None else frozenset[str]()
+    return hidden if pack.look else hidden | {"look_at_screen"}  # it can't look (#31)
 
 
 def shown_packs() -> list[dict[str, str]]:

@@ -8,6 +8,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from tycho.brain import Exchange
+from tycho.brain.looking import LOOK_OFFER
+from tycho.runtime.look import LOOK
 from tycho.runtime.messages import Result
 from tycho.tile import Card
 
@@ -30,6 +32,8 @@ def would_speak(result: Result) -> bool:
     """Whether this result has a line for the player, given a voice to say it."""
     if result.commands == ("say_again",):
         return result.done and bool(result.say)
+    if result.commands == (LOOK,) and not result.by_brain:
+        return bool(result.say.strip())  # Tycho's own line: looking is off, or no window (#31)
     if result.toggled:  # the fast path's too: it can't tell which way a toggle went
         return result.done and not result.announced and bool(result.say)
     if not result.by_brain or not result.say.strip():
@@ -46,6 +50,11 @@ class Conversation:
         """The brain's last answer, for "show me that" (ADR 16)."""
         self.last_line = Line()
         """The last line for the player, for "say that again" (#222, #226)."""
+
+    def offered_look(self) -> bool:
+        """Whether Tycho's last line offered to look at the game window, and recently
+        (#31): a "yes" now asks for the look."""
+        return LOOK_OFFER.lower() in self.last_line.text.lower() and bool(self.follow_ups())
 
     def follow_ups(self) -> tuple[Exchange, ...]:
         """The last few exchanges, if the latest was recent; otherwise a fresh start."""

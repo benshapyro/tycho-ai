@@ -111,6 +111,9 @@ class Trace:
     text: str
     recent: int = 0
     """Earlier exchanges sent with it, for follow-ups."""
+    picture: int = 0
+    """The size in bytes of a picture of the game window sent with it (#31), never the
+    picture itself: 0 for none."""
     run: str = ""
     case: str = ""
     source: str = "play"

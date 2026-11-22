@@ -37,6 +37,7 @@ from tycho.ptt.binding import Binding
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime import AlreadyRunning, RecognitionUnavailable, Result, Session, SingleInstance
 from tycho.runtime.conversation import FOLLOW_UP_SECONDS
+from tycho.runtime.look import Eyes
 from tycho.runtime.pressing import SAID_DURING_TRY_IT, TRYING_IN_GAME
 from tycho.runtime.speaking import CHECKING, FILLERS, KEEP_CHARACTERS
 from tycho.tile import Card, Row
@@ -121,6 +122,8 @@ def rig(
     address: Callable[[], str] = lambda: "",
     display: FakeDisplay | None = None,
     safety_lists: Safety = SC.safety,
+    eyes: Eyes | None = None,
+    looking: bool = False,
 ) -> Rig:
     audio, keys, feedback = FakeAudioSource(RATE), FakeKeySender(), FakeFeedback()
     actions = FakeActionLog()
@@ -159,6 +162,8 @@ def rig(
         display=display,
         sleep=sleep,
         safety_lists=safety_lists,
+        eyes=eyes,
+        looking=looking,
     )
     return Rig(session, audio, keys, feedback, transcriber, results, actions, waits)
 
@@ -2321,6 +2326,18 @@ def test_the_brain_naming_the_toggle_doesnt_claim_the_doors_are_open() -> None:
     r = _conversation("let me out", brain=brain, keybinds=DOORS_TOGGLE, speaker=speaker)
     assert r.results[0].say == "Toggled Open/Close Doors. I can't see which way it went."
     assert speaker.spoken == [r.results[0].say]
+
+
+def test_with_other_presses_the_brains_line_stays_and_the_receipt_follows() -> None:
+    # #537: "lights on and open the doors" kept only the doors' line before.
+    keybinds = Keybinds([_action("v_lights_on", "l"), *DOORS_TOGGLE], MODES)
+    brain = FakeBrain(RunActions(("v_lights_on", "v_toggle_all_doors"), "Lights on, doors sent."))
+    speaker = FakeSpeaker()
+    r = _conversation("lights on and let me out", brain=brain, keybinds=keybinds, speaker=speaker)
+    assert r.results[0].pressed == ("v_lights_on", "v_toggle_all_doors")
+    assert r.results[0].say == (
+        "Lights on, doors sent. Toggled Open/Close Doors. I can't see which way it went."
+    )
 
 
 def test_a_toggle_the_game_announces_is_left_to_the_game() -> None:

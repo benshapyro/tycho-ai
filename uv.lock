@@ -841,6 +841,16 @@ dependencies = [
     { name = "pywebview" },
     { name = "sounddevice" },
     { name = "tomlkit" },
+    { name = "winrt-runtime" },
+    { name = "winrt-windows-foundation" },
+    { name = "winrt-windows-graphics" },
+    { name = "winrt-windows-graphics-capture" },
+    { name = "winrt-windows-graphics-capture-interop" },
+    { name = "winrt-windows-graphics-directx" },
+    { name = "winrt-windows-graphics-directx-direct3d11" },
+    { name = "winrt-windows-graphics-directx-direct3d11-interop" },
+    { name = "winrt-windows-graphics-imaging" },
+    { name = "winrt-windows-storage-streams" },
 ]
 
 [package.dev-dependencies]
@@ -879,6 +889,16 @@ requires-dist = [
     { name = "pywebview", specifier = ">=6.2.1" },
     { name = "sounddevice", specifier = ">=0.5.6" },
     { name = "tomlkit", specifier = ">=0.13.3" },
+    { name = "winrt-runtime", specifier = ">=4.2.0" },
+    { name = "winrt-windows-foundation", specifier = ">=4!10.0.28000.2957" },
+    { name = "winrt-windows-graphics", specifier = ">=4!10.0.28000.2957" },
+    { name = "winrt-windows-graphics-capture", specifier = ">=4!10.0.28000.2957" },
+    { name = "winrt-windows-graphics-capture-interop", specifier = ">=4.0.0" },
+    { name = "winrt-windows-graphics-directx", specifier = ">=4!10.0.28000.2957" },
+    { name = "winrt-windows-graphics-directx-direct3d11", specifier = ">=4!10.0.28000.2957" },
+    { name = "winrt-windows-graphics-directx-direct3d11-interop", specifier = ">=4.1.0" },
+    { name = "winrt-windows-graphics-imaging", specifier = ">=4!10.0.28000.2957" },
+    { name = "winrt-windows-storage-streams", specifier = ">=4!10.0.28000.2957" },
 ]
 
 [package.metadata.requires-dev]
@@ -933,4 +953,157 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b2/24/20282bc8e69ff8dee680dc2b95e9dc81fa7e7894b14c1a8d06330e97fef7/virtualenv-21.15.1.tar.gz", hash = "sha256:e79c90b8f601701599c25905e02839924fede2c798d52325670d24fbdaab74ee", size = 5517048, upload-time = "2026-10-28T01:12:50.919Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ce/23/cdab19d3a9da42ca0938081e163e25f81e610141800ead743ba1ee881f0e/virtualenv-21.15.1-py3-none-any.whl", hash = "sha256:0d14a991689c67600316880eadc0a37b7690cb632e3b4ac67e2bc05b2b2e24a4", size = 5558848, upload-time = "2026-10-28T01:12:48.605Z" },
+]
+
+[[package]]
+name = "winrt-runtime"
+version = "4.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1a/11/966c5ab1fc1ebec435682331b21c2c224a98ed0e0d2126c432c593f96adf/winrt_runtime-4.2.0.tar.gz", hash = "sha256:5cc256e403e18cf00d2072890dc4b2b39d6c255d709a0a35e46a03efa7511f5e", size = 450120, upload-time = "2026-11-17T23:51:27.211Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/94/2b/5f135698aa98efdb67e47f5028bf1b6bd2bcc8df8d7490de5c28979ed391/winrt_runtime-4.2.0-cp314-cp314-win_amd64.whl", hash = "sha256:5bf0aa040af4c00819941a0c7d6b9a103df96ddcab04f851e942744b36f41dcd", size = 261470, upload-time = "2026-11-17T23:51:10.838Z" },
+    { url = "https://files.pythonhosted.org/packages/66/79/93ee3ec617b9acc550b63cfddb7bc4ef1a1de594957f709b6df410f2f410/winrt_runtime-4.2.0-cp314-cp314t-win_amd64.whl", hash = "sha256:932382033d4dfefb07d3dd16b123689736554c2d7a95f15e1839f6448144102f", size = 270095, upload-time = "2026-11-17T23:51:15.149Z" },
+    { url = "https://files.pythonhosted.org/packages/c0/61/cb5413d9881211186b17deb8acd657decd875f1fd44b61c7e54f3ca94156/winrt_runtime-4.2.0-cp315-cp315-win_amd64.whl", hash = "sha256:a008a907af83fce763951c7232bed3fa7044ed823a882c451e6953a38773cde0", size = 261935, upload-time = "2026-11-17T23:51:19.433Z" },
+    { url = "https://files.pythonhosted.org/packages/f1/c0/7c1e08ce28414a72d217c7e978b7f5708f24730f8c7efef6e615971e2e48/winrt_runtime-4.2.0-cp315-cp315t-win_amd64.whl", hash = "sha256:c31d5688e88df32c008d965f48a9fbfdc42812c73107a4d80c920b7512f91993", size = 270608, upload-time = "2026-11-17T23:51:24.078Z" },
+]
+
+[[package]]
+name = "winrt-windows-foundation"
+version = "4!10.0.28000.2957"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime" },
+    { name = "winrt-windows-foundation-collections" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/57/44/2e4c51cdaff9cecbeb2f93c1de1135f5ed1b135205eca01ac723082b349d/winrt_windows_foundation-4!10.0.28000.2957.tar.gz", hash = "sha256:6f7d8e932e283991cd931741f84dc7c2e8bc595b4df09de73d16c1d580fc678a", size = 13969, upload-time = "2026-10-31T23:44:22.665Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/aa/9d/fd8d66972454141acb2c7bbdc01655d62f305e8b65104502a9ce248c3723/winrt_windows_foundation-4!10.0.28000.2957-py3-none-any.whl", hash = "sha256:0669de7ce480806a0f9a46d005837799e37f1738911b54c4bc04788b37974e69", size = 17675, upload-time = "2026-10-31T23:39:34.387Z" },
+]
+
+[[package]]
+name = "winrt-windows-foundation-collections"
+version = "4!10.0.28000.2957"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime" },
+    { name = "winrt-windows-foundation" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4c/c3/ea71573d8aa64235a7860314c4d6ec69f726e5ead46d253873fb17639543/winrt_windows_foundation_collections-4!10.0.28000.2957.tar.gz", hash = "sha256:38989873bbdace2346d24168ceb66359800b7429128ea2ef1a36da55b255af1e", size = 8693, upload-time = "2026-10-31T23:44:23.349Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b7/f1/c8d3b74f1f89397ee826a1a5dc8085431664fc5f4d3660643b3cf9c9b536/winrt_windows_foundation_collections-4!10.0.28000.2957-py3-none-any.whl", hash = "sha256:0401c1b6ed512d1fdad8ba1571698e9000ebee6a69781db9a01994ffcc54a503", size = 11342, upload-time = "2026-10-31T23:39:35.446Z" },
+]
+
+[[package]]
+name = "winrt-windows-graphics"
+version = "4!10.0.28000.2957.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/58/c5/7ed1912e28625337dc6dfbdb46bcf6317ced552c44e75421282f3eac8a0d/winrt_windows_graphics-4!10.0.28000.2957.1.tar.gz", hash = "sha256:e371cae0446b13e2f2870d23a815c5ddef435225ddaa41b148c4a0b1fa7eef79", size = 3128, upload-time = "2026-11-05T20:34:45.408Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4b/15/6a650cf44ee98b97c7431530b4233a89d8fd8197026fadff8693a2c0f034/winrt_windows_graphics-4!10.0.28000.2957.1-py3-none-any.whl", hash = "sha256:af9b64158a6dbf6e29e6d83c830a3c6639508c3359570e31292a57b9a4352e29", size = 4603, upload-time = "2026-11-05T20:34:28.508Z" },
+]
+
+[[package]]
+name = "winrt-windows-graphics-capture"
+version = "4!10.0.28000.2957"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime" },
+    { name = "winrt-windows-foundation" },
+    { name = "winrt-windows-foundation-collections" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/82/fd/118e4fbcaa29f8013b443285fa11a272b89fc84785c18952f591bc6abd73/winrt_windows_graphics_capture-4!10.0.28000.2957.tar.gz", hash = "sha256:0d1f8cbb16b23bd13fb862d87150dde330e52b121198eba918f86665b0eb1709", size = 9122, upload-time = "2026-10-31T23:44:34.455Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/df/cd/4b331bf9fb64b825e9d83a29d0951a5c94e0effb9c6a6bf59062e9482ab4/winrt_windows_graphics_capture-4!10.0.28000.2957-py3-none-any.whl", hash = "sha256:cf129d375f664c21e7d5b527485377e9045290d1a3cdd4d49cf6b69b1316fa48", size = 11396, upload-time = "2026-10-31T23:39:51.179Z" },
+]
+
+[[package]]
+name = "winrt-windows-graphics-capture-interop"
+version = "4.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime" },
+    { name = "winrt-windows-graphics-capture" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/54/a0/9f40de522f7c7f892e440f9aeecad6070a961d321ed0f419bc8d155f4437/winrt_windows_graphics_capture_interop-4.0.0.tar.gz", hash = "sha256:5f77f9256037eb4a2c21c8c77b303501d77c1bb248630b11d9f55a5cbf0c0746", size = 7572, upload-time = "2026-10-24T01:54:58.893Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/40/f8/a620d506dd97c817133491e9e32be66f32ee502f96dbfe48c7f734495b6b/winrt_windows_graphics_capture_interop-4.0.0-cp314-cp314-win_amd64.whl", hash = "sha256:374b4f2ecd68ef77244365380d640ac5c24ac088bbb10d7f54d4bf0b6f4c8943", size = 9595, upload-time = "2026-10-24T01:54:50.236Z" },
+    { url = "https://files.pythonhosted.org/packages/17/bd/04b9738b39868ae8da0082ac6df8d3026ea685a8bfc316bb19e00f5a15b7/winrt_windows_graphics_capture_interop-4.0.0-cp314-cp314t-win_amd64.whl", hash = "sha256:dc4aea502aace23fc98c6d4676da0065f42024d154b6a067852ce3d8a80cd81f", size = 9715, upload-time = "2026-10-24T01:54:52.866Z" },
+    { url = "https://files.pythonhosted.org/packages/a8/4e/97d5f4a9299ecdce5fdcbd875f1922022611c8551c05dd57b8897750a503/winrt_windows_graphics_capture_interop-4.0.0-cp315-cp315-win_amd64.whl", hash = "sha256:f4d625889639c018e9e39015a83b9c3ba9504c805e6efa399193ce3b264bd626", size = 9588, upload-time = "2026-10-24T01:54:55.218Z" },
+    { url = "https://files.pythonhosted.org/packages/d8/a3/1a5d34b653d73b6794bb962445194d84f0abf47879ab409ebc19ff95cbb6/winrt_windows_graphics_capture_interop-4.0.0-cp315-cp315t-win_amd64.whl", hash = "sha256:62be523656e38ca8296db67644ac0867f1c9d7fcbf2aa3cccf44ded7cd319ba2", size = 9711, upload-time = "2026-10-24T01:54:57.534Z" },
+]
+
+[[package]]
+name = "winrt-windows-graphics-directx"
+version = "4!10.0.28000.2957.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f6/df/96535c00d57b02f0a82ed6e52ba93ded0c6c71aaf9ad88ceefd075fbf6e3/winrt_windows_graphics_directx-4!10.0.28000.2957.1.tar.gz", hash = "sha256:a2f7ea991ec668d247690b3c2418aaa90aec3c02e555fbdcb82c240d7c87d7aa", size = 4846, upload-time = "2026-11-05T20:34:45.978Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d1/9d/03f77932ed0b47e8d73560a307a896947907848872f8a523272b63a933ef/winrt_windows_graphics_directx-4!10.0.28000.2957.1-py3-none-any.whl", hash = "sha256:7a56a34756ce059ac940dad1d02d2512f14ef605d53ed245c72452f6fd896d06", size = 6851, upload-time = "2026-11-05T20:34:29.804Z" },
+]
+
+[[package]]
+name = "winrt-windows-graphics-directx-direct3d11"
+version = "4!10.0.28000.2957"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime" },
+    { name = "winrt-windows-foundation" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/37/b7/3408cc69f98094c3b0ab841fe97ea76c625d416b06103bbd1ba2c5e0d6ee/winrt_windows_graphics_directx_direct3d11-4!10.0.28000.2957.tar.gz", hash = "sha256:5d490cb99bfcd0f75e679fefcebe1865e211b04e5587a60d56062f7a23e6154a", size = 3994, upload-time = "2026-10-31T23:44:35.796Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/23/c6/8b4be4ef557489e7085b10dca2803e043e1c1e82c9006972532fdb80cd05/winrt_windows_graphics_directx_direct3d11-4!10.0.28000.2957-py3-none-any.whl", hash = "sha256:e831d6bfce8e28ed1fd74afd274740c4e31e2377228bab4c91b98294e3a4c2cb", size = 5789, upload-time = "2026-10-31T23:39:53.025Z" },
+]
+
+[[package]]
+name = "winrt-windows-graphics-directx-direct3d11-interop"
+version = "4.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime" },
+    { name = "winrt-windows-graphics-directx-direct3d11" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c5/84/49d39eaf7e5bd60776620327fa40eb043cf4884803577e68c9351f843924/winrt_windows_graphics_directx_direct3d11_interop-4.1.0.tar.gz", hash = "sha256:925fdd44f7d01e18eccc44e99a932a40d454753428387aab1ad934fb500055a2", size = 9851, upload-time = "2026-10-25T04:30:35.145Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ff/ff/52156d6fa8a2cc71cb6fbbcb6a79638926de2ed3c3b89d7a503f420d7e12/winrt_windows_graphics_directx_direct3d11_interop-4.1.0-cp314-cp314-win_amd64.whl", hash = "sha256:aa0bc28826bdfbca27c2c24cf92a2cbf2f687354f121b984ea253b7b510b89b9", size = 11350, upload-time = "2026-10-25T04:30:26.059Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/c5/a8356b60e893b548b945485d8e4c9769050a3d8c035f09511bc3ca810d46/winrt_windows_graphics_directx_direct3d11_interop-4.1.0-cp314-cp314t-win_amd64.whl", hash = "sha256:af66bd06b79d6cbdd727cfbc4bdf7878f381d9681a896329461575ea51bfc76a", size = 11477, upload-time = "2026-10-25T04:30:28.259Z" },
+    { url = "https://files.pythonhosted.org/packages/97/80/9b3a5947269c002489eaecc3b79665ca4e236465bec727e83b4489e6251d/winrt_windows_graphics_directx_direct3d11_interop-4.1.0-cp315-cp315-win_amd64.whl", hash = "sha256:7b3bb05395210bd5b90232e6be540476d37252f0705a21044c098bd8426e6cb2", size = 11347, upload-time = "2026-10-25T04:30:30.893Z" },
+    { url = "https://files.pythonhosted.org/packages/05/e3/c62ec3753f9ec9c0db0f3a5595102987a9368e7949d52849505b640361b7/winrt_windows_graphics_directx_direct3d11_interop-4.1.0-cp315-cp315t-win_amd64.whl", hash = "sha256:beee62e1e694c05125f343c2cfd80fccaf7b045c660f7c65b6f26a9faffae612", size = 11466, upload-time = "2026-10-25T04:30:33.591Z" },
+]
+
+[[package]]
+name = "winrt-windows-graphics-imaging"
+version = "4!10.0.28000.2957"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime" },
+    { name = "winrt-windows-foundation" },
+    { name = "winrt-windows-foundation-collections" },
+    { name = "winrt-windows-storage-streams" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/40/44/5e7a1ee1120a78db48d53da831bfb039617322dabbe2a3a51abf19ef807a/winrt_windows_graphics_imaging-4!10.0.28000.2957.tar.gz", hash = "sha256:c73b020093a2bfaa42fee0fa1f92a3b72ef363452a9a3cb147b44ad07bcc5a11", size = 19769, upload-time = "2026-10-31T23:44:39.805Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/be/be/d11c554f17aa976c80a063f5b8239d143ec94e6cf82774955d20eb8ff4d0/winrt_windows_graphics_imaging-4!10.0.28000.2957-py3-none-any.whl", hash = "sha256:af6f0b463cb0588b014e0a0c82d76e27c73be372d06d6cb2c25b63c573b204ac", size = 22021, upload-time = "2026-10-31T23:39:57.393Z" },
+]
+
+[[package]]
+name = "winrt-windows-storage-streams"
+version = "4!10.0.28000.2957"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime" },
+    { name = "winrt-windows-foundation" },
+    { name = "winrt-windows-foundation-collections" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9b/5a/db5b75cf82b834963d4440e23ea0d6ecbd06d788d4f2b854ef0eec48376a/winrt_windows_storage_streams-4!10.0.28000.2957.tar.gz", hash = "sha256:6284341b4b01ab872007def0b8d29bf30d84d46f6922f6e42be1d738d6bf2ff7", size = 16649, upload-time = "2026-10-31T23:45:47.22Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d5/8d/0fc70dedc79e36acab9aff05cdceb112a7512176f901ee37f6e522dfbfad/winrt_windows_storage_streams-4!10.0.28000.2957-py3-none-any.whl", hash = "sha256:e113832320f2e7f8b09cedfb400cb7eaf0ac769ad1f2038ddbe88801497916c4", size = 18829, upload-time = "2026-10-31T23:41:34.224Z" },
 ]

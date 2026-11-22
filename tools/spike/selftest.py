@@ -217,6 +217,10 @@ class Speaker:
         self.played.append("ask")
         self._real.ask()
 
+    def camera(self) -> None:
+        self.played.append("camera")
+        self._real.camera()
+
 
 class SwitchableFocus:
     """The real focus check, pointed at the stand-in window's program."""

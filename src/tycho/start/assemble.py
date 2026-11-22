@@ -7,6 +7,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from tycho import paths
+from tycho.callouts import turned_on
 from tycho.commands import CommandFileError, CommandMatcher
 from tycho.games import find_install, load_keys
 from tycho.keybinds import Keybinds
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
     from tycho.runtime import (
         ActionLog,
         Brain,
+        Camera,
         Display,
         Feedback,
         GameState,
@@ -33,6 +35,7 @@ if TYPE_CHECKING:
         Speaker,
         Transcriber,
     )
+    from tycho.runtime.callouts import Callouts
     from tycho.stt.parakeet import ParakeetTranscriber
 
 log = logging.getLogger("tycho")
@@ -123,19 +126,21 @@ def build_session(
     on_result: Callable[[Result], None] | None = None,
     address: Address | None = None,
     display: Display | None = None,
+    camera: Camera | None = None,
     pack: GamePack,
 ) -> Session:
     """The talking loop, wired the way ``tycho run`` wires it, for ``pack``'s game: its
     commands, words and safety lists, which say whether key actions are off (#191).
-    ``store`` is None for a pack with no keybinds part."""
-    from tycho.games import BUILT_IN
+    ``store`` is None for a pack with no keybinds part. ``camera``: the game window's,
+    for a pack that can look (its ``look`` phrases, #31)."""
     from tycho.input import Presser
     from tycho.lexicon import Lexicon
     from tycho.ptt.monitor import PushToTalk
     from tycho.runtime import Session
+    from tycho.runtime.look import Eyes
 
-    if game_state is None and store is not None and pack.parts.game_state is not None:
-        game_state = BUILT_IN.game_state[pack.parts.game_state](store.install.folder)
+    if game_state is None:
+        game_state = game_state_for(pack, store)
     matcher = load_commands(pack)
     return Session(
         audio=audio,
@@ -159,7 +164,31 @@ def build_session(
         address=(lambda: address.name) if address is not None else (lambda: ""),
         display=display,
         safety_lists=pack.safety,
+        eyes=Eyes(pack.look, camera) if camera is not None and pack.look else None,
+        looking=current.look_at_screen is True,
     )
+
+
+def game_state_for(pack: GamePack, store: GameKeys | None) -> GameState | None:
+    """The pack's game-state part (Star Citizen's Game.log), if it names one."""
+    from tycho.games import BUILT_IN
+
+    if store is None or pack.parts.game_state is None:
+        return None
+    return BUILT_IN.game_state[pack.parts.game_state](store.install.folder)
+
+
+def watch_for_callouts(
+    current: Settings, pack: GamePack, game_state: GameState | None, session: Session
+) -> Callouts | None:
+    """Speaking up (#4): the stage that watches the log for the kinds the player turned
+    on, if the pack offers any and has a log to watch."""
+    from tycho.runtime.callouts import Callouts
+
+    if game_state is None or not pack.callouts:
+        return None
+    on = turned_on(current.callouts)
+    return Callouts(game_state, pack.callouts, on, busy=session.busy, say=session.call_out)
 
 
 def _search_seconds(open_web: bool) -> tuple[float, float]:

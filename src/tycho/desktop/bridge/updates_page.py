@@ -6,6 +6,7 @@ import time
 from collections.abc import Mapping
 
 from tycho import __version__, settings, updates
+from tycho.desktop import setup
 from tycho.desktop.bridge.state import RELEASES_PAGE, UPDATE_SECONDS, State
 from tycho.settings import SettingsError
 
@@ -15,19 +16,20 @@ log = logging.getLogger(__name__)
 class UpdatesPage(State):
     def about(self) -> dict[str, object]:
         """``first_run``: Tycho is waiting for setup before it starts listening.
-        ``ask_crash_reports``: set up before crash reports existed and never asked, so the
-        window opens on setup's Privacy step until the player answers (ADR 4, #199).
+        ``ask_privacy``: the privacy questions a player set up before they existed was
+        never asked (crash reports, looking at the game window), so the window opens on
+        setup's Privacy step until the player answers (ADR 4, #199; ADR 14, #31).
         ``opening``: "try_it" the first time the window opens after a first run's
         setup, so it opens on setup's Try it, now that Tycho is listening (ADR 17)."""
         try:
-            unasked = settings.load(self._path).crash_reports is None
+            asks = setup.unasked(settings.load(self._path))
         except SettingsError:
-            unasked = False  # the window says what's wrong with the file instead
+            asks = ()  # the window says what's wrong with the file instead
         opening, self._opening = self._opening, ""  # once: reopened later, it's Home
         return {
             "version": __version__,
             "first_run": self._first_run,
-            "ask_crash_reports": unasked and not self._first_run,
+            "ask_privacy": [] if self._first_run else list(asks),
             "can_quit": self._quit is not None,
             "opening": opening,
         }

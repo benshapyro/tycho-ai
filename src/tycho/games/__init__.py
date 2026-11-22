@@ -157,7 +157,7 @@ def _trade(_: Workshop) -> Built:
 def _settings(workshop: Workshop) -> Built:
     from tycho.spoken_settings import SettingsTool
 
-    return Built((SettingsTool(live=workshop.live),))
+    return Built((SettingsTool(live=workshop.live, offered=workshop.pack.callouts),))
 
 
 def _web(workshop: Workshop) -> Built:

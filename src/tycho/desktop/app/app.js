@@ -107,14 +107,23 @@
   let trying = null;
   const TRIED_EMPTY = "Nothing yet. Hold your button, say something, and let go.";
   const tried = (live) => live.exchanges.filter((e) => e.at >= trying);
-  let askingCrash = false; // set up before crash reports existed: ask once (ADR 4)
+  // Privacy questions a player set up before they existed was never asked: crash reports
+  // (ADR 4) and looking at the game window (ADR 14, #31). Asked on their own, first.
+  let asking = [];
+  const ASKED = { crash_reports: "crash reports", look_at_screen: "looking at your game" };
+  // One of them answered: once none is left, done (#442).
+  function answeredAsked(name) {
+    if (!asking.includes(name)) return;
+    asking = asking.filter((a) => a !== name);
+    if (!asking.length) view = "status";
+  }
   // A step is ticked when what it asks for is there, not when it was walked past: a
   // skipped one keeps its number, marked as still to do, unless the game doesn't need it.
   function stepDone(name, s) {
     if (name === "Game") return !s.game.needed || s.game.found;
     if (name === "Keys") return brainKey(s);
     if (name === "Talk and listen") return s.push_to_talk.set;
-    if (name === "Privacy") return s.crash_reports != null;
+    if (name === "Privacy") return s.crash_reports != null && (!s.can_look || s.look_at_screen != null);
     return true;
   }
   // Tycho presses keys in this game: the pack can, and the player's key actions are on.
@@ -175,8 +184,8 @@
     const s = await api.setup_state();
     const lede = firstRun
       ? "A few steps, about three minutes. Skip any of them and come back; Tycho starts listening when you're done."
-      : askingCrash && STEPS[step] === "Privacy"
-        ? "One question left: crash reports. The rest is as you chose it."
+      : asking.length && STEPS[step] === "Privacy"
+        ? `${asking.length > 1 ? "Two questions" : "One question"} left: ${asking.map((a) => ASKED[a]).join(" and ")}. The rest is as you chose it.`
         : "Change anything you chose the first time. Changes apply when Tycho restarts.";
     const name = STEPS[step];
     let body = "";
@@ -218,7 +227,7 @@
     } else if (name === "Privacy") {
       const leaves = `<div class="card frame"><h3>What leaves your PC</h3>
         <p class="ok-line">✓ Your voice never does: speech recognition runs on this PC.</p>
-        <p>Only text is sent, and only what's listed here.</p>
+        <p>Only text is sent${s.can_look ? ", and a picture of the game window only if you turn that on and ask for a look" : ""}, and only what's listed here.</p>
         <div class="tablewrap"><table class="leaves"><thead><tr><th>Who gets it</th><th>What</th><th>When</th></tr></thead><tbody>
         ${s.leaves.map((r) => `<tr><td><b>${esc(r.to)}</b></td><td>${esc(r.what)}</td><td class="dim">${esc(r.when)}</td></tr>`).join("")}</tbody></table></div>
         <p class="note">Tycho counts and tracks nothing about how you use it. Your keys stay in Windows Credential Manager, and a record of what you said is kept on this PC only if you turn it on (Settings, Privacy).</p></div>`;
@@ -228,8 +237,18 @@
         <div class="field"><label>A report holds</label>${list(["The kind of error, and where in Tycho's own code it happened", "Tycho's version, the Windows version, the game and the brain provider"])}</div>
         <div class="field"><label>Never sent</label>${list(["What you or Tycho said, or anything sent to or from the brain", "Your keys", "Your name, what Tycho calls you, or your Windows user name", "Your files and folders, including the game's", "Your settings, log lines, or anything that identifies you or this PC"])}</div>
         <p class="note">Reports go to Sentry, the service Tycho's maintainer uses to collect them, when Tycho next starts after a crash. Saying no deletes any report still waiting.</p></div>`;
-      // Asked this one question (set up before it existed): it comes first, not under the table.
-      body = askingCrash ? crash + leaves : leaves + crash;
+      // Equal choices, neither picked for them; skipped, it stays off (ADR 14, #31).
+      const look = s.can_look ? `<div class="card frame" id="lookCard"><h3>Let Tycho look at your game window when you ask?</h3>
+        <p>Say “take a look” and Tycho takes one picture of the game window, and sends it to the brain with your question. Only the game window, never saved. You can turn this off any time under Settings, Privacy, or by saying “stop looking at my screen”.</p>
+        <div class="seg big" role="group" aria-label="Look at your game window when you ask"><button type="button" aria-pressed="${s.look_at_screen === false}" data-look="no">No</button><button type="button" aria-pressed="${s.look_at_screen === true}" data-look="yes">Yes</button></div>
+        <div class="field"><label>Each time</label>${list(["Only when you ask: “take a look”, or “yes” when Tycho offers to look", "One picture of the game window, never the rest of your screen", "A camera sound plays, so it's never silent"])}</div>
+        <div class="field"><label>Never</label>${list(["Taken by Tycho on its own", "Saved, logged, or kept for the next question"])}</div>
+        <p class="note">The picture goes where what you say goes (the table above or below). Skip this and it stays off.</p></div>` : "";
+      // Asked these questions alone (set up before they existed): they come first, not under the table.
+      const cards = { crash_reports: crash, look_at_screen: look };
+      const first = asking.map((a) => cards[a] || "").join("");
+      const rest = Object.keys(cards).filter((a) => !asking.includes(a)).map((a) => cards[a]).join("");
+      body = first + leaves + rest;
     } else {
       ok = s.ready;
       const say = s.pack.examples;
@@ -341,7 +360,15 @@
       const r = await api.set("crash_reports", on);
       if (!r.ok) toast(r.problem);
       else if (r.changed && !firstRun) toast(`Crash reports ${on ? "on" : "off"}.`, true);
-      if (r.ok && askingCrash) { askingCrash = false; view = "status"; } // answered: done
+      if (r.ok) answeredAsked("crash_reports");
+      render();
+    }));
+    page.querySelectorAll("[data-look]").forEach((b) => b.addEventListener("click", async () => {
+      const on = b.dataset.look === "yes";
+      const r = await api.set("look_at_screen", on);
+      if (!r.ok) toast(r.problem);
+      else if (r.changed && !firstRun) toast(`Looking at your game ${on ? "on" : "off"}.`, true);
+      if (r.ok) answeredAsked("look_at_screen");
       render();
     }));
     page.querySelectorAll("[data-channel]").forEach((b) => b.addEventListener("click", async () => {
@@ -443,6 +470,12 @@
         const hidden = new Set(String(v || "").split(",").map((k) => k.trim()).filter(Boolean));
         return `<div class="seg" role="group" aria-label="${esc(r.label)}">${r.cards.map((c) => `<button type="button" aria-pressed="${!hidden.has(c.kind)}" data-card="${esc(c.kind)}" data-name="${esc(c.name)}">${esc(c.name)}</button>`).join("")}</div>`;
       }
+      case "callouts": {
+        // A switch for each kind of event this game can speak up about, with its line (#4).
+        if (!r.callouts.length) return `<span class="dim">This game has nothing to speak up about.</span>`;
+        const on = new Set(String(v || "").split(",").map((k) => k.trim()).filter(Boolean));
+        return `<div class="callouts">${r.callouts.map((c) => `<label class="callout"><button class="switch" type="button" role="switch" aria-checked="${on.has(c.kind)}" aria-label="${esc(c.name)}" data-callout="${esc(c.kind)}" data-name="${esc(c.name)}"></button><span>${esc(c.name)}<br><span class="dim">“${esc(c.example)}”</span></span></label>`).join("")}</div>`;
+      }
       case "screen": // the screens plugged in now (#447)
         return `<select class="input" data-screen="${esc(r.name)}" aria-label="${esc(r.label)}">${r.screens.map((s) => `<option value="${esc(s.value)}" ${s.value === v ? "selected" : ""}>${esc(s.name)}</option>`).join("")}</select>`;
       case "setup":
@@ -533,6 +566,14 @@
       if (showing) hidden.delete(b.dataset.card); else hidden.add(b.dataset.card);
       row.value = [...hidden].join(", "); // a second quick click builds on this one (review of #466)
       change("tile_hidden_cards", row.value, `${b.dataset.name} ${showing ? "shown" : "hidden"} on the Tile`);
+    }));
+    page.querySelectorAll("[data-callout]").forEach((b) => b.addEventListener("click", () => {
+      const row = data.groups.flatMap((g) => g.rows).find((r) => r.name === "callouts");
+      const on = new Set(String(row.value || "").split(",").map((k) => k.trim()).filter(Boolean));
+      const was = on.has(b.dataset.callout);
+      if (was) on.delete(b.dataset.callout); else on.add(b.dataset.callout);
+      row.value = [...on].join(", "); // a second quick click builds on this one
+      change("callouts", row.value, `${b.dataset.name}: Tycho ${was ? "stays quiet" : "speaks up"}`);
     }));
     page.querySelectorAll("[data-screen]").forEach((sel) => sel.addEventListener("change", () => change(sel.dataset.screen, sel.value, `The Tile's screen: ${sel.selectedOptions[0].textContent}`)));
     page.querySelectorAll("[data-text]").forEach((i) => i.addEventListener("change", () => change(i.dataset.text, i.value, `${label(i.dataset.text)}: ${i.value || "none"}`)));
@@ -725,7 +766,7 @@
   /* ---------- shell ---------- */
   async function render() {
     // Left the question without answering: setup is as usual from here (#442).
-    if (askingCrash && (view !== "setup" || STEPS[step] !== "Privacy")) askingCrash = false;
+    if (asking.length && (view !== "setup" || STEPS[step] !== "Privacy")) asking = [];
     // Left Try it: Tycho presses keys again.
     if (trying !== null && (view !== "setup" || STEPS[step] !== "Try it")) { trying = null; await api.try_it(false); }
     if (capturing) api.cancel_capture();
@@ -775,7 +816,7 @@
     $("#quitSide").hidden = !canQuit;
     if (firstRun) view = "setup";
     else if (about.opening === "try_it") { view = "setup"; step = STEPS.indexOf("Try it"); }
-    else if (about.ask_crash_reports) { askingCrash = true; view = "setup"; step = STEPS.indexOf("Privacy"); }
+    else if (about.ask_privacy && about.ask_privacy.length) { asking = about.ask_privacy; view = "setup"; step = STEPS.indexOf("Privacy"); }
     await render();
     if (!firstRun) notice(await api.check_updates(false));
   }
