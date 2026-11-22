@@ -23,10 +23,9 @@ from importlib import resources
 from tycho.commands import CommandMatcher, resolve
 from tycho.commands.keys import own_keys
 from tycho.input.plan import pressable_input
-from tycho.keybinds import Keybinds, key_text
+from tycho.keybinds import Action, Keybinds, key_text
 from tycho.packs import GamePack
 from tycho.packs.pack import KEYS, MARKER
-from tycho.safety import spoken_name
 
 
 def core_sections() -> dict[str, str]:
@@ -142,24 +141,45 @@ def command_keys(keybinds: Keybinds, matcher: CommandMatcher) -> list[str]:
     return sorted(lines)
 
 
-def action_keys(keybinds: Keybinds, matcher: CommandMatcher, pack: GamePack) -> list[str]:
-    """With key actions off: what each action the brain would have been offered does,
-    and the player's key for it (#392: "hit the brakes" is no command). Never its name:
-    there's nothing to pick."""
+def action_keys(keybinds: Keybinds) -> list[str]:
+    """With key actions off: what each bound action does, and the player's key for it
+    (#392: "hit the brakes" is no command). Never its name: there's nothing to pick.
+
+    Every bound, labelled action, not only those the brain would be offered: steering,
+    strafing and emotes too, or "what's my strafe key" would hear there's none (#437).
+    The game's label keeps its note ("(Hold)", "(Toggle)"), and a label two action maps
+    share says which map, so the ship's and the vehicle's lines differ (#437)."""
+    found: list[tuple[str, str, str]] = []
+    for action in keybinds:
+        key = pressable_input(action)
+        if key is None or not action.label.strip():
+            continue
+        found.append((_with_note(action), action.actionmap, key_text(key)))
+    maps: dict[str, set[str]] = {}
+    for label, actionmap, _ in found:
+        maps.setdefault(label, set()).add(actionmap)
     lines: set[str] = set()
-    for name in offered_actions(keybinds, matcher, pack):
-        action = keybinds.get(name)
-        key = pressable_input(action) if action is not None else None
-        if action is not None and key is not None:
-            lines.add(f"{spoken_name(action)} | {key_text(key)}")
+    for label, actionmap, key in found:
+        where = f" ({actionmap.replace('_', ' ')})" if len(maps[label]) > 1 else ""
+        lines.add(f"{label}{where} | {key}")
     return sorted(lines)
+
+
+_NOTES = {"hold": "Hold", "double_tap": "Double tap"}
+
+
+def _with_note(action: Action) -> str:
+    """The game's label, with how to press it when the label doesn't say (#437)."""
+    label = " ".join(action.label.split())
+    note = next((n for a, n in _NOTES.items() if action.activation.startswith(a)), "")
+    return f"{label} ({note})" if note and "(" not in label else label
 
 
 def own_key_lists(keybinds: Keybinds, matcher: CommandMatcher, pack: GamePack) -> str:
     """The end of the keys-off briefing: the player's own keys, or nothing when Tycho
     reads no keybinds for the game. Cached with the rest: it changes only when the
     keybinds or the commands do."""
-    actions = action_keys(keybinds, matcher, pack)
+    actions = action_keys(keybinds)
     if not actions:
         return ""
     return (
