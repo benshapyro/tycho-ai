@@ -785,7 +785,8 @@ tag = "ships"
 heard = "how many crew does the Hammerhead take"
 mode = "lookup"
 expect = ["reply"]
-mentions = [["11", "eleven"]]
+# 8 in the 4.10.3 game files (Wiki API, checked 22 Nov 2026; it was 11, #443).
+mentions = [["\\b8\\b", "eight"]]
 tag = "ships"
 
 [[case]]
@@ -855,7 +856,8 @@ tag = "ships"
 heard = "can I fly the Galaxy yet"
 mode = "lookup"
 expect = ["reply"]
-mentions = [["concept", "not (yet )?(in|flyable|available|released)", "isn't", "not yet", "can't"]]
+# Flight-ready in 4.10.3 (Wiki API, checked 22 Nov 2026; it was in concept, #443).
+mentions = [["\\byes\\b", "flight[- ]ready", "flyable", "you can"]]
 tag = "ships"
 
 [[case]]

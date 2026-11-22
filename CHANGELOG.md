@@ -14,6 +14,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ### Fixed
 - A card the brain left empty no longer ends in the not-done sound: Tycho says its line without the card. ([#443](https://github.com/benshapyro/tycho-ai/issues/443))
+- With key actions off, Tycho now knows every key you've bound, steering, strafing and emotes included, and says when one is held ("Boost (Hold)"). Asked for your strafe key, it names it instead of saying there's none. ([#437](https://github.com/benshapyro/tycho-ai/issues/437))
 - With the brain through OpenRouter, Tycho now tells OpenRouter never to use a host that keeps or trains on what you say, whatever your OpenRouter account's privacy settings are. ([#488](https://github.com/benshapyro/tycho-ai/issues/488))
 
 ## [0.8.0] - 2026-11-22
