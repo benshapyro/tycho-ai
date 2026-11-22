@@ -159,8 +159,9 @@ def _ms(value: float | None) -> str:
     return "-" if value is None else f"{value:.0f} ms"
 
 
-def wrong_presses(results: Path, run: str) -> list[tuple[str, str]]:
-    """The cases the eval graded as wrong presses in the run that wrote these traces."""
+def verdicts(results: Path, run: str, start: str) -> list[tuple[str, str]]:
+    """The cases the eval graded with a verdict that starts with ``start``, in the run
+    that wrote these traces."""
     block: list[Line] = []
     inside = False
     for line in load(results):
@@ -172,8 +173,19 @@ def wrong_presses(results: Path, run: str) -> list[tuple[str, str]]:
     return [
         (str(r.get("heard", "")), str(r["verdict"]))
         for r in block
-        if str(r.get("verdict", "")).startswith("WRONG PRESS")
+        if str(r.get("verdict", "")).startswith(start)
     ]
+
+
+def wrong_presses(results: Path, run: str) -> list[tuple[str, str]]:
+    """The cases the eval graded as wrong presses in the run that wrote these traces."""
+    return verdicts(results, run, "WRONG PRESS")
+
+
+def key_clashes(results: Path, run: str) -> list[tuple[str, str]]:
+    """The cases the eval graded as key clashes (#494): an allowed pick the gate refused
+    only because the keybinds give its key to another confirm-grade action (#504)."""
+    return verdicts(results, run, "KEY CLASH")
 
 
 def summary(
@@ -181,8 +193,10 @@ def summary(
     run: str,
     per_hour: float = PER_HOUR,
     wrong: Sequence[tuple[str, str]] | None = None,
+    clashes: Sequence[tuple[str, str]] | None = None,
 ) -> list[str]:
-    """A run in a few lines an agent can read at a glance."""
+    """A run in a few lines an agent can read at a glance. ``wrong`` and ``clashes`` are
+    the eval's wrong presses and key clashes, when its results were given."""
     out = [f"Run {run}: {len(lines)} brain requests"]
     if not lines:
         return out
@@ -234,6 +248,9 @@ def summary(
     if wrong is not None:
         out.append(f"Wrong presses in the eval: {len(wrong) or 'none'}")
         out.extend(f"  {heard!r}: {verdict}" for heard, verdict in wrong)
+    if clashes:
+        out.append(f"Key clashes in the eval (the keybinds, not the model): {len(clashes)}")
+        out.extend(f"  {heard!r}: {verdict}" for heard, verdict in clashes)
     return out
 
 
@@ -320,7 +337,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "summary":
         run, lines = pick(load(args.file), args.run)
         wrong = wrong_presses(args.results, run) if args.results else None
-        print("\n".join(summary(lines, run, args.per_hour, wrong)))
+        clashes = key_clashes(args.results, run) if args.results else None
+        print("\n".join(summary(lines, run, args.per_hour, wrong, clashes)))
         return 0
     files: list[Path] = args.files or [EVAL_TRACES]
     if len(files) > 2 or len(args.run) > 2:
