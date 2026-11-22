@@ -111,6 +111,8 @@ Rules:
 
 *Planned (stage 2); not built.*
 
+The first version is proposed in [ADR 14's amendment](adr/0014-the-brain-voice-and-sequences.md) (22 November 2026): only the per-request trigger, off by default; the standing permission waits for its own decision.
+
 - **Per-request trigger:** a word the user chooses ("look", say) captures the game window together with what was said, and sends both to the brain.
 - **Standing permission (off by default):** a setting that lets Tycho capture whenever the state tracker needs to confirm something.
 - Only the game window is captured, never the whole desktop.
@@ -187,7 +189,7 @@ Settings (one schema, voice and file editing) arrive in stage 1. The settings GU
 ## 7. Open questions
 
 1. ~~Which default voice and persona tone tests best over long sessions?~~ Answered by a listening test; see [ADR 9](adr/0009-voice.md). Long-session fatigue is still untested.
-2. Should Tycho ever speak unprompted, for example to warn about low fuel? If so, how do we keep it from becoming noise?
+2. Should Tycho ever speak unprompted, for example to warn about low fuel? If so, how do we keep it from becoming noise? *Proposed answer (22 November 2026, ADR 14's amendment): yes, off by default, per kind, only for what the log records, at most one every 30 s.*
 3. How much does `Game.log` record in the current patch? This sets how much the state tracker must rely on vision.
 4. Can local speech-to-text run alongside the game without a noticeable frame-rate cost? On the graphics card it couldn't on one player's PC (graphics crashes, #188), so since 0.8 it runs on the processor by default. The frame-rate cost there is still **(to measure)**.
 5. What will CIG say when asked directly about a user-triggered voice keybind tool? See [ADR 3](adr/0003-staying-within-cig-rules.md).
