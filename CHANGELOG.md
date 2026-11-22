@@ -8,6 +8,12 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ## [Unreleased]
 
+### Added
+- New commands for remote turrets, such as the Idris's: "enter remote turret" (or "enter remote turret two" or "three") and "exit remote turret". The game has no key for entering one by default, so bind Enter Remote Turret 1, 2 and 3 in the game's keybinds first. ([#356](https://github.com/benshapyro/tycho-ai/issues/356))
+
+### Fixed
+- "Open hangar" heard as "open hangers", and "close doors" heard as "closed doors", now work instantly instead of waiting for the brain. ([#358](https://github.com/benshapyro/tycho-ai/issues/358))
+
 ### Changed
 - In setup, skipping the Keys step in Star Citizen now shows it as skipped, not as still to do: a key is optional there, since the built-in phrases work without one. At the window's smallest size, Next sits fully in view, and in World of Warcraft: Forever, What to say now shows any problem with your own commands file. ([#448](https://github.com/benshapyro/tycho-ai/issues/448))
 - **Quit** is now at the bottom of the left side of Tycho's window, so it's easy to find. It's still under Settings, Updates, and on Tycho's icon by the clock. ([#486](https://github.com/benshapyro/tycho-ai/issues/486))
