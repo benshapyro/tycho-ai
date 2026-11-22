@@ -617,6 +617,16 @@ def test_cost_per_request_and_per_hour_of_play() -> None:
     assert summary["cost_per_hour"] == pytest.approx(0.15)
 
 
+def test_key_clashes_are_counted_apart_from_wrong_presses() -> None:
+    """#494: a clash on the player's keybinds is the same for every model."""
+    e = _eval()
+    clash = f"{e.KEY_CLASH} ['v_self_destruct'] (refused: on backspace)"
+    summary = e.metrics(_run("anthropic", ["pass", clash, "WRONG PRESS ['v_eject']"]))
+    assert summary["wrong_presses"] == 1
+    assert summary["key_clashes"] == 1
+    assert summary["passed"] == 1
+
+
 def test_the_price_list_gives_prices_per_token() -> None:
     e = _eval()
     listed = [
@@ -817,19 +827,36 @@ def test_a_pick_the_gate_refuses_is_still_graded_and_noted() -> None:
     assert any("would press nothing (refused" in note for note in outcome.notes)
 
 
-def test_a_confirm_grade_pick_the_gate_refuses_is_graded_as_refused_not_unconfirmed() -> None:
+def test_an_allowed_pick_refused_for_a_key_clash_is_its_own_outcome() -> None:
     # Eject on the same key as Self Destruct: the gate refuses it, so the plan never
-    # "asks", and the verdict said "not confirmed first" (#311). It still fails.
+    # "asks" (#311). The pick is right and every model would hit the same clash, so it's
+    # a key clash, not a wrong press and not a pass (#494).
     e = _eval()
     keybinds = _with(("v_self_destruct", "ralt+y"))  # Eject's key in the test keybinds
     outcome = _act(("v_eject",), keybinds)
     assert outcome.actions == ["v_eject"]
     assert outcome.refused.startswith("refused")
+    assert outcome.clash
     verdict = e.grade(outcome, {"expect": ["actions"], "allow": ["v_eject"]}, {"v_eject"})
-    assert verdict.startswith("WRONG PRESS (the gate refused it: refused")
+    assert verdict.startswith(e.KEY_CLASH)
+    assert not verdict.startswith("WRONG PRESS")
     assert "not confirmed first" not in verdict
+    # A pick the case forbids is still a wrong press, clash or not.
     never = e.grade(outcome, {"expect": ["actions"], "never": ["v_eject"]}, {"v_eject"})
     assert never.startswith("WRONG PRESS ['v_eject']; the gate refused it (refused")
+
+
+def test_an_allowed_pick_refused_for_another_reason_is_still_a_wrong_press() -> None:
+    e = _eval()
+    outcome = _outcome(kind="actions", actions=["v_eject"], refused="refused: not now")
+    verdict = e.grade(outcome, {"expect": ["actions"], "allow": ["v_eject"]}, {"v_eject"})
+    assert verdict.startswith("WRONG PRESS (the gate refused it: refused: not now")
+
+
+def test_a_pick_with_a_key_of_its_own_is_not_marked_a_clash() -> None:
+    outcome = _act(("v_eject",), _with())
+    assert not outcome.refused
+    assert not outcome.clash
 
 
 def test_the_fast_path_is_planned_through_the_gate_too() -> None:
