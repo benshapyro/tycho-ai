@@ -289,7 +289,7 @@ class _Tray:
 def test_while_starting_the_star_says_what_its_doing_and_a_second_start_says_wait(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Review of #157: after setup, the 2.5 GB speech model downloads with nothing on
+    """Review of #157: after setup, the speech model downloads with nothing on
     screen, and a second start did nothing."""
 
     import tycho.desktop.tray
@@ -310,8 +310,8 @@ def test_while_starting_the_star_says_what_its_doing_and_a_second_start_says_wai
     )
     requests = _Requests()
     starting = shell.Starting(requests)  # type: ignore[arg-type]
-    starting.doing("Getting the speech model (2.5 GB, once): 42%")
-    assert _Tray.made[-1].tip() == "Tycho: Getting the speech model (2.5 GB, once): 42%…"
+    starting.doing("Getting the speech model (0.7 GB, once): 42%")
+    assert _Tray.made[-1].tip() == "Tycho: Getting the speech model (0.7 GB, once): 42%…"
     requests.target()
     assert "still starting" in shown[0]
     assert "42%" in shown[0]

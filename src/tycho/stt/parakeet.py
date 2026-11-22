@@ -2,6 +2,7 @@
 
 import gc
 import logging
+import os
 import threading
 import time
 from collections.abc import Mapping
@@ -12,7 +13,7 @@ import numpy as np
 
 from tycho.audio.clip import Samples
 from tycho.runtime.ports import RecognitionUnavailable
-from tycho.stt.models import PARAKEET_V2, PARAKEET_V2_INT8, ModelError
+from tycho.stt.models import PARAKEET_V2, PARAKEET_V2_INT8, ModelError, ModelSpec
 
 if TYPE_CHECKING:
     from onnx_asr.adapters import TextResultsAsrAdapter
@@ -43,7 +44,8 @@ CPU_THREADS = 6
 maintainer's i9-13900HX (8 performance and 16 efficiency cores, game closed, 2026-11-16)
 4 to 6 threads were fastest, p50 about 250-500 ms over the 30 replay clips; 8 was
 slower and 16 two to four times slower, the extra threads landing on efficiency cores.
-ONNX Runtime's default (every physical core) was 470 ms (#188)."""
+ONNX Runtime's default (every physical core) was 470 ms (#188). Never more than the PC
+has cores, though (``cpu_threads``): on a 4-core laptop, 6 would compete with the game."""
 CUDA_OPTIONS: Mapping[str, str] = LEAN_CUDA
 """What Tycho uses: see tools/bench/gpu_memory.py for the measurements behind it."""
 RETRY_SECONDS = 30.0
@@ -87,6 +89,10 @@ class ParakeetTranscriber:
                 return gpu
             except Exception as e:  # ONNX Runtime raises its own unrelated exception types
                 failure, broken = _first_line(e), card_broken(str(e))
+                if broken:
+                    # Broken while the session was being made: the half-built one is only
+                    # in the error's traceback, so keep that, never free it (#473, #480).
+                    _KEPT.append(e)
             # Out of the except block: the error's traceback, which holds the frames that
             # hold the half-built GPU session, is gone. Drop our own reference too, then
             # collect, so the card's memory is free before the CPU copy loads (#204);
@@ -126,7 +132,7 @@ class ParakeetTranscriber:
         providers: list[str | tuple[str, dict[str, str]]] = ["CPUExecutionProvider"]
         split = SMALL_PARTS_ON_CPU if small_parts_on_cpu is None else small_parts_on_cpu
         extra: dict[str, Any] = {}
-        spec = PARAKEET_V2 if device == "gpu" else PARAKEET_V2_INT8
+        spec = PARAKEET_V2 if device == "gpu" else processor_model(folder)
         if device == "gpu":
             options = CUDA_OPTIONS if cuda_options is None else cuda_options
             providers.insert(0, ("CUDAExecutionProvider", dict(options)))
@@ -134,7 +140,7 @@ class ParakeetTranscriber:
                 extra["preprocessor_config"] = {"use_numpy_preprocessors": True}
         else:
             session = ort.SessionOptions()  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-            session.intra_op_num_threads = CPU_THREADS  # leave the rest to the game
+            session.intra_op_num_threads = cpu_threads()  # leave the rest to the game
             extra["sess_options"] = session
         model = onnx_asr.load_model(  # pyright: ignore[reportUnknownMemberType] - ORT's types
             spec.name, folder, quantization=spec.quantization, providers=providers, **extra
@@ -263,7 +269,6 @@ context anyway, so keeping it costs nothing there."""
 
 _BROKEN_CARD = (
     "cuda failure 999",
-    "unknown error",
     "illegal memory access",
     "illegal address",
     "unspecified launch failure",
@@ -279,7 +284,27 @@ def card_broken(error: str) -> bool:
     reset or a fault), not just that it's short of memory, which is safe to free and
     worth freeing."""
     text = error.lower()
-    return any(sign in text for sign in _BROKEN_CARD)
+    # "unknown error" alone could be anything's: only CUDA's 999 means the card (#480).
+    return any(sign in text for sign in _BROKEN_CARD) or (
+        "unknown error" in text and "cuda" in text
+    )
+
+
+def cpu_threads() -> int:
+    """``CPU_THREADS``, but never more than the PC's cores. Windows counts each core
+    twice with hyper-threading, so half its count, which errs low on a PC without it:
+    fewer threads, and more left for the game."""
+    return max(1, min(CPU_THREADS, (os.cpu_count() or 2) // 2))
+
+
+def processor_model(folder: Path) -> ModelSpec:
+    """The 8-bit copy, or the full model if only that is on disk: a player who upgraded
+    offline still starts, on the full model, until the 8-bit one can download (#480)."""
+    if all((folder / f.name).exists() for f in PARAKEET_V2_INT8.files):
+        return PARAKEET_V2_INT8
+    if all((folder / f.name).exists() for f in PARAKEET_V2.files):
+        return PARAKEET_V2
+    return PARAKEET_V2_INT8
 
 
 def _first_line(error: Exception) -> str:

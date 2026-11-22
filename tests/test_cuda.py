@@ -255,3 +255,29 @@ def test_a_removal_that_fails_says_so_plainly(
     monkeypatch.setattr(cuda.shutil, "rmtree", in_use)
     with pytest.raises(ModelError, match="Close anything using it"):
         libraries.remove()
+
+
+@pytest.mark.parametrize(
+    ("device", "says"),
+    [
+        ("gpu", "will use the graphics card the next time Tycho starts"),
+        ("auto", 'choose the graphics card for "Speech recognition on"'),
+        ("cpu", 'choose the graphics card for "Speech recognition on"'),
+    ],
+)
+def test_tycho_gpu_install_says_what_runs_on_the_card_now(
+    gpu: SimpleNamespace,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    device: str,
+    says: str,
+) -> None:
+    """#480: "auto" runs speech on the processor since #476, so installing the libraries
+    alone doesn't move it to the card."""
+
+    def downloaded(self: CudaLibraries, progress: object = None) -> Path:
+        return Path()
+
+    monkeypatch.setattr(CudaLibraries, "ensure", downloaded)
+    assert cli.gpu_command("install", device) == 0
+    assert says in capsys.readouterr().out

@@ -90,7 +90,7 @@ def _dispatch(args: argparse.Namespace, current: Settings) -> int:
         case "credits":
             return credits_command()
         case "gpu":
-            return gpu_command(args.action)
+            return gpu_command(args.action, current.transcription_device)
         case "key":
             return credentials.main([args.action, args.name])
         case _:

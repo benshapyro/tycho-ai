@@ -40,12 +40,6 @@ def choose_device(setting: Setting, *, cuda: bool) -> DeviceChoice:
     return DeviceChoice("gpu", "set to the graphics card in settings")
 
 
-def gpu_free_mb() -> int | None:
-    """Free memory on the first NVIDIA card, or None if there isn't one or it can't be read."""
-    value = _smi("memory.free")
-    return int(value) if value is not None and value.isdigit() else None
-
-
 def nvidia_driver() -> int | None:
     """The NVIDIA driver's major version (e.g. 581), or None without an NVIDIA card."""
     value = _smi("driver_version")

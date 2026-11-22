@@ -584,6 +584,7 @@ def test_a_card_that_breaks_on_the_warm_up_keeps_its_session_too(
         ("Div node failed.\nCUDA error cudaErrorUnknown:unknown error", True),  # 2nd line
         ("CUDA error: an illegal memory access was encountered", True),
         ("CUDA error: unspecified launch failure", True),
+        ("Couldn't open the model file: unknown error", False),  # not CUDA's (#480)
         (_OUT_OF_MEMORY, False),  # the card is fine, only full
         ("Failed to allocate memory for requested buffer of size 1048576", False),
     ],
@@ -714,7 +715,7 @@ def test_the_processor_gets_the_8_bit_model_and_a_few_threads(
     # landing on the efficiency cores the game also wants (#188).
     import onnx_asr
 
-    from tycho.stt.parakeet import CPU_THREADS, ParakeetTranscriber
+    from tycho.stt.parakeet import CPU_THREADS, ParakeetTranscriber, cpu_threads
 
     asked: list[dict[str, object]] = []
 
@@ -727,7 +728,8 @@ def test_the_processor_gets_the_8_bit_model_and_a_few_threads(
     assert asked[0]["quantization"] == "int8"
     assert asked[0]["providers"] == ["CPUExecutionProvider"]
     options = asked[0]["sess_options"]
-    assert options.intra_op_num_threads == CPU_THREADS == 6  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
+    assert CPU_THREADS == 6
+    assert options.intra_op_num_threads == cpu_threads()  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
 
 
 def test_the_small_parts_can_run_on_the_processor(
@@ -791,3 +793,134 @@ def test_has_checks_every_copy(tmp_path: Path) -> None:
     store.ensure(one)
     assert store.has((one,))
     assert not store.has((one, two))
+
+
+@pytest.mark.parametrize(("logical", "threads"), [(32, 6), (8, 4), (4, 2), (1, 1), (None, 1)])
+def test_the_processor_never_gets_more_threads_than_the_pc_has_cores(
+    monkeypatch: pytest.MonkeyPatch, logical: int | None, threads: int
+) -> None:
+    """#480: 6 threads on a 4-core laptop is more than ONNX Runtime's own default, and
+    competes with the game. Windows counts each core twice with hyper-threading."""
+    from tycho.stt import parakeet
+
+    monkeypatch.setattr(parakeet.os, "cpu_count", lambda: logical)
+    assert parakeet.cpu_threads() == threads
+
+
+def test_a_card_that_breaks_while_its_session_is_made_keeps_that_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#480: broken while ``_open`` made the GPU session, nothing was kept, so the
+    half-built session, held only by the error's traceback, could be freed (#473)."""
+    from tycho.stt import parakeet
+    from tycho.stt.parakeet import ParakeetTranscriber
+
+    monkeypatch.setattr(parakeet, "_KEPT", [])
+    half_built: list[weakref.ref[_Model]] = []
+
+    def _open(cls: type[ParakeetTranscriber], folder: Path, device: Device) -> ParakeetTranscriber:
+        if device == "gpu":
+            session = _Model()  # what ONNX Runtime had made when the card broke
+            half_built.append(weakref.ref(session))
+            raise RuntimeError(_CARD_BROKE)
+        return ParakeetTranscriber(_Model(), "cpu", folder)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(ParakeetTranscriber, "_open", classmethod(_open))
+    assert ParakeetTranscriber.load(tmp_path, "gpu").device == "cpu"
+    assert half_built[0]() is not None  # never released
+    assert len(parakeet._KEPT) == 1  # pyright: ignore[reportPrivateUsage]
+
+
+def test_out_of_memory_while_a_session_is_made_keeps_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tycho.stt import parakeet
+    from tycho.stt.parakeet import ParakeetTranscriber
+
+    monkeypatch.setattr(parakeet, "_KEPT", [])
+
+    def _open(cls: type[ParakeetTranscriber], folder: Path, device: Device) -> ParakeetTranscriber:
+        if device == "gpu":
+            raise RuntimeError(_OUT_OF_MEMORY)
+        return ParakeetTranscriber(_Model(), "cpu", folder)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(ParakeetTranscriber, "_open", classmethod(_open))
+    assert ParakeetTranscriber.load(tmp_path, "gpu").device == "cpu"
+    assert parakeet._KEPT == []  # pyright: ignore[reportPrivateUsage]
+
+
+def _files(folder: Path, spec: ModelSpec) -> None:
+    folder.mkdir(parents=True, exist_ok=True)
+    for f in spec.files:
+        (folder / f.name).write_bytes(b"")
+
+
+def test_the_processor_uses_the_full_model_when_the_8_bit_one_isnt_there(tmp_path: Path) -> None:
+    """#480: an "auto" player upgraded offline has only the full model."""
+    from tycho.stt import PARAKEET_V2, PARAKEET_V2_INT8
+    from tycho.stt.parakeet import processor_model
+
+    assert processor_model(tmp_path) == PARAKEET_V2_INT8  # nothing yet: what to get
+    _files(tmp_path, PARAKEET_V2)
+    assert processor_model(tmp_path) == PARAKEET_V2
+    _files(tmp_path, PARAKEET_V2_INT8)
+    assert processor_model(tmp_path) == PARAKEET_V2_INT8
+
+
+@pytest.mark.parametrize("full_model_here", [True, False])
+def test_offline_after_upgrading_tycho_starts_on_the_full_model(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    full_model_here: bool,
+) -> None:
+    """#480: the 8-bit copy's download failed with no internet, and Tycho couldn't start,
+    though the full model was on disk."""
+    from tycho.settings import Settings
+    from tycho.start import assemble
+    from tycho.stt import PARAKEET_V2, PARAKEET_V2_INT8
+    from tycho.stt.parakeet import ParakeetTranscriber
+
+    def offline(self: ModelStore, spec: ModelSpec, progress: object = None) -> Path:
+        raise ModelError("Couldn't download the speech model: no internet.")
+
+    def ready(self: ModelStore, spec: ModelSpec) -> bool:
+        return full_model_here and spec == PARAKEET_V2
+
+    loaded: list[Device] = []
+
+    def load(folder: Path, device: Device) -> object:
+        loaded.append(device)
+        return SimpleNamespace(device=device)
+
+    monkeypatch.setenv("TYCHO_MODELS", str(tmp_path))
+    monkeypatch.setattr(ModelStore, "ensure", offline)
+    monkeypatch.setattr(ModelStore, "ready", ready)
+    monkeypatch.setattr(ParakeetTranscriber, "load", load)
+    current = Settings(transcription_device="cpu")
+    assert PARAKEET_V2_INT8 in models.speech_models("cpu")
+    if not full_model_here:
+        with pytest.raises(ModelError):
+            assemble.load_transcriber(current)
+        return
+    assert assemble.load_transcriber(current).device == "cpu"
+    assert loaded == ["cpu"]
+    assert "Using the full speech model until then" in caplog.text
+
+
+def test_check_says_the_full_model_can_go_when_speech_is_on_the_processor(
+    tmp_path: Path,
+) -> None:
+    """#480: an "auto" player from before 0.9 keeps a 2.5 GB model nothing uses."""
+    from tycho import doctor
+    from tycho.stt import PARAKEET_V2, PARAKEET_V2_INT8
+
+    unused = doctor._unused_full_model  # pyright: ignore[reportPrivateUsage]
+    _files(tmp_path, PARAKEET_V2_INT8)
+    assert unused((PARAKEET_V2_INT8,), tmp_path) == ""
+    _files(tmp_path, PARAKEET_V2)
+    said = unused((PARAKEET_V2_INT8,), tmp_path)
+    assert "2.5 GB" in said
+    assert "encoder-model.onnx.data" in said
+    assert "config.json" not in said  # shared with the 8-bit copy
+    assert unused((PARAKEET_V2, PARAKEET_V2_INT8), tmp_path) == ""  # the card uses it

@@ -119,8 +119,9 @@ def model_command(action: str, current: Settings) -> int:
     return 0
 
 
-def gpu_command(action: str) -> int:
-    """``tycho gpu``: NVIDIA's CUDA libraries, so speech recognition can use the card."""
+def gpu_command(action: str, device: str = "auto") -> int:
+    """``tycho gpu``: NVIDIA's CUDA libraries, so speech recognition can use the card.
+    ``device`` is the player's ``transcription_device``: "auto" runs on the processor."""
     from tycho.stt import CudaLibraries, ModelError, nvidia_driver
     from tycho.stt.cuda import DOWNLOAD_BYTES, MIN_DRIVER
 
@@ -159,7 +160,14 @@ def gpu_command(action: str) -> int:
     except ModelError as e:
         print(e, file=sys.stderr)
         return 2
-    print("Done. Speech recognition will use the graphics card the next time Tycho starts.")
+    if device == "gpu":
+        print("Done. Speech recognition will use the graphics card the next time Tycho starts.")
+    else:  # "auto" is the processor since #476
+        print(
+            'Done. To use it, choose the graphics card for "Speech recognition on" (Settings, '
+            'Advanced, in Tycho\'s window, or transcription_device = "gpu" in settings.toml), '
+            "then restart Tycho."
+        )
     return 0
 
 
