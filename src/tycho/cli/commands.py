@@ -14,7 +14,7 @@ from tycho.games import find_install, load_keys
 from tycho.packs import GameDataError, built_in
 from tycho.settings import Settings
 from tycho.start.assemble import download_progress
-from tycho.stt import PARAKEET_V2, ModelError, ModelStore
+from tycho.stt import PARAKEET_V2, ModelError, ModelStore, download_size, speech_models
 from tycho.stt.choice import GPU_HELP, MODEL_HELP
 
 log = logging.getLogger("tycho")
@@ -92,20 +92,26 @@ def actions_command(current: Settings, words: list[str]) -> int:
     return 0 if found or said else 1
 
 
-def model_command(action: str) -> int:
+def model_command(action: str, current: Settings) -> int:
     """``tycho model``: get the speech model before the first ``tycho run`` (a setup step an
-    agent can do for the player), or say whether it's here."""
+    agent can do for the player), or say whether it's here. Which copies it needs follows
+    ``transcription_device``: the 8-bit one for the processor, both for the graphics card."""
+    from tycho.stt.choice import device_choice
+
     model = ModelStore(paths.models_dir())
     folder = model.folder(PARAKEET_V2)
+    specs = speech_models(device_choice(current).device)
+    size = download_size(specs) / 1e9
     if action == "status":
-        if model.ready(PARAKEET_V2) or not model.missing(PARAKEET_V2):
+        if model.has(specs):
             print(f"Downloaded and checked, in {folder}.")
             return 0
-        print(f"Not downloaded yet ({PARAKEET_V2.size / 1e9:.1f} GB). Run: {MODEL_HELP}")
+        print(f"Not downloaded yet ({size:.1f} GB). Run: {MODEL_HELP}")
         return 1
-    print(f"Getting the speech model ({PARAKEET_V2.size / 1e9:.1f} GB) into {folder}.")
+    print(f"Getting the speech model ({size:.1f} GB) into {folder}.")
     try:
-        model.ensure(PARAKEET_V2, download_progress())
+        for spec in specs:
+            model.ensure(spec, download_progress())
     except ModelError as e:
         print(e, file=sys.stderr)
         return 2

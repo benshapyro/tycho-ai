@@ -10,15 +10,19 @@ from tycho.stt.device import (
 )
 from tycho.stt.models import (
     PARAKEET_V2,
+    PARAKEET_V2_INT8,
     HttpDownloader,
     ModelError,
     ModelFile,
     ModelSpec,
     ModelStore,
+    download_size,
+    speech_models,
 )
 
 __all__ = [
     "PARAKEET_V2",
+    "PARAKEET_V2_INT8",
     "CudaLibraries",
     "DeviceChoice",
     "HttpDownloader",
@@ -28,6 +32,8 @@ __all__ = [
     "ModelStore",
     "choose_device",
     "cuda_available",
+    "download_size",
     "gpu_free_mb",
     "nvidia_driver",
+    "speech_models",
 ]

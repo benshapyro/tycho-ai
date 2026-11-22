@@ -322,9 +322,9 @@ def test_while_starting_the_star_says_what_its_doing_and_a_second_start_says_wai
 def test_download_progress_reaches_the_star() -> None:
     seen: list[str] = []
     show = assemble.download_progress(doing=seen.append)
-    show("encoder-model.onnx.data", 1_200_000_000, 2_400_000_000)
+    show("encoder-model.int8.onnx", 326_000_000, 652_000_000)
     show("vocab.txt", 10, 20)  # a small file isn't the wait
-    assert seen == ["Getting the speech model (2.5 GB, once): 50%"]
+    assert seen == ["Getting the speech model (0.7 GB, once): 50%"]
 
 
 def test_a_crash_box_shows_tycho_s_last_words_not_the_traceback(

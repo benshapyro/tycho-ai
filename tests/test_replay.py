@@ -30,7 +30,7 @@ from tycho.packs import STAR_CITIZEN, built_in
 from tycho.ptt.binding import Binding
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime import Result, Session
-from tycho.stt import PARAKEET_V2, ModelStore, choose_device, cuda_available, gpu_free_mb
+from tycho.stt import PARAKEET_V2, ModelStore, choose_device, cuda_available, speech_models
 from tycho.stt.parakeet import SAMPLERATE, ParakeetTranscriber
 
 SC = built_in(STAR_CITIZEN)
@@ -66,9 +66,9 @@ def _audio(path: Path) -> np.ndarray[Any, np.dtype[np.float32]]:
 @pytest.fixture(scope="module")
 def transcriber() -> ParakeetTranscriber:
     store = ModelStore(paths.models_dir())
-    if not store.ready(PARAKEET_V2) and store.missing(PARAKEET_V2):
+    choice = choose_device("auto", cuda=cuda_available())
+    if not store.has(speech_models(choice.device)):
         pytest.skip(f"the speech model isn't in {store.folder(PARAKEET_V2)}; run tycho check")
-    choice = choose_device("auto", cuda=cuda_available(), free_mb=gpu_free_mb())
     print(f"\nParakeet on the {choice.device}: {choice.reason}")
     return ParakeetTranscriber.load(store.folder(PARAKEET_V2), choice.device)
 
@@ -76,7 +76,8 @@ def transcriber() -> ParakeetTranscriber:
 def test_accuracy_matches_the_benchmark(transcriber: ParakeetTranscriber) -> None:
     session = _latest_session()
     device = "cuda" if transcriber.device == "gpu" else "cpu"
-    bench_file = session / "results" / f"onnx-asr_{PARAKEET_V2.name}_{device}.jsonl"
+    name = PARAKEET_V2.name if device == "cuda" else f"{PARAKEET_V2.name}-int8"  # #188
+    bench_file = session / "results" / f"onnx-asr_{name}_{device}.jsonl"
     if not bench_file.is_file():
         pytest.skip(f"no benchmark result to compare with: {bench_file.name}")
     bench = {

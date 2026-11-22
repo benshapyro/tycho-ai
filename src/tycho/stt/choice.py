@@ -9,9 +9,10 @@ from tycho.stt import DeviceChoice
 
 
 def gpu_hint() -> str | None:
-    """What to do when an NVIDIA card could run speech recognition but its libraries are
-    missing; None if there's no NVIDIA card or it already has them (downloaded, or the
-    pip wheels in development), so a card that's merely short of memory gets no hint."""
+    """What to do when the player set the graphics card but its libraries are missing;
+    None if there's no NVIDIA card or it already has them (downloaded, or the pip wheels
+    in development). Only for ``transcription_device = "gpu"``: "auto" means the
+    processor on purpose, so it gets no hint."""
     import importlib.util
 
     from tycho.stt import CudaLibraries, nvidia_driver
@@ -40,14 +41,13 @@ MODEL_HELP = f"{TYCHO} model download"
 
 
 def device_choice(current: Settings) -> DeviceChoice:
-    from tycho.stt import CudaLibraries, choose_device, cuda_available, gpu_free_mb
+    from tycho.stt import CudaLibraries, choose_device, cuda_available
 
-    if current.transcription_device == "cpu":
-        return choose_device("cpu", cuda=False, free_mb=None)
+    if current.transcription_device != "gpu":  # no need to load CUDA to say "processor"
+        return choose_device(current.transcription_device, cuda=False)
     libraries = CudaLibraries(paths.cuda_dir())
     cuda = cuda_available(libraries.dlls if libraries.ready() else None)
-    free_mb = gpu_free_mb() if cuda else None  # no NVIDIA tool runs without CUDA
-    return choose_device(current.transcription_device, cuda=cuda, free_mb=free_mb)
+    return choose_device("gpu", cuda=cuda)
 
 
 def device_name(device: str) -> str:

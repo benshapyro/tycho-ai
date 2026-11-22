@@ -15,7 +15,7 @@ from tycho.ptt.binding import Binding
 from tycho.ptt.conflicts import conflict_warnings
 from tycho.ptt.devices import input_sources
 from tycho.settings import Settings
-from tycho.stt import PARAKEET_V2, ModelStore
+from tycho.stt import PARAKEET_V2, ModelStore, speech_models
 from tycho.stt.choice import device_choice, device_name, gpu_hint
 
 if TYPE_CHECKING:
@@ -70,15 +70,17 @@ def load_transcriber(
     """``doing`` hears what's happening, for the star of a Tycho with no terminal."""
     from tycho.stt.parakeet import ParakeetTranscriber
 
-    folder = ModelStore(paths.models_dir()).ensure(PARAKEET_V2, download_progress(doing=doing))
+    choice = device_choice(current)
+    store = ModelStore(paths.models_dir())
+    for spec in speech_models(choice.device):
+        store.ensure(spec, download_progress(doing=doing))
     if doing is not None:
         doing("Loading the speech model")
-    choice = device_choice(current)
     log.info("Speech recognition on the %s: %s", device_name(choice.device), choice.reason)
     started = time.monotonic()
-    transcriber = ParakeetTranscriber.load(folder, choice.device)
+    transcriber = ParakeetTranscriber.load(store.folder(PARAKEET_V2), choice.device)
     log.info("Speech model ready in %.1f s", time.monotonic() - started)
-    wanted = current.transcription_device != "cpu"
+    wanted = current.transcription_device == "gpu"
     if transcriber.device == "cpu" and wanted and (hint := gpu_hint()):
         log.info("%s", hint)
     return transcriber
@@ -184,6 +186,6 @@ def download_progress(
         line = f"  Downloading {what}: {name} {percent:3d}% {size}"
         print("\r" + line, end=end, flush=True)  # \r: overwrite the line in place
         if doing is not None and total > 1e8:  # the big file is the wait
-            doing(f"Getting {what} (2.5 GB, once): {percent}%")
+            doing(f"Getting {what} ({total / 1e9:.1f} GB, once): {percent}%")
 
     return show
