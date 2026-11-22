@@ -842,6 +842,8 @@ dependencies = [
     { name = "sounddevice" },
     { name = "tomlkit" },
     { name = "winrt-runtime" },
+    { name = "winrt-windows-foundation" },
+    { name = "winrt-windows-graphics" },
     { name = "winrt-windows-graphics-capture" },
     { name = "winrt-windows-graphics-capture-interop" },
     { name = "winrt-windows-graphics-directx" },
@@ -888,6 +890,8 @@ requires-dist = [
     { name = "sounddevice", specifier = ">=0.5.6" },
     { name = "tomlkit", specifier = ">=0.13.3" },
     { name = "winrt-runtime", specifier = ">=4.2.0" },
+    { name = "winrt-windows-foundation", specifier = ">=4!10.0.28000.2957" },
+    { name = "winrt-windows-graphics", specifier = ">=4!10.0.28000.2957" },
     { name = "winrt-windows-graphics-capture", specifier = ">=4!10.0.28000.2957" },
     { name = "winrt-windows-graphics-capture-interop", specifier = ">=4.0.0" },
     { name = "winrt-windows-graphics-directx", specifier = ">=4!10.0.28000.2957" },
@@ -990,6 +994,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/4c/c3/ea71573d8aa64235a7860314c4d6ec69f726e5ead46d253873fb17639543/winrt_windows_foundation_collections-4!10.0.28000.2957.tar.gz", hash = "sha256:38989873bbdace2346d24168ceb66359800b7429128ea2ef1a36da55b255af1e", size = 8693, upload-time = "2026-10-31T23:44:23.349Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/f1/c8d3b74f1f89397ee826a1a5dc8085431664fc5f4d3660643b3cf9c9b536/winrt_windows_foundation_collections-4!10.0.28000.2957-py3-none-any.whl", hash = "sha256:0401c1b6ed512d1fdad8ba1571698e9000ebee6a69781db9a01994ffcc54a503", size = 11342, upload-time = "2026-10-31T23:39:35.446Z" },
+]
+
+[[package]]
+name = "winrt-windows-graphics"
+version = "4!10.0.28000.2957.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/58/c5/7ed1912e28625337dc6dfbdb46bcf6317ced552c44e75421282f3eac8a0d/winrt_windows_graphics-4!10.0.28000.2957.1.tar.gz", hash = "sha256:e371cae0446b13e2f2870d23a815c5ddef435225ddaa41b148c4a0b1fa7eef79", size = 3128, upload-time = "2026-11-05T20:34:45.408Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4b/15/6a650cf44ee98b97c7431530b4233a89d8fd8197026fadff8693a2c0f034/winrt_windows_graphics-4!10.0.28000.2957.1-py3-none-any.whl", hash = "sha256:af9b64158a6dbf6e29e6d83c830a3c6639508c3359570e31292a57b9a4352e29", size = 4603, upload-time = "2026-11-05T20:34:28.508Z" },
 ]
 
 [[package]]

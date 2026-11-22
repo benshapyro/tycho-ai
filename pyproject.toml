@@ -29,6 +29,8 @@ dependencies = [
     "tomlkit>=0.13.3",
     # Looking at the game window when asked (#31, ADR 14): Windows Graphics Capture (ADR 3).
     "winrt-runtime>=4.2.0",
+    "winrt-Windows.Foundation>=4!10.0.28000.2957",
+    "winrt-Windows.Graphics>=4!10.0.28000.2957",
     "winrt-Windows.Graphics.Capture>=4!10.0.28000.2957",
     "winrt-Windows.Graphics.Capture.Interop>=4.0.0",
     "winrt-Windows.Graphics.DirectX>=4!10.0.28000.2957",
