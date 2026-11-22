@@ -1349,14 +1349,22 @@ tag = "tile"
 heard = "what's the best loadout for my M80"
 mode = "planning"
 expect = ["reply", "look_up"]
-card = ["list", "ship", "steps"]
+card = ["loadout", "list", "ship", "steps"]
+tag = "tile"
+
+# #491: the comparison card, two ships side by side.
+[[case]]
+heard = "compare the cutlass black and the freelancer for cargo"
+mode = "lookup"
+expect = ["reply"]
+card = ["compare", "ship", "list"]
 tag = "tile"
 
 [[case]]
 heard = "show me a couple interesting things on the tile"
 mode = "chat"
 expect = ["reply"]
-card = ["list", "route", "recipe", "ship", "fleet", "steps", "headlines"]
+card = ["list", "route", "recipe", "ship", "fleet", "steps", "headlines", "compare", "loadout"]
 tag = "tile"
 
 [[case]]

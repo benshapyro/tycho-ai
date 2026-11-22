@@ -25,6 +25,8 @@ type Kind = Literal[
     "steps",  # something to do in order
     "headlines",  # dated news with a source
     "warning",  # exact text the player needs, such as the keybinding to set
+    "compare",  # two things side by side, figure against figure (#491)
+    "loadout",  # what something is fitted with, by slot and size (#491)
     "long",  # the long-answer reader: Tycho's last reply, to read
     "confirm",  # a question waiting on the player, with the time left
     "notice",  # something about Tycho that stays true for a while
@@ -38,6 +40,8 @@ BRAIN_KINDS: tuple[Kind, ...] = (
     "steps",
     "headlines",
     "warning",
+    "compare",
+    "loadout",
 )
 """The kinds Claude may show. The rest come from Tycho itself."""
 ALL_KINDS: tuple[Kind, ...] = cast(tuple[Kind, ...], get_args(Kind.__value__))
@@ -48,6 +52,7 @@ NAMES: Mapping[Kind, str] = {
     "steps": "Steps",
     "headlines": "Headlines",
     "warning": "Warnings",
+    "compare": "Comparisons",
     "long": "Long answers",
     "notice": "Notices from Tycho",
 }
@@ -58,7 +63,7 @@ SPECS: Kind = "ship"
 
 type Tone = Literal["normal", "caution", "danger"]
 
-MAX_ROWS: Mapping[Kind, int] = {"steps": 8, "route": 2}
+MAX_ROWS: Mapping[Kind, int] = {"steps": 8, "route": 2, "loadout": 8}
 """Rows a card may have; others get ``DEFAULT_ROWS``. More is a list to read elsewhere."""
 DEFAULT_ROWS = 6
 TITLE, LABEL, SOURCE = 40, 28, 40
@@ -89,7 +94,8 @@ class Card:
     """Where it's from ("UEX"), never a claim Tycho can't back."""
     rows: tuple[Row, ...] = ()
     hero: tuple[str, str] | None = None
-    """One big figure with its label: a route's profit."""
+    """One big figure with its label: a route's profit. On a comparison, the names of
+    the two things compared, left and right."""
     body: tuple[str, ...] = ()
     """Paragraphs: a long answer, a warning's or a notice's words."""
     seconds: float = 0.0
@@ -98,12 +104,20 @@ class Card:
     def shown(self) -> tuple[str, str]:
         """Every word the card shows, and its values (drawn in the number face): the
         Tile checks its bundled fonts have them all (#458). A specs row with no value
-        draws its detail in the number face instead, so it's checked there (#515)."""
-        rows = (part for r in self.rows for part in (r.text, r.detail))
+        draws its detail in the number face instead, so it's checked there (#515). A
+        comparison draws both sides' figures in the number face, and its two names as
+        words (#491)."""
+        both = self.kind == "compare"
+        rows = (part for r in self.rows for part in (r.text, "" if both else r.detail))
         hero_label, hero_value = self.hero or ("", "")
+        if both:
+            hero_label, hero_value = hero_label + hero_value, ""
         words = "".join((self.title, self.label, self.source, *rows, hero_label, *self.body))
         specs = self.kind == SPECS
-        values = (r.value or (r.detail if specs else "") for r in self.rows)
+        values = (
+            (r.detail + r.value) if both else r.value or (r.detail if specs else "")
+            for r in self.rows
+        )
         return words, "".join((*values, hero_value))
 
     @property
@@ -146,6 +160,8 @@ def from_tool(arguments: Mapping[str, object]) -> Card:
     body = tuple(p for p in [clean(arguments.get("text"), BODY)] if p)
     if kind == "route" and len(rows) != 2:
         kind = "list"  # a route is a buy and a sell; anything else reads as a list
+    if kind == "compare" and not (hero and hero[0]):
+        kind = "list"  # a comparison names its two sides; without them it's a list
     rows = rows[: MAX_ROWS.get(kind, DEFAULT_ROWS)]
     if kind == "steps":  # the Tile numbers steps itself
         rows = tuple(Row(_NUMBERED.sub("", r.text) or r.text, r.detail, r.value) for r in rows)
@@ -266,7 +282,12 @@ hero_label and hero_value for the profit.
 can't do the job.
 - steps: one row per step (step | | ), in order.
 - headlines: news (headline | | date).
+- compare: two things side by side, such as two ships; hero_label and hero_value \
+name them (left, right); rows (what | left's figure | right's figure), each figure \
+with its unit.
+- loadout: what something is fitted with, by slot, biggest first (item, with "x2" \
+if there are two | slot, the same for each row in it | size, like "S3").
 - warning: no rows; text holds the exact words ("Keybindings, search lock all doors, \
 give it a key").
 Empty strings for what a kind doesn't use. Keep every field short: at most 6 rows \
-(8 steps) of a few words each; more isn't shown, and a long card can be cut off."""
+(8 steps or loadout rows) of a few words each; more isn't shown, and a long card can be cut off."""
