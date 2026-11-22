@@ -16,9 +16,10 @@ can be paid in that time instead of after it:
 """
 
 import asyncio
+import contextlib
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 
 log = logging.getLogger(__name__)
 
@@ -27,6 +28,10 @@ IDLE_SECONDS = 4.0
 them at 5 s), so a press opens one."""
 CACHE_STALE_SECONDS = 50 * 60.0
 """The cache lasts an hour from its last use: past this, a press writes it again."""
+SETTLE_SECONDS = 2.0
+"""How long a request waits for a cache write a press started (#533). Claude serves the
+cache only once the write has begun answering, so a request sent alongside it misses and
+writes it again. The write began a second or more before the request, at the press."""
 
 
 def now() -> float:
@@ -53,10 +58,15 @@ class Primer:
         self._cached = -float("inf")
         """When the cache was last read or written."""
         self._task: asyncio.Task[None] | None = None
+        self._writing = False
+        """``_task`` writes the cache (rather than opening a connection)."""
+        self._busy = 0
+        """Warm-ups running outside priming (the start-up one): a press waits for them."""
 
     def used(self, *, cache: bool = True) -> None:
-        """A request to the provider just went or ended: the connection is open, and
-        (unless ``cache`` is False) the cache's hour starts again."""
+        """A request to the provider just went, or one ended with an answer: the
+        connection is open, and (unless ``cache`` is False) the cache's hour starts
+        again. A request that failed or was cancelled reads no cache (#533)."""
         now = self._clock()
         self._talked = now
         if cache:
@@ -65,7 +75,7 @@ class Primer:
     def prime(self) -> None:
         """Push-to-talk went down: start getting ready, if anything's due. Runs on the
         event loop."""
-        if self._task is not None and not self._task.done():
+        if self._busy or (self._task is not None and not self._task.done()):
             return
         now = self._clock()
         if now - self._cached > CACHE_STALE_SECONDS:
@@ -74,7 +84,28 @@ class Primer:
             work, what = self._open, "open the connection"
         else:
             return
+        self._writing = work == self._rewarm_cache
         self._task = asyncio.get_running_loop().create_task(self._run(work, what))
+
+    @contextlib.asynccontextmanager
+    async def warming(self) -> AsyncGenerator[None]:
+        """Around a warm-up outside priming (at start, or after the keybinds change):
+        a press meanwhile starts nothing, so the cache isn't written twice (#533)."""
+        self._busy += 1
+        try:
+            yield
+        finally:
+            self._busy -= 1
+
+    async def going(self, seconds: float = SETTLE_SECONDS) -> None:
+        """A request is about to go. It first waits up to ``seconds`` for a cache write
+        a press started, so it reads the cache instead of writing it again (#533); then
+        its connection counts as used. Call ``used`` when it has its answer."""
+        task = self._task
+        if task is not None and not task.done() and self._writing:
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(asyncio.shield(task), seconds)
+        self.used(cache=False)
 
     async def _rewarm_cache(self) -> None:
         if await self._rewarm():

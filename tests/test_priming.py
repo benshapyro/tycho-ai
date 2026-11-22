@@ -7,8 +7,10 @@ from typing import Any
 import anthropic
 import httpx2
 
-from tests.fakes.fake_chat import FakeChat
+from tests.fakes.fake_chat import FakeChat, text
+from tests.test_brain import _end, _message_start, _sse  # pyright: ignore[reportPrivateUsage]
 from tycho.brain.claude import ClaudeBrain
+from tycho.brain.decisions import BrainRequest
 from tycho.brain.openrouter import OpenRouterBrain
 from tycho.brain.priming import CACHE_STALE_SECONDS, IDLE_SECONDS, Primer
 from tycho.commands import CommandMatcher
@@ -21,21 +23,26 @@ KEYBINDS = Keybinds([], {})
 
 
 class _Rig:
-    def __init__(self, *, rewarmed: bool = True, fails: bool = False) -> None:
+    def __init__(self, *, rewarmed: bool = True, fails: bool = False, takes: float = 0.0) -> None:
         self.now = 0.0
         self.connects = 0
         self.rewarms = 0
+        self.written = 0
         self._rewarmed = rewarmed
         self._fails = fails
+        self._takes = takes
         self.primer = Primer(self._connect, self._rewarm, clock=lambda: self.now)
 
     async def _connect(self) -> None:
         self.connects += 1
+        await asyncio.sleep(self._takes)
         if self._fails:
             raise OSError("offline")
 
     async def _rewarm(self) -> bool:
         self.rewarms += 1
+        await asyncio.sleep(self._takes)
+        self.written += 1
         return self._rewarmed
 
     def press(self) -> None:
@@ -43,7 +50,7 @@ class _Rig:
 
         async def go() -> None:
             self.primer.prime()
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.01)
             await self.primer.close()
 
         asyncio.run(go())
@@ -124,6 +131,71 @@ def test_presses_while_priming_start_nothing_more() -> None:
     assert rig.connects == 1
 
 
+def test_a_request_waits_for_the_cache_write_a_press_started() -> None:
+    """#533: sent alongside the write, the request missed the cache and wrote it again."""
+    rig = _Rig(takes=0.05)
+
+    async def go() -> int:
+        rig.primer.prime()
+        await rig.primer.going()
+        return rig.written
+
+    assert asyncio.run(go()) == 1
+
+
+def test_a_request_waits_for_a_cache_write_only_so_long() -> None:
+    rig = _Rig(takes=5.0)
+
+    async def go() -> int:
+        rig.primer.prime()
+        await rig.primer.going(0.01)
+        written = rig.written
+        await rig.primer.close()
+        return written
+
+    assert asyncio.run(go()) == 0
+
+
+def test_a_request_doesnt_wait_for_a_connection_being_opened() -> None:
+    rig = _Rig(takes=5.0)
+    rig.primer.used()
+    rig.now += 30
+
+    async def go() -> int:
+        rig.primer.prime()
+        await asyncio.sleep(0)
+        async with asyncio.timeout(1):
+            await rig.primer.going()
+        await rig.primer.close()
+        return rig.connects
+
+    assert asyncio.run(go()) == 1
+
+
+def test_a_press_during_the_start_up_warm_up_starts_nothing() -> None:
+    """#533: the cache was written twice when the player pressed in the first seconds."""
+    rig = _Rig()
+
+    async def go() -> None:
+        async with rig.primer.warming():
+            rig.primer.prime()
+            await asyncio.sleep(0)
+        await rig.primer.close()
+
+    asyncio.run(go())
+    assert rig.rewarms == 0
+
+
+def test_a_request_that_failed_doesnt_count_as_reading_the_cache() -> None:
+    """#533: only a request that got its answer renews the cache's hour."""
+    rig = _Rig()
+    rig.primer.used()
+    rig.now += CACHE_STALE_SECONDS + 1
+    asyncio.run(rig.primer.going())  # the request went, then failed: no ``used``
+    rig.press()
+    assert rig.rewarms == 1
+
+
 def _client() -> tuple[anthropic.AsyncAnthropic, list[tuple[str, str]]]:
     """The real ``AsyncAnthropic``: a free GET for the model, an empty warm-up reply."""
     sent: list[tuple[str, str]] = []
@@ -178,6 +250,68 @@ def test_claude_writes_its_cache_again_after_a_long_break(monkeypatch: Any) -> N
 
     asyncio.run(go())
     assert sent == [("POST", "/v1/messages"), ("POST", "/v1/messages")]
+
+
+def _answering_client() -> tuple[anthropic.AsyncAnthropic, list[tuple[str, str]]]:
+    """Like ``_client``, but a request gets a one-line reply, streamed."""
+    sent: list[tuple[str, str]] = []
+    reply = _sse(
+        _message_start(),
+        {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
+        {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Hi."}},
+        {"type": "content_block_stop", "index": 0},
+        *_end("end_turn"),
+    )
+
+    def answer(request: httpx2.Request) -> httpx2.Response:
+        sent.append((request.method, request.url.path))
+        headers = {"content-type": "text/event-stream"}
+        return httpx2.Response(200, content=reply, headers=headers)
+
+    transport = httpx2.MockTransport(answer)
+    client = anthropic.AsyncAnthropic(
+        api_key="sk-ant-test", http_client=httpx2.AsyncClient(transport=transport)
+    )
+    return client, sent
+
+
+def test_a_claude_request_leaves_the_connection_open_for_the_next_press(
+    monkeypatch: Any,
+) -> None:
+    """#533: a press soon after a request sends nothing more."""
+    client, sent = _answering_client()
+    brain = ClaudeBrain(MATCHER, client=client, pack=SC)
+    now = [CACHE_STALE_SECONDS * 2]
+    monkeypatch.setattr("tycho.brain.priming.now", lambda: now[0])
+
+    async def go() -> None:
+        await brain.decide(BrainRequest("hello", KEYBINDS))
+        now[0] += IDLE_SECONDS - 1
+        brain.prime()
+        await asyncio.sleep(0.05)
+        await brain.close()
+
+    asyncio.run(go())
+    assert sent == [("POST", "/v1/messages")]
+
+
+def test_an_openrouter_request_leaves_the_connection_open_for_the_next_press(
+    monkeypatch: Any,
+) -> None:
+    chat = FakeChat(text("Hi."))
+    brain = OpenRouterBrain(MATCHER, model="anthropic/claude-haiku-5.5", client=chat, pack=SC)
+    now = [CACHE_STALE_SECONDS * 2]
+    monkeypatch.setattr("tycho.brain.priming.now", lambda: now[0])
+
+    async def go() -> None:
+        await brain.decide(BrainRequest("hello", KEYBINDS))
+        now[0] += IDLE_SECONDS - 1
+        brain.prime()
+        await asyncio.sleep(0)
+        await brain.close()
+
+    asyncio.run(go())
+    assert (chat.connected, len(chat.requests)) == (0, 1)
 
 
 def test_openrouter_opens_its_connection_too(monkeypatch: Any) -> None:
