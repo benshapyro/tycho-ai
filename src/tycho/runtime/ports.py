@@ -5,6 +5,7 @@ from typing import Protocol
 from tycho.audio.clip import Samples
 from tycho.brain import BrainRequest, Decision
 from tycho.keybinds import Keybinds
+from tycho.situation import Situation
 from tycho.tile import Card
 
 
@@ -90,6 +91,10 @@ class GameState(Protocol):
     """
 
     def facts(self) -> frozenset[str]: ...
+
+    def situation(self) -> Situation:
+        """``facts`` and what else the log shows. Blocking, like ``facts``."""
+        ...
 
 
 class Display(Protocol):
