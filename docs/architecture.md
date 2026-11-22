@@ -8,9 +8,9 @@ Status: living document. Decisions are recorded in [adr/](adr) (index in [adr/RE
 
 Tycho is a voice co-pilot for Star Citizen. You talk to it the way you'd talk to a crewmate. It works out what you mean, presses the right keys through your own keybinds, answers questions from live game data, and (planned) looks at your screen when you let it.
 
-Existing tools in this space, for Star Citizen and other games, share the same failures. Tycho is built around fixing them:
+Existing tools in this space, for Star Citizen and other games, share the same failures. Tycho is designed around fixing them. Points 2 to 5 are built; point 1 is mostly planned:
 
-1. **It knows what's going on.** Other assistants press keys blind. They can't tell whether your shields are already on, or whether you're in a seat or on foot, so "turn on shields" can turn them off. Tycho tracks state and checks before toggling.
+1. **It knows what's going on** (planned, stage 2). Other assistants press keys blind. They can't tell whether your shields are already on, or whether you're in a seat or on foot, so "turn on shields" can turn them off. Tycho will track state and check before toggling. Today it reads two facts from the game's log for its safety guards, prefers specific on and off keys to toggles where the player has them, and says what it sent, never what happened.
 2. **Common commands feel instant.** "Landing gear" should happen in well under half a second, with no round trip to a cloud model.
 3. **It understands loose, chained and contextual requests.** "Get us ready to leave and call the tower" becomes the full startup sequence. "Do that again" and "no, the other one" work.
 4. **It knows the game.** Trade, loadout, mining, location and lore answers come from live data, not a model's memory, and say where they came from.
@@ -20,8 +20,8 @@ Existing tools in this space, for Star Citizen and other games, share the same f
 
 **Goals**
 - Run ship, vehicle and on-foot actions by natural speech, including multi-step sequences.
-- See the game window when the user allows it, and use what it sees both to answer and to decide.
-- Track game state (ship, seat, power, location, current task), with how sure it is of each fact.
+- See the game window when the user allows it, and use what it sees both to answer and to decide. (Planned.)
+- Track game state (ship, seat, power, location, current task), with how sure it is of each fact. (Planned.)
 - Answer game-knowledge questions from live sources: UEX Corp, the Star Citizen Wiki API, and starcitizen.tools.
 - Have a voice and persona worth listening to for hours, configurable by the user.
 - Be measurable: a test set of real spoken commands, with accuracy and latency tracked on every change.
@@ -47,7 +47,7 @@ Tycho is an AI product, not traditional software with a chatbot added. In practi
 - **Setup is a conversation.** First run finds your mics and controllers, has you say something to check your level, and has you press your push-to-talk button. The settings screen shows the result.
 - **Ask or click, same result.** Every setting can be changed by voice or in the GUI, and both edit the same settings. See [ADR 5](adr/0005-settings-one-schema-three-ways-in.md).
 - **It explains itself.** When something is wrong, such as a silent mic, a missing keybind or a service that's down, Tycho says what and why in plain words, instead of just failing.
-- **It learns where you can see it.** Ship names, places and shorthand it picks up are listed where you can review, edit and delete them. Nothing is learned in secret.
+- **It learns where you can see it** (planned, [#51](https://github.com/benshapyro/tycho-ai/issues/51); the player's fleet works this way today). Ship names, places and shorthand it picks up are listed where you can review, edit and delete them. Nothing is learned in secret.
 - **Quality is measured.** Speech, understanding and actions are scored against recorded speech on every change. See section 6.
 
 ## 3. Constraints
@@ -96,7 +96,7 @@ Every outside service (transcription, models, voice) sits behind a small typed i
 
 ### 4.3 Knowing the state of the game
 
-This is the core of the design. Tycho keeps a running picture of the game: ship, seat, power, shields, landing gear, doors, quantum status, location and current mission. Each fact records **where it came from** and **how sure** Tycho is:
+*Planned (stage 2); only the narrow log reader is built.* This is the core of the design. Tycho keeps a running picture of the game: ship, seat, power, shields, landing gear, doors, quantum status, location and current mission. Each fact records **where it came from** and **how sure** Tycho is:
 
 - **Seen:** read from a screen capture. High confidence, for a short time.
 - **Logged:** from `Game.log`. High confidence, but only for events the log records.
@@ -108,6 +108,8 @@ Rules:
 - Facts go stale. An unconfirmed fact loses confidence over time.
 
 ### 4.4 Screen vision and permission
+
+*Planned (stage 2); not built.*
 
 - **Per-request trigger:** a word the user chooses ("look", say) captures the game window together with what was said, and sends both to the brain.
 - **Standing permission (off by default):** a setting that lets Tycho capture whenever the state tracker needs to confirm something.
@@ -168,6 +170,7 @@ Settings (one schema, voice and file editing) arrive in stage 1. The settings GU
 
 ## 6. How we'll know it's world-class
 
+- **Where it stands:** the dated results and their limits are in [How Tycho was built](current/how-tycho-was-built.md).
 - **Test set:** at least 200 recorded phrases, each with the right outcome, including loose wording, chained commands and noise. Run on every change.
 - **Accuracy:** the right action, or a correct "I'm not sure", on at least 95% of the test set. Zero wrong actions on confirm-grade commands.
 - **Speed, from end of speech to action:**

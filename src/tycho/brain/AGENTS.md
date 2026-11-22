@@ -29,4 +29,4 @@ Claude decides what to do with anything the fast path doesn't match. Its output 
 
 - `tests/test_openrouter.py` scripts an OpenAI-style stream (`tests/fakes/fake_chat.py`).
 - `tests/test_brain.py` scripts Claude's stream (`_Calls`, `_looks_up`, `_picks`, `_reply`). It needs no key.
-- Any change here should be judged by the eval, which is paid (about 10 cents a run, ask first): `uv run python tools/bench/tycho_eval.py`. The bar is zero wrong presses. Compare the mean calls a request and the acting p50 with the last run.
+- Any change here should be judged by the eval, which is paid (about 5 cents a run, ask first): `uv run python tools/bench/tycho_eval.py`. The bar is zero wrong presses. Compare the mean calls a request and the acting p50 with the last run.
