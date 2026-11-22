@@ -260,9 +260,7 @@ class ModelStore:
 
     def ready(self, spec: ModelSpec) -> bool:
         """Present and checked, without hashing anything. For a quick status, not for loading."""
-        folder = self.folder(spec)
-        checked = _read_marker(folder)
-        return all(checked.get(f.name) == [*_stamp(folder / f.name), f.sha256] for f in spec.files)
+        return verified(self.folder(spec), spec)
 
     def has(self, specs: tuple[ModelSpec, ...]) -> bool:
         """Every file of ``specs`` is here and right: quick when already checked."""
@@ -336,6 +334,13 @@ def _still_to_fetch(folder: Path, missing: list[ModelFile]) -> int:
         have = _size(folder / file.name) + _size(folder / f"{file.name}.part")
         total += max(0, file.size - have)
     return total
+
+
+def verified(folder: Path, spec: ModelSpec) -> bool:
+    """Every file of ``spec`` in ``folder`` was checked against its hash and hasn't
+    changed since, without hashing anything (``ModelStore.ready``)."""
+    checked = _read_marker(folder)
+    return all(checked.get(f.name) == [*_stamp(folder / f.name), f.sha256] for f in spec.files)
 
 
 def _stamp(path: Path) -> tuple[int, int]:

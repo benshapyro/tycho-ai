@@ -445,6 +445,7 @@ class Session:
             progress=progress,
             trace=trace,
             trying=trying,
+            still_trying=lambda: self._trying,
         )
         return end(status, detail)
 

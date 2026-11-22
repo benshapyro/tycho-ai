@@ -401,6 +401,10 @@ def test_a_skipped_step_is_not_ticked_and_next_stays_in_view(setup: Setup) -> No
     for i, cls in enumerate(["todo", "skipped", "todo"]):
         expect(steps.nth(i)).to_have_class(cls)
         expect(steps.nth(i)).not_to_contain_text("✓")
+    # How a skipped step looks, not only its class (#506).
+    expect(steps.nth(1).locator("b")).to_have_text("\u2013")  # an en dash
+    expect(steps.nth(1)).to_have_attribute("title", "Skipped. You can add it later.")
+    expect(steps.nth(0)).to_have_attribute("title", "Still to do")
     # Done properly, a step is ticked.
     page.get_by_role("button", name="Back").click()
     page.locator("#capture").click()
@@ -424,6 +428,29 @@ def test_a_skipped_key_is_still_to_do_where_the_brain_is_all_there_is(
     setup.at("Keys")
     setup.next()
     expect(page.locator(".steps li").nth(1)).to_have_class("todo")
+    setup.close()
+
+
+def test_a_skipped_key_is_still_to_do_with_key_actions_off(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#506: with key actions off the built-in phrases press nothing, so in a game where
+    Tycho can press keys the brain is still all there is, and setup says why."""
+    settings.save(Settings(key_actions=False), path)
+    setup = Setup(browser, path)
+    page = setup.page
+    setup.at("Game")
+    setup.next()
+    setup.at("Keys")
+    expect(page.locator("#keysNote")).to_have_class("warn-line")
+    expect(page.locator("#keysNote")).to_contain_text("Key actions are off")
+    setup.next()
+    expect(page.locator(".steps li").nth(1)).to_have_class("todo")
+    expect(page.locator(".steps li").nth(1)).to_have_attribute("title", "Still to do")
+    for _ in range(2):
+        setup.next()
+    setup.at("Try it")
+    expect(page.locator("#noBrain")).to_contain_text("and key actions off, Tycho can't answer")
     setup.close()
 
 

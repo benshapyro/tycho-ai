@@ -224,9 +224,10 @@ def test_every_symbol_the_tile_draws_is_in_its_font() -> None:
             assert drawn(font(face, 20), ch), (face, ch)
 
 
-def test_greek_cyrillic_and_the_euro_draw_in_windows_faces_not_boxes() -> None:
+def test_greek_and_cyrillic_draw_in_windows_faces_not_boxes_and_the_euro_stays() -> None:
     """#458: the bundled fonts have no Greek or Cyrillic. A card with either draws in
-    Windows' own faces, which have both, instead of as boxes."""
+    Windows' own faces, which have both, instead of as boxes. The € is in the bundled
+    faces, so it keeps them (#515)."""
     import sys
 
     from tycho.tile.draw import _Pen  # pyright: ignore[reportPrivateUsage]
@@ -237,6 +238,10 @@ def test_greek_cyrillic_and_the_euro_draw_in_windows_faces_not_boxes() -> None:
         assert not bundled_draws(foreign), foreign
         assert not bundled_draws("", foreign), foreign
     assert not bundled_draws("", "→")  # Saira has the arrow; Share Tech Mono doesn't
+    # A specs row with no value draws its detail in the number face (#515).
+    arrow = Card("ship", title="Ship", rows=(Row("Route", "Area18 → Lorville", ""),))
+    assert not bundled_draws(*arrow.shown())
+    assert bundled_draws(*Card("list", title="Route", rows=(Row("Go", "A → B"),)).shown())
     look = Look()
     assert _Pen(LIST, look).windows is False
     greek = Card("list", title="Prices", rows=(Row("Αθήνα", "Ελλάδα", "12 €"), Row("Москва")))
@@ -250,3 +255,28 @@ def test_greek_cyrillic_and_the_euro_draw_in_windows_faces_not_boxes() -> None:
         for face, ch in wanted:
             f = pen.font(face, 20)
             assert (f.getbbox(ch), f.getlength(ch)) != (f.getbbox(missing), f.getlength(missing))
+
+
+def test_each_bundled_face_is_loaded_once_for_the_character_checks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#515: the first check of each character reloaded the font file, inside the
+    Tile's lock. Now each face is loaded once, whatever characters are checked."""
+    from tycho.tile import faces
+
+    loads: list[str] = []
+    real = faces._bundled  # pyright: ignore[reportPrivateUsage]
+
+    def counted(face: faces.Face, size: int) -> faces.Font:
+        loads.append(face)
+        return real(face, size)
+
+    monkeypatch.setattr(faces, "_bundled", counted)
+    faces._has.cache_clear()  # pyright: ignore[reportPrivateUsage]
+    faces._probe.cache_clear()  # pyright: ignore[reportPrivateUsage]
+    try:
+        assert faces.bundled_draws("Abc xyz", "123")
+    finally:
+        faces._has.cache_clear()  # pyright: ignore[reportPrivateUsage]
+        faces._probe.cache_clear()  # pyright: ignore[reportPrivateUsage]
+    assert sorted(loads) == ["label", "number", "strong", "text"]

@@ -864,7 +864,20 @@ def test_the_processor_uses_the_full_model_when_the_8_bit_one_isnt_there(tmp_pat
     _files(tmp_path, PARAKEET_V2)
     assert processor_model(tmp_path) == PARAKEET_V2
     _files(tmp_path, PARAKEET_V2_INT8)
+    # #519: an 8-bit copy on disk but never checked (damaged, and no space to fetch it
+    # again) loses to the full model.
+    assert processor_model(tmp_path) == PARAKEET_V2
+    _checked(tmp_path, PARAKEET_V2_INT8)
     assert processor_model(tmp_path) == PARAKEET_V2_INT8
+
+
+def _checked(folder: Path, spec: ModelSpec) -> None:
+    """Mark ``spec``'s files as checked, as ``ModelStore.ensure`` does once they match."""
+    stamp = models._stamp  # pyright: ignore[reportPrivateUsage]
+    stamps: dict[str, list[object]] = {
+        f.name: [*stamp(folder / f.name), f.sha256] for f in spec.files
+    }
+    models._write_marker(folder, stamps)  # pyright: ignore[reportPrivateUsage]
 
 
 @pytest.mark.parametrize("full_model_here", [True, False])
@@ -917,10 +930,13 @@ def test_check_says_the_full_model_can_go_when_speech_is_on_the_processor(
 
     unused = doctor._unused_full_model  # pyright: ignore[reportPrivateUsage]
     _files(tmp_path, PARAKEET_V2_INT8)
-    assert unused((PARAKEET_V2_INT8,), tmp_path) == ""
+    assert unused((PARAKEET_V2_INT8,), tmp_path, "auto") == ""
     _files(tmp_path, PARAKEET_V2)
-    said = unused((PARAKEET_V2_INT8,), tmp_path)
+    said = unused((PARAKEET_V2_INT8,), tmp_path, "auto")
     assert "2.5 GB" in said
     assert "encoder-model.onnx.data" in said
     assert "config.json" not in said  # shared with the 8-bit copy
-    assert unused((PARAKEET_V2, PARAKEET_V2_INT8), tmp_path) == ""  # the card uses it
+    assert unused((PARAKEET_V2, PARAKEET_V2_INT8), tmp_path, "auto") == ""  # the card uses it
+    # #519: chose the graphics card, but its libraries aren't installed yet, so speech
+    # runs on the processor for now. The full model is still wanted.
+    assert unused((PARAKEET_V2_INT8,), tmp_path, "gpu") == ""

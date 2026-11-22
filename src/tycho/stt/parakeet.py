@@ -13,7 +13,7 @@ import numpy as np
 
 from tycho.audio.clip import Samples
 from tycho.runtime.ports import RecognitionUnavailable
-from tycho.stt.models import PARAKEET_V2, PARAKEET_V2_INT8, ModelError, ModelSpec
+from tycho.stt.models import PARAKEET_V2, PARAKEET_V2_INT8, ModelError, ModelSpec, verified
 
 if TYPE_CHECKING:
     from onnx_asr.adapters import TextResultsAsrAdapter
@@ -299,8 +299,10 @@ def cpu_threads() -> int:
 
 def processor_model(folder: Path) -> ModelSpec:
     """The 8-bit copy, or the full model if only that is on disk: a player who upgraded
-    offline still starts, on the full model, until the 8-bit one can download (#480)."""
-    if all((folder / f.name).exists() for f in PARAKEET_V2_INT8.files):
+    offline still starts, on the full model, until the 8-bit one can download (#480).
+    The 8-bit copy only once checked: a damaged one that couldn't be fetched again (a
+    full disk) loses to a full model on disk (#519)."""
+    if verified(folder, PARAKEET_V2_INT8):
         return PARAKEET_V2_INT8
     if all((folder / f.name).exists() for f in PARAKEET_V2.files):
         return PARAKEET_V2
