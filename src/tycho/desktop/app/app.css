@@ -58,6 +58,10 @@ nav .badge { font-family: var(--f-num); font-size: 11px; color: var(--caution); 
 .update { margin: 10px 14px 0; font: inherit; font-size: 12px; color: var(--caution); background: none; border: 1px solid color-mix(in srgb, var(--caution) 50%, transparent); padding: 4px 8px; cursor: pointer; text-align: left; }
 .update:hover { background: color-mix(in srgb, var(--caution) 12%, transparent); }
 .ver { padding: 10px 20px 0; font-size: 12px; color: var(--dim); }
+/* Quit at the foot of the places (#486): where a player looks for it, not only in Settings. */
+.quit { margin: 12px 0 0; padding: 10px 20px; background: none; border: 0; border-top: 1px solid var(--rule); color: var(--dim); cursor: pointer; text-align: left; font-family: var(--f-label); letter-spacing: .1em; text-transform: uppercase; font-size: 13px; }
+.quit:hover { color: var(--danger); background: var(--well); }
+.quit:disabled { cursor: default; opacity: .5; }
 
 main { overflow: auto; padding: 22px 26px 40px; }
 h1 { margin: 0 0 4px; font-family: var(--f-label); font-weight: 600; font-size: 24px; letter-spacing: .08em; text-transform: uppercase; }
@@ -135,24 +139,24 @@ input[type="range"] { width: 150px; accent-color: var(--acc); }
   .ctl { justify-content: flex-start; }
   .tilepage { grid-template-columns: minmax(0, 1fr); }
   main { padding: 18px 14px; }
-  .state h1 { font-size: 36px; }
 }
 @media (max-width: 900px) {
   body { grid-template-columns: 168px minmax(0, 1fr); }
   nav button { padding: 9px 14px; font-size: 13px; }
   .brand { padding: 0 14px 14px; }
+  .quit { padding: 9px 14px; }
 }
 /* Home: one line on how Tycho is, at most one thing to fix, the rest one click away. */
-.state { --fill: var(--panel); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; padding: 20px 22px; max-width: 860px; }
+.state { --fill: var(--panel); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 22px; align-items: center; padding: 24px 26px; max-width: 860px; }
 .light { width: 16px; height: 16px; background: var(--good); transform: rotate(45deg); box-shadow: 0 0 16px color-mix(in srgb, var(--good) 60%, transparent); }
 .state.stuck .light { background: var(--caution); box-shadow: 0 0 16px color-mix(in srgb, var(--caution) 55%, transparent); }
 .state.paused .light { background: var(--dim); box-shadow: none; }
 /* Console plus: the state word reads from across the room, in the light's colour when it isn't ready. */
-.state { padding: 24px 26px; gap: 22px; }
 .state .light { width: 22px; height: 22px; }
 .state h1 { margin: 0; font-size: 54px; line-height: 1; letter-spacing: .05em; }
 .state.stuck h1 { color: var(--caution); }
 .state.paused h1 { color: var(--dim); }
+@media (max-width: 760px) { .state h1 { font-size: 36px; } } /* after the 54px rule, so it wins (#472) */
 .state p { margin: 2px 0 0; color: var(--dim); }
 .state p b { color: var(--acc); font-family: var(--f-num); font-weight: 400; }
 /* Console plus: a section label is small machine text with a slash mark. */
@@ -224,7 +228,9 @@ ul.costs, ul.tips { color: var(--dim); font-size: 14px; }
 /* The design review: setup's Back and Next stay in view, a skipped step isn't ticked,
    and a plain fact isn't amber. The bar sits over main's 40px bottom padding so nothing shows under it. */
 .stepnav { position: sticky; bottom: -40px; padding: 14px 0 22px; margin-top: 2px; background: linear-gradient(to bottom, transparent, var(--void) 12px); z-index: 5; }
+@media (max-width: 760px) { .stepnav { bottom: -18px; } } /* main's bottom padding there; after the rule above, so it wins (#448) */
 .steps li.todo b { border-color: color-mix(in srgb, var(--caution) 60%, transparent); color: var(--caution); }
+.steps li.skipped b { border-style: dashed; }
 .info-line { color: var(--text); font-size: 14px; border-left: 2px solid var(--acc-line); padding-left: 10px; }
 /* In setup a message sits above Back and Next, never on them. */
 body.insetup .toast { bottom: 86px; } /* clear of setup's Back and Next */

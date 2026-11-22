@@ -80,8 +80,11 @@ class Setup:
         recent: Recent | None = None,
         listening: bool | None = None,
         opening: str = "",
+        can_quit: bool = False,
     ) -> None:
         self.path = path
+        self.quits: list[bool] = []
+        """Quit asked of the running Tycho, as the tray's Quit does."""
         self.listening = listening
         self.trying: list[bool] = []
         """Try it turned on and off in the running Tycho, in order (ADR 17)."""
@@ -102,6 +105,7 @@ class Setup:
             listening=lambda: self.listening,
             trying=lambda on: self.listening is not None and not self.trying.append(on),
             opening=opening,
+            quit_tycho=(lambda: self.quits.append(True)) if can_quit else None,
         )
         self.page: Page = browser.new_page()
         self.errors: list[str] = []
@@ -392,8 +396,10 @@ def test_a_skipped_step_is_not_ticked_and_next_stays_in_view(setup: Setup) -> No
         setup.next()
     setup.at("Privacy")
     steps = page.locator(".steps li")
-    for i in range(3):
-        expect(steps.nth(i)).to_have_class("todo")
+    # #448: here a brain key is optional (the built-in phrases work without one), so
+    # skipping it is calm, not amber "still to do" every time setup opens.
+    for i, cls in enumerate(["todo", "skipped", "todo"]):
+        expect(steps.nth(i)).to_have_class(cls)
         expect(steps.nth(i)).not_to_contain_text("✓")
     # Done properly, a step is ticked.
     page.get_by_role("button", name="Back").click()
@@ -404,6 +410,39 @@ def test_a_skipped_step_is_not_ticked_and_next_stays_in_view(setup: Setup) -> No
     expect(steps.nth(2)).to_have_class("done")
     expect(steps.nth(2)).to_contain_text("✓")
     expect(page.get_by_role("button", name="Next", exact=True)).to_be_in_viewport()
+
+
+def test_a_skipped_key_is_still_to_do_where_the_brain_is_all_there_is(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#448: only a game with built-in phrases can do without a brain key."""
+    settings.save(Settings(game="wow-forever"), path)
+    setup = Setup(browser, path)
+    page = setup.page
+    setup.at("Game")
+    setup.next()
+    setup.at("Keys")
+    setup.next()
+    expect(page.locator(".steps li").nth(1)).to_have_class("todo")
+    setup.close()
+
+
+def test_at_the_smallest_window_next_is_wholly_in_view(setup: Setup) -> None:
+    """#448: the sticky bar sat flush with the bottom edge, set for the wide window's
+    padding."""
+    page = setup.page
+    width, height = window.SMALLEST
+    page.set_viewport_size({"width": width, "height": height})
+    setup.at("Game")
+    for _ in range(3):
+        setup.next()
+    setup.at("Privacy")  # the longest step
+    bar = page.locator(".stepnav").bounding_box()
+    nxt = page.get_by_role("button", name="Next", exact=True).bounding_box()
+    assert bar is not None
+    assert nxt is not None
+    assert nxt["y"] + nxt["height"] <= height
+    assert bar["y"] + bar["height"] <= height + 0.5  # the bar's own padding shows below Next
 
 
 def test_the_one_crash_question_comes_before_the_table(
@@ -454,6 +493,50 @@ def test_a_game_tycho_only_advises_in_has_no_empty_pages(
     there.page.get_by_role("tab", name="Advanced").click()
     expect(there.page.locator(".set", has_text="Game folder")).to_have_count(1)
     there.close()
+
+
+def test_an_advisor_games_commands_page_says_the_files_warnings(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#448: the "Just ask" card left out what was wrong in the player's commands file."""
+    settings.save(
+        Settings(game="wow-forever", push_to_talk="mouse:0x06", crash_reports=False), path
+    )
+    setup = Setup(browser, path, first_run=False)
+    shown = setup.bridge.commands()
+    warning = "'jump': 'stop' is one of Tycho's own words, so it never runs the command"
+    setup.bridge.commands = lambda: {**shown, "warnings": [warning]}  # type: ignore[method-assign]
+    page = setup.page
+    page.get_by_role("button", name="What to say").click()
+    expect(page.locator("#noCommands")).to_contain_text("ask in your own words")
+    expect(page.locator("#noCommands .warn-line")).to_have_text(warning)
+    setup.close()
+
+
+def test_a_view_change_fetches_the_settings_once(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#454: the game box fetched every setting (and loaded every pack) on each view
+    change, and Settings and The Tile then fetched them again."""
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    setup = Setup(browser, path, first_run=False)
+    page = setup.page
+    expect(page.locator("#homeState")).to_be_visible()
+    fetched: list[int] = []
+    real = setup.bridge.settings
+
+    def counted() -> dict[str, object]:
+        fetched.append(1)
+        return real()
+
+    setup.bridge.settings = counted  # type: ignore[method-assign]
+    for place, heading in [("Settings", "Settings"), ("The Tile", "The Tile")]:
+        fetched.clear()
+        page.get_by_role("button", name=place, exact=True).click()
+        expect(page.get_by_role("heading", name=heading, exact=True)).to_be_visible()
+        expect(page.locator("#gameBox")).to_contain_text("Star Citizen")
+        assert len(fetched) == 1
+    setup.close()
 
 
 def test_a_newer_version_makes_get_the_button_to_press(
@@ -600,6 +683,75 @@ def test_home_state_word_is_big_and_coloured_by_state_console_plus(
     expect(word).to_have_text("Paused", timeout=6000)
     expect(page.locator("#homeState")).to_have_class(re.compile(r"\bpaused\b"))
     expect(page.locator("#homeState")).not_to_have_class(re.compile(r"\bstuck\b"))
+    setup.close()
+
+
+def test_home_state_word_is_amber_when_stuck_and_smaller_in_a_narrow_window(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#472: stuck beats paused (amber, not grey), and the narrow window's smaller word
+    applies: it came before the 54px rule, so 54px always won."""
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    checks = [{"level": "fail", "what": "Brain", "detail": "no key", "fix": "add a key"}]
+    setup = Setup(browser, path, first_run=False, findings=checks, listening=False)
+    page = setup.page
+    box, word = page.locator("#homeState"), page.locator("#homeState h1")
+    expect(box).to_have_class(re.compile(r"\bstuck\b"))
+    expect(box).not_to_have_class(re.compile(r"\bpaused\b"))
+    amber = page.evaluate(
+        "getComputedStyle(document.documentElement).getPropertyValue('--caution')"
+    )
+    expect(word).to_have_css("color", _rgb(amber))
+    assert word.evaluate("e => parseFloat(getComputedStyle(e).fontSize)") >= 48
+    page.set_viewport_size({"width": 740, "height": 700})
+    expect(word).to_have_css("font-size", "36px")
+    setup.close()
+
+
+def test_home_state_word_is_grey_when_paused(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    setup = Setup(browser, path, first_run=False, recent=Recent(), listening=False)
+    page = setup.page
+    word = page.locator("#homeState h1")
+    expect(word).to_have_text("Paused")
+    dim = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--dim')")
+    expect(word).to_have_css("color", _rgb(dim))
+    setup.close()
+
+
+def _rgb(hex_colour: str) -> str:
+    """A ``#rrggbb`` CSS value as the browser's computed ``rgb(r, g, b)``."""
+    h = hex_colour.strip().lstrip("#")
+    r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
+    return f"rgb({r}, {g}, {b})"
+
+
+def test_quit_is_at_the_foot_of_the_places(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#486 (Ben, from play): Quit was only in Settings, Updates, an odd place to look."""
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    setup = Setup(browser, path, first_run=False, can_quit=True)
+    page = setup.page
+    side = page.locator("aside.side")
+    quit_button = side.get_by_role("button", name="Quit Tycho")
+    expect(quit_button).to_be_visible()
+    # The last thing down the side, below the places and the version.
+    below = quit_button.evaluate(
+        "q => [...q.parentElement.children].filter(e => e.offsetParent)"
+        ".every(e => e === q || e.getBoundingClientRect().bottom <= q.getBoundingClientRect().top)"
+    )
+    assert below
+    quit_button.click()
+    expect(quit_button).to_be_disabled()
+    assert setup.quits == [True]
+    setup.close()
+
+
+def test_no_quit_down_the_side_with_nothing_to_stop(setup: Setup) -> None:
+    expect(setup.page.locator("#quitSide")).to_be_hidden()
     setup.close()
 
 
