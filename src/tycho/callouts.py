@@ -36,14 +36,17 @@ def turned_on(value: str) -> frozenset[str]:
 
 def said(text: str, current: str, offered: Sequence[Callout]) -> str:
     """The setting's new value from what the brain passed for the player: "off" or
-    "all", kinds by id or name, or "+kind" / "-kind" to add or take one away. Raises
-    ``ValueError`` naming the kinds offered."""
+    "all", "-kind" to take one away, "only kind" to have just that one, and a kind by
+    id or name ("+kind" too) to add it: asking for one never turns the others off
+    (review of #546). Raises ``ValueError`` naming the kinds offered."""
     text = text.strip().lower()
     if text in NONE:
         return ""
     if text in ALL:
         return ", ".join(c.id for c in offered)
-    sign = text[:1] if text[:1] in "+-" else ""
+    sign = text[:1] if text[:1] in "+-" else "+"
+    if text.startswith("only "):
+        sign, text = "=", text.removeprefix("only ")
     names = [_match(k, offered) for k in text.lstrip("+-").replace(";", ",").split(",")]
     kinds = [k for k in names if k is not None]
     if None in names or not kinds:

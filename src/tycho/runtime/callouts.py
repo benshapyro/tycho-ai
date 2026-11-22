@@ -11,8 +11,8 @@ The rules, each tested:
 - Never while the player holds push-to-talk or a request runs, while Tycho talks or waits
   for "confirm", or within ``QUIET_SECONDS`` of any of those. What happens then is
   dropped too. Push-to-talk stops a callout like any line.
-- What happened before the player turned a kind on, or before Tycho started, is old
-  news: never said.
+- What happened before the player turned a kind on, or before Tycho started, or more
+  than ``STALE_SECONDS`` ago by the game's own time, is old news: never said.
 - Each callout, and each one dropped, goes in the log with its kind.
 
 The log is read every ``READ_SECONDS`` only while a kind is on; the busy check, which
@@ -23,6 +23,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Awaitable, Callable, Iterable, Sequence
+from datetime import UTC, datetime
 
 from tycho.callouts import turned_on
 from tycho.packs.callouts import Callout
@@ -38,6 +39,10 @@ QUIET_SECONDS = 4.0
 speak up: "a few seconds after the player last spoke"."""
 READ_SECONDS = 1.0
 TICK_SECONDS = 0.25
+STALE_SECONDS = 60.0
+"""An event the game logged longer ago than this is old news, whatever its number: a
+read that starts the file again after an error numbers old lines afresh (review of
+#546). The game and Tycho run on the same PC, so they share its clock."""
 NAME_LIMIT = 40
 """The longest name from the log a line may carry."""
 
@@ -53,6 +58,7 @@ class Callouts:
         say: Callable[[str], None],
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        utc: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         """``busy``: whether speaking now would talk over someone (``Session.busy``).
         ``say``: speak up (``Session.call_out``). ``on``: the kinds turned on."""
@@ -61,6 +67,7 @@ class Callouts:
         self._offered = frozenset(c.id for c in offered)
         self._on = frozenset(on) & self._offered
         self._busy, self._say, self._clock, self._sleep = busy, say, clock, sleep
+        self._utc = utc
         self._seen: int | None = None
         """The newest event's number already looked at; None: nothing read yet."""
         self._busy_at = -QUIET_SECONDS
@@ -102,7 +109,12 @@ class Callouts:
         self._seen = max([seen, *(e.number for e in situation.recent)])
         if first:
             return
-        fresh = [e for e in situation.recent if e.number > seen]
+        today = self._utc()
+        fresh = [
+            e
+            for e in situation.recent
+            if e.number > seen and (e.at is None or (today - e.at).total_seconds() <= STALE_SECONDS)
+        ]
         wanted = [e for e in fresh if (c := self._by_logged.get(e.kind)) and c.id in on]
         for event in wanted[:-1]:
             self._dropped(event, "a newer one came with it")

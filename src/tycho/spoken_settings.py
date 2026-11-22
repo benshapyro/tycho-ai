@@ -68,7 +68,7 @@ how Tycho works: its voice (George, Sarah, Lily or Brian) and sound volumes, how
 long they have to say "confirm", \
 web search, keeping transcripts, update checks, crash reports, game channel, speech recognition \
 device, and callouts: the kinds of game event Tycho tells the player about unasked \
-("get" lists them; set "+kind" or "-kind" to add or take away one, "off" for "stop the \
+("get" lists them; set a kind to add it, "-kind" to take it away, "only kind", "off" for "stop the \
 callouts"). action "get" reads them all, with which can change by voice. action "set" \
 changes the ones named; a value can be relative ("-10%" for a bit quieter, "+2" \
 seconds). action "undo" puts back the last change made by voice. Some settings only \

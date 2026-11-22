@@ -4,6 +4,7 @@ rule of the amendment, with a fake log and a fake clock."""
 import asyncio
 import logging
 import shutil
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -179,6 +180,18 @@ def test_a_line_carries_one_short_cleaned_name() -> None:
     assert len(said) < len("Now in  jurisdiction.") + 41
 
 
+def test_an_event_the_game_logged_long_ago_is_never_said() -> None:
+    # A read that starts the file again numbers old lines afresh (review of #546).
+    watch = started("quantum")
+    now = datetime.now(UTC)
+    old = Logged("arrived", "x", now - timedelta(minutes=50), 1, "")
+    new = Logged("arrived", "x", now - timedelta(seconds=2), 2, "")
+    watch.log.recent = (old,)
+    assert watch.after(READ_SECONDS) == []
+    watch.log.recent = (old, new)
+    assert watch.after(READ_SECONDS) == ["Jump complete."]
+
+
 def test_a_line_needing_a_name_without_one_is_not_said() -> None:
     watch = started("jurisdiction")
     watch.logged("jurisdiction")
@@ -291,8 +304,10 @@ def test_without_a_voice_a_callout_goes_to_the_tile() -> None:
         ("stop", "quantum", ""),
         ("all", "", "quantum, jurisdiction, monitored_space"),
         ("+monitored space", "quantum", "quantum, monitored_space"),
+        ("quantum", "jurisdiction, monitored_space", "quantum, jurisdiction, monitored_space"),
+        ("only quantum", "jurisdiction, monitored_space", "quantum"),
         ("-quantum", "quantum, jurisdiction", "jurisdiction"),
-        ("Jurisdiction changes", "quantum", "jurisdiction"),
+        ("Jurisdiction changes", "quantum", "quantum, jurisdiction"),
         ("+jurisdiction", "mission_updates", "jurisdiction, mission_updates"),
     ],
 )
