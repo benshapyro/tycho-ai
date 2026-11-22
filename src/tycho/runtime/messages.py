@@ -70,6 +70,9 @@ class Result:
     """The details of a reply, for the Tile (#2)."""
     confirmed: bool = False
     """The player said "confirm" to a question Tycho asked about this request."""
+    toggled: bool = False
+    """Toggles were pressed for a direction, and ``say`` says Tycho can't see which way
+    they went (#29): said even for the fast path, unless the game announces it."""
     would_press: tuple[str, ...] = ()
     """Setup's Try it (ADR 17): each key Tycho would have pressed, as the player knows
     it ("Landing System (N)"). Nothing was sent: ``pressed`` stays empty."""
@@ -98,6 +101,7 @@ class Progress:
     keydown_ms: float | None = None
     card: Card | None = None
     would_press: list[str] = field(default_factory=list[str])
+    toggled: bool = False
 
     def result(
         self,
@@ -127,4 +131,5 @@ class Progress:
             total_ms=trace.total_ms,
             keydown_ms=self.keydown_ms,
             would_press=tuple(self.would_press),
+            toggled=self.toggled,
         )

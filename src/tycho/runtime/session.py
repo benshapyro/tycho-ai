@@ -60,6 +60,7 @@ from tycho.runtime.planning import (
     announced,
     needs_facts,
     plan_request,
+    toggle_receipt,
 )
 from tycho.runtime.ports import (
     ActionLog,
@@ -247,6 +248,8 @@ class Session:
                 self._feedback.not_done()
                 return
             self._listening = True
+            if self._brain is not None:
+                self._brain.prime()  # while the player talks (#21)
             if self._display is not None:
                 self._display.listening()
         elif self._listening:
@@ -448,6 +451,8 @@ class Session:
             trying=trying,
             still_trying=lambda: self._trying,
         )
+        if status == "done" and planned.toggled and not trying and not progress.announced:
+            progress.say, progress.toggled = toggle_receipt(planned.toggled), True
         return end(status, detail)
 
     async def _ask_brain(self, text: str, own_keys: str = "") -> Picked | Reply | str:
