@@ -27,10 +27,14 @@ class FakeBrain:
         self.warmed = 0
         self.warmed_with: list[Keybinds] = []
         self.closed = False
+        self.primed = 0
 
     async def warm(self, keybinds: Keybinds) -> None:
         self.warmed += 1
         self.warmed_with.append(keybinds)
+
+    def prime(self) -> None:
+        self.primed += 1
 
     async def close(self) -> None:
         self.closed = True

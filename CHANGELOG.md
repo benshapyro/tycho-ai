@@ -8,6 +8,9 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ## [Unreleased]
 
+### Changed
+- Tycho gets the brain ready while you hold push-to-talk, so its answer starts a little sooner, and the first question after a break of an hour or more is no longer about 3 seconds slower. ([#21](https://github.com/benshapyro/tycho-ai/issues/21))
+
 ## [0.9.0] - 2026-11-22
 
 ### Added

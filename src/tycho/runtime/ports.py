@@ -47,6 +47,12 @@ class Brain(Protocol):
         start and again when the keybinds change. Never raises."""
         ...
 
+    def prime(self) -> None:
+        """Push-to-talk went down, so a request may follow: get ready while the player
+        talks (#21), e.g. by opening a connection. Runs on the event loop, returns at
+        once, never raises."""
+        ...
+
     async def close(self) -> None:
         """Let go of connections. Called once, when Tycho stops."""
         ...
