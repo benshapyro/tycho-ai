@@ -96,6 +96,7 @@ from tycho.games.star_citizen.store import KeybindStore
 from tycho.games.star_citizen.trade_lookup import trade_lookups
 from tycho.games.star_citizen.uex import UexApi
 from tycho.games.star_citizen.wiki import WikiApi
+from tycho.input import NotPressable, UnsupportedKey, plan
 from tycho.input.plan import pressable_input
 from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput, key_text
 from tycho.knowledge.web import WebSearch
@@ -180,9 +181,9 @@ class Outcome:
     refused: str = ""
     """Why the safety gate would refuse the pick, pressing nothing; empty if it wouldn't.
     A refusal outranks a question, so a refused pick never "asks" (#311)."""
-    clash: bool = False
-    """The gate refused because the pick's key is also a confirm-grade action's on these
-    keybinds (#494): the keybinds' fault, not the model's."""
+    clash: str = ""
+    """The action the gate refused only because its key is also a confirm-grade action's
+    on these keybinds (#494): the keybinds' fault, not the model's. Empty otherwise."""
     ms: float = 0.0
     looked_up: int = 0
     """Look-ups the brain made for this request."""
@@ -311,11 +312,12 @@ def grade(
     if bad := (never | (UNASKED - asked)).intersection(outcome.actions):
         return f"WRONG PRESS {sorted(bad)}{gate}"
     allowed = set(rule.get("allow", [])).intersection(outcome.actions)
-    if allowed and outcome.refused and outcome.clash:
-        # The case allows the pick and the gate would have asked, but on these keybinds
-        # its key is also another confirm-grade action's (#494): the same for every
-        # model, so it's its own outcome, not a wrong press and not a pass.
-        return f"{KEY_CLASH} {sorted(allowed)} ({outcome.refused})"
+    if outcome.clash in allowed and set(outcome.actions) <= allowed | asked:
+        # The case allows the refused pick, nothing else was picked that the case doesn't
+        # ask for, and the gate would have asked, but on these keybinds its key is also
+        # another confirm-grade action's (#494): the same for every model, so it's its
+        # own outcome, not a wrong press and not a pass.
+        return f"{KEY_CLASH} {[outcome.clash]} ({outcome.refused})"
     if allowed and outcome.refused:
         return f"WRONG PRESS (the gate refused it: {outcome.refused}) {sorted(allowed)}"
     if allowed and not outcome.asks:
@@ -364,6 +366,21 @@ def too_long(outcome: Outcome, rule: dict[str, Any], say_words: int) -> str:
         return ""
     count = len(outcome.say.split())
     return f"said {count} words, at most {most}: {outcome.say!r}" if count > most else ""
+
+
+SENTENCE = re.compile(r"[^.?!]+[.?!]+(?=\s|$)")
+
+
+def long_question(say: str) -> int:
+    """How many sentences a reply that ends in a question takes, if more than one, else 0
+    (#430). A clarifying question is one sentence (docs/voice-and-tone.md), but a reply
+    may also answer and then offer the rest ("Want the rest?"), so it's a measure the
+    summary counts, not a verdict."""
+    said = say.strip()
+    if not said.endswith("?"):
+        return 0
+    count = len(SENTENCE.findall(said))
+    return count if count > 1 else 0
 
 
 CURLY = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'})
@@ -517,6 +534,8 @@ async def run_case(
         outcome.hosts = costs.hosts[hosts:] if costs else []
     if isinstance(decision, Reply):
         outcome.kind, outcome.say = "reply", decision.text
+        if sentences := long_question(decision.text):
+            outcome.notes.append(f"a question in {sentences} sentences")
         if lists.keys_off:
             outcome.named_key = names_key(decision.text, rule, keybinds)
             if outcome.named_key is False:
@@ -567,22 +586,25 @@ def _plan(
     outcome.actions = pressed(commands, keybinds)
     if isinstance(planned, Refusal):  # never Questions: it's planned as confirmed
         outcome.refused = f"{planned.status}: {planned.detail}"
-        outcome.clash = _refused_for_clash(commands, keybinds, facts, lists)
+        if planned.status == "refused" and not lists.keys_off:
+            outcome.clash = _refused_for_clash(commands, keybinds, facts, lists)
         outcome.notes.append(f"Tycho would press nothing ({outcome.refused})")
 
 
 def _refused_for_clash(
     commands: tuple[Command, ...], keybinds: Keybinds, facts: frozenset[str], lists: Safety
-) -> bool:
-    """Whether the first press the gate refuses for these commands is refused because a
-    confirm-grade action shares its key (#494), as ``plan_request`` walks them."""
+) -> str:
+    """The action whose press the gate refuses first for these commands, if it refuses it
+    because a confirm-grade action shares its key (#494), else "". It walks them as
+    ``plan_request`` does, stopping wherever that would refuse for another reason."""
     for part in (step for command in commands for step in command.expand()):
         command = part.command
         resolved = resolve(command, keybinds)
         setup = [a for name in command.setup if (a := keybinds.get(name)) and a.bound]
         if resolved.action is None or len(setup) < len(command.setup):
-            return False
-        for position, action in enumerate((*setup, resolved.action)):
+            return ""
+        presses = (*setup, resolved.action)
+        for position, action in enumerate(presses):
             verdict = safety.check(
                 command,
                 action,
@@ -594,8 +616,13 @@ def _refused_for_clash(
             )
             if not verdict.allowed and not verdict.ask:
                 clash = safety.key_clash(action, keybinds, command, position, lists=lists)
-                return clash is not None
-    return False
+                return action.name if clash is not None else ""
+        try:
+            for action in presses:
+                plan(action, keybinds.modes)
+        except NotPressable, UnsupportedKey:
+            return ""  # plan_request refuses this step as no_key, before any later clash
+    return ""
 
 
 MATCHER = load_commands(built_in(STAR_CITIZEN))
@@ -1233,6 +1260,9 @@ def _summary(outcomes: list[Outcome], costs: _Costs, summary: dict[str, Any]) ->
             f"Look-ups: {len(looked)} requests used them, "
             f"p50 {statistics.median(o.ms for o in looked):.0f} ms"
         )
+    if asked := [o for o in outcomes if o.kind == "reply" and o.say.strip().endswith("?")]:
+        long = sum(1 for o in asked if long_question(o.say))
+        print(f"Replies ending in a question: {len(asked)}, {long} longer than a sentence (#430)")
     if keyed := [o for o in outcomes if o.named_key is not None]:
         named = sum(1 for o in keyed if o.named_key)
         print(f"Named the player's key: {named} of {len(keyed)} requests for a press (#392)")
@@ -1274,6 +1304,7 @@ def compare(direct: Run, routed: Run, per_hour: float = PER_HOUR) -> list[str]:
     rows = [
         ("pass", "passed", "d"),
         ("wrong presses", "wrong_presses", "d"),
+        ("key clashes", "key_clashes", "d"),
         ("errors", "errors", "d"),
         ("mean calls", "mean_calls", ".2f"),
         ("p50 ms", "p50_ms", ".0f"),
