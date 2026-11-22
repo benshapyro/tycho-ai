@@ -1,12 +1,16 @@
 """The Tile's fonts (ADR 16, ADR 17): the bundled files (``tycho.fonts``) the window
-uses too, with Windows' own and then Pillow's as the fallbacks. Out of ``draw.py``."""
+uses too, with Windows' own and then Pillow's as the fallbacks. Out of ``draw.py``.
+
+The bundled files cover Latin, not Greek or Cyrillic.
+Pillow doesn't fall back glyph by glyph as the window's browser does, so a card with a
+character they lack draws in Windows' own faces instead of as boxes (#458)."""
 
 import contextlib
 import functools
 import io
 from typing import Literal
 
-from PIL import ImageFont
+from PIL import Image, ImageDraw, ImageFont
 
 from tycho import fonts
 
@@ -30,11 +34,17 @@ _WINDOWS: dict[Face, tuple[str, str | None]] = {
 """Windows' own, if a bundled file is missing."""
 
 
+_NOT_IN_ANY = "\U000f0000"
+"""A private-use code point no font here has: what a missing character draws as."""
+
+
 @functools.cache
-def font(face: Face, size: int) -> Font:
-    """The bundled font at ``size`` pixels, else Windows' own, else Pillow's."""
-    with contextlib.suppress(OSError):
-        return ImageFont.truetype(io.BytesIO(fonts.path(_BUNDLED[face]).read_bytes()), size)
+def font(face: Face, size: int, windows: bool = False) -> Font:
+    """The bundled font at ``size`` pixels, else (or with ``windows``) Windows' own,
+    else Pillow's."""
+    if not windows:
+        with contextlib.suppress(OSError):
+            return _bundled(face, size)
     file, style = _WINDOWS[face]
     try:
         loaded = ImageFont.truetype(file, size)
@@ -48,3 +58,80 @@ def font(face: Face, size: int) -> Font:
         with contextlib.suppress(OSError, ValueError):
             loaded.set_variation_by_name(style)
     return loaded
+
+
+def _bundled(face: Face, size: int) -> Font:
+    return ImageFont.truetype(io.BytesIO(fonts.path(_BUNDLED[face]).read_bytes()), size)
+
+
+def bundled_draws(words: str, numbers: str = "") -> bool:
+    """Whether the bundled faces have every character: ``words`` in the label and text
+    faces, ``numbers`` (values, drawn in the number face) in that one. If not, the Tile
+    draws the card with Windows' own faces (#458)."""
+    texts: tuple[Face, ...] = ("label", "text", "strong")
+    return all(_has(face, ch) for ch in _shown(words) for face in texts) and all(
+        _has("number", ch) for ch in _shown(numbers)
+    )
+
+
+def _shown(text: str) -> set[str]:
+    return {ch for ch in text if not ch.isspace()}
+
+
+@functools.cache
+def _has(face: Face, ch: str) -> bool:
+    """Checked once per face and character, against the box a missing one draws. By its
+    ink: in a monospaced face every character has the box's size."""
+    try:
+        f = _bundled(face, 32)
+    except OSError:
+        return True  # no bundled file: this face is Windows' own already
+    return _ink(f, ch) != _ink(f, _NOT_IN_ANY)
+
+
+def _ink(f: Font, ch: str) -> bytes:
+    image = Image.new("L", (64, 64))
+    ImageDraw.Draw(image).text((8, 8), ch, font=f, fill=255)
+    return image.tobytes()
+
+
+# Fitting text to a width (out of draw.py, ADR 19's 500-line limit).
+
+
+def text_width(text: str, f: Font, tracking: float = 0.0) -> float:
+    return f.getlength(text) + tracking * max(0, len(text) - 1)
+
+
+def wrap(text: str, f: Font, width: float, lines: int = 99) -> list[str]:
+    """``text`` in lines no wider than ``width``; the last cut with an ellipsis."""
+    out: list[str] = []
+    line = ""
+    for word in text.split():
+        while text_width(word, f) > width:  # a word longer than the line: break it
+            cut = max(1, int(len(word) * width / text_width(word, f)) - 1)
+            if line:
+                out.append(line)
+                line = ""
+            out.append(word[:cut])
+            word = word[cut:]
+        candidate = f"{line} {word}".strip()
+        if text_width(candidate, f) <= width:
+            line = candidate
+        else:
+            out.append(line)
+            line = word
+    if line:
+        out.append(line)
+    if len(out) > lines:
+        out = out[:lines]
+        out[-1] = fit(out[-1] + "…", f, width)
+    return out
+
+
+def fit(text: str, f: Font, width: float, tracking: float = 0.0) -> str:
+    """``text`` cut with an ellipsis to fit ``width``."""
+    if text_width(text, f, tracking) <= width:
+        return text
+    while text and text_width(text + "…", f, tracking) > width:
+        text = text[:-1]
+    return text.rstrip() + "…"
