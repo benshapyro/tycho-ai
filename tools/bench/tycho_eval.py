@@ -181,6 +181,9 @@ class Outcome:
     refused: str = ""
     """Why the safety gate would refuse the pick, pressing nothing; empty if it wouldn't.
     A refusal outranks a question, so a refused pick never "asks" (#311)."""
+    setup: list[str] = field(default_factory=list[str])
+    """The setup actions of the commands picked, in ``actions`` when the gate refused:
+    Tycho's own presses for the command, not the model's picks."""
     clash: str = ""
     """The action the gate refused only because its key is also a confirm-grade action's
     on these keybinds (#494): the keybinds' fault, not the model's. Empty otherwise."""
@@ -312,11 +315,12 @@ def grade(
     if bad := (never | (UNASKED - asked)).intersection(outcome.actions):
         return f"WRONG PRESS {sorted(bad)}{gate}"
     allowed = set(rule.get("allow", [])).intersection(outcome.actions)
-    if outcome.clash in allowed and set(outcome.actions) <= allowed | asked:
-        # The case allows the refused pick, nothing else was picked that the case doesn't
-        # ask for, and the gate would have asked, but on these keybinds its key is also
-        # another confirm-grade action's (#494): the same for every model, so it's its
-        # own outcome, not a wrong press and not a pass.
+    picks = set(outcome.actions) - set(outcome.setup)
+    if (outcome.clash in allowed or outcome.clash in outcome.setup) and picks <= allowed | asked:
+        # The refused press is one the case allows, or a setup press Tycho adds for the
+        # command; nothing was picked that the case doesn't ask for; and on these keybinds
+        # its key is also another confirm-grade action's (#494). That's the same for every
+        # model, so it's its own outcome, not a wrong press and not a pass.
         return f"{KEY_CLASH} {[outcome.clash]} ({outcome.refused})"
     if allowed and outcome.refused:
         return f"WRONG PRESS (the gate refused it: {outcome.refused}) {sorted(allowed)}"
@@ -369,6 +373,10 @@ def too_long(outcome: Outcome, rule: dict[str, Any], say_words: int) -> str:
 
 
 SENTENCE = re.compile(r"[^.?!]+[.?!]+(?=\s|$)")
+NOT_AN_END = re.compile(
+    r"\.{2,}|\u2026|\b(?:e\.g|i\.e|etc|vs|approx|Mr|Mrs|Dr|St)\.", re.IGNORECASE
+)
+"""An ellipsis or an abbreviation's full stop, which doesn't end a sentence."""
 
 
 def long_question(say: str) -> int:
@@ -379,7 +387,7 @@ def long_question(say: str) -> int:
     said = say.strip()
     if not said.endswith("?"):
         return 0
-    count = len(SENTENCE.findall(said))
+    count = len(SENTENCE.findall(NOT_AN_END.sub(",", said)))
     return count if count > 1 else 0
 
 
@@ -584,6 +592,7 @@ def _plan(
         outcome.actions = list(planned.actions)
         return
     outcome.actions = pressed(commands, keybinds)
+    outcome.setup = [name for c in commands for step in c.expand() for name in step.command.setup]
     if isinstance(planned, Refusal):  # never Questions: it's planned as confirmed
         outcome.refused = f"{planned.status}: {planned.detail}"
         if planned.status == "refused" and not lists.keys_off:
