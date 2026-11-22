@@ -104,10 +104,13 @@ class WindowsFocusCheck:
 
 def foreground_executable() -> str:
     """The file name of the program whose window is in front, or "" if unknown."""
+    window = win32.user32().GetForegroundWindow()
+    return executable_of(window) if window else ""
+
+
+def executable_of(window: int) -> str:
+    """The file name of the program that owns ``window``, or "" if unknown."""
     user32, kernel32 = win32.user32(), win32.kernel32()
-    window = user32.GetForegroundWindow()
-    if not window:
-        return ""
     pid = wintypes.DWORD()
     user32.GetWindowThreadProcessId(window, ctypes.byref(pid))
     process = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)

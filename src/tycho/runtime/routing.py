@@ -7,8 +7,9 @@ In order, a whole utterance is:
 1. a word to the Tile, while the Tile is on ("keep that up", ADR 16);
 2. "say that again" (#222);
 3. a reply to a question, "confirm" or "cancel" (ADR 13);
-4. a fast-path command;
-5. otherwise, the brain's, if there is one.
+4. asking Tycho to look at the game window, for the brain with a picture (#31);
+5. a fast-path command;
+6. otherwise, the brain's, if there is one.
 
 What the session does with 1 to 3 depends on what it last said and asked, so
 they come back as ``Reserved`` and the session answers them itself.
@@ -66,6 +67,8 @@ class ToBrain:
     """What the fast path matched, sent to the brain because key actions are off
     (#384): if the brain can't answer, these are planned, so the gate's refusal says
     why nothing was pressed."""
+    look: bool = False
+    """The player asked Tycho to look at the game window (ADR 14, #31)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +79,8 @@ class NotUnderstood:
 
 
 type Routed = Reserved | Picked | ToBrain | NotUnderstood
+
+NO_BRAIN_TO_LOOK = "looking at the game needs the brain: an Anthropic or OpenRouter key"
 
 
 def tile_command(text: str) -> TileWord | None:
@@ -106,18 +111,23 @@ def route(
     tile: bool = False,
     brain: bool = True,
     keys: bool = True,
+    look: bool = False,
 ) -> Routed:
     """Where ``text`` (already through the lexicon) goes. ``tile``: the Tile is on, so
     its words are the Tile's. ``brain``: there's a brain to ask what the fast path can't
     match. ``keys``: key actions are on; with them off, what the fast path would press
     goes to the brain, which says how instead (#384), and the gate still refuses any
-    press. Without a brain it stays a pick, so the player hears the gate's refusal."""
+    press. Without a brain it stays a pick, so the player hears the gate's refusal.
+    ``look``: the words ask Tycho to look (``look.wants_a_look``), never a fast-path
+    command."""
     if tile and (what := tile_command(text)) is not None:
         return Reserved(what)
     if is_say_again(text):
         return Reserved("say_again")
     if (reply := reply_to_question(text)) is not None:
         return Reserved(reply)
+    if look:
+        return ToBrain("asked to look", look=True) if brain else NotUnderstood(NO_BRAIN_TO_LOOK)
     match = matcher.match(text)
     if not isinstance(match, Defer):
         if not keys and brain:

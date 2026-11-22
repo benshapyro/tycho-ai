@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from tycho.runtime import (
         ActionLog,
         Brain,
+        Camera,
         Display,
         Feedback,
         GameState,
@@ -125,15 +126,18 @@ def build_session(
     on_result: Callable[[Result], None] | None = None,
     address: Address | None = None,
     display: Display | None = None,
+    camera: Camera | None = None,
     pack: GamePack,
 ) -> Session:
     """The talking loop, wired the way ``tycho run`` wires it, for ``pack``'s game: its
     commands, words and safety lists, which say whether key actions are off (#191).
-    ``store`` is None for a pack with no keybinds part."""
+    ``store`` is None for a pack with no keybinds part. ``camera``: the game window's,
+    for a pack that can look (its ``look`` phrases, #31)."""
     from tycho.input import Presser
     from tycho.lexicon import Lexicon
     from tycho.ptt.monitor import PushToTalk
     from tycho.runtime import Session
+    from tycho.runtime.look import Eyes
 
     if game_state is None:
         game_state = game_state_for(pack, store)
@@ -160,6 +164,8 @@ def build_session(
         address=(lambda: address.name) if address is not None else (lambda: ""),
         display=display,
         safety_lists=pack.safety,
+        eyes=Eyes(pack.look, camera) if camera is not None and pack.look else None,
+        looking=current.look_at_screen is True,
     )
 
 

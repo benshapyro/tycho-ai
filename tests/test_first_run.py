@@ -176,9 +176,10 @@ def test_the_page_learns_whether_this_is_a_first_run(path: Path) -> None:
 
 def test_a_broken_settings_file_doesnt_ask_about_crash_reports(path: Path) -> None:
     """#442: the window says what's wrong with the file instead; nothing is asked."""
-    assert _bridge(path).about()["ask_crash_reports"] is True  # never asked
+    asked = ["crash_reports", "look_at_screen"]
+    assert _bridge(path).about()["ask_privacy"] == asked  # never asked
     path.write_text("crash_reports = [\n", "utf-8")
-    assert _bridge(path).about()["ask_crash_reports"] is False
+    assert _bridge(path).about()["ask_privacy"] == []
 
 
 def test_a_setup_choice_can_be_undone(path: Path) -> None:

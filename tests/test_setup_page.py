@@ -230,6 +230,21 @@ def test_a_first_run_for_a_game_tycho_presses_keys_in(setup: Setup, vault: dict[
     expect(crash.locator("[data-crash='no']")).to_have_attribute("aria-pressed", "true")
     expect(crash.locator("[data-crash='yes']")).to_have_attribute("aria-pressed", "false")
     assert setup.saved().crash_reports is False
+    # Looking at the game window (ADR 14, #31): asked beside it, in a game that can look,
+    # with No and Yes equal and neither picked. The table says where a picture would go.
+    look = page.locator("#lookCard")
+    expect(look).to_contain_text("Let Tycho look at your game window when you ask?")
+    expect(look).to_contain_text("never saved")
+    expect(look).to_contain_text("A camera sound plays")
+    expect(leaves).to_contain_text("A picture of the game window, only when you ask")
+    expect(look.locator("[data-look][aria-pressed='true']")).to_have_count(0)
+    assert setup.saved().look_at_screen is None
+    look.locator("[data-look='yes']").click()
+    expect(look.locator("[data-look='yes']")).to_have_attribute("aria-pressed", "true")
+    assert setup.saved().look_at_screen is True
+    look.locator("[data-look='no']").click()
+    expect(look.locator("[data-look='no']")).to_have_attribute("aria-pressed", "true")
+    assert setup.saved().look_at_screen is False
 
     # 5. What to say first, from the pack, and Start.
     setup.next()
@@ -293,6 +308,9 @@ def test_a_first_run_for_a_game_tycho_only_advises_in(setup: Setup, vault: dict[
     assert "UEX" not in leaves.inner_text()
     # A player who never answers the crash question sends nothing: it stays unanswered.
     expect(page.locator("#crashCard [data-crash][aria-pressed='true']")).to_have_count(0)
+    # Tycho can't look at a game with no window, so it isn't asked, or listed (#31).
+    expect(page.locator("#lookCard")).to_have_count(0)
+    assert "picture" not in leaves.inner_text()
 
     # 5. The skipped button is what's missing: Start waits, and a button goes back for it.
     setup.next()
@@ -322,7 +340,10 @@ def test_picking_another_game_in_settings_shows_its_own_setup_first(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
     settings.save(
-        Settings(push_to_talk="mouse:0x06", game_channel="PTU", crash_reports=False), path
+        Settings(
+            push_to_talk="mouse:0x06", game_channel="PTU", crash_reports=False, look_at_screen=False
+        ),
+        path,
     )
     setup = Setup(browser, path, first_run=False)
     page = setup.page
@@ -359,7 +380,7 @@ def test_a_player_set_up_before_crash_reports_is_asked_once(
 ) -> None:
     """ADR 4: players who set up before crash reports existed are asked on their next
     start, on setup's Privacy step, and once they answer the window goes on as usual."""
-    settings.save(Settings(push_to_talk="mouse:0x06"), path)
+    settings.save(Settings(push_to_talk="mouse:0x06", look_at_screen=False), path)
     setup = Setup(browser, path, first_run=False)
     page = setup.page
     setup.at("Privacy")
@@ -379,7 +400,7 @@ def test_the_first_run_asks_crash_reports_in_its_own_place(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
     setup = Setup(browser, path, first_run=True)
-    assert setup.bridge.about()["ask_crash_reports"] is False
+    assert setup.bridge.about()["ask_privacy"] == []
     expect(setup.page.get_by_role("heading", name="Welcome to Tycho")).to_be_visible()
     setup.at("Game")
     setup.close()
@@ -494,6 +515,33 @@ def test_at_the_smallest_window_next_is_wholly_in_view(setup: Setup) -> None:
     assert bar["y"] + bar["height"] <= height + 0.5  # the bar's own padding shows below Next
 
 
+def test_a_player_set_up_before_looking_existed_is_asked_once(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """ADR 14's amendment (#31): players who set up before Tycho could look are asked on
+    their next start, both questions first when neither was answered, and the window
+    goes on as usual once both are. Skipping leaves looking off."""
+    settings.save(Settings(push_to_talk="mouse:0x06"), path)
+    setup = Setup(browser, path, first_run=False)
+    page = setup.page
+    setup.at("Privacy")
+    lede = "Two questions left: crash reports and looking at your game"
+    expect(page.locator(".lede")).to_contain_text(lede)
+    cards = page.locator("main > .card")
+    expect(cards.nth(0)).to_have_id("crashCard")
+    expect(cards.nth(1)).to_have_id("lookCard")
+    page.locator("#crashCard [data-crash='no']").click()
+    setup.at("Privacy")  # one still to answer: still here
+    expect(page.locator(".lede")).to_contain_text("One question left: looking at your game")
+    page.locator("#lookCard [data-look='yes']").click()
+    expect(page.locator("#homeState")).to_be_visible()
+    assert setup.saved().look_at_screen is True
+    setup.close()
+    again = Setup(browser, path, first_run=False)  # the next start: answered, not asked
+    expect(again.page.locator("#homeState")).to_be_visible()
+    again.close()
+
+
 def test_the_one_crash_question_comes_before_the_table(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
@@ -507,7 +555,8 @@ def test_the_one_crash_question_comes_before_the_table(
     for _ in range(3):
         first.next()
     first.at("Privacy")
-    expect(first.page.locator("main > .card").last).to_have_id("crashCard")
+    expect(first.page.locator("main > .card").nth(-2)).to_have_id("crashCard")
+    expect(first.page.locator("main > .card").last).to_have_id("lookCard")
     first.close()
 
 
@@ -517,7 +566,10 @@ def test_a_game_tycho_only_advises_in_has_no_empty_pages(
     """The design review: an advisor game showed an empty commands table with a column
     for keys, and another game's folder settings."""
     settings.save(
-        Settings(game="wow-forever", push_to_talk="mouse:0x06", crash_reports=False), path
+        Settings(
+            game="wow-forever", push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False
+        ),
+        path,
     )
     setup = Setup(browser, path, first_run=False)
     page = setup.page
@@ -536,7 +588,9 @@ def test_a_game_tycho_only_advises_in_has_no_empty_pages(
     assert "game" in names
     setup.close()
     # A game with a folder keeps them.
-    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+    )
     there = Setup(browser, path, first_run=False)
     there.page.get_by_role("button", name="Settings", exact=True).click()
     there.page.get_by_role("tab", name="Advanced").click()
@@ -549,7 +603,10 @@ def test_an_advisor_games_commands_page_says_the_files_warnings(
 ) -> None:
     """#448: the "Just ask" card left out what was wrong in the player's commands file."""
     settings.save(
-        Settings(game="wow-forever", push_to_talk="mouse:0x06", crash_reports=False), path
+        Settings(
+            game="wow-forever", push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False
+        ),
+        path,
     )
     setup = Setup(browser, path, first_run=False)
     shown = setup.bridge.commands()
@@ -567,7 +624,9 @@ def test_a_view_change_fetches_the_settings_once(
 ) -> None:
     """#454: the game box fetched every setting (and loaded every pack) on each view
     change, and Settings and The Tile then fetched them again."""
-    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+    )
     setup = Setup(browser, path, first_run=False)
     page = setup.page
     expect(page.locator("#homeState")).to_be_visible()
@@ -591,7 +650,9 @@ def test_a_view_change_fetches_the_settings_once(
 def test_a_newer_version_makes_get_the_button_to_press(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
-    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+    )
     setup = Setup(browser, path, first_run=False)
     page = setup.page
     page.get_by_role("button", name="Settings", exact=True).click()
@@ -616,7 +677,10 @@ def test_the_places_are_down_the_side_and_home_shows_one_thing_to_fix(
     """ADR 17 as amended (direction B): Home, What to say, The Tile and Settings down the
     left, the game under them, at most one thing to fix on Home, and the Tile on its own."""
     settings.save(
-        Settings(game="wow-forever", push_to_talk="mouse:0x06", crash_reports=False), path
+        Settings(
+            game="wow-forever", push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False
+        ),
+        path,
     )
     checks = [
         {"level": "ok", "what": "Microphone", "detail": "found", "fix": ""},
@@ -666,7 +730,12 @@ def test_the_places_are_down_the_side_and_home_shows_one_thing_to_fix(
 def test_the_game_box_says_tycho_only_talks_with_key_actions_off(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
-    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False, key_actions=False), path)
+    settings.save(
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, key_actions=False
+        ),
+        path,
+    )
     setup = Setup(browser, path, first_run=False)
     expect(setup.page.locator("#gameBox")).to_contain_text("Tycho only talks")
     setup.close()
@@ -677,7 +746,10 @@ def test_the_window_takes_the_games_own_colour(
 ) -> None:
     """ADR 17 (amended): one accent per game, from the game's pack."""
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, game="wow-forever"), path
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, game="wow-forever"
+        ),
+        path,
     )
     setup = Setup(browser, path, first_run=False)
     expect(setup.page.locator("#gameBox")).to_contain_text("World of Warcraft")
@@ -691,7 +763,9 @@ def test_home_says_its_listening_and_shows_the_last_exchanges_from_memory(
 ) -> None:
     """ADR 17 (amended): Home says in one line whether Tycho is listening and which
     button to hold, and lists the last exchanges, newest first, as they come in."""
-    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+    )
     recent = Recent()
     recent.add(Result(1, "done", text="gear down", say="Landing gear down."))
     setup = Setup(browser, path, first_run=False, recent=recent, listening=True)
@@ -720,7 +794,9 @@ def test_home_state_word_is_big_and_coloured_by_state_console_plus(
 ) -> None:
     """Console plus (Ben, 16 Nov 2026): Home's state word reads from across the room,
     paused shows grey rather than as a problem, and section labels carry a slash mark."""
-    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+    )
     setup = Setup(browser, path, first_run=False, recent=Recent(), listening=True)
     page = setup.page
     word = page.locator("#homeState h1")
@@ -740,7 +816,9 @@ def test_home_state_word_is_amber_when_stuck_and_smaller_in_a_narrow_window(
 ) -> None:
     """#472: stuck beats paused (amber, not grey), and the narrow window's smaller word
     applies: it came before the 54px rule, so 54px always won."""
-    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+    )
     checks = [{"level": "fail", "what": "Brain", "detail": "no key", "fix": "add a key"}]
     setup = Setup(browser, path, first_run=False, findings=checks, listening=False)
     page = setup.page
@@ -760,7 +838,9 @@ def test_home_state_word_is_amber_when_stuck_and_smaller_in_a_narrow_window(
 def test_home_state_word_is_grey_when_paused(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
-    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+    )
     setup = Setup(browser, path, first_run=False, recent=Recent(), listening=False)
     page = setup.page
     word = page.locator("#homeState h1")
@@ -781,7 +861,9 @@ def test_quit_is_at_the_foot_of_the_places(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
     """#486 (Ben, from play): Quit was only in Settings, Updates, an odd place to look."""
-    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+    )
     setup = Setup(browser, path, first_run=False, can_quit=True)
     page = setup.page
     side = page.locator("aside.side")
@@ -810,7 +892,9 @@ def test_after_a_first_run_try_it_is_real_and_sends_nothing(
     """ADR 17: once Tycho listens after a first run, the window opens on setup's Try
     it. What the player says shows there with what Tycho would press, and nothing
     reaches the game until they leave the step."""
-    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+    )
     recent = Recent()
     recent.add(Result(1, "done", text="from before", say="Old."))
     setup = Setup(browser, path, first_run=False, recent=recent, listening=True, opening="try_it")
@@ -835,7 +919,9 @@ def test_after_a_first_run_try_it_is_real_and_sends_nothing(
 def test_try_it_ends_when_the_player_goes_back_a_step(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
-    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+    )
     setup = Setup(browser, path, first_run=False, listening=True, opening="try_it")
     setup.at("Try it")
     expect(setup.page.locator("#tryCard")).to_be_visible()
@@ -851,7 +937,9 @@ def test_try_it_ends_when_the_player_switches_to_the_game(
 ) -> None:
     """Review of #464: left open on Try it, nothing reached the game, and Tycho still
     played done. Try it lasts only while the window is in front."""
-    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+    )
     setup = Setup(browser, path, first_run=False, listening=True, opening="try_it")
     setup.at("Try it")
     expect(setup.page.locator("#tryCard")).to_contain_text("Switch to the game")
@@ -892,7 +980,13 @@ def test_the_tile_page_lists_the_games_own_kinds_of_card(
     """#422: the hidden-cards list named Star Citizen's ship and fleet cards in every
     game. Now each kind is a switch, and a game's own come from its pack."""
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, game=game, game_root=None),
+        Settings(
+            push_to_talk="mouse:0x06",
+            crash_reports=False,
+            look_at_screen=False,
+            game=game,
+            game_root=None,
+        ),
         path,
     )
     setup = Setup(browser, path, first_run=False)
@@ -924,6 +1018,7 @@ def test_a_kind_hidden_in_another_game_stays_hidden(
         Settings(
             push_to_talk="mouse:0x06",
             crash_reports=False,
+            look_at_screen=False,
             game="wow-forever",
             tile_hidden_cards="ship",
         ),
@@ -943,7 +1038,9 @@ def test_the_tile_page_picks_the_tiles_screen(
 ) -> None:
     """#447: follow the game (as before), or a screen plugged in now. A chosen screen
     that isn't plugged in stays listed, so opening the page doesn't lose it."""
-    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+    )
     setup = Setup(browser, path, first_run=False)
     page = setup.page
     page.locator("nav [data-view='tile']").click()
@@ -959,7 +1056,13 @@ def test_the_tile_page_picks_the_tiles_screen(
     assert setup.saved().tile_screen == r"\\.\DISPLAY2"
     setup.close()
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, tile_screen=r"\\.\DISPLAY7"), path
+        Settings(
+            push_to_talk="mouse:0x06",
+            crash_reports=False,
+            look_at_screen=False,
+            tile_screen=r"\\.\DISPLAY7",
+        ),
+        path,
     )
     setup = Setup(browser, path, first_run=False)
     setup.page.locator("nav [data-view='tile']").click()
@@ -972,7 +1075,9 @@ def test_the_tile_page_picks_the_tiles_screen(
 def test_home_has_no_exchanges_list_while_tycho_isnt_running(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
-    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+    )
     setup = Setup(browser, path, first_run=False)
     expect(setup.page.locator("#homeState h1")).to_have_text("Ready")
     expect(setup.page.locator("#recent")).to_have_count(0)
@@ -985,7 +1090,13 @@ def test_setup_run_again_shows_another_game_before_switching(
     """#435: run again from Home, picking another game in setup restarted Tycho at once
     and closed the window mid-setup, with no word on what Tycho does there."""
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, voice="The Ship's Mind"), path
+        Settings(
+            push_to_talk="mouse:0x06",
+            crash_reports=False,
+            look_at_screen=False,
+            voice="The Ship's Mind",
+        ),
+        path,
     )
     setup = Setup(browser, path, first_run=False)
     page = setup.page

@@ -207,3 +207,24 @@ def needs_setup(current: Settings, pc: SetupPC | None = None, pack: GamePack | N
     if current.push_to_talk is None:
         return True
     return not game(current, pc or WindowsPC(), pack).found
+
+
+def unasked(current: Settings) -> tuple[str, ...]:
+    """The privacy questions a player who set Tycho up before they existed was never
+    asked, so the window opens on setup's Privacy step at start until they answer:
+    crash reports (ADR 4, #199), and looking at the game window in a game that can
+    (ADR 14, #31). Skipping leaves each off."""
+    names: list[str] = []
+    if current.crash_reports is None:
+        names.append("crash_reports")
+    if current.look_at_screen is None and can_look(current.game):
+        names.append("look_at_screen")
+    return tuple(names)
+
+
+def can_look(game: str) -> bool:
+    """Whether Tycho can look at this game's window: its pack names look phrases."""
+    try:
+        return bool(built_in(game).look)
+    except PackError:
+        return False

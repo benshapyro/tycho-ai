@@ -315,6 +315,13 @@ class Settings(BaseModel):
         "Empty means not asked yet, and nothing is sent.",
         json_schema_extra=_rule("lower_only", how=FILE_OR_APP),
     )
+    look_at_screen: bool | None = Field(
+        default=None,
+        description='Let Tycho look at your game window when you ask it to ("take a look"): '
+        "one picture of the game window, sent to the brain with your question and never "
+        "saved. A camera sound plays each time. Empty means not asked yet, and it's off.",
+        json_schema_extra=_rule("lower_only", "now", how=FILE_OR_APP),
+    )
     check_for_updates: bool = Field(
         default=True,
         description="When Tycho starts, and when its window opens, ask GitHub whether a newer "
@@ -404,7 +411,7 @@ def load(path: Path | None = None) -> Settings:
     data = _read(path)
     if data is None:
         return Settings()
-    data = _migrate(data)
+    data = {"version": 1, **data}  # older files had no version
     try:
         return Settings.model_validate(
             {k: v for k, v in data.items() if k in Settings.model_fields}
@@ -491,10 +498,3 @@ def _update(changes: Mapping[str, object], path: Path) -> Settings:
     data = _read(path) or {}
     save(updated, path, keep={k: v for k, v in data.items() if k not in Settings.model_fields})
     return updated
-
-
-def _migrate(data: dict[str, Any]) -> dict[str, Any]:
-    """Bring older settings files up to the current version."""
-    data = dict(data)
-    data.setdefault("version", 1)
-    return data

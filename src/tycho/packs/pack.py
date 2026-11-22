@@ -4,7 +4,8 @@
 plain message (``PackError``). What a pack may hold:
 
     pack.toml      the manifest: id, name, version, format, mode, the built-in parts it uses,
-                   and what to call the player there (call_me)
+                   what to call the player there (call_me), and what asks Tycho to look
+                   at the game window (look, #31)
     briefing.md    the game part of the brain's briefing, placing the core sections
     facts.md       what's true in the current patch
     terms.txt      game words for the speech corrector
@@ -68,7 +69,7 @@ _FILES = frozenset(
 )
 _TOP = frozenset(
     {"id", "name", "version", "format", "mode", "why", "window", "parts", "web", "briefing"}
-    | {"call_me", "setup", "accent", "callouts"}
+    | {"call_me", "setup", "accent", "callouts", "look"}
 )
 _PARTS = frozenset({"install", "keybinds", "game_state", "lookups"})
 
@@ -169,6 +170,9 @@ class GamePack:
     accent: str | None = None
     """The game's accent colour for the window and the Tile (ADR 17), like ``#f0c674``;
     None keeps Tycho's own. A ship's accent, where the Tile knows one, comes first."""
+    look: tuple[str, ...] = ()
+    """What the player says to have Tycho look at the game window ("take a look"), with
+    looking turned on (ADR 14, #31). Only a pack with a ``window`` can look."""
     callouts: tuple[Callout, ...] = ()
     """What Tycho may say about the game unasked, if the player turns it on (#4)."""
 
@@ -248,6 +252,9 @@ def load_pack(folder: Traversable, *, built_in: bool, registry: Registry | None 
             f"{where}: call_me must be a name of up to 40 letters, digits, spaces, "
             'apostrophes, hyphens or full stops, or "" for none'
         )
+    look = _strings(manifest, "look", where)
+    if look and window is None:
+        raise PackError(f"{where}: look needs a window: Tycho only ever looks at the game's own")
     try:
         setup = onboarding.read(
             manifest.get("setup", {}), where, has_folder=parts.install is not None
@@ -280,6 +287,7 @@ def load_pack(folder: Traversable, *, built_in: bool, registry: Registry | None 
         call_me=" ".join(call_me.split()) if call_me is not None else None,
         setup=setup,
         accent=_accent(manifest.get("accent"), where),
+        look=look,
         callouts=told,
     )
 

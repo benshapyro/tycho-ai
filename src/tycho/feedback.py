@@ -6,6 +6,7 @@ and quiet on purpose: they confirm, they don't announce.
 - Not done: a soft, low, falling tone (didn't understand, refused, no key, or
   the game wasn't in front).
 - Ask: two short rising notes, a question. Tycho wants "confirm" before acting.
+- Camera: a soft shutter, two quick clicks. A picture of the game window was taken (#31).
 """
 
 import logging
@@ -21,6 +22,8 @@ log = logging.getLogger(__name__)
 SAMPLERATE = 48_000
 LOUDEST = 0.5
 """Peak level at full volume. Comfortably below clipping, and below the game's own sounds."""
+CAMERA_LEAST = 0.15
+"""The camera sound's level with the sounds turned down or off: quiet, never silent."""
 
 
 def done_sound(rate: int = SAMPLERATE) -> Samples:
@@ -49,6 +52,21 @@ def ask_sound(rate: int = SAMPLERATE) -> Samples:
     gap = np.zeros(_frames(0.04, rate))
     notes = [np.sin(2 * np.pi * f * t) * envelope for f in (660, 880)]
     return _finish(np.concatenate([notes[0], gap, notes[1]]), rate)
+
+
+def camera_sound(rate: int = SAMPLERATE) -> Samples:
+    """About 110 ms: a shutter, two short bursts of filtered static 60 ms apart, the
+    second softer, so a picture being taken always sounds like one (ADR 14)."""
+    rng = np.random.default_rng(31)
+    clicks: list[np.ndarray[tuple[int], np.dtype[np.float64]]] = []
+    for level in (1.0, 0.6):
+        noise = rng.uniform(-1, 1, _frames(0.025, rate))
+        noise = np.convolve(noise, np.ones(6) / 6, mode="same")  # duller: a shutter, not a hiss
+        clicks += [
+            noise * np.exp(-_time(0.025, rate) / 0.006) * level,
+            np.zeros(_frames(0.035, rate)),
+        ]
+    return _finish(np.concatenate(clicks[:-1]), rate)
 
 
 class Player(Protocol):
@@ -94,6 +112,8 @@ class SoundFeedback:
         self._done = (done_sound(rate) * gain).astype(np.float32)
         self._not_done = (not_done_sound(rate) * gain).astype(np.float32)
         self._ask = (ask_sound(rate) * gain).astype(np.float32)
+        # Never silent, even with the sounds turned off: a picture is always heard (ADR 14).
+        self._camera = (camera_sound(rate) * max(gain, CAMERA_LEAST)).astype(np.float32)
         self._silent = gain == 0
 
     def done(self) -> None:
@@ -105,8 +125,11 @@ class SoundFeedback:
     def ask(self) -> None:
         self._play(self._ask)
 
-    def _play(self, samples: Samples) -> None:
-        if self._silent:
+    def camera(self) -> None:
+        self._play(self._camera, always=True)
+
+    def _play(self, samples: Samples, *, always: bool = False) -> None:
+        if self._silent and not always:
             return
         try:
             self._player.play(samples, self._rate)

@@ -32,8 +32,9 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 
 from tycho.brain.briefing import briefing, offered_actions
-from tycho.brain.claude import history
-from tycho.brain.decisions import BrainError, BrainRequest, Decision, Exchange, Reply
+from tycho.brain.claude import turns
+from tycho.brain.decisions import BrainError, BrainRequest, Decision, Reply
+from tycho.brain.looking import openai_turns
 from tycho.brain.lookups import Lookup
 from tycho.brain.openrouter_http import ChatClient, Chunk, OpenRouterClient
 from tycho.brain.player_keys import keyed
@@ -278,7 +279,7 @@ class OpenRouterBrain:
 
     async def decide(self, request: BrainRequest) -> Decision:
         self._brief(request.keybinds)
-        turn = Turn(waiting=request.waiting, looking=request.looking, checking=request.checking)
+        turn = Turn.of(request)
         if self._traces is not None:
             turn.trace = self._traces.start(
                 "openrouter", self._model, self._briefed, request.text, len(request.recent)
@@ -291,7 +292,7 @@ class OpenRouterBrain:
     async def _decide(self, request: BrainRequest, turn: Turn) -> Decision:
         started = time.perf_counter()
         about = await asyncio.to_thread(self._about)
-        messages = _messages(request.recent, request.text, self._today(), about, request.own_keys)
+        messages = openai_turns(turns(request, self._today(), about))
         for call in range(MAX_CALLS):
             decided, message, round_ = await self._call(messages, started, turn)
             if decided is not None:
@@ -498,13 +499,6 @@ def _function(spec: Mapping[str, object]) -> dict[str, object]:
             "parameters": spec["input_schema"],
         },
     }
-
-
-def _messages(
-    recent: Sequence[Exchange], text: str, today: datetime.date, about: str, own_keys: str = ""
-) -> list[dict[str, Any]]:
-    """The same turns ``ClaudeBrain`` sends: its text parts are OpenAI's shape too."""
-    return [dict(m) for m in history(recent, text, today, about, own_keys)]
 
 
 def _error_text(error: object) -> str:

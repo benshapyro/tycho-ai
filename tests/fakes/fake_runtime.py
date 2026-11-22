@@ -1,8 +1,9 @@
-"""A transcriber and feedback sounds that follow a script, for runtime tests."""
+"""A transcriber, feedback sounds and a camera that follow a script, for runtime tests."""
 
 import threading
 
 from tycho.audio.clip import Samples
+from tycho.eyes import Picture
 from tycho.situation import Logged, Situation
 
 
@@ -34,7 +35,7 @@ class FakeTranscriber:
 
 
 class FakeFeedback:
-    """Satisfies ``Feedback``. Records "done", "not_done" and "ask" in order."""
+    """Satisfies ``Feedback``. Records "done", "not_done", "ask" and "camera" in order."""
 
     def __init__(self) -> None:
         self.played: list[str] = []
@@ -47,6 +48,23 @@ class FakeFeedback:
 
     def ask(self) -> None:
         self.played.append("ask")
+
+    def camera(self) -> None:
+        self.played.append("camera")
+
+
+class FakeCamera:
+    """Satisfies ``Camera``. Hands back ``picture`` (or raises it), counting each take."""
+
+    def __init__(self, picture: Picture | Exception | None = None) -> None:
+        self.picture = picture if picture is not None else Picture(b"\xff\xd8jpeg", 160, 90)
+        self.taken = 0
+
+    def take(self) -> Picture:
+        self.taken += 1
+        if isinstance(self.picture, Exception):
+            raise self.picture
+        return self.picture
 
 
 class FakeActionLog:

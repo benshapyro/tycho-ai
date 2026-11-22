@@ -40,6 +40,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
         "web_search_open",
         "check_for_updates",
         "crash_reports",
+        "look_at_screen",
     ),
     "The Tile": tuple(n for n in Settings.model_fields if n == "tile" or n.startswith("tile_")),
     "Advanced": (
@@ -277,12 +278,14 @@ def callout_kinds(game: str) -> list[dict[str, str]]:
 
 def _not_for(game: str) -> frozenset[str]:
     """The settings that mean nothing in the chosen game, so its Settings leave them out:
-    a game whose pack reads nothing from its folder has no folder to choose."""
+    a game whose pack reads nothing from its folder has no folder to choose, and one
+    with no window to look at has no looking (#31)."""
     try:
         pack = built_in(game)
     except PackError:  # tycho check and Status say why; show everything
         return frozenset()
-    return FOLDER_SETTINGS if pack.parts.install is None else frozenset()
+    hidden = FOLDER_SETTINGS if pack.parts.install is None else frozenset[str]()
+    return hidden if pack.look else hidden | {"look_at_screen"}  # it can't look (#31)
 
 
 def shown_packs() -> list[dict[str, str]]:

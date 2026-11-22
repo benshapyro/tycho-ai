@@ -25,7 +25,14 @@ import time
 from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
-from tycho.brain.decisions import BrainError, Decision, Reply, UnboundAction, parse_tool_call
+from tycho.brain.decisions import (
+    BrainError,
+    BrainRequest,
+    Decision,
+    Reply,
+    UnboundAction,
+    parse_tool_call,
+)
 from tycho.brain.lookups import LOOKUP_SECONDS, Lookup, LookupResult, failure, run_lookup
 from tycho.brain.traces import Look, Trace, TraceFile
 from tycho.text import clip_spoken
@@ -142,6 +149,15 @@ class Turn:
     note): its results get ``CARD_NOTE`` while the Tile is on (#490)."""
     trace: Trace | None = None
     """What the request did, when tracing is on (#282)."""
+    picture: int = 0
+    """The size of the game window's picture sent with the request (#31): only that is
+    traced."""
+
+    @classmethod
+    def of(cls, request: BrainRequest) -> Turn:
+        """A new turn for ``request``, with its callbacks."""
+        size = request.picture.size if request.picture is not None else 0
+        return cls(request.waiting, request.looking, request.checking, picture=size)
 
 
 class Round:
@@ -313,6 +329,7 @@ async def traced(traces: TraceFile | None, turn: Turn, deciding: Awaitable[Decis
     trace = turn.trace
     if traces is None or trace is None:
         return await deciding
+    trace.picture = turn.picture
     try:
         decided = await deciding
     except BaseException as e:

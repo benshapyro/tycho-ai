@@ -5,6 +5,7 @@ from tycho.runtime.messages import Result, Status, Trace
 from tycho.runtime.ports import (
     ActionLog,
     Brain,
+    Camera,
     Display,
     Feedback,
     GameState,
@@ -18,6 +19,7 @@ __all__ = [
     "ActionLog",
     "AlreadyRunning",
     "Brain",
+    "Camera",
     "Display",
     "Feedback",
     "GameState",
