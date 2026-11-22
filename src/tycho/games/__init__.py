@@ -161,22 +161,35 @@ def _settings(workshop: Workshop) -> Built:
 
 
 def _web(workshop: Workshop) -> Built:
-    """Web search on the pack's sites, if the player left it on and has an Anthropic key."""
+    """Web search, if the player left it on: through OpenRouter's web plugin when they
+    have an OpenRouter key (#365), otherwise Anthropic's own search."""
     current = workshop.current
     if not current.web_search:
         log.info("Web search: off (web_search is false)")
         return Built()
+    if (openrouter := workshop.openrouter_key()) is not None:
+        from tycho.knowledge.web_plugin import ENGINE, PluginSearch
+
+        log.info("Web search: %s, through your OpenRouter key", ENGINE)
+        return Built(
+            (
+                PluginSearch(
+                    openrouter,
+                    sites=workshop.pack.web_sites,
+                    game=workshop.pack.name,
+                    open_web=current.web_search_open,
+                    log_queries=current.keep_transcripts,
+                ),
+            )
+        )
     import anthropic
 
-    from tycho.findings import key_help
-    from tycho.knowledge.web import SearchNeedsAnthropic, WebSearch
+    from tycho.knowledge.web import WebSearch
 
     search_key = workshop.search_key()
-    if search_key is None:
-        log.info("Web search: needs an Anthropic key (%s); Tycho says so", key_help("anthropic"))
-        return Built((SearchNeedsAnthropic(),))
-    if workshop.brain_provider != "anthropic":
-        log.info("Web search: through your Anthropic key")
+    if search_key is None:  # a brain runs on one of the two keys, so never in play
+        log.info("Web search: no key to search with")
+        return Built()
     return Built(
         (
             WebSearch(

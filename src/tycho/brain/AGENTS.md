@@ -6,7 +6,7 @@ Claude decides what to do with anything the fast path doesn't match. Its output 
 
 - `rounds.py`: what every adapter does with a complete tool call (`Round`): start a look-up, refuse an unbound act, or take the first act. The rules below live here once.
 - `claude.py`: the adapter. One request is up to `MAX_CALLS` calls to Claude: look-ups run, their results go back, Claude carries on.
-- `openrouter.py`: the same through OpenRouter, for any model (#192). Players get it with `brain_provider = "openrouter"` (#112), on a model from `providers`; the eval uses it on any model. It has no web search of its own: with the player's Anthropic key it gets the usual `WebSearch`, and without one `SearchNeedsAnthropic`, which tells the model to say so.
+- `openrouter.py`: the same through OpenRouter, for any model (#192). Players get it with `brain_provider = "openrouter"` (#112), on a model from `providers`; the eval uses it on any model. Web search runs through the player's OpenRouter key (`knowledge/web_plugin.py`, #365), as it does for Claude direct when the player has stored one.
 - `openrouter_http.py`: OpenRouter over HTTP: the `ChatClient` boundary (a fake in `tests/fakes/fake_chat.py`), the real client and reading its stream and errors.
 - `priming.py`: getting ready as push-to-talk goes down (#21): each adapter's `prime` opens the connection with a free request when it's been idle, or writes the cache again after a break near the cache's hour. Each adapter calls its `Primer.used` when a request goes and ends.
 - `providers.py`: the allowlist players pick from (#112). A model goes in only after the eval scores it with zero wrong presses; the settings schema refuses anything else. The wiring is in `src/tycho/brain_choice.py`.

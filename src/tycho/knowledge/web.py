@@ -151,41 +151,6 @@ SCHEMA: Mapping[str, object] = {
     "required": ["query"],
     "additionalProperties": False,
 }
-NEEDS_ANTHROPIC = (
-    "Web search needs an Anthropic key, and the player has only an OpenRouter key. Tell "
-    "them in one short sentence that you can't search the web without one, then answer from "
-    "what you know if you can, saying it may be out of date."
-)
-
-
-class SearchNeedsAnthropic:
-    """``web_search`` for a brain through OpenRouter when the player has no Anthropic
-    key (#112). Search is Anthropic's own tool, so the brain is told plainly why it can't
-    search, and says so, rather than the question failing quietly. The same name,
-    description and schema as ``WebSearch``, so the tools don't change.
-    Satisfies ``brain.lookups.Lookup``."""
-
-    instant = True
-    """It answers at once: no "Checking." first."""
-
-    @property
-    def name(self) -> str:
-        return NAME
-
-    @property
-    def description(self) -> str:
-        return DESCRIPTION
-
-    @property
-    def input_schema(self) -> Mapping[str, object]:
-        return SCHEMA
-
-    async def prepare(self) -> None:
-        return None
-
-    async def run(self, arguments: Mapping[str, object]) -> LookupResult:
-        # Not an error result: an error makes the model try again (brain/AGENTS.md).
-        return LookupResult(json.dumps({"not_available": NEEDS_ANTHROPIC}))
 
 
 class WebSearch:
@@ -405,6 +370,12 @@ def _answer(content: Sequence[Any], *, cut: bool) -> str:
         default=-1,
     )
     text = "".join(str(b.text) for b in content[last + 1 :] if getattr(b, "type", "") == "text")
+    return spoken(text, cut=cut)
+
+
+def spoken(text: str, *, cut: bool = False) -> str:
+    """A search's answer on one line, at most ``MAX_ANSWER`` long, in whole sentences
+    when ``cut`` (the reply hit its token limit) or when it's too long."""
     text = _SPACE_BEFORE.sub(r"\1", " ".join(text.split()))
     if cut:
         text = _whole_sentences(text)

@@ -167,17 +167,18 @@ class Settings(BaseModel):
     )
     web_search: bool = Field(
         default=True,
-        description="Let Tycho search the game's own sites for news and what's coming, "
-        "in games that have them. Each search costs about 1 cent of your Anthropic credit.",
+        description="Let Tycho search the web for news, what's coming, where things are and "
+        "how to do things, in games that have web search. With an OpenRouter key it searches "
+        "through it, for about half a cent; otherwise about 1 to 3 cents of your Anthropic "
+        "credit.",
         json_schema_extra=_rule("lower_only", how=FILE_OR_APP),
     )
     web_search_open: bool = Field(
         default=True,
-        description="When the game's own sites have no clear answer, let web search look "
-        "on any website (guides, forums, Reddit's search results) and read a page, for where "
-        "things are and how to do things. Answers from players' posts say so. That search "
-        "takes longer (about 11 s, at most 25 s) and costs about 3 cents. Off: the game's "
-        "own sites only.",
+        description="Let web search look on any website (guides, forums, Reddit's search "
+        "results), not only the game's own sites, for where things are and how to do things. "
+        "Answers from players' posts say so. With only an Anthropic key, it tries the game's "
+        "sites first and takes longer (about 10 s). Off: the game's own sites only.",
         json_schema_extra=_rule("lower_only", how=FILE_OR_APP),
     )
     brain_provider: Provider = Field(

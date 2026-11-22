@@ -81,6 +81,7 @@ def load_brain(
         live,
         brain_provider=choice.provider,
         search_key=lambda: key if choice.provider == "anthropic" else anthropic_key(),
+        openrouter_key=lambda: key if choice.provider == "openrouter" else openrouter_key(),
     )
     built = [BUILT_IN.lookups[name](workshop) for name in lookup_order(pack.parts.lookups)]
     if "web" not in pack.parts.lookups:
@@ -197,11 +198,3 @@ def brain_findings(
             yield Finding("warn", "Brain", f"{choice.describe()}: the key works, but {spent}")
         else:
             yield Finding("ok", "Brain", f"{choice.describe()}; your {choice.label} key works")
-    if choice.provider != "anthropic" and current.web_search and anthropic_key() is None:
-        yield Finding(
-            "warn",
-            "Web search",
-            f"needs an Anthropic key, even with the brain through {choice.label}; without "
-            f"one Tycho says it can't search: {BRAIN_KEY_HELP}, or set web_search = false",
-            fix=BRAIN_KEY_HELP,
-        )
