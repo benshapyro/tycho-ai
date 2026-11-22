@@ -402,7 +402,7 @@ def test_a_skipped_step_is_not_ticked_and_next_stays_in_view(setup: Setup) -> No
         expect(steps.nth(i)).to_have_class(cls)
         expect(steps.nth(i)).not_to_contain_text("✓")
     # How a skipped step looks, not only its class (#506).
-    expect(steps.nth(1).locator("b")).to_have_text("–")
+    expect(steps.nth(1).locator("b")).to_have_text("\u2013")  # an en dash
     expect(steps.nth(1)).to_have_attribute("title", "Skipped. You can add it later.")
     expect(steps.nth(0)).to_have_attribute("title", "Still to do")
     # Done properly, a step is ticked.
