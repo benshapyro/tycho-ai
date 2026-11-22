@@ -12,6 +12,7 @@ from dataclasses import dataclass, field, replace
 
 from tycho import safety
 from tycho.commands import Command, CommandMatcher
+from tycho.eyes import Picture
 from tycho.keybinds import Keybinds
 from tycho.packs import Safety
 from tycho.tile import BRAIN_KINDS, Card, from_tool
@@ -80,6 +81,12 @@ class BrainRequest:
     """Called at most once a request, when a reply with look-ups is known not to end in
     a key press, so the player hears "Checking." while Tycho checks, and never just
     before a press (#176, #178)."""
+    picture: Picture | None = field(default=None, compare=False, repr=False)
+    """The game window, when the player asked Tycho to look (ADR 14, #31): sent with
+    this request only, never kept, logged or traced (the trace keeps its size)."""
+    may_look: bool = False
+    """The player has looking turned on: the brain may offer one (``LOOK_OFFER``) when
+    seeing the game would answer and no picture came. It can't take one itself."""
 
 
 class BrainError(Exception):

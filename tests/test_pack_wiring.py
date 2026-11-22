@@ -173,9 +173,9 @@ def test_the_open_web_search_gives_the_brain_longer_once_it_starts(
 ) -> None:
     """#361: web_search_open (on by default) searches twice and reads pages."""
     store = SimpleNamespace(keybinds=FakeGameKeybinds().keybinds)
-    opened = _session(fake_pack(), store, monkeypatch)._times
+    opened = _session(fake_pack(), store, monkeypatch)._asker.times
     assert (opened.search, opened.search_limit) == (OPEN_SEARCH_SECONDS, OPEN_SEARCH_LIMIT)
     assert (opened.search, opened.search_limit) == (27.0, 32.0)
     sites = Settings(web_search_open=False)
-    only = _session(fake_pack(), store, monkeypatch, sites)._times
+    only = _session(fake_pack(), store, monkeypatch, sites)._asker.times
     assert (only.search, only.search_limit) == (SEARCH_SECONDS, SEARCH_LIMIT)

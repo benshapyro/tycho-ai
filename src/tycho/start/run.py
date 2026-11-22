@@ -205,6 +205,7 @@ def _start(
     opens the window once listening, on setup's Try it (ADR 17)."""
     from tycho.address import Address, Pronouncing
     from tycho.audio.microphone import Microphone
+    from tycho.eyes.windows import WindowsCamera
     from tycho.feedback import SoundDevicePlayer, SoundFeedback
     from tycho.input.windows import GAME_EXECUTABLE, WindowsFocusCheck, WindowsKeySender
     from tycho.runtime.actionlog import FileActionLog
@@ -284,10 +285,12 @@ def _start(
             speaker=speaker,
             address=address,
             display=display,
+            camera=WindowsCamera(pack.window) if pack.window and pack.look else None,
             pack=pack,
             on_result=recent.add,
         )
         live["confirm_seconds"] = lambda v: session.set_confirm_seconds(_float(v))
+        live["look_at_screen"] = lambda v: session.set_looking(v is True)
         tile.on_stopped = lambda _why: session.tell(TILE_STOPPED)  # said, once (#297)
         for said in unseen:  # the Tile is off or didn't open: said aloud once listening
             session.tell(said)

@@ -12,12 +12,14 @@ from dataclasses import dataclass, replace
 
 from tycho.brain import BrainError, BrainRequest, Exchange, Reply
 from tycho.commands import Command, CommandMatcher
+from tycho.eyes import Picture
 from tycho.keybinds import Keybinds
 from tycho.packs import Safety
 from tycho.runtime.conversation import Line
 from tycho.runtime.messages import Progress, Result, Status, Trace
 from tycho.runtime.ports import Brain
 from tycho.runtime.routing import Picked, from_brain
+from tycho.runtime.speaking import Speaking
 
 CONFIRM_SECONDS = 5.0
 """How long a question waits for "confirm", unless the settings say otherwise."""
@@ -75,11 +77,15 @@ async def ask_brain(
     lists: Safety,
     searching: Callable[[], None],
     checking: Callable[[], None],
+    picture: Picture | None = None,
+    may_look: bool = False,
 ) -> Picked | Reply | str:
     """What the brain decides, within its time (ADR 14, #150, #169): commands, a
     reply, or why it couldn't answer. ``own_keys`` names the player's keys for a
     built-in command said with key actions off (#386). ``searching`` and ``checking``
-    hear a web search or another look-up start, to say a line while it runs."""
+    hear a web search or another look-up start, to say a line while it runs.
+    ``picture``: the game window, for a look (#31); ``may_look``: looking is on, so
+    the brain may offer one."""
     loop = asyncio.get_running_loop()
     try:
         async with asyncio.timeout(times.brain) as budget:
@@ -110,11 +116,52 @@ async def ask_brain(
                     waiting=search_started,
                     looking=looking,
                     checking=checking,
+                    picture=picture,
+                    may_look=may_look,
                 )
             )
         return from_brain(decision, matcher, lists)
     except (BrainError, TimeoutError) as e:
         return str(e) or "it took too long"
+
+
+@dataclass(frozen=True, slots=True)
+class Asker:
+    """The session's way to the brain: ``ask_brain`` with what it needs each time. The
+    voice warms up while the brain thinks, so speech starts sooner."""
+
+    brain: Brain | None
+    """None: no brain, so nothing is routed here."""
+    times: Times
+    matcher: CommandMatcher
+    lists: Safety
+    voice: Speaking
+    keybinds: Callable[[], Keybinds]
+    follow_ups: Callable[[], tuple[Exchange, ...]]
+    may_look: Callable[[], bool]
+    """Looking at the game window is on, so the brain may offer a look (#31)."""
+
+    async def ask(
+        self, text: str, own_keys: str = "", picture: Picture | None = None
+    ) -> Picked | Reply | str:
+        """What the brain decides, with the game window's picture for a look (#31),
+        which is dropped once the request ends."""
+        assert self.brain is not None  # noqa: S101 - only routed here with a brain
+        self.voice.warm()
+        return await ask_brain(
+            self.brain,
+            text,
+            self.keybinds(),
+            self.follow_ups(),
+            own_keys,
+            times=self.times,
+            matcher=self.matcher,
+            lists=self.lists,
+            searching=self.voice.fill,
+            checking=self.voice.check,
+            picture=picture,
+            may_look=self.may_look(),
+        )
 
 
 @dataclass(frozen=True, slots=True)

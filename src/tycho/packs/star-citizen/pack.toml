@@ -8,6 +8,19 @@ version = "1.0.0"          # the pack's own version, shown by tycho check and in
 format = 1                 # the folder format; Tycho refuses a format it doesn't know
 mode = "keys"              # Tycho may press keys, through the safety gate
 window = "StarCitizen.exe" # the program whose window must be in front to press
+# What asks Tycho to look at the game window, anywhere in what's said (ADR 14, #31). Only
+# with look_at_screen on; the picture goes to the brain with the question, and is never kept.
+look = [
+    "take a look",
+    "have a look",
+    "look at this",
+    "look at that",
+    "look at my screen",
+    "look at the screen",
+    "what am i looking at",
+    "what is on my screen",
+    "what is on the screen",
+]
 
 [parts]                     # built-in code, by id
 install = "star-citizen"    # find the game folder and its channels

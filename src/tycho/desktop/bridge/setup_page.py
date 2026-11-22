@@ -53,6 +53,8 @@ class SetupPage(SettingsPage, CommandsPage):
             },
             "leaves": _leaves(pack, current),
             "crash_reports": current.crash_reports,  # None: not asked yet (ADR 4)
+            "look_at_screen": current.look_at_screen,  # None: not asked yet (#31)
+            "can_look": bool(pack.look),
             "todo": todo,
             "channels": list(setting_choices(Settings.model_fields["game_channel"].annotation)),
             "push_to_talk": {
@@ -261,6 +263,17 @@ def _leaves(pack: GamePack, current: Settings) -> list[dict[str, str]]:
                 "what": "A short search query Claude writes from your question",
                 "when": "Questions Tycho's look-ups don't cover. "
                 + ("On now" if current.web_search else "Off now")
+                + ": Settings, Privacy.",
+            }
+        )
+    if pack.look:
+        rows.append(
+            {
+                "to": brain,
+                "what": "A picture of the game window, only when you ask Tycho to look, "
+                "with your question. Never saved.",
+                "when": "Only with looking at your game on. "
+                + ("On now" if current.look_at_screen else "Off now")
                 + ": Settings, Privacy.",
             }
         )

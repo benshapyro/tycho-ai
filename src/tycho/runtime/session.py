@@ -12,7 +12,8 @@ The session keeps the threads, cancellation and barge-in, and the open confirm
 question (ADR 13). Where words go is ``routing``, what gets pressed is ``planning``
 (both pure, so the brain eval grades the same code, #55), asking the brain and
 answering the question is ``asking``, the log is the ``Reporter``, what was said
-lately is the ``Conversation``, and the Tile's part is ``tiling``.
+lately is the ``Conversation``, the Tile's part is ``tiling``, and looking at the game
+window when asked is ``look`` (#31).
 """
 
 import asyncio
@@ -42,10 +43,10 @@ from tycho.runtime.asking import (
     SEARCH_LIMIT,
     SEARCH_SECONDS,
     Answer,
+    Asker,
     Question,
     Times,
     answered,
-    ask_brain,
     say_again,
 )
 from tycho.runtime.conversation import (
@@ -53,6 +54,7 @@ from tycho.runtime.conversation import (
     would_speak,
 )
 from tycho.runtime.listening import TAIL_SECONDS, poll, tail
+from tycho.runtime.look import ANSWER_ONLY, LOOK, Eyes, Unseen, look, wants_a_look
 from tycho.runtime.messages import Progress, Result, Status, Trace
 from tycho.runtime.planning import (
     Questions,
@@ -122,8 +124,13 @@ class Session:
         display: Display | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         safety_lists: Safety,
+        eyes: Eyes | None = None,
+        looking: bool = False,
     ) -> None:
-        """``safety_lists``: the pack's lists for the safety gate, for every plan (ADR 18)."""
+        """``safety_lists``: the pack's lists for the safety gate, for every plan (ADR 18).
+        ``eyes``: the pack's look phrases and its window's camera (None: it can't look);
+        ``looking``: the player turned looking on (``look_at_screen``, #31)."""
+        self._eyes, self._looking = eyes, looking
         self._safety_lists = safety_lists
         self._tail_seconds = tail_seconds
         self._tail_pending = False
@@ -138,9 +145,6 @@ class Session:
         self._game_state = game_state
         self._reporter = Reporter(log_transcripts=log_transcripts, action_log=action_log)
         self._brain = brain
-        self._times = Times(
-            brain_seconds, search_seconds, search_limit, looking_seconds, looking_limit
-        )
         self._speaker = speaker
         self._voice = Speaking(speaker)
         self._telling = Telling(display, self._voice, feedback)
@@ -148,6 +152,11 @@ class Session:
         """Whether this session has said why a press was refused with key actions off."""
         self._brain_warming: asyncio.Task[None] | None = None
         self._conversation = Conversation(clock)
+        times = Times(brain_seconds, search_seconds, search_limit, looking_seconds, looking_limit)
+        voice, said_lately = self._voice, self._conversation.follow_ups
+        self._asker = Asker(
+            brain, times, matcher, safety_lists, voice, keybinds, said_lately, self._may_look
+        )
         self._confirm_seconds = confirm_seconds
         self._question: Question | None = None
         self._samplerate = samplerate
@@ -186,6 +195,13 @@ class Session:
     @property
     def paused(self) -> bool:
         return self._paused
+
+    def set_looking(self, on: bool) -> None:
+        """Looking at the game window turned on or off, from the next request (#31)."""
+        self._looking = on
+
+    def _may_look(self) -> bool:
+        return self._eyes is not None and self._looking
 
     def set_confirm_seconds(self, seconds: float) -> None:
         """How long to wait for "confirm", from the next question on (#111)."""
@@ -367,6 +383,7 @@ class Session:
             tile=self._display is not None and self._display.on,
             brain=self._brain is not None,
             keys=not self._safety_lists.keys_off,
+            look=wants_a_look(text, self._eyes, offered=self._conversation.offered_look()),
         )
         trace.mark("match")
         if isinstance(routed, Reserved):
@@ -397,7 +414,11 @@ class Session:
             confirmed = False
             progress.by_brain = True
             keys = own_keys(routed.matched, self._keybinds()) if routed.matched else ""
-            picked = await self._ask_brain(corrected.for_brain, keys)
+            seen = await look(self._eyes, self._looking, self._feedback) if routed.look else None
+            progress.commands = (LOOK,) if routed.look else ()
+            if isinstance(seen, Unseen):  # off, or no game window: nothing is sent
+                return seen.result(progress, request, trace, heard, text)
+            picked = await self._asker.ask(corrected.for_brain, keys, seen)
             trace.mark("brain")
             if isinstance(picked, Reply):
                 progress.say, progress.card = picked.text, picked.card
@@ -409,6 +430,8 @@ class Session:
             if isinstance(picked, str):
                 detail = f"the brain couldn't answer: {picked}"
                 return progress.result(request, "failed", trace, heard, text, detail)
+            if seen is not None:  # a look only answers (ADR 14): nothing is pressed
+                return ANSWER_ONLY.result(progress, request, trace, heard, text)
             commands, progress.say = picked.commands, picked.say
 
         progress.commands = tuple(command.id for command in commands)
@@ -449,23 +472,6 @@ class Session:
             still_trying=lambda: self._trying,
         )
         return end(status, detail)
-
-    async def _ask_brain(self, text: str, own_keys: str = "") -> Picked | Reply | str:
-        """What the brain decides, within its time (``asking.ask_brain``)."""
-        assert self._brain is not None  # noqa: S101 - only routed here with a brain
-        self._voice.warm()  # while the brain thinks, so speech starts sooner
-        return await ask_brain(
-            self._brain,
-            text,
-            self._keybinds(),
-            self._conversation.follow_ups(),
-            own_keys,
-            times=self._times,
-            matcher=self._matcher,
-            lists=self._safety_lists,
-            searching=self._voice.fill,
-            checking=self._voice.check,
-        )
 
     def _report(self, result: Result) -> None:
         speak = self._speaker is not None and would_speak(result)

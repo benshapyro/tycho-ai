@@ -37,6 +37,7 @@ from tycho.ptt.binding import Binding
 from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime import AlreadyRunning, RecognitionUnavailable, Result, Session, SingleInstance
 from tycho.runtime.conversation import FOLLOW_UP_SECONDS
+from tycho.runtime.look import Eyes
 from tycho.runtime.pressing import SAID_DURING_TRY_IT, TRYING_IN_GAME
 from tycho.runtime.speaking import CHECKING, FILLERS, KEEP_CHARACTERS
 from tycho.tile import Card, Row
@@ -121,6 +122,8 @@ def rig(
     address: Callable[[], str] = lambda: "",
     display: FakeDisplay | None = None,
     safety_lists: Safety = SC.safety,
+    eyes: Eyes | None = None,
+    looking: bool = False,
 ) -> Rig:
     audio, keys, feedback = FakeAudioSource(RATE), FakeKeySender(), FakeFeedback()
     actions = FakeActionLog()
@@ -159,6 +162,8 @@ def rig(
         display=display,
         sleep=sleep,
         safety_lists=safety_lists,
+        eyes=eyes,
+        looking=looking,
     )
     return Rig(session, audio, keys, feedback, transcriber, results, actions, waits)
 

@@ -8,6 +8,9 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ## [Unreleased]
 
+### Added
+- Tycho can look at the game window when you ask: say "take a look" (or "what am I looking at?"), or say "yes" when Tycho asks "Want me to take a look?". It's off until you say yes, in setup's privacy step or in Settings, and players who set Tycho up before are asked once. Only the game's own window is captured, you hear a camera click each time, and the picture goes to the brain with your question and nowhere else: it's never saved or logged. Saying "stop looking at my screen" turns it off, and a look never presses a key. ([#31](https://github.com/benshapyro/tycho-ai/issues/31))
+
 ## [0.9.0] - 2026-11-22
 
 ### Added

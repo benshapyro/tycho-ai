@@ -65,8 +65,9 @@ DESCRIPTION = """\
 Read or change Tycho's own settings, when the player asks about or for a change to \
 how Tycho works: its voice (George, Sarah, Lily or Brian) and sound volumes, how \
 long they have to say "confirm", \
-web search, keeping transcripts, update checks, crash reports, game channel, speech recognition \
-device. action "get" reads them all, with which can change by voice. action "set" \
+web search, keeping transcripts, update checks, crash reports, looking at the game window \
+(look_at_screen: "stop looking at my screen"), game channel, speech recognition device. \
+action "get" reads them all, with which can change by voice. action "set" \
 changes the ones named; a value can be relative ("-10%" for a bit quieter, "+2" \
 seconds). action "undo" puts back the last change made by voice. Some settings only \
 go down or off by voice: the result says so, and how to change them instead. Never by \

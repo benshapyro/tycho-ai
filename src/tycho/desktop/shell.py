@@ -120,8 +120,8 @@ def serve_with_tray(
         requests.target = lambda: host.ask("open")
     if reopen or try_it:
         host.ask("open")  # the window asked for the restart: it's back, on the new loop
-    elif _crash_reports_unasked():
-        host.ask("open")  # set up before crash reports: asks until answered (ADR 4, #442)
+    elif _privacy_unasked():
+        host.ask("open")  # set up before a privacy question: asks until answered (#442, #31)
     try:
         host.run(window.open)
     finally:
@@ -137,11 +137,14 @@ def _try_it(session: Session, on: bool) -> bool:
     return True
 
 
-def _crash_reports_unasked() -> bool:
-    """Set up before crash reports existed and never asked (ADR 4): the window opens at
-    start to ask, even for a player who never opens it."""
+def _privacy_unasked() -> bool:
+    """Set up before crash reports (ADR 4) or looking at the game window (ADR 14) existed
+    and never asked: the window opens at start to ask, even for a player who never
+    opens it."""
+    from tycho.desktop.setup import unasked
+
     try:
-        return settings.load().crash_reports is None
+        return bool(unasked(settings.load()))
     except settings.SettingsError:
         return False
 
