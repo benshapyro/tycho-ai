@@ -863,6 +863,50 @@ def test_a_clash_excuses_only_the_allowed_press_that_clashed() -> None:
     assert e.grade(outcome, rule, {"v_eject", "v_lights_toggle"}).startswith("WRONG PRESS")
 
 
+def test_a_fast_path_command_with_no_key_bound_is_not_a_wrong_press() -> None:
+    """#508: "enter remote turret" takes the fast path to an action with no key on these
+    keybinds. Tycho presses nothing and says so; nobody picked a key."""
+    from tycho.lexicon import Lexicon
+
+    e = _eval()
+    rule: dict[str, Any] = {"heard": "enter remote turret", "expect": ["actions", "reply"]}
+    outcome = asyncio.run(
+        e.run_case(
+            rule, Lexicon.default(pack=SC), _ScriptedBrain(0, None), _with(), lists=SC.safety
+        )
+    )
+    assert outcome.route == "fast"
+    assert outcome.kind == "no_key"
+    assert outcome.refused.startswith("no_key")
+    rule["must"] = [["v_enter_remote_turret_1"]]
+    verdict = e.grade(outcome, rule, set())
+    assert verdict == "pass"
+    summary = e.metrics(e.Run("anthropic", "some/model", [outcome], e._Costs()))
+    assert summary["wrong_presses"] == 0
+    # A case that wants only a press doesn't pass on a missing key, but isn't a wrong one.
+    only = e.grade(outcome, {"expect": ["actions"]}, set())
+    assert only.startswith("expected actions")
+    assert "WRONG" not in only
+
+
+def test_a_clash_on_a_command_with_setup_presses_is_still_a_clash() -> None:
+    """From the review of #500: a refused command's setup presses are Tycho's, not picks
+    the model made, so they don't turn a key clash into a wrong press."""
+    e = _eval()
+    outcome = _outcome(
+        kind="actions",
+        actions=["v_master_mode_set_nav", "v_toggle_qdrive_engagement"],
+        setup=["v_master_mode_set_nav"],
+        refused="refused: on mouse1",
+        clash="v_toggle_qdrive_engagement",
+    )
+    rule: dict[str, Any] = {"expect": ["actions"], "allow": ["v_toggle_qdrive_engagement"]}
+    valid = {"v_master_mode_set_nav", "v_toggle_qdrive_engagement"}
+    assert e.grade(outcome, rule, valid).startswith(e.KEY_CLASH)
+    outcome.clash = "v_master_mode_set_nav"  # the clash on the setup press itself
+    assert e.grade(outcome, rule, valid).startswith(e.KEY_CLASH)
+
+
 def test_a_step_with_no_pressable_key_before_a_clash_is_not_a_clash() -> None:
     """From the review of #498: plan_request refuses "no_key" at the first step, so the
     clash on the second never decides anything."""
@@ -1098,6 +1142,8 @@ def test_the_model_benchmark_asks_for_the_hour_long_cache_tycho_does() -> None:
         ("The Hammerhead takes 8. It's a gunship. Want its weapons?", 3),
         ("Lights on.", 0),
         ("It's 3.5 km away, isn't it?", 0),  # a decimal point isn't a sentence end
+        ("Hmm... which one?", 0),  # from the review of #500
+        ("Which one, e.g. the engine or the music?", 0),
     ],
 )
 def test_a_question_longer_than_a_sentence_is_measured(say: str, sentences: int) -> None:

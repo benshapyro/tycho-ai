@@ -264,10 +264,12 @@ def focus_finding(game: str, window: str, seconds: float = 10.0) -> Finding:
         if focus.game_has_focus():
             return Finding("ok", "Focus check", f"Tycho can tell when {game} is in front")
         time.sleep(0.2)
-    front = foreground_executable() or "another program"
+    front = foreground_executable()
+    # Name the program in front only when Tycho can tell which it was (#430).
+    instead = f" ({front} was)" if front else ""
     return Finding(
         "warn",
         "Focus check",
-        f"{game} wasn't in front ({front} was). Tycho only presses keys when it is: "
+        f"{game} wasn't in front{instead}. Tycho only presses keys when it is: "
         f"start the game, then run the check again.",
     )
