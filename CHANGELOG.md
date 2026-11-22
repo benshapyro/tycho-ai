@@ -16,6 +16,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ### Changed
 - With the brain through OpenRouter, Tycho now tells OpenRouter never to use a host that keeps or trains on what you say, whatever your OpenRouter account's privacy settings are. ([#488](https://github.com/benshapyro/tycho-ai/issues/488))
+- `tycho check`'s focus test no longer says "(another program was)" when it can't tell which program was in front; it names the program only when it knows. ([#430](https://github.com/benshapyro/tycho-ai/issues/430))
 
 ## [0.8.0] - 2026-11-22
 
