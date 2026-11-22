@@ -154,7 +154,7 @@ def action_keys(keybinds: Keybinds) -> list[str]:
         key = pressable_input(action)
         if key is None or not action.label.strip():
             continue
-        found.append((_with_note(action), action.actionmap, key_text(key)))
+        found.append((with_note(action), action.actionmap, key_text(key)))
     maps: dict[str, set[str]] = {}
     for label, actionmap, _ in found:
         maps.setdefault(label, set()).add(actionmap)
@@ -168,7 +168,7 @@ def action_keys(keybinds: Keybinds) -> list[str]:
 _NOTES = {"hold": "Hold", "double_tap": "Double tap"}
 
 
-def _with_note(action: Action) -> str:
+def with_note(action: Action) -> str:
     """The game's label, with how to press it when the label doesn't say (#437)."""
     label = " ".join(action.label.split())
     note = next((n for a, n in _NOTES.items() if action.activation.startswith(a)), "")

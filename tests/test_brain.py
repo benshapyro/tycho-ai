@@ -283,12 +283,22 @@ class _Stream:
         self._events = events
         self._final = final
 
+        self.left_open = False
+        """Whether its events were still open when the stream was closed (#443)."""
+        self._closed_events = False
+
     def __aiter__(self) -> AsyncIterator[Any]:
         async def events() -> AsyncIterator[Any]:
-            for event in self._events:
-                yield event
+            try:
+                for event in self._events:
+                    yield event
+            finally:
+                self._closed_events = True
 
         return events()
+
+    def close(self) -> None:
+        self.left_open = not self._closed_events
 
     async def get_final_message(self) -> Any:
         return self._final
@@ -311,14 +321,18 @@ class _Client:
     def __init__(self, events: list[Any], final: Any = None) -> None:
         self.requests: list[dict[str, Any]] = []
         self.closed = False
+        self.left_open = False
 
         @asynccontextmanager
         async def stream(**request: Any) -> AsyncGenerator[_Stream]:
             self.requests.append(request)
+            stream = _Stream(events, final)
             try:
-                yield _Stream(events, final)
+                yield stream
             finally:
                 self.closed = True
+                stream.close()
+                self.left_open = stream.left_open
 
         async def create(**request: Any) -> Any:
             self.requests.append(request)
@@ -362,6 +376,9 @@ def test_claude_acts_as_soon_as_the_tool_call_is_complete() -> None:
     )
     assert _decide(client) == RunActions(("v_toggle_landing_system",), "Gear.")
     assert client.closed  # the stream was left at the first tool call
+    # Its events were closed then too, not later by the garbage collector, which
+    # printed "async generator already executing" in the eval (#443).
+    assert not client.left_open
 
 
 def test_claude_is_asked_the_way_adr_14_says() -> None:
@@ -372,7 +389,7 @@ def test_claude_is_asked_the_way_adr_14_says() -> None:
     assert request["output_config"] == {"effort": "low"}
     assert request["tool_choice"] == {"type": "auto"}  # several tools a reply (#149, #156)
     assert request["system"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
-    assert {t["name"] for t in request["tools"]} == {"run_actions", "run_sequence"}
+    assert {t["name"] for t in request["tools"]} == {"run_actions", "run_sequence", "player_keys"}
     assert all(t["strict"] for t in request["tools"])
 
 
@@ -564,7 +581,12 @@ def test_look_ups_are_offered_alongside_the_acts() -> None:
     client = _Calls(([], _final("RSI.")))
     _ask(client, FakeLookup())
     (request,) = client.requests
-    assert [t["name"] for t in request["tools"]] == ["run_sequence", "run_actions", "ship_lookup"]
+    assert [t["name"] for t in request["tools"]] == [
+        "run_sequence",
+        "run_actions",
+        "ship_lookup",
+        "player_keys",
+    ]
     assert all(t["strict"] for t in request["tools"])
 
 
@@ -891,6 +913,11 @@ def test_an_empty_card_with_a_line_to_say_is_said_without_the_card() -> None:
     and the player heard the error sound instead of the line."""
     empty = _CARD | {"kind": "steps", "rows": [], "say": "Your power key is P."}
     assert parse_tool_call("show_card", empty, ACTIONS, SEQUENCES) == Reply("Your power key is P.")
+    # Its line never points at a Tile that shows nothing (review of #501).
+    pointing = empty | {"say": "Your power key is P. The steps are on the Tile."}
+    assert parse_tool_call("show_card", pointing, ACTIONS, SEQUENCES) == Reply(
+        "Your power key is P."
+    )
 
 
 def _offered(tile: bool) -> list[str]:
