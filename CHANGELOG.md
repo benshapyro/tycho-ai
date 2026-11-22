@@ -8,6 +8,8 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-22
+
 ### Added
 - New commands for remote turrets, such as the Idris's: "enter remote turret" (or "enter remote turret two" or "three") and "exit remote turret". The game has no key for entering one by default, so bind Enter Remote Turret 1, 2 and 3 in the game's keybinds first. ([#356](https://github.com/benshapyro/tycho-ai/issues/356))
 - Ask Tycho which key does something ("how do I fire the guns?", "what's my strafe key?") and it names your own key, from your keybinds. ([#357](https://github.com/benshapyro/tycho-ai/issues/357))
@@ -187,7 +189,8 @@ The first release with an installer, as a preview. Earlier versions weren't rele
 - A fleet Tycho remembers, and speech recognition on your PC.
 - A check for a newer version when Tycho starts (it never updates itself).
 
-[Unreleased]: https://github.com/benshapyro/tycho-ai/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/benshapyro/tycho-ai/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.9.0
 [0.8.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.8.0
 [0.7.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.7.0
 [0.6.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.6.0
