@@ -633,7 +633,7 @@ tag = "unbound"
 heard = "how do you shoot the guns on the Idris"
 mode = "coach"
 expect = ["reply"]
-tools = ["player_keys"]
+# Graded on naming the key, from player_keys or the briefing's own lists (keys off).
 key_for = ["v_attack1_group1"]
 max_calls = 2
 tag = "keys"
@@ -642,7 +642,7 @@ tag = "keys"
 heard = "what's my key for strafing up"
 mode = "lookup"
 expect = ["reply"]
-tools = ["player_keys"]
+# Graded on naming the key, from player_keys or the briefing's own lists (keys off).
 key_for = ["v_strafe_up"]
 max_calls = 2
 tag = "keys"
