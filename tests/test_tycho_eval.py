@@ -1052,3 +1052,19 @@ def test_the_model_benchmark_asks_for_the_hour_long_cache_tycho_does() -> None:
     with pytest.raises(Stop):
         brains.ask("claude-haiku-5-5", "the briefing", "lights on", "low")
     assert sent["system"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
+
+
+@pytest.mark.parametrize(
+    ("say", "sentences"),
+    [
+        ("Which sounds?", 0),
+        ("Which sounds, the engine or the music?", 0),
+        ("Do you mean the engine? Or the music?", 2),
+        ("The Hammerhead takes 8. It's a gunship. Want its weapons?", 3),
+        ("Lights on.", 0),
+        ("It's 3.5 km away, isn't it?", 0),  # a decimal point isn't a sentence end
+    ],
+)
+def test_a_question_longer_than_a_sentence_is_measured(say: str, sentences: int) -> None:
+    """#430: a clarifying question is one sentence; the eval counts the ones that aren't."""
+    assert _eval().long_question(say) == sentences

@@ -366,6 +366,21 @@ def too_long(outcome: Outcome, rule: dict[str, Any], say_words: int) -> str:
     return f"said {count} words, at most {most}: {outcome.say!r}" if count > most else ""
 
 
+SENTENCE = re.compile(r"[^.?!]+[.?!]+(?=\s|$)")
+
+
+def long_question(say: str) -> int:
+    """How many sentences a reply that ends in a question takes, if more than one, else 0
+    (#430). A clarifying question is one sentence (docs/voice-and-tone.md), but a reply
+    may also answer and then offer the rest ("Want the rest?"), so it's a measure the
+    summary counts, not a verdict."""
+    said = say.strip()
+    if not said.endswith("?"):
+        return 0
+    count = len(SENTENCE.findall(said))
+    return count if count > 1 else 0
+
+
 CURLY = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'})
 
 
@@ -517,6 +532,8 @@ async def run_case(
         outcome.hosts = costs.hosts[hosts:] if costs else []
     if isinstance(decision, Reply):
         outcome.kind, outcome.say = "reply", decision.text
+        if sentences := long_question(decision.text):
+            outcome.notes.append(f"a question in {sentences} sentences")
         if lists.keys_off:
             outcome.named_key = names_key(decision.text, rule, keybinds)
             if outcome.named_key is False:
@@ -1233,6 +1250,9 @@ def _summary(outcomes: list[Outcome], costs: _Costs, summary: dict[str, Any]) ->
             f"Look-ups: {len(looked)} requests used them, "
             f"p50 {statistics.median(o.ms for o in looked):.0f} ms"
         )
+    if asked := [o for o in outcomes if o.kind == "reply" and o.say.strip().endswith("?")]:
+        long = sum(1 for o in asked if long_question(o.say))
+        print(f"Replies ending in a question: {len(asked)}, {long} longer than a sentence (#430)")
     if keyed := [o for o in outcomes if o.named_key is not None]:
         named = sum(1 for o in keyed if o.named_key)
         print(f"Named the player's key: {named} of {len(keyed)} requests for a press (#392)")
