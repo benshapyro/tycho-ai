@@ -248,6 +248,8 @@ class Session:
                 self._feedback.not_done()
                 return
             self._listening = True
+            if self._brain is not None:
+                self._brain.prime()  # while the player talks (#21)
             if self._display is not None:
                 self._display.listening()
         elif self._listening:

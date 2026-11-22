@@ -2271,6 +2271,14 @@ def test_the_brain_is_told_what_a_misheard_word_may_be() -> None:
     assert asked.text.endswith('[Speech-to-text: "address" may be "Idris".]')
 
 
+def test_push_to_talk_going_down_gets_the_brain_ready() -> None:
+    """#21: the brain opens its connection (or writes its cache again) while the player
+    talks, not after they let go."""
+    brain = FakeBrain(RunActions(("v_toggle_landing_system",), "Gear down."))
+    _conversation("put the wheels out would you", brain=brain)
+    assert brain.primed == 1
+
+
 # --- A toggle pressed for a direction (#13, #29) ---------------------------------------
 
 DOORS_TOGGLE = Keybinds(

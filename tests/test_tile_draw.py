@@ -10,6 +10,7 @@ from tycho.tile import Board, Card, Row
 from tycho.tile.cards import ALL_KINDS, BODY, confirm, long_answer, notice
 from tycho.tile.design import CORE, accent_for
 from tycho.tile.draw import MAX_CARD, WIDTH, Look, draw, rgba
+from tycho.tile.tables import bar_lengths, number
 
 SC = built_in(STAR_CITIZEN)
 
@@ -280,3 +281,72 @@ def test_each_bundled_face_is_loaded_once_for_the_character_checks(
         faces._has.cache_clear()  # pyright: ignore[reportPrivateUsage]
         faces._probe.cache_clear()  # pyright: ignore[reportPrivateUsage]
     assert sorted(loads) == ["label", "number", "strong", "text"]
+
+
+# --- the table-like cards (#491) ---------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("value", "found"),
+    [
+        ("3,048", (3048.0, "")),
+        ("72 SCU", (72.0, "scu")),
+        ("681.8 Gm", (681.8, "gm")),
+        ("1 to 4", None),
+        ("Large", None),
+        ("", None),
+    ],
+)
+def test_a_value_is_a_number_only_when_it_has_one(value: str, found: Any) -> None:
+    assert number(value) == found
+
+
+def test_bars_need_numbers_in_one_unit_that_differ() -> None:
+    assert bar_lengths(["3,048", "1,524"]) == [1.0, 0.5]
+    assert bar_lengths(["46 SCU", "66 SCU"]) == pytest.approx([46 / 66, 1.0])
+    assert bar_lengths(["46 SCU", "66 m/s"]) is None  # different units
+    assert bar_lengths(["3,048", "Large"]) is None
+    assert bar_lengths(["3,048", "3,012"]) is None  # too close to say anything
+    assert bar_lengths(["3,048"]) is None
+
+
+def _bar_pixels(rows: tuple[Row, ...]) -> int:
+    """Accent pixels in the thin lines along the rows' feet: bars, not the best row."""
+    card = Card("list", title="Sell", rows=rows)
+    image = _tile(card, Look(accent="#f5901e"), now=100.0)
+    return _near(image, "#f5901e", tolerance=140)
+
+
+def test_a_list_draws_bars_when_its_numbers_differ() -> None:
+    spread = (Row("A", value="3,048"), Row("B", value="1,500"), Row("C", value="900"))
+    close = (Row("A", value="3,048"), Row("B", value="3,012"), Row("C", value="2,990"))
+    assert _bar_pixels(spread) > _bar_pixels(close) + 200
+
+
+def test_a_comparison_draws_its_left_side_in_the_accent() -> None:
+    card = Card(
+        "compare",
+        title="For cargo",
+        hero=("Cutlass Black", "Freelancer"),
+        rows=(Row("Cargo", "46 SCU", "66 SCU"),),
+    )
+    plain = Card("compare", title="For cargo", hero=("", ""), rows=card.rows)
+    look = Look(accent="#f5901e")
+    assert _near(_tile(card, look), "#f5901e") > _near(_tile(plain, look), "#f5901e")
+
+
+def test_a_loadout_names_each_slot_once_for_the_rows_that_share_it() -> None:
+    one = Card("loadout", title="Cutlass", rows=(Row("Panther", "Weapons", "S3"),))
+    two = Card(
+        "loadout",
+        title="Cutlass",
+        rows=(Row("Panther", "Weapons", "S3"), Row("Panther", "Weapons", "S3")),
+    )
+    again = Card(
+        "loadout",
+        title="Cutlass",
+        rows=(Row("Panther", "Weapons", "S3"), Row("Panther", "Turret", "S3")),
+    )
+    dim = CORE.dim
+    assert _near(_tile(two), dim, 30) == pytest.approx(_near(_tile(one), dim, 30), rel=0.25)
+    assert _near(_tile(again), dim, 30) > _near(_tile(two), dim, 30)
