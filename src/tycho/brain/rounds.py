@@ -53,6 +53,12 @@ LAST_CALL = (
     "use show_card. If something wasn't found, say so briefly."
 )
 """Added to the results before the last call, so a third look-up isn't the end."""
+CARD_NOTE = (
+    "If your answer has more than about three items or numbers (prices, a route, "
+    "specs, steps), answer with show_card: one sentence to say, the rest on the card."
+)
+"""Added to a look-up's results while the Tile is on (#490). The briefing's rule is far
+from the answer: in play, a trade route and a loadout were spoken, numbers and all."""
 CUT_SHORT = "That answer ran too long for me. Ask me for part of it."
 """Said when the model's reply hit the output limit before it was whole: a how-to or a
 plan on a card can (#266). Better than the error sound, and true whichever part was cut."""
@@ -130,6 +136,9 @@ class Turn:
     """The last act refused for naming unbound actions, for the final error (#167)."""
     refused: bool = False
     """This call's reply held a refused act: its result asks for another pick."""
+    looked: bool = False
+    """This call's reply looked something up for an answer (not a fleet or settings
+    note): its results get ``CARD_NOTE`` while the Tile is on (#490)."""
     trace: Trace | None = None
     """What the request did, when tracing is on (#282)."""
 
@@ -159,7 +168,7 @@ class Round:
         """A fleet or settings note in the same reply as an act: it runs too (#156)."""
         self._looks: dict[asyncio.Task[LookupResult], Look] = {}
         """Each traced look-up's line entry, by its task."""
-        turn.refused = False
+        turn.refused = turn.looked = False
         if turn.trace is not None:
             turn.trace.call()
 
@@ -221,6 +230,8 @@ class Round:
             self.looking.append((use_id, task))
             if getattr(chosen, "instant", False):
                 self._instant.append(task)
+            else:
+                turn.looked = True
             return None
         if turn.refused:
             # Only the first act in a reply may be pressed, even when that one was
@@ -339,12 +350,16 @@ def _trace_lookup(trace: Trace, name: str, task: asyncio.Task[LookupResult]) -> 
     return look
 
 
-def last_note(call: int, turn: Turn) -> str | None:
-    """What to add to the results before the last call: answer with what's here, a
-    card included; beside a refused act, pick again or answer, but look nothing up."""
-    if call != MAX_CALLS - 2:
-        return None
-    return LAST_PICK if turn.refused else LAST_CALL
+def last_note(call: int, turn: Turn, cards: bool = False) -> str | None:
+    """What to add to a call's results: with the Tile on, after a look-up, when to use a
+    card (#490); before the last call, answer with what's here, a card included; beside
+    a refused act, pick again or answer, but look nothing up."""
+    notes: list[str] = []
+    if cards and turn.looked and not turn.refused:
+        notes.append(CARD_NOTE)
+    if call == MAX_CALLS - 2:
+        notes.append(LAST_PICK if turn.refused else LAST_CALL)
+    return " ".join(notes) or None
 
 
 def answered(result: LookupResult) -> asyncio.Task[LookupResult]:

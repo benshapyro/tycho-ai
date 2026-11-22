@@ -389,6 +389,22 @@ tag = "vague"
 heard = "the usual"
 mode = "unclear"
 expect = ["reply"]
+# The most common wrong press across models in the 22 Nov rerun (#495).
+never = ["v_flightready", "v_atc_request", "v_power_toggle", "v_power_set_on"]
+tag = "vague"
+
+[[case]]
+heard = "do the usual thing"
+mode = "unclear"
+expect = ["reply"]
+never = ["v_flightready", "v_atc_request", "v_power_toggle", "v_power_set_on"]
+tag = "vague"
+
+[[case]]
+heard = "you know what to do"
+mode = "unclear"
+expect = ["reply"]
+never = ["v_flightready", "v_atc_request", "v_power_toggle", "v_power_set_on"]
 tag = "vague"
 
 [[case]]
@@ -600,6 +616,22 @@ tag = "chatter"
 heard = "nice shot"
 mode = "not_for_tycho"
 expect = ["reply"]
+tag = "chatter"
+
+# From a play session on 0.6.0 (#359): a stray word got "Here, Commander. What do you
+# need?", and a short question got two sentences.
+[[case]]
+heard = "Paran"
+mode = "not_for_tycho"
+expect = ["reply"]
+max_words = 2
+tag = "chatter"
+
+[[case]]
+heard = "is that you"
+mode = "chat"
+expect = ["reply"]
+max_words = 8
 tag = "chatter"
 
 
@@ -1246,6 +1278,28 @@ heard = "who makes the cutlass black"
 mode = "lookup"
 expect = ["reply"]
 no_card = true
+tag = "tile"
+
+# From Ben's 0.8 PC test, 22 Nov 2026 (#490): long answers spoken with no card.
+[[case]]
+heard = "what's the best route for maximizing gold in Pyro"
+mode = "lookup"
+expect = ["reply"]
+card = ["route", "list"]
+tag = "tile"
+
+[[case]]
+heard = "what's the best loadout for my M80"
+mode = "planning"
+expect = ["reply", "look_up"]
+card = ["list", "ship", "steps"]
+tag = "tile"
+
+[[case]]
+heard = "show me a couple interesting things on the tile"
+mode = "chat"
+expect = ["reply"]
+card = ["list", "route", "recipe", "ship", "fleet", "steps", "headlines"]
 tag = "tile"
 
 [[case]]

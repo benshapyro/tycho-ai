@@ -415,7 +415,7 @@ class OpenRouterBrain:
             )
             for (use_id, _), result in zip(round_.looking, results, strict=True):
                 messages.append({"role": "tool", "tool_call_id": use_id, "content": result.content})
-            if note := last_note(call, turn):
+            if note := last_note(call, turn, self._cards()):
                 messages.append({"role": "user", "content": note})
         if turn.unbound is not None and turn.refused:
             raise turn.unbound  # the last call too named actions that aren't bound
