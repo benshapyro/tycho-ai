@@ -22,7 +22,7 @@ Good places to start, smallest first:
 
 ## Setup
 
-1. Install [uv](https://docs.astral.sh/uv/). It fetches Python 3.14 for you.
+1. Install [uv](https://docs.astral.sh/uv/), version 0.13.9 or newer (CI uses 0.13.9; an older uv can rewrite `uv.lock`). It fetches Python 3.14 for you.
 2. `uv sync --no-group gpu` creates the virtual environment (CI does the same). Plain `uv sync` adds about 2 GB of CUDA libraries, which you only need to run speech recognition on an NVIDIA card.
 3. `uv run pre-commit install` sets up the commit hooks.
 

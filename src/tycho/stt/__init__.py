@@ -5,7 +5,6 @@ from tycho.stt.device import (
     DeviceChoice,
     choose_device,
     cuda_available,
-    gpu_free_mb,
     nvidia_driver,
 )
 from tycho.stt.models import (
@@ -33,7 +32,6 @@ __all__ = [
     "choose_device",
     "cuda_available",
     "download_size",
-    "gpu_free_mb",
     "nvidia_driver",
     "speech_models",
 ]

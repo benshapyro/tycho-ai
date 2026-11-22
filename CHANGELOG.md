@@ -21,6 +21,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - A notice that comes while Tycho says "Let me check." during a look-up is now said before the answer, and the filler line isn't cut off. ([#440](https://github.com/benshapyro/tycho-ai/issues/440))
 
 - Names and quotes in Greek or Cyrillic on the Tile now draw in Windows' own fonts. Since 0.8's bundled fonts they drew as boxes. ([#458](https://github.com/benshapyro/tycho-ai/issues/458))
+- With speech recognition on the processor (the default), Tycho now uses at most as many threads as your PC has cores, so a 4-core laptop keeps more for the game. If the new speech model couldn't download after an update, Tycho starts on the one you already have instead of not starting. `tycho gpu install` now says how to move speech recognition to the graphics card, and `tycho check` says when the old 2.5 GB model is no longer used and can be deleted. ([#480](https://github.com/benshapyro/tycho-ai/issues/480))
 
 ### Changed
 - A ship's name misheard as an everyday word ("the address" for the Idris) is now read as the ship, instead of a question back. ([#509](https://github.com/benshapyro/tycho-ai/issues/509))

@@ -15,7 +15,7 @@ from tycho.ptt.binding import Binding
 from tycho.ptt.conflicts import conflict_warnings
 from tycho.ptt.devices import input_sources
 from tycho.settings import Settings
-from tycho.stt import PARAKEET_V2, ModelStore, speech_models
+from tycho.stt import PARAKEET_V2, PARAKEET_V2_INT8, ModelError, ModelStore, speech_models
 from tycho.stt.choice import device_choice, device_name, gpu_hint
 
 if TYPE_CHECKING:
@@ -73,7 +73,14 @@ def load_transcriber(
     choice = device_choice(current)
     store = ModelStore(paths.models_dir())
     for spec in speech_models(choice.device):
-        store.ensure(spec, download_progress(doing=doing))
+        try:
+            store.ensure(spec, download_progress(doing=doing))
+        except ModelError as e:
+            # Upgraded offline (#480): the full model is here, so start on it, on the
+            # processor, and fetch the 8-bit copy at a later start.
+            if spec != PARAKEET_V2_INT8 or not store.ready(PARAKEET_V2):
+                raise
+            log.warning("%s Using the full speech model until then.", e)
     if doing is not None:
         doing("Loading the speech model")
     log.info("Speech recognition on the %s: %s", device_name(choice.device), choice.reason)

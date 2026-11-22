@@ -28,7 +28,7 @@ flowchart TD
 ```
 
 - Every action the model names is checked against the keys the player has actually bound. A name that isn't there is answered, never pressed ([`brain/decisions.py`](../../src/tycho/brain/decisions.py), [`brain/AGENTS.md`](../../src/tycho/brain/AGENTS.md): "Never trust a pick").
-- Every press, from any path, then goes through one safety gate ([`safety.py`](../../src/tycho/safety.py)). Anything that can't be undone waits for a spoken "confirm". A game pack can add to the gate's danger list and can never take away from it.
+- Every press, from any path, then goes through one safety gate ([`safety.py`](../../src/tycho/safety.py)). Anything that can't be undone waits for a spoken "confirm". A game pack can add to the gate's danger list. Only a pack that ships inside Tycho, reviewed like code, can name exceptions to it ([ADR 18](../adr/0018-game-packs.md)).
 - The model can choose a multi-step sequence only by name. The steps come from a file, never from the model ([ADR 14](../adr/0014-the-brain-voice-and-sequences.md)).
 - Nothing is pressed after a web search, because text from the web can't be checked (`NO_PRESS_AFTER_SEARCH` in [`brain/rounds.py`](../../src/tycho/brain/rounds.py)).
 - By voice, a setting that protects the player can only get stricter. A misheard sentence must never weaken a safeguard ([ADR 5](../adr/0005-settings-one-schema-three-ways-in.md)).

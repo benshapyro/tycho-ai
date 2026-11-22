@@ -209,7 +209,7 @@ def test_an_unknown_setting_is_a_note_not_a_stop(
     monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path))
     (tmp_path / "settings.toml").write_text("from_the_future = true\n", encoding="utf-8")
 
-    def gpu(action: str) -> int:
+    def gpu(action: str, device: str = "auto") -> int:
         return 0
 
     monkeypatch.setattr(cli, "gpu_command", gpu)

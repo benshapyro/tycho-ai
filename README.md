@@ -136,7 +136,7 @@ The full list:
 | Anthropic (web search) | A short search query Claude writes from your question | Questions about news, upcoming patches, events and new ships, and where something is or how to do something when Tycho's look-ups don't cover it; off with `web_search = false`. When those sites have no clear answer, any website, and Anthropic reads up to two of the pages it finds (never Reddit's pages, only its search snippets); `web_search_open = false` keeps it to the Star Citizen sites. Always Anthropic directly, with your Anthropic key, even when the brain runs through OpenRouter |
 | UEX Corp | Which commodity or trading place you asked about | Trade questions |
 | Star Citizen Wiki API | The item names you ask about | Weapon, armor, component and crafting questions |
-| GitHub | Nothing about you: Tycho asks whether a newer version is out | When Tycho starts and when its window opens; off with `check_for_updates = false` |
+| GitHub | Nothing about you: Tycho asks whether a newer version is out | When Tycho starts and when its window opens, off with `check_for_updates = false`; and when you press **Check for updates** |
 | Hugging Face | Nothing about you: Tycho downloads its speech model | Once, the first time Tycho starts |
 | Sentry (crash reports) | Only if you said yes: the kind of error and where in Tycho's own code it happened, Tycho's version, the Windows version, the game and the brain provider. Never what you or Tycho said, your keys, your name, your files or folders, or anything that identifies you or your PC | The next time Tycho starts after a crash. Saying no deletes any report still waiting |
 | *Planned:* Anthropic (Claude) | A capture of the game window | Only if you turn vision on and ask Tycho to look |

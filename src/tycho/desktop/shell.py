@@ -217,9 +217,9 @@ class Starting:
             requests.target = self.say
 
     def _chosen(self, key: str) -> None:
-        """Quit while starting: the 2.5 GB first download can take minutes, and there's
-        nothing else to stop it with. A half-downloaded file is left as .part and
-        checked before use, so the next start carries on safely."""
+        """Quit while starting: the speech model's first download (0.7 GB) can take
+        minutes, and there's nothing else to stop it with. A half-downloaded file is
+        left as .part and checked before use, so the next start carries on safely."""
         if key == "quit":
             log.info("Quit while starting")
             if sys.stdout is not None and sys.stdout.isatty():
