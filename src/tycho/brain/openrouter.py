@@ -491,8 +491,7 @@ class OpenRouterBrain:
             "stream": True,
             "usage": {"include": True},
         }
-        if self._route:
-            body["provider"] = self._route
+        body["provider"] = self._route
         if self._effort is not None:
             body["reasoning"] = {"effort": self._effort, "exclude": True}
         return body
@@ -556,10 +555,10 @@ class OpenRouterBrain:
 
 
 def route(hosts: Sequence[str] = (), sort: str | None = None) -> dict[str, object]:
-    """OpenRouter's ``provider`` field for pinned ``hosts`` and a ``sort``; empty when
-    neither is asked, so OpenRouter picks as it always does. Pinned hosts never fall back
-    to another: a run measures the host it names, or fails."""
-    pinned: dict[str, object] = {}
+    """OpenRouter's ``provider`` field: never a host that keeps data or trains on it (#488),
+    then pinned ``hosts`` and a ``sort``. Pinned hosts never fall back to another: a run
+    measures the host it names, or fails."""
+    pinned: dict[str, object] = {"data_collection": "deny"}
     if names := [h.strip().lower() for h in hosts if h.strip()]:
         pinned |= {"order": names, "allow_fallbacks": False}
     if sort is not None:

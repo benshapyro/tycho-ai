@@ -127,7 +127,11 @@ def test_a_players_openrouter_brain_is_served_by_anthropic_only() -> None:
     _store(openrouter=OPENROUTER)
     brain = _load(Settings(brain_provider="openrouter"))
     assert isinstance(brain, OpenRouterBrain)
-    assert brain._route == {"order": ["anthropic"], "allow_fallbacks": False}  # pyright: ignore[reportPrivateUsage]
+    assert brain._route == {  # pyright: ignore[reportPrivateUsage]
+        "data_collection": "deny",  # never a host that keeps data (#488)
+        "order": ["anthropic"],
+        "allow_fallbacks": False,
+    }
     _close(brain)
 
 
