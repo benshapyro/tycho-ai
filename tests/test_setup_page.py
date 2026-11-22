@@ -80,8 +80,11 @@ class Setup:
         recent: Recent | None = None,
         listening: bool | None = None,
         opening: str = "",
+        can_quit: bool = False,
     ) -> None:
         self.path = path
+        self.quits: list[bool] = []
+        """Quit asked of the running Tycho, as the tray's Quit does."""
         self.listening = listening
         self.trying: list[bool] = []
         """Try it turned on and off in the running Tycho, in order (ADR 17)."""
@@ -102,6 +105,7 @@ class Setup:
             listening=lambda: self.listening,
             trying=lambda on: self.listening is not None and not self.trying.append(on),
             opening=opening,
+            quit_tycho=(lambda: self.quits.append(True)) if can_quit else None,
         )
         self.page: Page = browser.new_page()
         self.errors: list[str] = []
@@ -600,6 +604,75 @@ def test_home_state_word_is_big_and_coloured_by_state_console_plus(
     expect(word).to_have_text("Paused", timeout=6000)
     expect(page.locator("#homeState")).to_have_class(re.compile(r"\bpaused\b"))
     expect(page.locator("#homeState")).not_to_have_class(re.compile(r"\bstuck\b"))
+    setup.close()
+
+
+def test_home_state_word_is_amber_when_stuck_and_smaller_in_a_narrow_window(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#472: stuck beats paused (amber, not grey), and the narrow window's smaller word
+    applies: it came before the 54px rule, so 54px always won."""
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    checks = [{"level": "fail", "what": "Brain", "detail": "no key", "fix": "add a key"}]
+    setup = Setup(browser, path, first_run=False, findings=checks, listening=False)
+    page = setup.page
+    box, word = page.locator("#homeState"), page.locator("#homeState h1")
+    expect(box).to_have_class(re.compile(r"\bstuck\b"))
+    expect(box).not_to_have_class(re.compile(r"\bpaused\b"))
+    amber = page.evaluate(
+        "getComputedStyle(document.documentElement).getPropertyValue('--caution')"
+    )
+    expect(word).to_have_css("color", _rgb(amber))
+    assert word.evaluate("e => parseFloat(getComputedStyle(e).fontSize)") >= 48
+    page.set_viewport_size({"width": 740, "height": 700})
+    expect(word).to_have_css("font-size", "36px")
+    setup.close()
+
+
+def test_home_state_word_is_grey_when_paused(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    setup = Setup(browser, path, first_run=False, recent=Recent(), listening=False)
+    page = setup.page
+    word = page.locator("#homeState h1")
+    expect(word).to_have_text("Paused")
+    dim = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--dim')")
+    expect(word).to_have_css("color", _rgb(dim))
+    setup.close()
+
+
+def _rgb(hex_colour: str) -> str:
+    """A ``#rrggbb`` CSS value as the browser's computed ``rgb(r, g, b)``."""
+    h = hex_colour.strip().lstrip("#")
+    r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
+    return f"rgb({r}, {g}, {b})"
+
+
+def test_quit_is_at_the_foot_of_the_places(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#486 (Ben, from play): Quit was only in Settings, Updates, an odd place to look."""
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    setup = Setup(browser, path, first_run=False, can_quit=True)
+    page = setup.page
+    side = page.locator("aside.side")
+    quit_button = side.get_by_role("button", name="Quit Tycho")
+    expect(quit_button).to_be_visible()
+    # The last thing down the side, below the places and the version.
+    below = quit_button.evaluate(
+        "q => [...q.parentElement.children].filter(e => e.offsetParent)"
+        ".every(e => e === q || e.getBoundingClientRect().bottom <= q.getBoundingClientRect().top)"
+    )
+    assert below
+    quit_button.click()
+    expect(quit_button).to_be_disabled()
+    assert setup.quits == [True]
+    setup.close()
+
+
+def test_no_quit_down_the_side_with_nothing_to_stop(setup: Setup) -> None:
+    expect(setup.page.locator("#quitSide")).to_be_hidden()
     setup.close()
 
 

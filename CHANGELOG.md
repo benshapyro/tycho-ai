@@ -9,6 +9,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ## [Unreleased]
 
 ### Changed
+- **Quit** is now at the bottom of the left side of Tycho's window, so it's easy to find. It's still under Settings, Updates, and on Tycho's icon by the clock. ([#486](https://github.com/benshapyro/tycho-ai/issues/486))
 - With the brain through OpenRouter, Tycho now tells OpenRouter never to use a host that keeps or trains on what you say, whatever your OpenRouter account's privacy settings are. ([#488](https://github.com/benshapyro/tycho-ai/issues/488))
 
 ## [0.8.0] - 2026-11-22
@@ -29,7 +30,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ### Changed
 - With the brain through OpenRouter, Tycho now keeps its instructions cached with Anthropic for an hour between requests, as it does when you use Claude directly. Before, the cache lasted 5 minutes, so the first thing you asked after a quiet spell took about 3 seconds longer.
 - **Speech recognition now runs on the processor by default, so the game keeps the graphics card.** With Tycho's speech model on the same card as the game (3 GB of its memory), one player's PC had graphics crashes in two games and a full freeze. Tycho now uses a smaller 8-bit copy of the same model on the processor: as accurate, and about 0.4 seconds a phrase instead of about 0.25 with the game running. **The first start after upgrading downloads it, 0.7 GB, once**; new players download 0.7 GB instead of 2.5. If you want the card's speed and have the memory to spare, set Speech recognition to the graphics card (Settings, Advanced, or `transcription_device = "gpu"` in `settings.toml`). ([#188](https://github.com/benshapyro/tycho-ai/issues/188))
-- Home in Tycho's window says how Tycho is in a much bigger word, so you can read it from across the room: amber when something needs fixing, grey when paused. Settings rows light up on their left edge under the pointer, and section labels are smaller.
+- Home in Tycho's window says how Tycho is in a much bigger word, so you can read it from across the room: amber when something needs fixing, grey when paused. Settings rows light up on their left edge under the pointer, and section labels are smaller. ([#471](https://github.com/benshapyro/tycho-ai/pull/471))
 - The Tile page in Tycho's window now has a switch for each kind of card your game uses, instead of a box to type card names into. World of Warcraft: Forever no longer lists Star Citizen's ship and fleet cards. ([#422](https://github.com/benshapyro/tycho-ai/issues/422))
 - The Tile's preview in Tycho's window shows a card in your game's own words: World of Warcraft: Forever no longer shows a Star Citizen trade card. The Tile's colour choice that follows the game is now called `game` (it was `ship`; an older `settings.toml` still works). ([#422](https://github.com/benshapyro/tycho-ai/issues/422))
 - Tycho's window and the Tile now use their own fonts, so they look the same on every PC.

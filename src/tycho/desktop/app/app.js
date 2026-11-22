@@ -547,17 +547,7 @@
     return [u.problem || "Couldn't check.", "err"];
   }
   function bindUpdates() {
-    $("#quitTycho")?.addEventListener("click", async () => {
-      const b = $("#quitTycho");
-      b.disabled = true;
-      try {
-        const r = await api.quit();
-        if (!r.ok) { $("#quitErr").textContent = r.problem; b.disabled = false; }
-      } catch (e) {
-        $("#quitErr").textContent = "Couldn't quit. Use Quit on Tycho's icon by the clock.";
-        b.disabled = false;
-      }
-    });
+    $("#quitTycho")?.addEventListener("click", () => quit($("#quitTycho"), (t) => { $("#quitErr").textContent = t; }));
     $("#checkUpdates")?.addEventListener("click", async () => {
       const b = $("#checkUpdates"), msg = $("#updateMsg");
       b.disabled = true; msg.className = "note"; msg.textContent = "Checking…";
@@ -583,6 +573,19 @@
       }
     });
   }
+  // Quit, from Settings' Updates tab or the foot of the places (#486): asks the Host, as
+  // the tray's Quit does. A problem is said beside the button, or as a toast.
+  async function quit(b, say) {
+    b.disabled = true;
+    try {
+      const r = await api.quit();
+      if (!r.ok) { say(r.problem); b.disabled = false; }
+    } catch (e) {
+      say("Couldn't quit. Use Quit on Tycho's icon by the clock.");
+      b.disabled = false;
+    }
+  }
+  $("#quitSide").addEventListener("click", () => quit($("#quitSide"), toast));
   let lastUpdate = { state: "" };
   /* The last check's answer: the notice opens the Updates tab with its button (#376). */
   function notice(u) {
@@ -753,6 +756,7 @@
     $("#ver").textContent = about.version;
     firstRun = Boolean(about.first_run);
     canQuit = Boolean(about.can_quit);
+    $("#quitSide").hidden = !canQuit;
     if (firstRun) view = "setup";
     else if (about.opening === "try_it") { view = "setup"; step = STEPS.indexOf("Try it"); }
     else if (about.ask_crash_reports) { askingCrash = true; view = "setup"; step = STEPS.indexOf("Privacy"); }
