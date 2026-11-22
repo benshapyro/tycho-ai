@@ -2,7 +2,7 @@
 bring back a card, or show the last answer to read (ADR 16). Out of ``session.py``
 (#399)."""
 
-from tycho.runtime.messages import Result
+from tycho.runtime.messages import Progress, Result, Status, Trace
 from tycho.runtime.ports import Display
 from tycho.tile import Card
 from tycho.tile.cards import long_answer
@@ -26,6 +26,22 @@ def tile_word(display: Display, what: str, last_reply: tuple[str, Card | None]) 
     if done:
         return ""
     return "nothing on the Tile for that" if what != "show" else "nothing to show"
+
+
+def tile_request(
+    display: Display,
+    what: str,
+    last_reply: tuple[str, Card | None],
+    request: int,
+    trace: Trace,
+    heard: str,
+    text: str,
+) -> Result:
+    """A request that was a word to the Tile, done (``tile_word``)."""
+    detail = tile_word(display, what, last_reply)
+    status: Status = "not_understood" if detail else "done"
+    progress = Progress(commands=(f"tile_{what}",))
+    return progress.result(request, status, trace, heard, text, detail)
 
 
 def to_tile(display: Display, result: Result, *, listening: bool, confirm_seconds: float) -> None:

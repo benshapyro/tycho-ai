@@ -14,6 +14,9 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ### Fixed
 - "Open hangar" heard as "open hangers", and "close doors" heard as "closed doors", now work instantly instead of waiting for the brain. ([#358](https://github.com/benshapyro/tycho-ai/issues/358))
 - Tycho no longer hears an everyday word such as "hunger" as a game word that only sounds like it ("hangar"). ([#505](https://github.com/benshapyro/tycho-ai/issues/505))
+- Setup's Try it is safer. What you say there is tried, not pressed, even if you switch to the game while Tycho is still working it out. If the window misses your switch to the game and Try it stays on, what you say there plays the not-done sound and nothing is pressed, rather than a done sound for keys that never reached the game. After setting up a new game you picked in Settings, the window opens on Try it, as after a first run. Actions with no name in the game's files now read as words ("Toggle landing system"), not as raw ids, and a follow-up question no longer takes something you only tried as done. ([#467](https://github.com/benshapyro/tycho-ai/issues/467), [#465](https://github.com/benshapyro/tycho-ai/issues/465))
+- Tycho no longer says it "stopped unexpectedly last time" when you ended it from Task Manager after the window hit a harmless Windows error that it recovered from. ([#474](https://github.com/benshapyro/tycho-ai/issues/474))
+- A notice that comes while Tycho says "Let me check." during a look-up is now said before the answer, and the filler line isn't cut off. ([#440](https://github.com/benshapyro/tycho-ai/issues/440))
 
 ### Changed
 - With the brain through OpenRouter, Tycho now tells OpenRouter never to use a host that keeps or trains on what you say, whatever your OpenRouter account's privacy settings are. ([#488](https://github.com/benshapyro/tycho-ai/issues/488))
