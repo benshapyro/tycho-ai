@@ -1025,3 +1025,30 @@ def test_the_star_citizen_cases_that_must_search_are_tagged() -> None:
     searching = [c for c in cases if "web_search" in c.get("tools", [])]
     assert len(searching) >= 3
     assert all(c["tag"] == "search_first" for c in searching)
+
+
+def test_the_model_benchmark_asks_for_the_hour_long_cache_tycho_does() -> None:
+    """#489: Tycho asks Anthropic to keep its briefing an hour (claude.py, and
+    openrouter.py since #487), so the benchmark's cache-write costs must match."""
+    _eval()  # puts brain_report on the path
+    from brain_report import Brains  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
+
+    sent: dict[str, Any] = {}
+
+    class Stop(Exception):
+        pass
+
+    class Messages:
+        def stream(self, **kwargs: Any) -> Any:
+            sent.update(kwargs)
+            raise Stop
+
+    class Client:
+        class beta:  # the client's own attribute name
+            messages = Messages()
+
+    brains = Brains()
+    brains._anthropic = Client()  # pyright: ignore[reportAttributeAccessIssue]
+    with pytest.raises(Stop):
+        brains.ask("claude-haiku-5-5", "the briefing", "lights on", "low")
+    assert sent["system"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
