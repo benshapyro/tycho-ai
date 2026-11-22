@@ -19,6 +19,7 @@ from tests.fakes.fake_runtime import FakeFeedback, FakeTranscriber
 from tycho import brain_choice, credentials
 from tycho.brain.claude import ClaudeBrain
 from tycho.commands import CommandMatcher
+from tycho.knowledge import web
 from tycho.knowledge.web import WebSearch
 from tycho.packs import STAR_CITIZEN, GamePack, built_in, load_pack
 from tycho.ptt import InputSource
@@ -175,7 +176,9 @@ def test_the_open_web_search_gives_the_brain_longer_once_it_starts(
     store = SimpleNamespace(keybinds=FakeGameKeybinds().keybinds)
     opened = _session(fake_pack(), store, monkeypatch)._times
     assert (opened.search, opened.search_limit) == (OPEN_SEARCH_SECONDS, OPEN_SEARCH_LIMIT)
-    assert (opened.search, opened.search_limit) == (27.0, 32.0)
+    assert (opened.search, opened.search_limit) == (23.0, 28.0)
+    # The brain has 5 s to answer after the slowest search allowed (#361, #365).
+    assert OPEN_SEARCH_SECONDS - web.OPEN_SECONDS >= 5.0
     sites = Settings(web_search_open=False)
     only = _session(fake_pack(), store, monkeypatch, sites)._times
     assert (only.search, only.search_limit) == (SEARCH_SECONDS, SEARCH_LIMIT)

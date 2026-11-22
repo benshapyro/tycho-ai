@@ -136,6 +136,15 @@ uv run python tools/bench/tts/design_voices.py recordings/voices/designs        
 
 Lines come from [`voice_lines.txt`](../spike/voice_lines.txt) and [`voice_lines_character.txt`](../spike/voice_lines_character.txt). ElevenLabs costs about half a credit per character on Flash and v4 Turbo; lines already generated are skipped, so a re-run never pays twice.
 
+## Web search services compared, all through OpenRouter (#365)
+
+```powershell
+uv run --group bench python tools/bench/search_compare.py                  # Tycho's search, Exa, Parallel, Perplexity; 40 questions, judged
+uv run --group bench python tools/bench/search_compare.py --modes tycho,parallel --limit 10
+```
+
+The same forty questions and reference answers as `web_trial.py` below, with one OpenRouter key (`OPENROUTER_API_KEY`) for everything. `tycho` is Tycho's own `WebSearch`, unchanged, as players have it (the sites, then the open web): OpenRouter passes Anthropic's search and fetch tools through its Anthropic-shaped endpoint. `exa`, `parallel` and `perplexity` are one Haiku request with OpenRouter's web plugin on that engine, answered with the open web's brief. Firecrawl is left out because OpenRouter refuses it under zero data retention. A Sonnet judge grades against the references. One round costs about $2.20 in all (22 Nov 2026). Results: [`docs/research/web-search-services.md`](../../docs/research/web-search-services.md).
+
 ## Web search: sites first, then the open web (#354, #360)
 
 ```powershell

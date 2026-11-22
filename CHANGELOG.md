@@ -8,6 +8,9 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ## [Unreleased]
 
+### Changed
+- A slow web search gives up sooner (18 s instead of 25 s), so Tycho always has time to answer from it rather than running out of time just after it finishes. Searches took 15 s at most when measured. ([#365](https://github.com/benshapyro/tycho-ai/issues/365))
+
 ## [0.9.0] - 2026-11-22
 
 ### Added
