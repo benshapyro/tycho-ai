@@ -2323,6 +2323,18 @@ def test_the_brain_naming_the_toggle_doesnt_claim_the_doors_are_open() -> None:
     assert speaker.spoken == [r.results[0].say]
 
 
+def test_with_other_presses_the_brains_line_stays_and_the_receipt_follows() -> None:
+    # #537: "lights on and open the doors" kept only the doors' line before.
+    keybinds = Keybinds([_action("v_lights_on", "l"), *DOORS_TOGGLE], MODES)
+    brain = FakeBrain(RunActions(("v_lights_on", "v_toggle_all_doors"), "Lights on, doors sent."))
+    speaker = FakeSpeaker()
+    r = _conversation("lights on and let me out", brain=brain, keybinds=keybinds, speaker=speaker)
+    assert r.results[0].pressed == ("v_lights_on", "v_toggle_all_doors")
+    assert r.results[0].say == (
+        "Lights on, doors sent. Toggled Open/Close Doors. I can't see which way it went."
+    )
+
+
 def test_a_toggle_the_game_announces_is_left_to_the_game() -> None:
     # The game says "landing gear deployed" itself, so Tycho keeps quiet as before.
     speaker = FakeSpeaker()
