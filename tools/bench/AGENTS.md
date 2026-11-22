@@ -11,7 +11,7 @@ Code here measures things and may call paid APIs. Product code under `src/` must
   - the answer: wrong presses, what must be pressed, `mentions`, cards;
   - the wording (`docs/voice-and-tone.md`, #363): the file's `never_say` (another game's words, in any reply: every pack's cases name the other packs' games, and `tests/test_wording.py` checks), the file's `say_words` (the most words in the line said with a press) and a case's `max_words` (the most words in its reply);
   - and how it was reached: `max_calls`, `tools`, `no_tools`, `no_errors`.
-- **The bar is zero wrong presses.**
+- **The bar is zero wrong presses.** A pick the case allows, which the gate refuses only because its key is also another confirm-grade action's on the keybinds in use, is graded `KEY CLASH`, apart from wrong presses and passes: it measures the keybinds, not the model (#494). Fix the keybinds, not the case.
 - **Add a case for every miss a play log shows,** tagged and commented with where it came from. A case's keys must be ones the eval reads (`tests/test_tycho_eval.py` checks), and every case needs a `mode` from `brain_report.MODES` (ADR 10, #24): what the player wants, not the right response.
 - **Running it:**
   - Run it from a git worktree of the branch under test, never the folder the maintainer runs Tycho from.

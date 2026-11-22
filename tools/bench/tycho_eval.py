@@ -158,6 +158,9 @@ CLAIMED = re.compile(
 )
 """A reply that says Tycho did something in the game, where it presses nothing (advisor
 mode, #326): "Mounting up." would tell the player it happened when nothing did."""
+KEY_CLASH = "KEY CLASH (the keybinds, not the model)"
+"""The verdict for an allowed pick the gate refuses only because its key is shared with
+another confirm-grade action on the keybinds the eval runs with (#494)."""
 UNASKED = frozenset({"v_unlock_all_doors", "v_toggle_all_doorlocks"})
 """Presses that are wrong whenever the case didn't ask for them: unlocking the
 doors when the player said something else leaves the ship open."""
@@ -177,6 +180,9 @@ class Outcome:
     refused: str = ""
     """Why the safety gate would refuse the pick, pressing nothing; empty if it wouldn't.
     A refusal outranks a question, so a refused pick never "asks" (#311)."""
+    clash: bool = False
+    """The gate refused because the pick's key is also a confirm-grade action's on these
+    keybinds (#494): the keybinds' fault, not the model's."""
     ms: float = 0.0
     looked_up: int = 0
     """Look-ups the brain made for this request."""
@@ -305,6 +311,11 @@ def grade(
     if bad := (never | (UNASKED - asked)).intersection(outcome.actions):
         return f"WRONG PRESS {sorted(bad)}{gate}"
     allowed = set(rule.get("allow", [])).intersection(outcome.actions)
+    if allowed and outcome.refused and outcome.clash:
+        # The case allows the pick and the gate would have asked, but on these keybinds
+        # its key is also another confirm-grade action's (#494): the same for every
+        # model, so it's its own outcome, not a wrong press and not a pass.
+        return f"{KEY_CLASH} {sorted(allowed)} ({outcome.refused})"
     if allowed and outcome.refused:
         return f"WRONG PRESS (the gate refused it: {outcome.refused}) {sorted(allowed)}"
     if allowed and not outcome.asks:
@@ -544,7 +555,8 @@ def _plan(
 
     A request the gate refuses presses nothing in the game, but the eval still grades
     what was picked: a pick the gate had to stop is a wrong pick, and the gate is the
-    backstop, not the bar. The refusal is noted."""
+    backstop, not the bar. The refusal is noted, and whether it was only a key clash on
+    these keybinds (#494)."""
     outcome.kind = "actions"
     facts = safety.known_facts(lists)
     outcome.asks = isinstance(plan_request(commands, keybinds, facts, lists=lists), Questions)
@@ -555,7 +567,35 @@ def _plan(
     outcome.actions = pressed(commands, keybinds)
     if isinstance(planned, Refusal):  # never Questions: it's planned as confirmed
         outcome.refused = f"{planned.status}: {planned.detail}"
+        outcome.clash = _refused_for_clash(commands, keybinds, facts, lists)
         outcome.notes.append(f"Tycho would press nothing ({outcome.refused})")
+
+
+def _refused_for_clash(
+    commands: tuple[Command, ...], keybinds: Keybinds, facts: frozenset[str], lists: Safety
+) -> bool:
+    """Whether the first press the gate refuses for these commands is refused because a
+    confirm-grade action shares its key (#494), as ``plan_request`` walks them."""
+    for part in (step for command in commands for step in command.expand()):
+        command = part.command
+        resolved = resolve(command, keybinds)
+        setup = [a for name in command.setup if (a := keybinds.get(name)) and a.bound]
+        if resolved.action is None or len(setup) < len(command.setup):
+            return False
+        for position, action in enumerate((*setup, resolved.action)):
+            verdict = safety.check(
+                command,
+                action,
+                keybinds,
+                facts,
+                confirmed=True,
+                setup_done=position,
+                lists=lists,
+            )
+            if not verdict.allowed and not verdict.ask:
+                clash = safety.key_clash(action, keybinds, command, position, lists=lists)
+                return clash is not None
+    return False
 
 
 MATCHER = load_commands(built_in(STAR_CITIZEN))
@@ -1139,6 +1179,7 @@ def metrics(run: Run, per_hour: float = PER_HOUR) -> dict[str, Any]:
         "cases": len(outcomes),
         "passed": sum(o.verdict == "pass" for o in outcomes),
         "wrong_presses": sum(o.verdict.startswith("WRONG PRESS") for o in outcomes),
+        "key_clashes": sum(o.verdict.startswith(KEY_CLASH) for o in outcomes),
         "brain_requests": len(brain),
         "errors": sum(o.kind == "error" for o in brain),
         "p50_ms": statistics.median(answered) if answered else None,
@@ -1160,6 +1201,11 @@ def metrics(run: Run, per_hour: float = PER_HOUR) -> dict[str, Any]:
 def _summary(outcomes: list[Outcome], costs: _Costs, summary: dict[str, Any]) -> None:
     print(
         f"\n{summary['passed']}/{summary['cases']} pass, {summary['wrong_presses']} wrong presses"
+        + (
+            f", {summary['key_clashes']} key clash(es) on these keybinds (not the model's)"
+            if summary["key_clashes"]
+            else ""
+        )
     )
     by_tag: dict[str, list[Outcome]] = {}
     for o in outcomes:
