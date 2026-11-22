@@ -102,12 +102,14 @@ class Lexicon:
         *,
         threshold: float = 0.8,
         min_spelling_similarity: float = 0.65,
+        min_word_spelling_similarity: float = 0.75,
         min_fuzzy_length: int = 5,
         max_words: int = 3,
     ) -> None:
         self._terms = [_Term(t, _collapse(t), sound_key(t)) for t in terms]
         self._threshold = threshold
         self._min_spelling_similarity = min_spelling_similarity
+        self._min_word_spelling_similarity = min_word_spelling_similarity
         self._min_fuzzy_length = min_fuzzy_length
         self._max_words = max_words
 
@@ -185,6 +187,12 @@ class Lexicon:
             if sounds < self._threshold or (best is not None and sounds <= best[1]):
                 continue
             # Sounding alike isn't enough on its own: "ready to" and Riccite do.
-            if similarity(collapsed, term.collapsed) >= self._min_spelling_similarity:
-                best = (term, sounds)
+            spelling = similarity(collapsed, term.collapsed)
+            if spelling < self._min_spelling_similarity:
+                continue
+            # One everyday word spelled this differently ("hunger" for hangar, #505)
+            # is only a hint, however alike they sound.
+            if len(heard) == 1 and spelling < self._min_word_spelling_similarity:
+                sounds = min(sounds, 0.99)
+            best = (term, sounds)
         return best
