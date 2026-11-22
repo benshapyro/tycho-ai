@@ -81,7 +81,7 @@ Claude was asked for one tool a reply (`disable_parallel_tool_use`). In the play
 
 ## Amendment, 22 November 2026: looking at the game window when asked
 
-*Status: proposed, waiting for the maintainer's approval of this text. The maintainer agreed to the direction on 22 November 2026: only on request, the game window only, off by default ([#31](https://github.com/benshapyro/tycho-ai/issues/31)).*
+*Status: accepted. The maintainer approved this text on 22 November 2026 (#524), after agreeing to the direction: only on request, the game window only, off by default ([#31](https://github.com/benshapyro/tycho-ai/issues/31)).*
 
 **Context.** Some questions need what's on the screen: "is this contract worth it?", "what's that ship?". The game's log doesn't record most of it ([#30](https://github.com/benshapyro/tycho-ai/issues/30)). Architecture 4.4 planned two ways to look: when the player asks, and a standing permission for Tycho to look on its own. A picture of the screen is new data leaving the PC, so it belongs in this ADR's privacy list.
 
@@ -105,7 +105,7 @@ Claude was asked for one tool a reply (`disable_parallel_tool_use`). In the play
 
 ## Amendment, 22 November 2026: speaking up without being asked
 
-*Status: proposed, waiting for the maintainer's approval of this text. The maintainer agreed to the direction on 22 November 2026: narrow, off by default, only what the game's log records ([#4](https://github.com/benshapyro/tycho-ai/issues/4); architecture open question 2).*
+*Status: accepted. The maintainer approved this text on 22 November 2026 (#524), after agreeing to the direction: narrow, off by default, only what the game's log records ([#4](https://github.com/benshapyro/tycho-ai/issues/4); architecture open question 2).*
 
 **Context.** Until now Tycho speaks only after the player does ("Who speaks when", above). Some news is worth hearing unasked: a mission objective done, a contract a party member shared. The risk is noise over hours of play. The log reader ([#30](https://github.com/benshapyro/tycho-ai/issues/30)) now makes a few such events reliable to spot.
 
