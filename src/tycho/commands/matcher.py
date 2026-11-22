@@ -51,6 +51,8 @@ _NEGATIONS = frozenset(
 _MEANING_WORDS = frozenset(
     {
         *("on", "off", "up", "down", "open", "close", "shut", "lock", "unlock"),
+        "closed",  # "closed doors" is close doors misheard (#358), and must say so
+        *("enter", "exit"),  # in or out of a remote turret (#356)
         *("raise", "lower", "drop", "deploy", "retract"),
         *("front", "forward", "back", "rear", "left", "right", "top", "bottom"),
         *("engines", "engine", "thrusters", "shields", "shield", "weapons", "weapon", "guns"),
