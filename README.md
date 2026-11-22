@@ -1,12 +1,28 @@
 # Tycho
 
-**An unofficial voice co-pilot for Star Citizen®.**
+**An unofficial voice co-pilot for Star Citizen®, and an advisor for World of Warcraft: Forever.**
 
 > Named after Tycho Brahe, who charted the stars with unmatched precision before the telescope existed.
 
 Tycho turns natural speech into in-game actions, using your own keybinds. Hold push-to-talk and say what you want, the way you'd say it to a crewmate. Tycho presses the right keys, tells you what it did, and asks before doing anything you can't undo. It can also answer Star Citizen questions.
 
-**Status: pre-alpha (0.7).** Common commands run instantly on your PC. Claude handles everything said differently, plus questions, and Tycho answers aloud with an ElevenLabs voice. Anything you can't undo (ejecting, firing) waits for you to say "confirm". Install it with the installer from [Releases](https://github.com/benshapyro/tycho-ai/releases/latest), or from source with a terminal and about 15 minutes.
+**Status: pre-alpha (0.8).** Common commands run instantly on your PC. Claude handles everything said differently, plus questions, and Tycho answers aloud with an ElevenLabs voice. Anything you can't undo (ejecting, firing) waits for you to say "confirm". Install it with the installer from [Releases](https://github.com/benshapyro/tycho-ai/releases/latest), or from source with a terminal and about 15 minutes.
+
+## Why Tycho
+
+Your job is to play. Star Citizen hands you two other jobs on top: hundreds of actions, many on keys you set up once and forgot, and the facts you need (prices, routes, recipes, ship specs), which live on wikis one alt-tab away from the cockpit. Both pull you out of the moment you came for.
+
+Tycho takes those two jobs. You say what you want and keep flying. Tycho presses the right keys, answers from live data, or puts a card over the game you can read at a glance. You stay in the seat and make every call that matters; Tycho does the remembering and the looking up.
+
+**Who it's for:** Star Citizen players who would rather fly than memorise keybinds or alt-tab to a wiki, and World of Warcraft: Forever players who want answers without leaving the game. You need a Windows PC and a microphone. The built-in commands are free; most of the rest needs your own Anthropic or OpenRouter key, and a spoken voice needs an ElevenLabs key ([Keys and costs](#keys-and-costs)).
+
+**What makes it different:**
+- **It reads your real keybinds,** so it presses what you bound and never guesses a key. It tells you when an action has no key.
+- **Live data, not memory.** Prices, routes, ships and recipes come from this patch's game files, UEX and the Star Citizen Wiki, and it says where an answer came from.
+- **The Tile.** The one answer to act on, shown over the game, then gone. Never a chat window to read.
+- **Safe by design.** Nothing you can't undo happens without "confirm", and that check sits outside the AI, so nothing the AI picks can skip it.
+- **Your agent can set it up.** If you use Claude Code, Codex or a similar agent, say "set up Tycho" and let it.
+- **Open source** (Apache-2.0), so you can read exactly what leaves your PC.
 
 ## Works today
 
@@ -28,8 +44,9 @@ Tycho turns natural speech into in-game actions, using your own keybinds. Hold p
 - **Settings by voice:** "turn your voice down a bit", "less time to confirm", "stop searching the web". "Undo" puts back the last change.
 - **Calls you what you like:** "Commander" by default, or "call me Ace", or nothing at all. It uses the name sparingly.
 - **The Tile:** a small see-through panel over the game for what's better read than heard: prices, routes, specs, recipes, steps, and the countdown when Tycho asks you to confirm. In Star Citizen its colour follows your ship; in World of Warcraft: Forever it's gold. It needs a borderless window: Borderless Window mode in Star Citizen, Windowed (Fullscreen) in World of Warcraft: Forever.
-- **Its own window and a tray icon:** a guided first run that starts with your game (then your keys and what they cost, your push-to-talk button, a microphone test, Tycho's voice, and what leaves your PC), Status, Settings, and Commands, where you see everything you can say and add your own phrases.
+- **Its own window and a tray icon:** a guided first run in five steps (your game; your keys and what they cost; your push-to-talk button, microphone and Tycho's voice; what leaves your PC; and a real test you can try at the desktop), Home (whether Tycho is ready and listening, and the last things you said with what it did), What to say (everything you can say, and your own phrases), The Tile, and Settings.
 - **A log of every key it pressed.**
+- **Crash reports, only if you say yes.** Setup asks, and nothing is picked for you. A report says where in Tycho's code it broke, never what you said, your keys or anything that identifies you. If Tycho ever vanishes without a word, it keeps a record on your PC and tells you at the next start.
 - **Speech recognition on your PC,** on the processor, so the game keeps the graphics card. You can move it to an NVIDIA card in Settings if you want it faster.
 - **Claude through Anthropic or OpenRouter,** with one OpenRouter key if you prefer.
 - **An installer, an update notice in its window, and setup by an AI agent.**
@@ -66,7 +83,7 @@ The skills are [tycho-setup](plugins/tycho/skills/tycho-setup/SKILL.md) (install
 
 ## Install
 
-**Installer (preview).** Download `TychoSetup-<version>.exe` from the [latest release](https://github.com/benshapyro/tycho-ai/releases/latest) and run it. (Every build on `main` also makes one: the [Build workflow](https://github.com/benshapyro/tycho-ai/actions/workflows/build.yml)'s `tycho-installer` artifact.) It installs for you only, with no administrator prompt, adds Tycho to the Start menu and puts `tycho` on your PATH. It isn't code-signed yet, so Windows SmartScreen will say it's from an unknown publisher: choose **More info**, then **Run anyway**. When it finishes, Tycho starts, and its window walks you through setup: your game, your keys, your push-to-talk button, the microphone, Tycho's voice and what leaves your PC. After that, open Tycho from the Start menu; opening it again while it runs brings up its window. Everything also works from a terminal (`tycho check`, `tycho key set anthropic`, `tycho bind`, `tycho run`). With an NVIDIA card, `tycho gpu install` lets speech recognition use it. Uninstalling keeps your settings, keys and the speech model.
+**Installer (preview).** Download `TychoSetup-<version>.exe` from the [latest release](https://github.com/benshapyro/tycho-ai/releases/latest) and run it. (Every build on `main` also makes one: the [Build workflow](https://github.com/benshapyro/tycho-ai/actions/workflows/build.yml)'s `tycho-installer` artifact.) It installs for you only, with no administrator prompt, adds Tycho to the Start menu and puts `tycho` on your PATH. It isn't code-signed yet, so Windows SmartScreen will say it's from an unknown publisher: choose **More info**, then **Run anyway**. When it finishes, Tycho starts, and its window walks you through setup: your game, your keys, your push-to-talk button, microphone and voice, what leaves your PC, and a first thing to try. After that, open Tycho from the Start menu; opening it again while it runs brings up its window. Everything also works from a terminal (`tycho check`, `tycho key set anthropic`, `tycho bind`, `tycho run`). Speech recognition runs on the processor, so the game keeps the graphics card. If you'd rather have an NVIDIA card's speed and it has memory to spare, set Speech recognition to the graphics card (Settings, Advanced), then run `tycho gpu install`. Uninstalling keeps your settings, keys and the speech model.
 
 **From source:**
 
@@ -78,10 +95,10 @@ The skills are [tycho-setup](plugins/tycho/skills/tycho-setup/SKILL.md) (install
 2. **Get Tycho.** Either `git clone https://github.com/benshapyro/tycho-ai`, or download the ZIP from [the repository page](https://github.com/benshapyro/tycho-ai) (Code, Download ZIP) and unzip it. Then `cd tycho-ai`.
 3. **Install its parts.**
    ```powershell
-   uv sync                  # with an NVIDIA graphics card (adds about 2 GB of CUDA libraries)
-   uv sync --no-group gpu   # without one; speech recognition then runs on the processor
+   uv sync --no-group gpu   # speech recognition runs on the processor, so the game keeps the graphics card
+   uv sync                  # only if you'll move speech to an NVIDIA card (adds about 2 GB of CUDA libraries)
    ```
-   Installed without them, `uv run tycho gpu install` adds the same CUDA libraries later (a 1.2 GB download, kept in `%LOCALAPPDATA%\tycho\cuda`); `uv run tycho gpu remove` takes them away.
+   To move speech to the card later, set `transcription_device = "gpu"` in `settings.toml`, then `uv run tycho gpu install` adds the CUDA libraries (a 1.2 GB download, kept in `%LOCALAPPDATA%\tycho\cuda`); `uv run tycho gpu remove` takes them away.
 4. **Add your keys** (optional, but most of Tycho needs them; see [Keys and costs](#keys-and-costs)). Each command asks for the key and stores it in Windows Credential Manager, never in a file:
    ```powershell
    uv run tycho key set anthropic
@@ -114,8 +131,8 @@ Without an ElevenLabs key, Tycho's replies are shown in its window and it plays 
 - **Sounds:** a click when the keys were pressed, a low tone when they weren't, two rising notes for a question. `uv run tycho sounds` plays them. Tycho can't see the game, so a click means the keys went in, not that the game acted on them: some actions need something else first (engine power needs the engines on, a quantum jump needs a route).
 - **Confirm or cancel.** Ejecting, firing and anything else you can't undo asks first ("Eject? Say confirm."). Hold push-to-talk and say "confirm" within 5 seconds, or "cancel". Anything else you say drops the question.
 - **The Tile.** When an answer has more than a few numbers or steps, Tycho says the gist and puts the rest on the Tile, in the top-right corner, where it fades by itself. Say "keep that up" to keep a card, "clear" to take it down, "show that again" to bring a kept one back, and "show me that" to read Tycho's last answer. Missed what Tycho said? "Say that again" repeats its last answer word for word, Tile on or off. A small light shows while you talk (green) and while Tycho thinks (your ship's colour). The Tile is a window of its own over the game, never anything inside it: clicks go through it and it never takes focus. Use Borderless Window mode (exclusive fullscreen hides it). Change it by voice: "make the Tile bigger", "move the Tile to the top left", "Tile more see-through", "keep the Tile orange", "Tile quiet mode", "hide the Tile".
-- **First run.** On a fresh install, `tycho run` opens Tycho's window to set up. You pick your game first, and Tycho says what it does there and finds the game's folder if it needs one (or you choose it). Then you add your keys (each with what it costs), press the button you want for push-to-talk (it warns if the game uses it too), pick and test the microphone, choose Tycho's voice, and see what leaves your PC. The last step gives you a few things to say first. Any step can be skipped and finished later; Tycho starts listening when you press Start. Everything you chose there can be changed later in Settings, or with Run setup again on Home.
-- **The tray icon.** While Tycho runs, its star sits by the clock. Click it to open Tycho's window. Its places are down the left: Home (whether Tycho is ready, the one thing to fix if there is one, and the same checks as `tycho check`), What to say (everything you can say, your key for each, which have no key and what to bind, and your own phrases, added or removed there), The Tile (its settings and a preview), and Settings (every other setting, with how to say it, and your keys, stored in Windows Credential Manager). The game you chose sits under them, with Switch game. Right-click it to pause listening (push-to-talk does nothing until you resume), show or hide the Tile, open the logs folder, or quit. `tycho run --no-window` runs in the terminal only, as before.
+- **First run.** On a fresh install, `tycho run` opens Tycho's window to set up, in five steps. You pick your game first, and Tycho says what it does there and finds the game's folder if it needs one (or you choose it). Then you add your keys (each with what it costs); press the button you want for push-to-talk (it warns if the game uses it too), test the microphone and choose Tycho's voice; see what leaves your PC and answer the crash reports question; and try it. Try it is a real test: hold your button and speak, and the window shows what Tycho heard and the keys it would press, while nothing reaches the game. Any step can be skipped and finished later; the last one lists what Tycho still needs. Tycho starts listening when you press Start. Everything you chose there can be changed later in Settings, or with Run setup again on Home.
+- **The tray icon.** While Tycho runs, its star sits by the clock. Click it to open Tycho's window. Its places are down the left: Home (whether Tycho is ready and listening, which button to hold, the one thing to fix if there is one, the same checks as `tycho check`, and the last 20 things you said with what Tycho did, kept in memory only), What to say (everything you can say, your key for each, which have no key and what to bind, and your own phrases, added or removed there), The Tile (its settings and a preview), and Settings (every other setting, with how to say it, and your keys, stored in Windows Credential Manager). The game you chose sits under them, with Switch game. Right-click it to pause listening (push-to-talk does nothing until you resume), show or hide the Tile, open the logs folder, or quit. `tycho run --no-window` runs in the terminal only, as before.
 - **Stop.** Pressing push-to-talk stops Tycho talking, and stops any key sequence it's in the middle of.
 - **Questions.** Ask about ships, places or how something works. Ship facts come from the current patch's game files, and ships still in concept from UEX. Commodity prices and trade routes come live from UEX ("where's the best place to sell quantanium?", "best trade route from Lorville with 96 SCU?"). Weapons, armor, ship components and crafting recipes come from the game files, via the Star Citizen Wiki API ("what do I need to craft an FS-9?", "Bulwark or Palisade?"). News, upcoming patches and events come from a web search of RSI's sites and the community wiki: Tycho says "Let me check." and answers a few seconds later. Everything else comes from Claude's own knowledge, which can be out of date.
 - **Your ships.** Tell Tycho what you own and what you're flying: "I own a Cutlass Black", "I just bought a Carrack", "I sold my Prospector", "I'm flying the Cutlass today". It then answers "what should I haul?" or "which of my ships is best for mining?" with your ships. Your fleet is kept in `%APPDATA%\tycho\fleet.toml`, which you can edit too; the ship you're flying lasts until you say otherwise or restart.
@@ -147,29 +164,36 @@ uv run python tools/spike/make_layout.py --install
 
 Settings are in `%APPDATA%\tycho\settings.toml`. You can also change them by voice: "voice at 40%", "sounds a bit quieter", "give me less time to confirm", "stop keeping transcripts", "switch to PTU", "call me Ace", "stop calling me Commander". Volumes, the confirm time, what Tycho calls you and the Tile's settings change at once; the rest apply when Tycho next starts, and Tycho says which. "Undo" puts back the last change. A misheard sentence must never weaken a safeguard or your privacy, so by voice the confirm time only gets shorter, and transcripts, web search, the update check, crash reports and key actions only switch off: making them longer, or switching them on, is done in the file. With `key_actions` off, Tycho is an advisor: it answers, looks things up and shows cards, and presses nothing, whatever you or Claude say; a game whose rules forbid tools that press keys is always that way. The push-to-talk button (`tycho bind`), the microphone and the game folder never change by voice. If the voice says your name wrong, set `call_me_says` to how it sounds (`Zile` for `Xyl`); the console and logs keep your spelling. Claude runs on your Anthropic key unless you set `brain_provider = "openrouter"`, which runs the same Claude Haiku through your OpenRouter key (`tycho key set openrouter`); only models that passed Tycho's test with no wrong key presses can be picked (`brain_model`), and the brain's provider never changes by voice. Tycho's voice is George unless you set `voice` (George, Sarah, Lily, Brian, or a voice ID from your ElevenLabs account); a voice you designed works only with your own key, and Tycho checks at start and speaks as George if your key can't use it.
 
-Logs are in `%LOCALAPPDATA%\tycho\logs`: `tycho.jsonl` for everything, `actions.jsonl` for every key Tycho pressed. Set `keep_transcripts = true` to also log what you said and what Tycho said, which helps when something goes wrong. It stays on your PC. Set `TYCHO_MODELS` to keep the speech model on another drive. When it starts, Tycho asks GitHub whether a newer version is out and says so (it never updates itself); set `check_for_updates = false` to turn that off.
+Logs are in `%LOCALAPPDATA%\tycho\logs`: `tycho.jsonl` for everything, `actions.jsonl` for every key Tycho pressed. Set `keep_transcripts = true` to also log what you said and what Tycho said, which helps when something goes wrong. It stays on your PC. Set `TYCHO_MODELS` to keep the speech model on another drive. Speech recognition runs on the processor; `transcription_device = "gpu"` moves it to an NVIDIA graphics card, which is faster but takes about 3 GB of the card's memory from the game. When it starts, Tycho asks GitHub whether a newer version is out and says so (it never updates itself); set `check_for_updates = false` to turn that off.
 
 ## What leaves your PC
 
-Your voice never does: speech recognition runs on your PC. Only text is sent, and only to services you set up with your own keys.
+Your voice never does: speech recognition runs on your PC. Only text is sent, and only what's listed here. Tycho counts and tracks nothing about how you use it.
 
 | Service | What it receives | When |
 |---|---|---|
 | Anthropic (Claude) | What you said (as text); your bound actions with their keys, your commands and sequences; and your last few requests with what Tycho did, if they were in the last 30 seconds | Requests the built-in commands don't handle, plus one warm-up request when Tycho starts |
 | OpenRouter, instead of Anthropic | The same as Anthropic (Claude) above. OpenRouter forwards it to Anthropic, who runs the model, so both receive it | Only with `brain_provider = "openrouter"`, instead of sending it to Anthropic directly |
-| ElevenLabs | The text Tycho speaks | When Tycho speaks |
+| ElevenLabs | The text Tycho speaks; at start, which voice you chose, to check your key can use it | When Tycho speaks, and once when it starts |
+| The key's own provider (Anthropic, OpenRouter or ElevenLabs) | A key you store, to check it works | When you store it, and when you run `tycho check` |
 | Star Citizen Wiki API, UEX Corp | Nothing about you: Tycho downloads their ship lists | On first run, and when a new patch goes live |
-| Anthropic (web search) | A short search query Claude writes from your question | Questions about news, upcoming patches, events and new ships, and where something is or how to do something when Tycho's look-ups don't cover it (#353); off with `web_search = false`. When those sites have no clear answer, any website, and Anthropic reads up to two of the pages it finds (never Reddit's pages, only its search snippets); `web_search_open = false` keeps it to the Star Citizen sites. Always Anthropic directly, with your Anthropic key, even when the brain runs through OpenRouter |
+| Anthropic (web search) | A short search query Claude writes from your question | Questions about news, upcoming patches, events and new ships, and where something is or how to do something when Tycho's look-ups don't cover it; off with `web_search = false`. When those sites have no clear answer, any website, and Anthropic reads up to two of the pages it finds (never Reddit's pages, only its search snippets); `web_search_open = false` keeps it to the Star Citizen sites. Always Anthropic directly, with your Anthropic key, even when the brain runs through OpenRouter |
 | UEX Corp | Which commodity or trading place you asked about | Trade questions |
 | Star Citizen Wiki API | The item names you ask about | Weapon, armor, component and crafting questions |
+| GitHub | Nothing about you: Tycho asks whether a newer version is out | When Tycho starts and when its window opens; off with `check_for_updates = false` |
+| Hugging Face | Nothing about you: Tycho downloads its speech model | Once, the first time Tycho starts |
+| Sentry (crash reports) | Only if you said yes: the kind of error and where in Tycho's own code it happened, Tycho's version, the Windows version, the game and the brain provider. Never what you or Tycho said, your keys, your name, your files or folders, or anything that identifies you or your PC | The next time Tycho starts after a crash. Saying no deletes any report still waiting |
 | *Planned:* Anthropic (Claude) | A capture of the game window | Only if you turn vision on and ask Tycho to look |
 
 ## Principles
 
+- **Protect the player's attention.** Every feature is judged by whether it keeps you in the game. Short spoken lines, a card only when the eye beats the ear, and no new screen to watch.
 - **Receipts, not claims.** Every action is logged: what was pressed, and whether you confirmed it.
 - **Fast where it matters.** Known commands skip the AI entirely.
 - **Asks before the irreversible.** The safety gate is separate from the AI: nothing Claude picks can skip a confirmation.
 - **Plays by the rules.** It sends keypresses through your keybinds only. It never reads game memory or injects into the game. Every action starts from you; there's no unattended automation.
+- **Private by default.** Your voice stays on your PC, your keys stay in Windows Credential Manager, and nothing about how you use Tycho is tracked. Crash reports are sent only if you say yes.
+- **Built for your agent too.** Everything setup does, an AI agent can do through Tycho's command line and skills, with the same checks.
 - **Your screen is yours** (planned): vision will be off unless you ask, capture only the game window, and keep nothing by default.
 - **Measured, not claimed.** Accuracy and latency are benchmarked against a recorded test set.
 
@@ -186,7 +210,7 @@ See [docs/architecture.md](docs/architecture.md) for the design, [docs/adr](docs
 
 ## Credits
 
-Speech recognition uses NVIDIA's [Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) model (CC-BY-4.0), via [onnx-asr](https://github.com/istupakov/onnx-asr). Ship and vehicle data comes from the [Star Citizen Wiki API](https://api.star-citizen.wiki), downloaded to your PC once per patch; its in-game prices are reported by players to [UEX Corp](https://uexcorp.space), which also lists the ships still in concept and provides the commodity prices and trade routes. Web search answers can draw on [starcitizen.tools](https://starcitizen.tools) (CC BY-SA 4.0). `tycho credits` shows these in the app, and the installer includes them.
+Speech recognition uses NVIDIA's [Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) model (CC-BY-4.0), via [onnx-asr](https://github.com/istupakov/onnx-asr). Ship and vehicle data comes from the [Star Citizen Wiki API](https://api.star-citizen.wiki), downloaded to your PC once per patch; its in-game prices are reported by players to [UEX Corp](https://uexcorp.space), which also lists the ships still in concept and provides the commodity prices and trade routes. Web search answers can draw on [starcitizen.tools](https://starcitizen.tools) (CC BY-SA 4.0). The window and the Tile use the Saira and Share Tech Mono fonts (SIL Open Font License). `tycho credits` shows these in the app, and the installer includes them.
 
 ## Licence
 

@@ -1,6 +1,6 @@
 # Security policy
 
-Tycho handles API keys, sends keypresses and can capture your screen, so we take security reports seriously.
+Tycho handles API keys and sends keypresses, so we take security reports seriously.
 
 ## Reporting a vulnerability
 
@@ -10,12 +10,13 @@ Include what you found, how to reproduce it, and what an attacker could do with 
 
 ## Supported versions
 
-Tycho is pre-alpha. Only the latest commit on `main` is supported.
+Tycho is pre-alpha. Only the latest release, and the latest commit on `main`, are supported.
 
 ## Design commitments
 
-- API keys (Anthropic, ElevenLabs, and optionally Cerebras and TypeSafe) are stored in Windows Credential Manager through `tycho.credentials`, never in config files or logs.
+- API keys (Anthropic, ElevenLabs and OpenRouter, plus Cerebras and TypeSafe for benchmarks only) are stored in Windows Credential Manager through `tycho.credentials`, never in config files or logs.
 - Audio never leaves your PC. The text that goes to each provider is listed in the README under "What leaves your PC".
+- Tycho tracks nothing about how you use it. Crash reports are sent only if you say yes, hold only an allowlisted set of fields (the error, Tycho's own code, versions, the game and the brain provider), and never what you said, your keys or anything that identifies you or your PC.
 - Recordings and benchmark results stay in the local `recordings/` folder, which git ignores.
 - Any local server binds to `127.0.0.1` only and requires a per-session token.
 - Tycho never reads or writes game memory, and never injects into the game process.
