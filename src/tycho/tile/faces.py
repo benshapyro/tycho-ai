@@ -83,10 +83,18 @@ def _has(face: Face, ch: str) -> bool:
     """Checked once per face and character, against the box a missing one draws. By its
     ink: in a monospaced face every character has the box's size."""
     try:
-        f = _bundled(face, 32)
+        f, box = _probe(face)
     except OSError:
         return True  # no bundled file: this face is Windows' own already
-    return _ink(f, ch) != _ink(f, _NOT_IN_ANY)
+    return _ink(f, ch) != box
+
+
+@functools.cache
+def _probe(face: Face) -> tuple[Font, bytes]:
+    """The bundled face at 32 px and the ink of the box it draws for a missing character,
+    loaded once per face, not on each new character's check (#515)."""
+    f = _bundled(face, 32)
+    return f, _ink(f, _NOT_IN_ANY)
 
 
 def _ink(f: Font, ch: str) -> bytes:

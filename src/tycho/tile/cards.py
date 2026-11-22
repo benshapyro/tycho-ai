@@ -97,11 +97,14 @@ class Card:
 
     def shown(self) -> tuple[str, str]:
         """Every word the card shows, and its values (drawn in the number face): the
-        Tile checks its bundled fonts have them all (#458)."""
+        Tile checks its bundled fonts have them all (#458). A specs row with no value
+        draws its detail in the number face instead, so it's checked there (#515)."""
         rows = (part for r in self.rows for part in (r.text, r.detail))
         hero_label, hero_value = self.hero or ("", "")
         words = "".join((self.title, self.label, self.source, *rows, hero_label, *self.body))
-        return words, "".join((*(r.value for r in self.rows), hero_value))
+        specs = self.kind == SPECS
+        values = (r.value or (r.detail if specs else "") for r in self.rows)
+        return words, "".join((*values, hero_value))
 
     @property
     def tone(self) -> Tone:

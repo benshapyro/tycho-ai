@@ -97,7 +97,8 @@ class _Pen:
         self.text = rgba("#ffffff") if hc else rgba(CORE.text)
         self.dim = rgba("#c8d2e0") if hc else rgba(CORE.dim)
         self.well = (255, 255, 255, 18 if hc else 9)
-        # Greek, Cyrillic or a €: the whole card in Windows' faces, not boxes (#458).
+        # Greek or Cyrillic: the whole card in Windows' faces, not boxes (#458). The
+        # bundled faces have the €, so it stays in them.
         self.windows = not bundled_draws(*card.shown())
 
     def font(self, face: Face, size: int) -> Font:
