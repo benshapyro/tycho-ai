@@ -13,6 +13,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ### Fixed
 - "Open hangar" heard as "open hangers", and "close doors" heard as "closed doors", now work instantly instead of waiting for the brain. ([#358](https://github.com/benshapyro/tycho-ai/issues/358))
+- Tycho no longer hears an everyday word such as "hunger" as a game word that only sounds like it ("hangar"). ([#505](https://github.com/benshapyro/tycho-ai/issues/505))
 
 ### Changed
 - In setup, skipping the Keys step in Star Citizen now shows it as skipped, not as still to do: a key is optional there, since the built-in phrases work without one. At the window's smallest size, Next sits fully in view, and in World of Warcraft: Forever, What to say now shows any problem with your own commands file. ([#448](https://github.com/benshapyro/tycho-ai/issues/448))
