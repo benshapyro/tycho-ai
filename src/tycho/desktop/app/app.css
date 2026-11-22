@@ -228,7 +228,9 @@ ul.costs, ul.tips { color: var(--dim); font-size: 14px; }
 /* The design review: setup's Back and Next stay in view, a skipped step isn't ticked,
    and a plain fact isn't amber. The bar sits over main's 40px bottom padding so nothing shows under it. */
 .stepnav { position: sticky; bottom: -40px; padding: 14px 0 22px; margin-top: 2px; background: linear-gradient(to bottom, transparent, var(--void) 12px); z-index: 5; }
+@media (max-width: 760px) { .stepnav { bottom: -18px; } } /* main's bottom padding there; after the rule above, so it wins (#448) */
 .steps li.todo b { border-color: color-mix(in srgb, var(--caution) 60%, transparent); color: var(--caution); }
+.steps li.skipped b { border-style: dashed; }
 .info-line { color: var(--text); font-size: 14px; border-left: 2px solid var(--acc-line); padding-left: 10px; }
 /* In setup a message sits above Back and Next, never on them. */
 body.insetup .toast { bottom: 86px; } /* clear of setup's Back and Next */

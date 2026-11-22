@@ -9,6 +9,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ## [Unreleased]
 
 ### Changed
+- In setup, skipping the Keys step in Star Citizen now shows it as skipped, not as still to do: a key is optional there, since the built-in phrases work without one. At the window's smallest size, Next sits fully in view, and in World of Warcraft: Forever, What to say now shows any problem with your own commands file. ([#448](https://github.com/benshapyro/tycho-ai/issues/448))
 - **Quit** is now at the bottom of the left side of Tycho's window, so it's easy to find. It's still under Settings, Updates, and on Tycho's icon by the clock. ([#486](https://github.com/benshapyro/tycho-ai/issues/486))
 - With the brain through OpenRouter, Tycho now tells OpenRouter never to use a host that keeps or trains on what you say, whatever your OpenRouter account's privacy settings are. ([#488](https://github.com/benshapyro/tycho-ai/issues/488))
 

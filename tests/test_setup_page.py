@@ -396,8 +396,10 @@ def test_a_skipped_step_is_not_ticked_and_next_stays_in_view(setup: Setup) -> No
         setup.next()
     setup.at("Privacy")
     steps = page.locator(".steps li")
-    for i in range(3):
-        expect(steps.nth(i)).to_have_class("todo")
+    # #448: here a brain key is optional (the built-in phrases work without one), so
+    # skipping it is calm, not amber "still to do" every time setup opens.
+    for i, cls in enumerate(["todo", "skipped", "todo"]):
+        expect(steps.nth(i)).to_have_class(cls)
         expect(steps.nth(i)).not_to_contain_text("✓")
     # Done properly, a step is ticked.
     page.get_by_role("button", name="Back").click()
@@ -408,6 +410,39 @@ def test_a_skipped_step_is_not_ticked_and_next_stays_in_view(setup: Setup) -> No
     expect(steps.nth(2)).to_have_class("done")
     expect(steps.nth(2)).to_contain_text("✓")
     expect(page.get_by_role("button", name="Next", exact=True)).to_be_in_viewport()
+
+
+def test_a_skipped_key_is_still_to_do_where_the_brain_is_all_there_is(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#448: only a game with built-in phrases can do without a brain key."""
+    settings.save(Settings(game="wow-forever"), path)
+    setup = Setup(browser, path)
+    page = setup.page
+    setup.at("Game")
+    setup.next()
+    setup.at("Keys")
+    setup.next()
+    expect(page.locator(".steps li").nth(1)).to_have_class("todo")
+    setup.close()
+
+
+def test_at_the_smallest_window_next_is_wholly_in_view(setup: Setup) -> None:
+    """#448: the sticky bar sat flush with the bottom edge, set for the wide window's
+    padding."""
+    page = setup.page
+    width, height = window.SMALLEST
+    page.set_viewport_size({"width": width, "height": height})
+    setup.at("Game")
+    for _ in range(3):
+        setup.next()
+    setup.at("Privacy")  # the longest step
+    bar = page.locator(".stepnav").bounding_box()
+    nxt = page.get_by_role("button", name="Next", exact=True).bounding_box()
+    assert bar is not None
+    assert nxt is not None
+    assert nxt["y"] + nxt["height"] <= height
+    assert bar["y"] + bar["height"] <= height + 0.5  # the bar's own padding shows below Next
 
 
 def test_the_one_crash_question_comes_before_the_table(
@@ -458,6 +493,50 @@ def test_a_game_tycho_only_advises_in_has_no_empty_pages(
     there.page.get_by_role("tab", name="Advanced").click()
     expect(there.page.locator(".set", has_text="Game folder")).to_have_count(1)
     there.close()
+
+
+def test_an_advisor_games_commands_page_says_the_files_warnings(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#448: the "Just ask" card left out what was wrong in the player's commands file."""
+    settings.save(
+        Settings(game="wow-forever", push_to_talk="mouse:0x06", crash_reports=False), path
+    )
+    setup = Setup(browser, path, first_run=False)
+    shown = setup.bridge.commands()
+    warning = "'jump': 'stop' is one of Tycho's own words, so it never runs the command"
+    setup.bridge.commands = lambda: {**shown, "warnings": [warning]}  # type: ignore[method-assign]
+    page = setup.page
+    page.get_by_role("button", name="What to say").click()
+    expect(page.locator("#noCommands")).to_contain_text("ask in your own words")
+    expect(page.locator("#noCommands .warn-line")).to_have_text(warning)
+    setup.close()
+
+
+def test_a_view_change_fetches_the_settings_once(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#454: the game box fetched every setting (and loaded every pack) on each view
+    change, and Settings and The Tile then fetched them again."""
+    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=False), path)
+    setup = Setup(browser, path, first_run=False)
+    page = setup.page
+    expect(page.locator("#homeState")).to_be_visible()
+    fetched: list[int] = []
+    real = setup.bridge.settings
+
+    def counted() -> dict[str, object]:
+        fetched.append(1)
+        return real()
+
+    setup.bridge.settings = counted  # type: ignore[method-assign]
+    for place, heading in [("Settings", "Settings"), ("The Tile", "The Tile")]:
+        fetched.clear()
+        page.get_by_role("button", name=place, exact=True).click()
+        expect(page.get_by_role("heading", name=heading, exact=True)).to_be_visible()
+        expect(page.locator("#gameBox")).to_contain_text("Star Citizen")
+        assert len(fetched) == 1
+    setup.close()
 
 
 def test_a_newer_version_makes_get_the_button_to_press(
