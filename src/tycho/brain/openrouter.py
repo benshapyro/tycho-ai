@@ -243,8 +243,8 @@ class OpenRouterBrain:
         if self._preparing is None:
             lookups = self._lookups.values()
             self._preparing = asyncio.gather(*(lookup.prepare() for lookup in lookups))
-        async with self._primer.warming():
-            await asyncio.gather(self._warm_cache(keybinds), asyncio.shield(self._preparing))
+        warming = self._primer.warming(lambda: self._warm_cache(keybinds))
+        await asyncio.gather(warming, asyncio.shield(self._preparing))
 
     async def close(self) -> None:
         if self._preparing is not None and not self._preparing.done():

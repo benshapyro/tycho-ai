@@ -176,10 +176,12 @@ def test_a_press_during_the_start_up_warm_up_starts_nothing() -> None:
     """#533: the cache was written twice when the player pressed in the first seconds."""
     rig = _Rig()
 
+    async def warm_up() -> None:
+        rig.primer.prime()
+        await asyncio.sleep(0)
+
     async def go() -> None:
-        async with rig.primer.warming():
-            rig.primer.prime()
-            await asyncio.sleep(0)
+        await rig.primer.warming(warm_up)
         await rig.primer.close()
 
     asyncio.run(go())

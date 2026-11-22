@@ -19,7 +19,7 @@ import asyncio
 import contextlib
 import logging
 import time
-from collections.abc import AsyncGenerator, Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
 log = logging.getLogger(__name__)
 
@@ -87,13 +87,14 @@ class Primer:
         self._writing = work == self._rewarm_cache
         self._task = asyncio.get_running_loop().create_task(self._run(work, what))
 
-    @contextlib.asynccontextmanager
-    async def warming(self) -> AsyncGenerator[None]:
-        """Around a warm-up outside priming (at start, or after the keybinds change):
-        a press meanwhile starts nothing, so the cache isn't written twice (#533)."""
+    async def warming[T](self, warm_up: Callable[[], Awaitable[T]]) -> T:
+        """Run a warm-up from outside priming (at start, or after the keybinds change):
+        a press meanwhile starts nothing, so the cache isn't written twice (#533). Only
+        the cache write: the look-ups' loading, which can take minutes after a patch,
+        leaves presses free to open the connection."""
         self._busy += 1
         try:
-            yield
+            return await warm_up()
         finally:
             self._busy -= 1
 
