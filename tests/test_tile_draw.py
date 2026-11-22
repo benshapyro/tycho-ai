@@ -222,3 +222,31 @@ def test_every_symbol_the_tile_draws_is_in_its_font() -> None:
     for face in faces:
         for ch in "…·":
             assert drawn(font(face, 20), ch), (face, ch)
+
+
+def test_greek_cyrillic_and_the_euro_draw_in_windows_faces_not_boxes() -> None:
+    """#458: the bundled fonts have no Greek or Cyrillic. A card with either draws in
+    Windows' own faces, which have both, instead of as boxes."""
+    import sys
+
+    from tycho.tile.draw import _Pen  # pyright: ignore[reportPrivateUsage]
+    from tycho.tile.faces import Face, bundled_draws, font
+
+    assert bundled_draws("Sell · Laranite → Everus Harbor… Tiếng Việt €", "3,048 aUEC 12 €")
+    for foreign in ("Ωμέγα", "Привет"):
+        assert not bundled_draws(foreign), foreign
+        assert not bundled_draws("", foreign), foreign
+    assert not bundled_draws("", "→")  # Saira has the arrow; Share Tech Mono doesn't
+    look = Look()
+    assert _Pen(LIST, look).windows is False
+    greek = Card("list", title="Prices", rows=(Row("Αθήνα", "Ελλάδα", "12 €"), Row("Москва")))
+    pen = _Pen(greek, look)
+    assert pen.windows is True
+    assert pen.font("text", 20) is not font("text", 20)
+    assert _tile(greek).getbbox() is not None  # it draws
+    if sys.platform == "win32":  # Windows' own faces are there to check
+        missing = "\U000f0000"
+        wanted: list[tuple[Face, str]] = [("text", "Ω"), ("strong", "Ж"), ("label", "Ж")]
+        for face, ch in wanted:
+            f = pen.font(face, 20)
+            assert (f.getbbox(ch), f.getlength(ch)) != (f.getbbox(missing), f.getlength(missing))
