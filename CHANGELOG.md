@@ -11,11 +11,11 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ### Changed
 - Answers with more than a few numbers, such as a trade route or a loadout, now go on the Tile more often, with one sentence spoken. Asking to see "something interesting" on the Tile gets a card, not a question back. ([#490](https://github.com/benshapyro/tycho-ai/issues/490))
 - A stray word that isn't a request, or one misheard, gets "Copy." instead of a question back, and "is that you?" gets a few words. A vague "the usual" gets a question, never a guess. ([#359](https://github.com/benshapyro/tycho-ai/issues/359), [#495](https://github.com/benshapyro/tycho-ai/issues/495))
+- With key actions off, Tycho now knows every key you've bound, steering, strafing and emotes included, and says when one is held ("Boost (Hold)"). Asked for your strafe key, it names it instead of saying there's none. ([#437](https://github.com/benshapyro/tycho-ai/issues/437))
+- With the brain through OpenRouter, Tycho now tells OpenRouter never to use a host that keeps or trains on what you say, whatever your OpenRouter account's privacy settings are. ([#488](https://github.com/benshapyro/tycho-ai/issues/488))
 
 ### Fixed
 - A card the brain left empty no longer ends in the not-done sound: Tycho says its line without the card. ([#443](https://github.com/benshapyro/tycho-ai/issues/443))
-- With key actions off, Tycho now knows every key you've bound, steering, strafing and emotes included, and says when one is held ("Boost (Hold)"). Asked for your strafe key, it names it instead of saying there's none. ([#437](https://github.com/benshapyro/tycho-ai/issues/437))
-- With the brain through OpenRouter, Tycho now tells OpenRouter never to use a host that keeps or trains on what you say, whatever your OpenRouter account's privacy settings are. ([#488](https://github.com/benshapyro/tycho-ai/issues/488))
 
 ## [0.8.0] - 2026-11-22
 
