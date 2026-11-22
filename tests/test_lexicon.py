@@ -105,3 +105,19 @@ def test_an_everyday_word_spelled_unlike_the_term_is_only_a_hint(heard: str, ter
 )
 def test_a_close_spelling_of_the_term_is_still_fixed(heard: str, fixed: str) -> None:
     assert Lexicon.default(pack=SC).correct(heard).text == fixed
+
+
+def test_one_word_right_at_the_spelling_cut_off_is_still_fixed() -> None:
+    # #513: "kurracks" sounds exactly like "Carracks" and its spelling is exactly 0.75
+    # alike, the default cut-off, which is compared with "<": it's a rewrite, not a hint.
+    # A later change to the cut-off or to `similarity` must not quietly make it a hint.
+    lexicon = Lexicon(["Carracks"])
+    corrected = lexicon.correct("the kurracks")
+    assert corrected.text == "the Carracks"
+    assert [(r.heard, r.term, r.similarity) for r in corrected.replacements] == [
+        ("kurracks", "Carracks", 1.0)
+    ]
+    # Just above the cut-off it's only a hint.
+    stricter = Lexicon(["Carracks"], min_word_spelling_similarity=0.76).correct("the kurracks")
+    assert stricter.text == "the kurracks"
+    assert [h.heard for h in stricter.hints] == ["kurracks"]
