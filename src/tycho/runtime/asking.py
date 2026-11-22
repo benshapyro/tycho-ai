@@ -32,10 +32,12 @@ a row ran past BRAIN_SECONDS in the play session (#150). Never less than
 BRAIN_SECONDS, and never past LOOKING_LIMIT."""
 SEARCH_LIMIT = 20.0
 """A request with a web search answers or fails this long after it was asked."""
-OPEN_SEARCH_SECONDS = 27.0
-OPEN_SEARCH_LIMIT = 32.0
+OPEN_SEARCH_SECONDS = 23.0
+OPEN_SEARCH_LIMIT = 28.0
 """With ``web_search_open`` (#354, on by default): two searches and page reads take longer,
-up to the search's own 25 s, so the brain gets more time once it starts."""
+up to the search's own ``knowledge.web.OPEN_SECONDS`` (18 s), so the brain gets more time
+once it starts: the search's limit and 5 s to answer from it (#361, #365). It was 27 s
+against a 25 s search, which left 2 s."""
 LOOKING_LIMIT = 15.0
 """However many look-ups, an answer comes or fails this long after the request."""
 

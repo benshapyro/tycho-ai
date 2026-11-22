@@ -6,10 +6,12 @@ knows changes nothing: what Tycho doesn't recognise stays unknown, and commands 
 need a fact refuse rather than guess.
 
 Log text is untrusted data. It holds other players' names and chat-like notifications,
-so whatever a pattern takes from a line is cleaned and cut here, names after "By" are
-dropped, and anything that passes it on (the brain, the voice) must treat it as data,
-never as instructions. Nothing else leaves a line: no handles, account or session ids,
-server addresses or other players' names.
+so only notifications of a known shape are kept (``KNOWN_NOTIFICATIONS``: party invites,
+friend requests and other players' calibrations start or end with a name and are
+dropped, #531), whatever a pattern takes from a line is cleaned and cut here, and
+anything that passes it on (the brain, the voice) must treat it as data, never as
+instructions. Nothing else leaves a line: no handles, account or session ids, server
+addresses or other players' names.
 
 Surveyed on build 13220821 (22 Nov 2026: a 6.5-hour session and three earlier logs).
 The log records: plotting a quantum route and arriving, letting go of a ship's
@@ -34,12 +36,20 @@ ARRIVED = "arrived"
 """A quantum jump ended (an event)."""
 LEFT_SEAT = "left_seat"
 """The player let go of a ship's controls (an event)."""
-NOTIFICATION = "notification"
-"""A line the HUD showed (an event). Can be about other players: untrusted text."""
 MONITORED = "monitored"
-"""In monitored space (``now``), from the HUD's "Entered/Exited Monitored Space"."""
+"""In monitored space (``now``), from the HUD's "Entered Monitored Space"."""
+LEFT_MONITORED = "left_monitored"
+"""The HUD said "Exited Monitored Space" (an event)."""
 JURISDICTION = "jurisdiction"
-"""The last jurisdiction the HUD said the player entered (``now``)."""
+"""The last jurisdiction the HUD said the player entered (``now``). The survey found no
+line for leaving one, so it lasts until the next one or a server join (#531)."""
+ARMISTICE = "armistice"
+"""The HUD said "Entering Armistice Zone - Combat Prohibited" (an event: there's no line
+for leaving one, so it can't be kept as true)."""
+PRIVATE_PROPERTY = "private_property"
+"""The HUD said "Entering Private Property" (an event)."""
+LEFT_PRIVATE_PROPERTY = "left_private_property"
+"""The HUD said "Leaving Private Property" (an event)."""
 JOINED = "joined"
 """Joined a game server (an event): a fresh start in the universe, so what was known
 about the route and the surroundings is gone."""
@@ -79,7 +89,6 @@ _RELEASED = re.compile(
     r"ClearDriver: Local client node \[\d+\] releasing control token for '([^']+)'"
 )
 _NOTIFICATION = re.compile(r'Added notification "(.*?)"\s*\[\d+\]')
-_BY_SOMEONE = re.compile(r"\s+(?:by|from)\s+.*$", re.IGNORECASE)
 _JURISDICTION = re.compile(r"^Entered (.+) Jurisdiction$")
 _SHIP_NUMBER = re.compile(r"_\d+$")
 
@@ -136,20 +145,33 @@ def _left_seat(line: str) -> Line | None:
     return Line(LEFT_SEAT, said, clears=(ROUTE,), set_route=False, ship=own)
 
 
+KNOWN_NOTIFICATIONS: dict[str, str] = {
+    "Entered Monitored Space": MONITORED,
+    "Exited Monitored Space": LEFT_MONITORED,
+    "Entering Armistice Zone - Combat Prohibited": ARMISTICE,
+    "Entering Private Property": PRIVATE_PROPERTY,
+    "Leaving Private Property": LEFT_PRIVATE_PROPERTY,
+}
+"""The HUD's notifications Tycho keeps, by their exact wording (with "Entered ...
+Jurisdiction", below), each seen in the survey. Every other notification is dropped:
+some start or end with another player's name, and none of those may reach the brain or
+the voice (#531). A new kind joins here with a real line in ``tests/test_gamelog.py``."""
+
+
 def _notification(line: str) -> Line | None:
     if "<SHUDEvent_OnNotification>" not in line or not (match := _NOTIFICATION.search(line)):
         return None
-    # "Quantum Travel Calibration Complete By <someone>": the name isn't Tycho's to repeat.
-    said = clean(_BY_SOMEONE.sub("", match.group(1).rstrip(" :")))
-    if not said:
-        return None
-    if said == "Entered Monitored Space":
-        return Line(MONITORED, said, keep=True)
-    if said == "Exited Monitored Space":
-        return Line(NOTIFICATION, said, clears=(MONITORED,))
-    if _JURISDICTION.match(said):
+    said = clean(match.group(1).rstrip(" :"))
+    if kind := KNOWN_NOTIFICATIONS.get(said):
+        if kind == MONITORED:
+            return Line(MONITORED, said, keep=True)
+        if kind == LEFT_MONITORED:
+            return Line(LEFT_MONITORED, said, clears=(MONITORED,))
+        return Line(kind, said)
+    if (match := _JURISDICTION.match(said)) and len(match.group(1).split()) <= 4:
+        # A jurisdiction is a place's name ("UEE", "Rough & Ready"), a few words at most.
         return Line(JURISDICTION, said, keep=True)
-    return Line(NOTIFICATION, said)
+    return None
 
 
 def _joined(line: str) -> Line | None:
