@@ -35,6 +35,7 @@ from tycho.brain.briefing import (
 from tycho.brain.claude import ClaudeBrain, history
 from tycho.brain.lookups import LOOKUP_SECONDS, run_lookup
 from tycho.brain.rounds import (
+    CARD_NOTE,
     CUT_SHORT,
     LAST_CALL,
     LAST_PICK,
@@ -877,12 +878,19 @@ def test_a_card_is_a_reply_with_the_details_to_read() -> None:
     [
         ({"kind": "confirm"}, "isn't a card"),
         ({"say": ""}, "nothing to say"),
-        ({"rows": []}, "nothing on it"),
+        ({"say": "", "rows": []}, "nothing on it"),
     ],
 )
 def test_a_card_claude_cant_show_is_a_brain_error(change: dict[str, Any], problem: str) -> None:
     with pytest.raises(BrainError, match=problem):
         parse_tool_call("show_card", _CARD | change, ACTIONS, SEQUENCES)
+
+
+def test_an_empty_card_with_a_line_to_say_is_said_without_the_card() -> None:
+    """#443: "turn off power, I'm in my Pitbull" with keys off sent an empty steps card,
+    and the player heard the error sound instead of the line."""
+    empty = _CARD | {"kind": "steps", "rows": [], "say": "Your power key is P."}
+    assert parse_tool_call("show_card", empty, ACTIONS, SEQUENCES) == Reply("Your power key is P.")
 
 
 def _offered(tile: bool) -> list[str]:
@@ -921,6 +929,43 @@ def test_a_card_after_a_web_search_is_shown_since_nothing_is_pressed() -> None:
     assert decision.card.kind == "headlines"
 
 
+def _ask_tile(lookup: FakeLookup, tile: bool) -> _Calls:
+    client = _Calls(_looks_up(lookup.name), ([], _final("Best is Everus Harbor.")))
+    brain = ClaudeBrain(
+        MATCHER, client=cast(Any, client), lookups=[lookup], cards=lambda: tile, pack=SC
+    )
+    asyncio.run(brain.decide(BrainRequest("where to sell laranite", KEYBINDS)))
+    return client
+
+
+def _notes(client: _Calls) -> list[str]:
+    """The text parts sent with look-up results: the notes Claude is given."""
+    return [
+        str(cast(dict[str, Any], part)["text"])
+        for r in client.requests
+        for m in r["messages"]
+        if isinstance(m["content"], list)
+        for part in cast(list[Any], m["content"])
+        if isinstance(part, dict) and cast(dict[str, Any], part).get("type") == "text"
+    ]
+
+
+def test_after_a_look_up_with_the_tile_on_claude_is_reminded_of_cards() -> None:
+    """#490: in play a trade route and a loadout were spoken, numbers and all. The rule
+    is in the briefing, far from the answer; the results carry it too."""
+    assert any(CARD_NOTE in n for n in _notes(_ask_tile(FakeLookup("trade_routes"), True)))
+
+
+@pytest.mark.parametrize(
+    ("lookup", "tile"),
+    [(FakeLookup("trade_routes"), False), (FakeLookup("update_fleet", "{}", instant=True), True)],
+)
+def test_no_card_reminder_without_the_tile_or_after_a_fleet_note(
+    lookup: FakeLookup, tile: bool
+) -> None:
+    assert not any(CARD_NOTE in n for n in _notes(_ask_tile(lookup, tile)))
+
+
 def test_a_look_up_cant_take_the_cards_name() -> None:
     with pytest.raises(ValueError, match="show_card"):
         ClaudeBrain(
@@ -944,7 +989,12 @@ def test_the_briefing_says_what_not_to_guess() -> None:
     assert "Never guess a sequence, a boost or the throttle" in text
     assert "call no tool, not even for shields or targeting" in text
     assert 'reply with exactly "Copy." and nothing else' in text
-    assert "Chat to you, such as thanks, still gets a short friendly reply" in text
+    assert (
+        'Chat to you, such as thanks or "you still with me?", still gets a short friendly reply'
+        in text
+    )
+    assert 'neither a request nor a question ("Marrow", "uh, so then") is the same' in text
+    assert 'a habit you haven\'t been told ("my normal routine"' in text
     assert 'never "the player", and never explain why you replied' in text
     assert "A request for something you can press is still for you" in text
     assert "the destination is set in the star map" in text

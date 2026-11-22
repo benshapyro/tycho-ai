@@ -325,6 +325,35 @@ def test_with_keys_off_the_briefing_ends_with_the_player_s_own_keys() -> None:
     assert text == briefing(LABELLED, CommandMatcher.default(pack=pack), pack)
 
 
+def test_with_keys_off_every_bound_action_is_listed_with_its_note_and_map() -> None:
+    """#437: "what's my strafe key" heard there was none, since the list left out
+    steering, strafing and emotes; "(Hold)" was dropped, and the ship's and the ground
+    vehicle's "Headlights" looked alike."""
+    pack = _star_citizen_off()
+
+    def bound(name: str, actionmap: str, label: str, key: str, activation: str = "") -> Action:
+        parsed = KeyInput.parse(key)
+        assert parsed is not None
+        return Action(name, actionmap, label, (parsed,), activation)
+
+    keybinds = Keybinds(
+        [
+            bound("v_strafe_up", "spaceship_movement", "Strafe Up", "space"),
+            bound("emote_wave", "player_emotes", "Wave", "f9"),
+            bound("v_ifcs_boost", "spaceship_movement", "Boost", "lshift", "hold"),
+            bound("v_lights", "spaceship_general", "Headlights (Toggle)", "l"),
+            bound("v_ground_lights", "vehicle_general", "Headlights (Toggle)", "l"),
+        ]
+    )
+    text = briefing(keybinds, CommandMatcher.default(pack=pack), pack)
+    actions = text.split("The player's own keys for everything else")[1]
+    assert "\nStrafe Up | Space\n" in actions
+    assert "\nWave | F9\n" in actions
+    assert "\nBoost (Hold) | Left Shift\n" in actions
+    assert "\nHeadlights (Toggle) (spaceship general) | L\n" in actions
+    assert "\nHeadlights (Toggle) (vehicle general) | L\n" in actions
+
+
 def test_with_keys_on_the_briefing_still_names_no_key() -> None:
     pack = built_in(STAR_CITIZEN)
     text = briefing(LABELLED, CommandMatcher.default(pack=pack), pack)
