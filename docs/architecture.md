@@ -111,6 +111,8 @@ Rules:
 
 *Planned (stage 2); not built.*
 
+The first version is proposed in [ADR 14's amendment](adr/0014-the-brain-voice-and-sequences.md) (22 November 2026): only the per-request trigger, off by default; the standing permission waits for its own decision.
+
 - **Per-request trigger:** a word the user chooses ("look", say) captures the game window together with what was said, and sends both to the brain.
 - **Standing permission (off by default):** a setting that lets Tycho capture whenever the state tracker needs to confirm something.
 - Only the game window is captured, never the whole desktop.

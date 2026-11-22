@@ -78,3 +78,26 @@ What leaves the PC, for the README's list:
 ## Update, 6 November 2026: several tools in one reply
 
 Claude was asked for one tool a reply (`disable_parallel_tool_use`). In the play session that cost a call per look-up when a question needed two, and lost a fleet note said with a command ("I'm in my Pitbull, power off": the act ended the request first). Tool use is now parallel (#149, #156). Look-ups in one reply run together, and a fleet or settings note runs alongside an act, which waits up to a second for it. Only the first act in a reply is pressed, and every act is still checked and goes through the safety gate. The brain eval judged it before it merged (6 November 2026): 161/172 pass, 0 wrong presses (1 on main), acting picks p50 1,215 ms (1,589 on main), 1.59 calls a request; the Pitbull case passes. A command said with a ship note waits for the note: 5.5 s to the press in that case.
+
+## Amendment, 22 November 2026: looking at the game window when asked
+
+*Status: proposed, waiting for the maintainer's approval of this text. The maintainer agreed to the direction on 22 November 2026: only on request, the game window only, off by default ([#31](https://github.com/benshapyro/tycho-ai/issues/31)).*
+
+**Context.** Some questions need what's on the screen: "is this contract worth it?", "what's that ship?". The game's log doesn't record most of it ([#30](https://github.com/benshapyro/tycho-ai/issues/30)). Architecture 4.4 planned two ways to look: when the player asks, and a standing permission for Tycho to look on its own. A picture of the screen is new data leaving the PC, so it belongs in this ADR's privacy list.
+
+**Decision.** Tycho looks at the game only when the player asks, and only if they have turned it on.
+
+- **Off by default.** A `look_at_screen` setting, off until the player turns it on in the window's privacy settings or in `settings.toml`. Setup doesn't ask; it stays short. By voice it only turns off (`lower_only`, ADR 5): "stop looking at my screen" works, nothing said turns it on. Asked to look while it's off, Tycho says it's off and where to turn it on, and sends nothing.
+- **Only when asked, and the code decides, not the model.** A look happens only when what the player said asks for one: the pack's look phrases ("take a look", "look at this", "what am I looking at"), matched in the transcript like the fast path, before the brain is called. The brain gets the picture; it can't take one. When the brain thinks a look would help and none was asked for, it may ask "Want me to take a look?", and a "yes" within the follow-up window (30 s) counts as asking.
+- **The game window only.** One frame of the pack's game window (`window` in `pack.toml`) through the Windows Graphics Capture API (ADR 3), never the desktop or another window. The Tile is a separate window, so it isn't in the picture. If the game window isn't found, nothing is captured and Tycho says so. A pack without a `window` can't look.
+- **Kept in memory, then gone.** The frame is scaled down to what the model needs, sent with that one request, and dropped. It is never written to disk, never kept for follow-ups (a follow-up that needs it again asks again), and never put in the log, the brain traces (#282, which record only that a picture was sent and its size), the action log or a crash report. "Save that" stays for later.
+- **Heard every time.** A short camera sound plays when the frame is taken, so a capture is never silent.
+- **Where it goes.** To the brain's provider with the question: Anthropic, or OpenRouter and then Anthropic when `brain_provider = "openrouter"` (with the no-retention request, #488). Nowhere else.
+- **Never on the fast path, never for pressing.** A look answers questions. Nothing in the picture can press a key or skip the safety gate; what the brain reads in it is as untrusted as the log (ADR 10).
+
+**Not decided here.** Tycho looking on its own (architecture 4.4's standing permission, and checking a toggle's state before pressing it) needs its own amendment and the maintainer's yes.
+
+**Consequences.**
+- The README's "What leaves your PC" table gains a row when this ships: "A picture of the game window, only when you ask Tycho to look, with look-at-screen on".
+- A capture boundary (a Protocol with a fake, ADR 4) and the camera sound. Vision cases join the brain eval: asked to look, not asked, and asked while off.
+- Each look costs more than a text request (the picture's tokens); the cost and the time to an answer are measured before it ships (architecture 6: under 4 s).
