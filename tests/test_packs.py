@@ -563,7 +563,11 @@ def test_a_pack_names_only_its_own_kinds_of_card(tmp_path: Path) -> None:
     (folder / "tile.toml").write_text('[cards]\nship = ""\n', "utf-8")
     with pytest.raises(PackError, match="each card needs a name"):
         load_pack(folder, built_in=False, registry=REGISTRY)
-    assert dict(built_in(STAR_CITIZEN).tile.cards) == {"ship": "Ship specs", "fleet": "Your fleet"}
+    assert dict(built_in(STAR_CITIZEN).tile.cards) == {
+        "ship": "Ship specs",
+        "fleet": "Your fleet",
+        "loadout": "Ship loadouts",
+    }
     assert dict(built_in("wow-forever").tile.cards) == {}
 
 

@@ -34,6 +34,8 @@ def would_speak(result: Result) -> bool:
         return result.done and bool(result.say)
     if result.commands == (LOOK,) and not result.by_brain:
         return bool(result.say.strip())  # Tycho's own line: looking is off, or no window (#31)
+    if result.toggled:  # the fast path's too: it can't tell which way a toggle went
+        return result.done and not result.announced and bool(result.say)
     if not result.by_brain or not result.say.strip():
         return False
     return result.status == "replied" or (result.done and not result.announced)

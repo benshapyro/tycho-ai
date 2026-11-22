@@ -42,6 +42,7 @@ from tycho.brain.decisions import BrainError, BrainRequest, Decision, Exchange, 
 from tycho.brain.looking import MAY_OFFER, SEEN, picture_block
 from tycho.brain.lookups import Lookup, LookupResult
 from tycho.brain.player_keys import keyed
+from tycho.brain.priming import Primer
 from tycho.brain.providers import ANTHROPIC_HAIKU
 from tycho.brain.rounds import (
     ACTS,
@@ -134,14 +135,9 @@ def history(
 
 def turns(request: BrainRequest, today: datetime.date, about: str) -> list[MessageParam]:
     """``history`` for one request: its earlier exchanges, words, keys and picture."""
+    r = request
     return history(
-        request.recent,
-        request.text,
-        today,
-        about,
-        request.own_keys,
-        picture=request.picture,
-        may_look=request.may_look,
+        r.recent, r.text, today, about, r.own_keys, picture=r.picture, may_look=r.may_look
     )
 
 
@@ -197,6 +193,20 @@ class ClaudeBrain:
         self._preparing: asyncio.Future[list[None]] | None = None
         self._draining: set[asyncio.Task[None]] = set()
         """Streams an act left, being read to the end (``_drain``)."""
+        self._primer = Primer(self._connect, self._rewarm)
+
+    def prime(self) -> None:
+        """Push-to-talk went down: open the connection, or write the cache again
+        after a long break, while the player talks (#21, ``priming``)."""
+        self._primer.prime()
+
+    async def _connect(self) -> None:
+        """Open a connection with a free, tiny request: the model's details."""
+        quick = self._client.with_options(max_retries=0, timeout=3.0)
+        await quick.models.retrieve(self._model)
+
+    async def _rewarm(self) -> bool:
+        return self._for is not None and await self._warm_cache(self._for)
 
     async def warm(self, keybinds: Keybinds) -> None:
         """Warm the cache, and load what the look-ups need, side by side.
@@ -215,6 +225,7 @@ class ClaudeBrain:
         if self._preparing is not None and not self._preparing.done():
             self._preparing.cancel()
             await asyncio.gather(self._preparing, return_exceptions=True)
+        await self._primer.close()
         for task in self._draining:  # each closes its stream as it's cancelled
             task.cancel()
         await asyncio.gather(*self._draining, return_exceptions=True)
@@ -225,8 +236,9 @@ class ClaudeBrain:
         if self._owns_client:
             await self._client.close()
 
-    async def _warm_cache(self, keybinds: Keybinds) -> None:
+    async def _warm_cache(self, keybinds: Keybinds) -> bool:
         """Write the briefing to the cache and open the connection, billing no output.
+        Returns whether it did.
 
         Everything up to the briefing must match ``decide``'s request, or the cache misses.
         """
@@ -244,8 +256,10 @@ class ClaudeBrain:
             )
         except anthropic.APIError as e:
             log.warning("Couldn't warm up the brain: %s", e)
-            return
+            return False
+        self._primer.used()
         _log_usage(message.usage, started, "Brain warmed up")
+        return True
 
     async def decide(self, request: BrainRequest) -> Decision:
         self._brief(request.keybinds)
@@ -254,7 +268,11 @@ class ClaudeBrain:
             turn.trace = self._traces.start(
                 "anthropic", self._model, self._briefed, request.text, len(request.recent)
             )
-        return await traced(self._traces, turn, self._decide(request, turn))
+        self._primer.used()  # this request opens the connection and reads the cache
+        try:
+            return await traced(self._traces, turn, self._decide(request, turn))
+        finally:
+            self._primer.used()
 
     async def _decide(self, request: BrainRequest, turn: Turn) -> Decision:
         started = time.perf_counter()

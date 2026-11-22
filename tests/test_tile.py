@@ -57,6 +57,34 @@ def test_a_route_that_isnt_a_buy_and_a_sell_is_shown_as_a_list() -> None:
     assert from_tool(_call("route", rows=rows)).kind == "list"
 
 
+def test_a_comparison_names_its_two_sides_and_keeps_both_figures() -> None:
+    """#491: two ships side by side, figure against figure."""
+    rows = [{"text": "Cargo", "detail": "46 SCU", "value": "66 SCU", "dim": False}]
+    card = from_tool(
+        _call("compare", rows=rows, hero_label="Cutlass Black", hero_value="Freelancer")
+    )
+    assert card.kind == "compare"
+    assert card.hero == ("Cutlass Black", "Freelancer")
+    assert card.rows == (Row("Cargo", "46 SCU", "66 SCU"),)
+    assert card.shown()[1] == "46 SCU66 SCU"  # both figures are drawn in the number face
+
+
+def test_a_comparison_without_its_two_sides_is_shown_as_a_list() -> None:
+    assert from_tool(_call("compare")).kind == "list"
+    assert from_tool(_call("compare", hero_value="Freelancer")).kind == "list"
+
+
+def test_a_loadout_keeps_up_to_eight_rows() -> None:
+    """#491: a ship's weapons and components, by slot and size."""
+    rows = [
+        {"text": f"Item {i}", "detail": "Weapons", "value": "S3", "dim": False} for i in range(10)
+    ]
+    card = from_tool(_call("loadout", rows=rows))
+    assert card.kind == "loadout"
+    assert len(card.rows) == 8
+    assert card.rows[0] == Row("Item 0", "Weapons", "S3")
+
+
 def test_a_warning_carries_the_exact_words() -> None:
     card = from_tool(_call("warning", rows=[], text="Keybindings, search lock all doors."))
     assert card.body == ("Keybindings, search lock all doors.",)

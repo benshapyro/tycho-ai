@@ -12,8 +12,7 @@ The session keeps the threads, cancellation and barge-in, and the open confirm
 question (ADR 13). Where words go is ``routing``, what gets pressed is ``planning``
 (both pure, so the brain eval grades the same code, #55), asking the brain and
 answering the question is ``asking``, the log is the ``Reporter``, what was said
-lately is the ``Conversation``, the Tile's part is ``tiling``, and looking at the game
-window when asked is ``look`` (#31).
+lately is the ``Conversation``, the Tile's part is ``tiling``, and looking is ``look``.
 """
 
 import asyncio
@@ -62,6 +61,7 @@ from tycho.runtime.planning import (
     announced,
     needs_facts,
     plan_request,
+    toggle_receipt,
 )
 from tycho.runtime.ports import (
     ActionLog,
@@ -128,8 +128,7 @@ class Session:
         looking: bool = False,
     ) -> None:
         """``safety_lists``: the pack's lists for the safety gate, for every plan (ADR 18).
-        ``eyes``: the pack's look phrases and its window's camera (None: it can't look);
-        ``looking``: the player turned looking on (``look_at_screen``, #31)."""
+        ``eyes`` (None: the game can't be seen) and ``looking`` (it's on): #31."""
         self._eyes, self._looking = eyes, looking
         self._safety_lists = safety_lists
         self._tail_seconds = tail_seconds
@@ -153,9 +152,9 @@ class Session:
         self._brain_warming: asyncio.Task[None] | None = None
         self._conversation = Conversation(clock)
         times = Times(brain_seconds, search_seconds, search_limit, looking_seconds, looking_limit)
-        voice, said_lately = self._voice, self._conversation.follow_ups
+        lately, voice = self._conversation.follow_ups, self._voice
         self._asker = Asker(
-            brain, times, matcher, safety_lists, voice, keybinds, said_lately, self._may_look
+            brain, times, matcher, safety_lists, voice, keybinds, lately, self._may_look
         )
         self._confirm_seconds = confirm_seconds
         self._question: Question | None = None
@@ -263,6 +262,8 @@ class Session:
                 self._feedback.not_done()
                 return
             self._listening = True
+            if self._brain is not None:
+                self._brain.prime()  # while the player talks (#21)
             if self._display is not None:
                 self._display.listening()
         elif self._listening:
@@ -471,6 +472,8 @@ class Session:
             trying=trying,
             still_trying=lambda: self._trying,
         )
+        if status == "done" and planned.toggled and not trying and not progress.announced:
+            progress.say, progress.toggled = toggle_receipt(planned.toggled), True
         return end(status, detail)
 
     def _report(self, result: Result) -> None:

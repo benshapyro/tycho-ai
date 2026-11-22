@@ -29,6 +29,9 @@ from tycho.tile.faces import Face, Font, bundled_draws, font
 from tycho.tile.faces import fit as _fit
 from tycho.tile.faces import text_width as _width
 from tycho.tile.faces import wrap as _wrap
+from tycho.tile.tables import compare, headlines, loadout, row_bars, steps
+
+_TABLES = {"steps": steps, "headlines": headlines, "loadout": loadout, "compare": compare}
 
 type Light = Literal["listening", "thinking"] | None
 type Rgba = tuple[int, int, int, int]
@@ -96,7 +99,7 @@ class _Pen:
         }[tone]
         self.text = rgba("#ffffff") if hc else rgba(CORE.text)
         self.dim = rgba("#c8d2e0") if hc else rgba(CORE.dim)
-        self.well = (255, 255, 255, 18 if hc else 9)
+        self.well: Rgba = (255, 255, 255, 18 if hc else 9)
         # Greek or Cyrillic (not €): the whole card in Windows' faces, not boxes (#458).
         self.windows = not bundled_draws(*card.shown())
 
@@ -174,6 +177,7 @@ class _Pen:
             self.font("number", self.px(19)),
             self.font("text", self.px(14)),
         )
+        tops: list[tuple[int, int]] = []
         for i, row in enumerate(self.card.rows):
             best = best_first and i == 0 and not row.dim
             top = self.y
@@ -184,6 +188,7 @@ class _Pen:
                 self.d.rectangle(
                     (self.pad, top, self.pad + self.px(2) - 1, top + h), fill=self.accent
                 )
+            tops.append((top, h))
             alpha = 0.6 if row.dim else 1.0
             text = (*self.text[:3], round(255 * alpha))
             value_c = self.accent if best else (*self.text[:3], round(255 * alpha))
@@ -214,6 +219,8 @@ class _Pen:
                 fill=value_c,
             )
             self.y += h + self.px(4)
+        if not fleet:
+            row_bars(self, tops, self.card.rows)
         self.y += self.px(2)
 
     def recipe(self) -> None:
@@ -322,32 +329,6 @@ class _Pen:
             )
         self.y += math.ceil(len(self.card.rows) / 2) * (h + self.px(5)) + self.px(3)
 
-    def steps(self) -> None:
-        f, n = self.font("text", self.px(18)), self.font("number", self.px(18))
-        gutter = self.px(26)
-        for i, row in enumerate(self.card.rows):
-            self.d.text((self.pad, self.y), str(i + 1), font=n, fill=self.accent)
-            for line in _wrap(row.text, f, self.inner - gutter, lines=2):
-                self.d.text((self.pad + gutter, self.y), line, font=f, fill=self.text)
-                self.y += self.px(23)
-            self.y += self.px(5)
-
-    def headlines(self) -> None:
-        f, n = (
-            self.font(
-                "text",
-                self.px(17),
-            ),
-            self.font("number", self.px(15)),
-        )
-        date_w = max((_width(r.value, n) for r in self.card.rows), default=0) + self.px(12)
-        for row in self.card.rows:
-            self.d.text((self.pad, self.y + self.px(2)), row.value, font=n, fill=self.accent)
-            for line in _wrap(row.text, f, self.inner - date_w, lines=2):
-                self.d.text((self.pad + date_w, self.y), line, font=f, fill=self.text)
-                self.y += self.px(22)
-            self.y += self.px(5)
-
     def words(self, size: int = 18, lines: int = 6) -> None:
         f = self.font("text", self.px(size))
         for paragraph in self.card.body:
@@ -382,10 +363,8 @@ class _Pen:
             self.route()
         elif kind == SPECS:
             self.specs()
-        elif kind == "steps":
-            self.steps()
-        elif kind == "headlines":
-            self.headlines()
+        elif kind in ("steps", "headlines", "loadout", "compare"):
+            _TABLES[kind](self)
         elif kind == "confirm":
             self.confirm()
         elif kind == "long":

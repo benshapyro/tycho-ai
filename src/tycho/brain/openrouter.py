@@ -27,19 +27,18 @@ import datetime
 import json
 import logging
 import time
-from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterable, Mapping, Sequence
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Protocol, cast
-
-import httpx2
+from typing import Any, cast
 
 from tycho.brain.briefing import briefing, offered_actions
 from tycho.brain.claude import turns
 from tycho.brain.decisions import BrainError, BrainRequest, Decision, Reply
 from tycho.brain.looking import openai_turns
 from tycho.brain.lookups import Lookup
+from tycho.brain.openrouter_http import ChatClient, Chunk, OpenRouterClient
 from tycho.brain.player_keys import keyed
+from tycho.brain.priming import Primer
 from tycho.brain.rounds import (
     ACTS,
     MAX_CALLS,
@@ -61,7 +60,6 @@ from tycho.tile.cards import TOOL_DESCRIPTION, TOOL_SCHEMA
 
 log = logging.getLogger(__name__)
 
-URL = "https://openrouter.ai/api/v1"
 WARM_TOKENS = 16
 """The warm-up's reply: some providers refuse fewer."""
 MAX_TOKENS = 2048
@@ -72,9 +70,6 @@ REASONING_TOKENS = 2048
 model that doesn't reason pays nothing for it."""
 SORTS = ("latency", "throughput", "price")
 """What OpenRouter can pick a host by (its ``provider.sort``)."""
-READ_SECONDS = 30.0
-"""How long to wait for the next byte. Some models take over 8 s to their first token
-(Gemini, #268); the session's own deadline still gives up first in play."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,108 +80,6 @@ class Prices:
     prompt: float
     completion: float
     cache_read: float | None = None
-
-
-type Chunk = Mapping[str, Any]
-
-
-class ChatClient(Protocol):
-    """OpenAI-style chat completions, streamed (a fake in ``tests/fakes``).
-
-    ``stream`` yields each chunk of the reply as parsed JSON. It raises ``BrainError``
-    when the request fails: a refused key, no credit, offline."""
-
-    def stream(
-        self, body: Mapping[str, object]
-    ) -> AbstractAsyncContextManager[AsyncIterator[Chunk]]: ...
-
-    async def close(self) -> None: ...
-
-
-class OpenRouterClient:
-    """``ChatClient`` for OpenRouter, over HTTP."""
-
-    def __init__(self, api_key: str, *, client: httpx2.AsyncClient | None = None) -> None:
-        # The session gives up after its own deadline, so no retries here.
-        self._http = client or httpx2.AsyncClient(
-            base_url=URL, timeout=httpx2.Timeout(READ_SECONDS, connect=3.0)
-        )
-        self._headers = {
-            "Authorization": f"Bearer {api_key}",
-            # Named on OpenRouter's side, so its dashboard says what made the request.
-            "X-Title": "Tycho",
-            "HTTP-Referer": "https://github.com/benshapyro/tycho-ai",
-        }
-
-    @asynccontextmanager
-    async def stream(self, body: Mapping[str, object]) -> AsyncGenerator[AsyncIterator[Chunk]]:
-        try:
-            async with self._http.stream(
-                "POST", "/chat/completions", json=dict(body), headers=self._headers
-            ) as response:
-                if response.status_code != 200:
-                    raise BrainError(_explain(response.status_code, await response.aread()))
-                yield chunks(response.aiter_lines())
-        except (httpx2.ReadTimeout, httpx2.WriteTimeout) as e:
-            # Only a model that's slow to answer: a connect or pool timeout is a network
-            # that drops packets, which is "can't reach" below (#270).
-            raise BrainError(f"OpenRouter was too slow to answer ({e.__class__.__name__})") from e
-        except httpx2.HTTPError as e:
-            raise BrainError("can't reach OpenRouter (offline?)") from e
-
-    async def close(self) -> None:
-        await self._http.aclose()
-
-
-def _explain(status: int, body: bytes = b"") -> str:
-    if status == 401:
-        return "the OpenRouter key was refused"
-    if status == 402:
-        return "the OpenRouter account is out of credit"
-    problem = f"OpenRouter returned an error ({status})"
-    if said := _said(body):
-        problem += f": {said}"
-    return problem
-
-
-SAID_CHARACTERS = 200
-
-
-def _said(body: bytes) -> str:
-    """OpenRouter's own reason for an error (#268): "ZDR violation (account settings)"
-    said why every call failed, and a bare status hid it. It holds no key."""
-    try:
-        parsed: object = json.loads(body)
-    except ValueError:
-        return ""
-    if not isinstance(parsed, dict):
-        return ""
-    error = cast("dict[str, object]", parsed).get("error")
-    if not isinstance(error, dict):
-        return ""
-    said = cast("dict[str, object]", error).get("message")
-    if not isinstance(said, str):
-        return ""
-    message = " ".join(said.split())
-    return message[:SAID_CHARACTERS]
-
-
-async def chunks(lines: AsyncIterator[str]) -> AsyncIterator[Chunk]:
-    """The chunks of a server-sent event stream: ``data:`` lines, up to ``[DONE]``.
-    Comments (OpenRouter sends ": OPENROUTER PROCESSING" while it waits) are skipped."""
-    async for line in lines:
-        if not line.startswith("data:"):
-            continue
-        data = line[5:].strip()
-        if data == "[DONE]":
-            return
-        try:
-            chunk = json.loads(data)
-        except json.JSONDecodeError:
-            log.warning("OpenRouter sent a line that isn't JSON; skipped")
-            continue
-        if isinstance(chunk, dict):
-            yield chunk
 
 
 @dataclass
@@ -337,6 +230,14 @@ class OpenRouterBrain:
         self._system: dict[str, object] = {}
         self._actions: frozenset[str] = frozenset()
         self._preparing: asyncio.Future[list[None]] | None = None
+        self._primer = Primer(self._client.connect, self._rewarm)
+
+    def prime(self) -> None:
+        """As ``ClaudeBrain.prime``: get ready while the player talks (#21)."""
+        self._primer.prime()
+
+    async def _rewarm(self) -> bool:
+        return self._for is not None and await self._warm_cache(self._for)
 
     async def warm(self, keybinds: Keybinds) -> None:
         """Warm the cache (for models that cache), and load what the look-ups need."""
@@ -349,6 +250,7 @@ class OpenRouterBrain:
         if self._preparing is not None and not self._preparing.done():
             self._preparing.cancel()
             await asyncio.gather(self._preparing, return_exceptions=True)
+        await self._primer.close()
         for lookup in self._lookups.values():
             if (close := getattr(lookup, "close", None)) is not None:
                 with contextlib.suppress(Exception):
@@ -356,7 +258,7 @@ class OpenRouterBrain:
         if self._owns_client:
             await self._client.close()
 
-    async def _warm_cache(self, keybinds: Keybinds) -> None:
+    async def _warm_cache(self, keybinds: Keybinds) -> bool:
         """One short request with the same briefing and tools as ``decide``'s."""
         self._brief(keybinds)
         started = time.perf_counter()
@@ -369,8 +271,10 @@ class OpenRouterBrain:
                     host = host or str(chunk.get("provider") or "")
         except BrainError as e:
             log.warning("Couldn't warm up the brain: %s", e)
-            return
+            return False
+        self._primer.used()
         self._log_usage(usage, started, "Brain warmed up", host)
+        return True
 
     async def decide(self, request: BrainRequest) -> Decision:
         self._brief(request.keybinds)
@@ -379,7 +283,11 @@ class OpenRouterBrain:
             turn.trace = self._traces.start(
                 "openrouter", self._model, self._briefed, request.text, len(request.recent)
             )
-        return await traced(self._traces, turn, self._decide(request, turn))
+        self._primer.used()
+        try:
+            return await traced(self._traces, turn, self._decide(request, turn))
+        finally:
+            self._primer.used()
 
     async def _decide(self, request: BrainRequest, turn: Turn) -> Decision:
         started = time.perf_counter()

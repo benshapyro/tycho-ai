@@ -10,6 +10,11 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ### Added
 - Tycho can look at the game window when you ask: say "take a look" (or "what am I looking at?"), or say "yes" when Tycho asks "Want me to take a look?". It's off until you say yes, in setup's privacy step or in Settings, and players who set Tycho up before are asked once. Only the game's own window is captured, you hear a camera click each time, and the picture goes to the brain with your question and nowhere else: it's never saved or logged. Saying "stop looking at my screen" turns it off, and a look never presses a key. ([#31](https://github.com/benshapyro/tycho-ai/issues/31))
+- Two new Tile cards: a loadout (what a ship is fitted with, by slot and size, for questions like "what's the best loadout for my M80?") and a comparison (two ships side by side, figure against figure). Lists of numbers now show a bar for each, so the biggest and smallest stand out at a glance. ([#491](https://github.com/benshapyro/tycho-ai/issues/491))
+
+### Changed
+- Tycho gets the brain ready while you hold push-to-talk, so its answer starts a little sooner, and the first question after a break of an hour or more is no longer about 3 seconds slower. ([#21](https://github.com/benshapyro/tycho-ai/issues/21))
+- When Tycho can only reach an action through a toggle (say, "open the doors" with only Open/Close Doors bound), it now says "Toggled Open/Close Doors. I can't see which way it went." instead of a line that claims the doors are open. Give the action its own key and the line goes away. Actions the game announces itself, like the landing gear, stay quiet as before. ([#29](https://github.com/benshapyro/tycho-ai/issues/29))
 
 ## [0.9.0] - 2026-11-22
 

@@ -186,6 +186,8 @@ def commands_for(
         command = own.get(name) or Command(
             id=name, say=(), actions=(name,), announced=any(c.announced for c in using)
         )
+        if any(name in c.actions[1:] for c in using):  # a fallback for a direction (#29)
+            command = replace(command, blind=True)
         picked.append(_ask_before_travel(_strictest(command, using), lists))
     return tuple(picked)
 
