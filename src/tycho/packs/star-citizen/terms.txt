@@ -155,6 +155,7 @@ decoupled
 coupled
 Starmap
 hangar
+hangars
 kiosk
 salvage
 tractor beam

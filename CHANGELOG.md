@@ -8,7 +8,11 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ## [Unreleased]
 
+### Added
+- New commands for remote turrets, such as the Idris's: "enter remote turret" (or "enter remote turret two" or "three") and "exit remote turret". The game has no key for entering one by default, so bind Enter Remote Turret 1, 2 and 3 in the game's keybinds first. ([#356](https://github.com/benshapyro/tycho-ai/issues/356))
+
 ### Fixed
+- "Open hangar" heard as "open hangers", and "close doors" heard as "closed doors", now work instantly instead of waiting for the brain. ([#358](https://github.com/benshapyro/tycho-ai/issues/358))
 - Setup's Try it is safer. What you say there is tried, not pressed, even if you switch to the game while Tycho is still working it out. If the window misses your switch to the game and Try it stays on, what you say there plays the not-done sound and nothing is pressed, rather than a done sound for keys that never reached the game. After setting up a new game you picked in Settings, the window opens on Try it, as after a first run. Actions with no name in the game's files now read as words ("Toggle landing system"), not as raw ids, and a follow-up question no longer takes something you only tried as done. ([#467](https://github.com/benshapyro/tycho-ai/issues/467), [#465](https://github.com/benshapyro/tycho-ai/issues/465))
 - Tycho no longer says it "stopped unexpectedly last time" when you ended it from Task Manager after the window hit a harmless Windows error that it recovered from. ([#474](https://github.com/benshapyro/tycho-ai/issues/474))
 - A notice that comes while Tycho says "Let me check." during a look-up is now said before the answer, and the filler line isn't cut off. ([#440](https://github.com/benshapyro/tycho-ai/issues/440))
