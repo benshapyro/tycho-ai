@@ -48,10 +48,7 @@ from tycho.runtime.asking import (
     ask_brain,
     say_again,
 )
-from tycho.runtime.conversation import (
-    Conversation,
-    would_speak,
-)
+from tycho.runtime.conversation import Conversation, would_speak
 from tycho.runtime.listening import TAIL_SECONDS, poll, tail
 from tycho.runtime.messages import Progress, Result, Status, Trace
 from tycho.runtime.planning import (
@@ -74,12 +71,7 @@ from tycho.runtime.ports import (
 )
 from tycho.runtime.pressing import press_all
 from tycho.runtime.reporter import Reporter
-from tycho.runtime.routing import (
-    NotUnderstood,
-    Picked,
-    Reserved,
-    route,
-)
+from tycho.runtime.routing import NotUnderstood, Picked, Reserved, route
 from tycho.runtime.speaking import Speaking, Telling, log_failure, refused_keys_off
 from tycho.runtime.tiling import tile_request, to_tile
 from tycho.tile.cards import notice
@@ -489,6 +481,17 @@ class Session:
         self._voice.tell(result, self._feedback, speak=speak, keys_off=keys_off)
         if self._on_result is not None:
             self._on_result(result)
+
+    def busy(self) -> bool:
+        """Whether speaking up now would talk over someone (#4): push-to-talk is held, a
+        request runs, Tycho is talking or waiting for "confirm", or it's paused."""
+        asking = self._question is not None and self._clock() < self._question.deadline
+        running = self._current is not None and not self._current.done()
+        return self._listening or running or asking or self._voice.talking or self._paused
+
+    def call_out(self, line: str) -> None:
+        """Speak up (#4), on the loop: said like any line, so push-to-talk stops it."""
+        self._telling.call_out(line)
 
     def tell(self, said: str) -> None:
         """From any thread: something the player must know that no request asked for,

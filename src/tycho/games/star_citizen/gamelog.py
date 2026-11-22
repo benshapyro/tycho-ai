@@ -123,7 +123,7 @@ class GameLog:
         if line is None:
             return
         self._number += 1
-        logged = Logged(line.kind, line.said, loglines.when(raw), self._number)
+        logged = Logged(line.kind, line.said, loglines.when(raw), self._number, line.name)
         if line.set_route is True:
             self._facts.add(QUANTUM_ROUTE)
         elif line.set_route is False:

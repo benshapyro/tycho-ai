@@ -73,6 +73,8 @@ class Line:
     """True: a route is now plotted; False: it's gone; None: unchanged."""
     ship: str = ""
     """The player's own ship, from a control-token line."""
+    name: str = ""
+    """One short name the line carries (a jurisdiction's), for a callout's line (#4)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,7 +172,7 @@ def _notification(line: str) -> Line | None:
         return Line(kind, said)
     if (match := _JURISDICTION.match(said)) and len(match.group(1).split()) <= 4:
         # A jurisdiction is a place's name ("UEE", "Rough & Ready"), a few words at most.
-        return Line(JURISDICTION, said, keep=True)
+        return Line(JURISDICTION, said, keep=True, name=match.group(1))
     return None
 
 

@@ -10,6 +10,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ### Added
 - Two new Tile cards: a loadout (what a ship is fitted with, by slot and size, for questions like "what's the best loadout for my M80?") and a comparison (two ships side by side, figure against figure). Lists of numbers now show a bar for each, so the biggest and smallest stand out at a glance. ([#491](https://github.com/benshapyro/tycho-ai/issues/491))
+- Tycho can speak up without being asked, about a few things the game's log records: a quantum jump ending, entering or leaving monitored space, a new jurisdiction, an armistice zone, and private property. It's off until you pick which kinds in Settings, under Voice ("Speaking up"), or ask ("tell me when a quantum jump ends"). Each is one short line, at most one every 30 seconds, never while you or Tycho are talking, and push-to-talk stops it. Say "stop the callouts" to turn them all off. Without a voice, the line shows on the Tile. ([#4](https://github.com/benshapyro/tycho-ai/issues/4))
 
 ### Changed
 - Tycho gets the brain ready while you hold push-to-talk, so its answer starts a little sooner, and the first question after a break of an hour or more is no longer about 3 seconds slower. ([#21](https://github.com/benshapyro/tycho-ai/issues/21))

@@ -24,9 +24,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from tycho import paths
 from tycho.brain.providers import BrainModel, Provider, choose
+from tycho.callouts import CalloutKinds
 from tycho.ptt.binding import Binding
 from tycho.settings_toml import to_toml, toml_value
-from tycho.tile.values import CardKinds, ScreenName
+from tycho.tile import values as tiles
 from tycho.voice import voices
 
 CURRENT_VERSION = 1
@@ -44,13 +45,6 @@ type Device = Literal["auto", "gpu", "cpu"]
 type VoiceRule = Literal["yes", "lower_only", "no"]
 type Applies = Literal["now", "restart"]
 type HowOften = Literal["sparingly", "often"]
-type TileSize = Literal["small", "medium", "large", "extra large"]
-type Corner = Literal["top right", "top left", "bottom right", "bottom left"]
-type TileColour = Literal[
-    "game", "tycho", "orange", "amber", "green", "teal", "blue", "white", "red", "pink"
-]
-type CardsAtOnce = Literal["one", "two"]
-type CardsStay = Literal["shorter", "normal", "longer"]
 type VoiceModel = Literal["the voice's own", "v4 turbo", "flash"]
 
 
@@ -227,19 +221,19 @@ class Settings(BaseModel):
         "for answers better read than heard. Off, Tycho says everything out loud.",
         json_schema_extra=_rule("yes", "now"),
     )
-    tile_size: TileSize = Field(
+    tile_size: tiles.TileSize = Field(
         default="medium",
         description="How big the Tile's text is. The Tile grows with it.",
         json_schema_extra=_rule("yes", "now"),
     )
-    tile_screen: ScreenName = Field(
+    tile_screen: tiles.ScreenName = Field(
         default="game",
         description="Which screen the Tile shows on: game, for the screen the game is on, "
         "or a screen as Windows names it, such as \\\\.\\DISPLAY2 (pick it on the "
         "window's Tile page). If that screen isn't plugged in, the Tile follows the game.",
         json_schema_extra=_rule("no", "now", how=FILE_OR_APP),
     )
-    tile_corner: Corner = Field(
+    tile_corner: tiles.Corner = Field(
         default="top right",
         description="Which corner of the screen the Tile sits in.",
         json_schema_extra=_rule("yes", "now"),
@@ -260,7 +254,7 @@ class Settings(BaseModel):
         "screen's height.",
         json_schema_extra=_rule("yes", "now"),
     )
-    tile_colour: TileColour = Field(
+    tile_colour: tiles.TileColour = Field(
         default="game",
         description="The Tile's highlight colour: game (the game's own, or in a game where "
         "Tycho knows what you're in, its colour), Tycho's, or one you pick. Warnings keep "
@@ -279,12 +273,12 @@ class Settings(BaseModel):
         description="A solid background and brighter text and lines.",
         json_schema_extra=_rule("yes", "now"),
     )
-    tile_cards_at_once: CardsAtOnce = Field(
+    tile_cards_at_once: tiles.CardsAtOnce = Field(
         default="one",
         description="One card at a time (a kept card shrinks to a strip), or two.",
         json_schema_extra=_rule("yes", "now"),
     )
-    tile_cards_stay: CardsStay = Field(
+    tile_cards_stay: tiles.CardsStay = Field(
         default="normal",
         description="How long cards stay before they fade.",
         json_schema_extra=_rule("yes", "now"),
@@ -299,11 +293,19 @@ class Settings(BaseModel):
         description="Quiet mode: only questions waiting on you, warnings and notices show.",
         json_schema_extra=_rule("yes", "now"),
     )
-    tile_hidden_cards: CardKinds = Field(
+    tile_hidden_cards: tiles.CardKinds = Field(
         default="",
         description="Kinds of card not to show while the Tile is on, separated by commas "
         "(to hide the whole Tile, turn tile off), such as list, steps, warning, notice "
         "or long. Tycho still says them. Questions waiting on you always show.",
+        json_schema_extra=_rule("yes", "now"),
+    )
+    callouts: CalloutKinds = Field(
+        default="",
+        description="Kinds of game event Tycho tells you about without being asked, separated "
+        "by commas: only ones the game's log records, in a short fixed line, at most one every "
+        '30 seconds, never while you or Tycho are talking. Empty means none. Say "stop the '
+        'callouts" to turn them all off.',
         json_schema_extra=_rule("yes", "now"),
     )
     crash_reports: bool | None = Field(
