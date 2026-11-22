@@ -78,10 +78,11 @@ def speech_finding(current: Settings) -> Finding:
     return Finding("warn", "Speech recognition", detail)
 
 
-def _unused_full_model(specs: tuple[ModelSpec, ...], folder: Path) -> str:
+def _unused_full_model(specs: tuple[ModelSpec, ...], folder: Path, device: str) -> str:
     """Speech on the processor uses only the 8-bit copy: a full model left from before
-    0.9 can go (#480)."""
-    if PARAKEET_V2 in specs:
+    0.9 can go (#480). Not when the player chose the graphics card (``device``), which
+    runs on the processor only until its libraries are installed (#519)."""
+    if PARAKEET_V2 in specs or device == "gpu":
         return ""
     names = {f.name for f in PARAKEET_V2_INT8.files}
     spare = [f for f in PARAKEET_V2.files if f.name not in names and (folder / f.name).is_file()]
@@ -185,7 +186,11 @@ def checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Finding
     specs = speech_models(device_choice(current).device)
     if model.has(specs):
         folder = model.folder(PARAKEET_V2)
-        yield Finding("ok", "Speech model", f"{folder}{_unused_full_model(specs, folder)}")
+        yield Finding(
+            "ok",
+            "Speech model",
+            f"{folder}{_unused_full_model(specs, folder, current.transcription_device)}",
+        )
     else:
         size = download_size(specs) / 1e9
         yield Finding(
