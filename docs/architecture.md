@@ -2,9 +2,11 @@
 
 Status: living document. Decisions are recorded in [adr/](adr) (index in [adr/README.md](adr/README.md)), and this page summarises them. Anything still unproven is marked **(to measure)**.
 
+**Where it stands (0.8, November 2026).** Built: push-to-talk, local speech recognition, the fast path, the brain (Claude, direct or through OpenRouter), the safety gate with spoken confirmation, the action log, the ElevenLabs voice, look-ups (game files, UEX, the Star Citizen Wiki, web search), the player's fleet, settings by voice, the Tile ([ADR 16](adr/0016-the-tile.md)), the app window and tray ([ADR 17](adr/0017-the-app.md)), game packs with World of Warcraft: Forever as an advisor-only pack ([ADR 18](adr/0018-game-packs.md)), and opt-in crash reports ([ADR 4](adr/0004-built-for-every-player.md)). A narrow `Game.log` reader is built (a plotted quantum route, leaving the pilot seat), for the safety gate's guards. Not built yet: screen vision, the full state tracker (stage 2 below), a wake word, and a local voice. Sections 4.3 and 4.4 describe that planned design.
+
 ## 1. What Tycho is
 
-Tycho is a voice co-pilot for Star Citizen. You talk to it the way you'd talk to a crewmate. It works out what you mean, presses the right keys through your own keybinds, looks at your screen when you let it, and answers questions from live game data.
+Tycho is a voice co-pilot for Star Citizen. You talk to it the way you'd talk to a crewmate. It works out what you mean, presses the right keys through your own keybinds, answers questions from live game data, and (planned) looks at your screen when you let it.
 
 Existing tools in this space, for Star Citizen and other games, share the same failures. Tycho is built around fixing them:
 
@@ -23,12 +25,12 @@ Existing tools in this space, for Star Citizen and other games, share the same f
 - Answer game-knowledge questions from live sources: UEX Corp, the Star Citizen Wiki API, and starcitizen.tools.
 - Have a voice and persona worth listening to for hours, configurable by the user.
 - Be measurable: a test set of real spoken commands, with accuracy and latency tracked on every change.
-- Cheap to run, with no technical setup: API keys are all a player provides (Claude, plus ElevenLabs for the recommended voice). Speech-to-text runs locally and Tycho manages it; the language model and the recommended voice run in the cloud, with a free local voice as the fallback. See [ADR 6](adr/0006-cloud-brain-local-ears.md) and [ADR 9](adr/0009-voice.md).
+- Cheap to run, with no technical setup: API keys are all a player provides (Claude, plus ElevenLabs for the recommended voice). Speech-to-text runs locally and Tycho manages it; the language model and the recommended voice run in the cloud; without a voice key, Tycho answers with sounds and shows its replies in its window. See [ADR 6](adr/0006-cloud-brain-local-ears.md) and [ADR 9](adr/0009-voice.md).
 
 **Non-goals (for now)**
 - Playing the game for you: flying, fighting, mining loops.
 - Group or org features.
-- Other games, although the core shouldn't rule them out.
+- Key presses in games whose rules forbid them. Other games come as game packs ([ADR 18](adr/0018-game-packs.md)); World of Warcraft: Forever is the first, as an advisor that presses nothing.
 - Mobile or web versions.
 
 **Anti-goals: Tycho fails if it does any of these, even if everything else works**
@@ -61,7 +63,7 @@ Tycho is an AI product, not traditional software with a chatbot added. In practi
 ### 4.1 The journey of one request
 
 1. **Activation.** The user holds push-to-talk: a keyboard key, mouse button, or HOTAS or stick button. A wake word is optional, because wake words false-trigger during voice chat and gameplay noise.
-2. **Speech to text.** Releasing push-to-talk ends the clip, and Parakeet transcribes it locally in about 0.1 s on the GPU. A game-term corrector then fixes words like "Art Corp" (ArcCorp). Streaming while the user speaks is a later option.
+2. **Speech to text.** Releasing push-to-talk ends the clip, and Parakeet transcribes it locally: by default on the processor with an 8-bit copy of the model (about 0.4 s with the game running), so the game keeps the graphics card; on an NVIDIA card it takes about 0.1 s ([#188](https://github.com/benshapyro/tycho-ai/issues/188)). A game-term corrector then fixes words like "Art Corp" (ArcCorp). Streaming while the user speaks is a later option.
 3. **Fast path.** If the phrase matches a known command ("landing gear", "open the doors", "request landing"), Tycho runs it straight away, with no model involved. Target: under 300 ms from the end of speech to the keypress.
 4. **Routing.** Anything else is routed to a mode: a command, a question, a request to look at the screen, conversation, planning, a settings change, or speech not meant for Tycho. See [ADR 10](adr/0010-interaction-modes-and-routing.md).
 5. **Thinking.** The brain (Claude) gets the request, the current state as Tycho understands it, recent conversation and a set of tools. It plans and calls those tools.
@@ -83,9 +85,12 @@ Tycho is an AI product, not traditional software with a chatbot added. In practi
 | State tracker | What Tycho believes is true right now (see 4.3) |
 | Safety gate | The single checkpoint every action passes through (see 4.7) |
 | Knowledge | Game data lookups: UEX Corp, the Wiki API, starcitizen.tools |
-| Voice | Streaming text to speech (ElevenLabs, Kokoro as the local fallback), plus pre-rendered short replies ([ADR 9](adr/0009-voice.md)). As built ([ADR 14](adr/0014-the-brain-voice-and-sequences.md)): ElevenLabs v4 Turbo as raw PCM, played as it arrives; only the brain speaks, never over what the game announces, and push-to-talk stops it |
+| Voice | Streaming text to speech (ElevenLabs; a local fallback voice is not built), plus pre-rendered short replies ([ADR 9](adr/0009-voice.md)). As built ([ADR 14](adr/0014-the-brain-voice-and-sequences.md)): ElevenLabs v4 Turbo as raw PCM, played as it arrives; only the brain speaks, never over what the game announces, and push-to-talk stops it |
 | Memory | User preferences, fleet and habits, in a local file the user can edit |
-| Control panel | Settings, command list, history and privacy controls, served locally |
+| App window and tray | Setup, Home, What to say, the Tile's page and Settings, in a pywebview window loaded from memory, with no local server ([ADR 17](adr/0017-the-app.md)) |
+| The Tile | A see-through panel over the game for cards that are better read than heard ([ADR 16](adr/0016-the-tile.md)) |
+| Game packs | Each game's data: commands, safety lists, briefing, terms and which built-in parts it uses ([ADR 18](adr/0018-game-packs.md)) |
+| Crash reports | Only if the player says yes: an allowlisted report sent to Sentry at the next start ([ADR 4](adr/0004-built-for-every-player.md)) |
 
 Every outside service (transcription, models, voice) sits behind a small typed interface, so it can be swapped without touching the rest. Every hardware boundary (audio, input, capture, joystick) sits behind one too, so it can be tested with fakes. The measured choices are in [ADR 2](adr/0002-cascaded-voice-pipeline.md) (Outcome), [ADR 6](adr/0006-cloud-brain-local-ears.md) and [ADR 9](adr/0009-voice.md). What Tycho knows is assembled in layers, from fixed safety rules to game and persona packs ([ADR 8](adr/0008-packs-and-connections.md)).
 
@@ -169,7 +174,7 @@ Settings (one schema, voice and file editing) arrive in stage 1. The settings GU
 
   | Path | Target | Measured so far (spike) |
   |---|---|---|
-  | Fast path | under 300 ms | about 0.1 s transcription plus about 6 ms matching; key press not yet measured |
+  | Fast path | under 300 ms | about 0.1 s transcription on the GPU (about 0.4 s on the processor, the default since 0.8) plus about 6 ms matching; key press not yet measured |
   | Thinking, no vision | under 1.5 s | Haiku 5.5 with a cached, warmed briefing: 1.24 s median when acting (brain eval, 2026-11-01); some requests take over 2 s |
   | With vision | under 4 s | not yet measured |
 - **Hands-off test:** a full session (startup, travel, a mission, landing) without touching the keyboard for any action Tycho supports.
@@ -181,5 +186,5 @@ Settings (one schema, voice and file editing) arrive in stage 1. The settings GU
 1. ~~Which default voice and persona tone tests best over long sessions?~~ Answered by a listening test; see [ADR 9](adr/0009-voice.md). Long-session fatigue is still untested.
 2. Should Tycho ever speak unprompted, for example to warn about low fuel? If so, how do we keep it from becoming noise?
 3. How much does `Game.log` record in the current patch? This sets how much the state tracker must rely on vision.
-4. Can local speech-to-text run alongside the game without a noticeable frame-rate cost? **(to measure)**
+4. Can local speech-to-text run alongside the game without a noticeable frame-rate cost? On the graphics card it couldn't on one player's PC (graphics crashes, #188), so since 0.8 it runs on the processor by default. The frame-rate cost there is still **(to measure)**.
 5. What will CIG say when asked directly about a user-triggered voice keybind tool? See [ADR 3](adr/0003-staying-within-cig-rules.md).
