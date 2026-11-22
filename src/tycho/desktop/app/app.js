@@ -117,9 +117,16 @@
     if (name === "Privacy") return s.crash_reports != null;
     return true;
   }
+  // Tycho presses keys in this game: the pack can, and the player's key actions are on.
+  // With them off, the built-in phrases press nothing, so only the brain answers (#506).
+  const presses = (p) => p.can_press && p.key_actions !== false;
   // Skipped on purpose and not needed: a brain key in a game where Tycho's built-in
   // phrases work without one (#448). Calm, not "still to do" every time setup opens.
-  const stepOptional = (name, s) => name === "Keys" && s.pack.can_press;
+  const stepOptional = (name, s) => name === "Keys" && presses(s.pack);
+  // Why a brain key is all there is, where it is: no built-in phrases, or key actions off.
+  const brainOnly = (p) => p.can_press
+    ? `Key actions are off (Settings, Safety), so the built-in phrases press nothing: Tycho needs an Anthropic or OpenRouter key to answer in ${esc(p.name)}.`
+    : `Tycho needs an Anthropic or OpenRouter key to answer in ${esc(p.name)}: it has no built-in phrases there.`;
   function stepper(s) {
     return `<ol class="steps">${STEPS.map((name, i) => {
       const past = i < step, done = past && stepDone(name, s);
@@ -187,7 +194,7 @@
           <li><b>OpenRouter</b>, instead of Anthropic: the same Claude through one OpenRouter key (set Who runs the brain under Settings, Advanced). About what Anthropic charges, on your OpenRouter credit. Web search still needs the Anthropic key.</li>
           <li><b>ElevenLabs</b>: gives Tycho its voice. About 0.5 credits a character: a chatty hour is about 4,000 credits. Without it, Tycho answers with sounds.</li>
         </ul>
-        <p class="${s.pack.can_press ? "note" : "warn-line"}">${s.pack.can_press ? "Without an Anthropic or OpenRouter key, only the built-in phrases work." : `Tycho needs an Anthropic or OpenRouter key to answer in ${esc(s.pack.name)}: it has no built-in phrases there.`}</p></div>${await keysView()}`;
+        <p class="${presses(s.pack) ? "note" : "warn-line"}" id="keysNote">${presses(s.pack) ? "Without an Anthropic or OpenRouter key, only the built-in phrases work." : brainOnly(s.pack)}</p></div>${await keysView()}`;
     } else if (name === "Talk and listen") {
       // Push-to-talk, the microphone and the voice: how you talk to Tycho and hear it back.
       const ptt = `<div class="card frame"><h3>Push-to-talk</h3>
@@ -250,7 +257,7 @@
         ${s.todo.length ? `<div id="todo"><p class="warn-line">Tycho still needs:</p>${s.todo.map((t) => `<div class="keyrow"><span>${esc(t.what)}</span><button class="btn frame" type="button" data-goto="${esc(t.step)}">Go to ${esc(STEP_OF[t.step] || t.step)}</button></div>`).join("")}
           <p class="note">Or close this window and finish later: what you've chosen is kept.</p></div>` : ""}
         ${say.length ? `<div class="field"><label>Hold your button and say</label>${list(say.map((e) => `“${e}”`), "say")}</div>` : `<p>Hold your button and ask Tycho something about ${esc(s.pack.name)}.</p>`}
-        ${brainKey(s) ? "" : `<p class="warn-line" id="noBrain">${s.pack.can_press ? "With no Anthropic or OpenRouter key, only the built-in phrases work: What to say lists them." : `With no Anthropic or OpenRouter key, Tycho can't answer in ${esc(s.pack.name)}. Add one in the Keys step.`}</p>`}
+        ${brainKey(s) ? "" : `<p class="warn-line" id="noBrain">${presses(s.pack) ? "With no Anthropic or OpenRouter key, only the built-in phrases work: What to say lists them." : `With no Anthropic or OpenRouter key${s.pack.can_press ? " and key actions off" : ""}, Tycho can't answer in ${esc(s.pack.name)}. Add one in the Keys step.`}</p>`}
         ${list(s.pack.tips, "tips")}
         <p class="note">${firstRun ? "Press Start Tycho. Once it's listening, this window opens again here so you can try it, with nothing sent to the game. Its star sits by the clock (if you don't see it, it's under the ^ arrow there): click it to open this window again, or open Tycho from the Start menu." : "Changes apply when Tycho next starts."}</p>
         <span class="err" id="finishErr"></span></div>`;
