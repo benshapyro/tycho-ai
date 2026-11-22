@@ -13,7 +13,7 @@ from tycho import safety
 from tycho.commands import Command, CommandMatcher
 from tycho.keybinds import Keybinds
 from tycho.packs import Safety
-from tycho.tile import Card, from_tool
+from tycho.tile import BRAIN_KINDS, Card, from_tool
 
 MAX_ACTIONS = 8
 """More than this in one request is a misunderstanding, not a plan."""
@@ -128,6 +128,10 @@ def parse_tool_call(
         try:
             card = from_tool(args)
         except ValueError as e:
+            if say and args.get("kind") in BRAIN_KINDS:
+                # An empty card with a line to say (#443): the player hears the line,
+                # not the error sound.
+                return Reply(say)
             raise BrainError(f"show_card: {e}") from e
         if not say:
             raise BrainError("show_card: nothing to say")

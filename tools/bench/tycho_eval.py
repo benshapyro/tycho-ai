@@ -132,7 +132,7 @@ NARRATED = re.compile(
     r"\b(this|that) (is|sounds like) (squad |room )?chat\b|\bchat (to|for) (me|the squad)\b|"
     r"\bthe player (is|was|said|asked|wants|trailed|didn't)\b|\bjust acknowledg|"
     r"\bso (there's )?no action\b|\bpress(ing)? nothing\b|\bcall(ing)? no tool\b|"
-    r"\bthe player'?s (request|own keys?)\b|\b(their|your) own keys? (bound|for this)\b|"
+    r"\bthe player'?s (request|own keys?)\b|\btheir own keys? (bound|for this)\b|"
     r"\bbracketed\b",
     re.IGNORECASE,
 )

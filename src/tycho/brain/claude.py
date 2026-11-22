@@ -247,7 +247,7 @@ class ClaudeBrain:
                 results = await round_.results()
                 messages.append({"role": "assistant", "content": message.content})
                 content: list[Any] = [*_results(round_.looking, results)]
-                if note := last_note(call, turn):
+                if note := last_note(call, turn, self._cards()):
                     content.append({"type": "text", "text": note})
                 messages.append({"role": "user", "content": content})
         except anthropic.AuthenticationError as e:

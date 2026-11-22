@@ -118,6 +118,8 @@ def test_a_reply_that_explains_itself_fails(say: str) -> None:
         "That's not a command I know.",
         "It's 2 Gm, so a short hop.",
         "Glad you're enjoying it, Commander. Take a moment and soak it in.",
+        # #437: a good answer naming the player's key, which the old pattern failed.
+        "Your own key for this is N.",
     ],
 )
 def test_a_plain_reply_is_not_narrated(say: str) -> None:
