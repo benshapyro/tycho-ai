@@ -263,7 +263,7 @@ def names_key(say: str, rule: dict[str, Any], keybinds: Keybinds) -> bool | None
     ("Left Alt + N", or "Left Alt and N"), or ``None`` if none of them has a key. A
     measure, not a verdict: a one-letter key can be a word."""
     keys: list[str] = []
-    for name in (name for group in rule.get("must", []) for name in group):
+    for name in rule.get("key_for") or [n for group in rule.get("must", []) for n in group]:
         action = keybinds.get(name)
         key = pressable_input(action) if action is not None else None
         if key is not None:
@@ -354,6 +354,8 @@ def grade(
         return f"claimed a press with keys off: {outcome.say!r}"
     if outcome.kind == "reply" and rule.get("answer") and DODGE.search(said):
         return "dodged the question"
+    if rule.get("key_for") and outcome.named_key is False:
+        return "didn't name the player's key"  # #357
     if outcome.kind == "reply":
         # What the player gets: the line, and the card when there is one (#490).
         shown = " ".join([said, *outcome.card_rows])
@@ -550,7 +552,7 @@ async def run_case(
         outcome.kind, outcome.say = "reply", decision.text
         if sentences := long_question(decision.text):
             outcome.notes.append(f"a question in {sentences} sentences")
-        if lists.keys_off:
+        if lists.keys_off or rule.get("key_for"):
             outcome.named_key = names_key(decision.text, rule, keybinds)
             if outcome.named_key is False:
                 outcome.notes.append("didn't name the player's key")

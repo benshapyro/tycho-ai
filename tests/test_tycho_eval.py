@@ -196,6 +196,7 @@ KNOWN = {
     "no_tools",
     "no_errors",
     "max_words",
+    "key_for",
 }
 
 
@@ -1162,3 +1163,11 @@ def test_a_number_on_the_card_counts_as_mentioned() -> None:
     assert e.grade(_outcome(say=said), rule, set()) == "missing \\d"
     carded = _outcome(say=said, card="route", card_rows=["Rod's | Buy | 3,450"])
     assert e.grade(carded, rule, set()) == "pass"
+
+
+def test_a_key_for_case_fails_a_reply_that_names_no_key() -> None:
+    """#357: calling player_keys and still saying "the primary fire button" passed."""
+    e = _eval()
+    rule = {"expect": ["reply"], "key_for": ["v_attack1_group1"]}
+    assert e.grade(_outcome(named_key=False), rule, set()) == "didn't name the player's key"
+    assert e.grade(_outcome(named_key=True), rule, set()) == "pass"

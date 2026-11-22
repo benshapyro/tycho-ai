@@ -25,6 +25,8 @@
 #
 # max_words: (replies) the most words the spoken reply may have: one short sentence
 #            for a simple question (docs/voice-and-tone.md, #363).
+# key_for:   (replies) actions whose key, from the player's keybinds, the reply must name
+#            (#357). Skipped when none of them is bound.
 #
 # Action names are from the author's bound keys. Actions with no key can't be
 # chosen, so requests for them should get a reply explaining that.
@@ -632,6 +634,7 @@ heard = "how do you shoot the guns on the Idris"
 mode = "coach"
 expect = ["reply"]
 tools = ["player_keys"]
+key_for = ["v_attack1_group1"]
 max_calls = 2
 tag = "keys"
 
@@ -640,6 +643,7 @@ heard = "what's my key for strafing up"
 mode = "lookup"
 expect = ["reply"]
 tools = ["player_keys"]
+key_for = ["v_strafe_up"]
 max_calls = 2
 tag = "keys"
 

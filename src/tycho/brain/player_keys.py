@@ -56,6 +56,8 @@ class PlayerKeys:
     input_schema = SCHEMA
     seconds = 1.0
     """It reads memory only."""
+    instant = True
+    """It answers at once: no "Checking." before it (review of #516)."""
 
     def __init__(self, keybinds: Callable[[], Keybinds | None]) -> None:
         self._keybinds = keybinds
@@ -70,14 +72,14 @@ class PlayerKeys:
         keybinds = self._keybinds()
         if keybinds is None or not len(keybinds):
             return LookupResult(json.dumps({"not_found": "Tycho can't read this game's keys"}))
-        found: list[dict[str, str]] = []
+        found: dict[str, Action] = {}
         missing: list[str] = []
         for wanted in [str(a) for a in asked[:MAX_ASKED] if str(a).strip()]:  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
             matches = _matches(wanted, keybinds)
-            found += [_entry(a) for a in matches]
+            found |= {a.name: a for a in matches}
             if not matches:
                 missing.append(wanted)
-        result: dict[str, object] = {"keys": list({e["does"]: e for e in found}.values())}
+        result: dict[str, object] = {"keys": _entries(list(found.values()))}
         if missing:
             result["not_found"] = missing
             result["say"] = (
@@ -115,5 +117,16 @@ def _key(action: Action) -> str:
     return key_text(key) if key is not None else ""
 
 
-def _entry(action: Action) -> dict[str, str]:
-    return {"does": with_note(action), "key": _key(action)}
+def _entries(actions: list[Action]) -> list[dict[str, str]]:
+    """What each action does and its key; a label two action maps share names its map,
+    so the ship's key and the vehicle's aren't taken for one (review of #516)."""
+    labels = [with_note(a) for a in actions]
+    return [
+        {
+            "does": f"{label} ({a.actionmap.replace('_', ' ')})"
+            if labels.count(label) > 1
+            else label,
+            "key": _key(a),
+        }
+        for label, a in zip(labels, actions, strict=True)
+    ]

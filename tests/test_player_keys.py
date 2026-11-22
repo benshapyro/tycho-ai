@@ -72,3 +72,18 @@ def test_the_briefing_reads_a_misheard_ship_name_as_the_ship() -> None:
 
     text = " ".join(instructions(built_in(STAR_CITIZEN)).split())
     assert "Ship names are misheard as everyday words too" in text
+
+
+def test_one_label_in_two_maps_gives_both_keys_with_their_maps() -> None:
+    """Review of #516: the vehicle's key replaced the ship's, under the same words."""
+    ship = _bound("v_lights", "Headlights (Toggle)", "l")
+    car = Action("v_ground_lights", "vehicle_general", "Headlights (Toggle)", ship.inputs)
+    found = asyncio.run(PlayerKeys(lambda: Keybinds([ship, car])).run({"actions": ["headlights"]}))
+    assert json.loads(found.content)["keys"] == [
+        {"does": "Headlights (Toggle) (spaceship weapons)", "key": "L"},
+        {"does": "Headlights (Toggle) (vehicle general)", "key": "L"},
+    ]
+
+
+def test_it_answers_at_once_with_no_filler() -> None:
+    assert PlayerKeys(lambda: None).instant is True
