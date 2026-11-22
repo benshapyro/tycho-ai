@@ -52,9 +52,9 @@ OPEN_USES = 2
 OPEN_PAGE_TOKENS = 6000
 """How much of a page a read may bring back. At Haiku's price, two full pages cost
 about a tenth of a cent."""
-OPEN_SECONDS = 25.0
-"""Searching twice and reading pages takes longer: about 8 to 20 s (an estimate until
-the trial measures it)."""
+OPEN_SECONDS = 18.0
+"""Searching twice and reading pages takes longer. Measured on 40 questions (#365, 22 Nov
+2026): median 10 s, 9 in 10 within 12.7 s, slowest 14.9 s (16.4 s in #372's run)."""
 
 DESCRIPTION = """\
 Search Star Citizen websites (RSI's patch notes, roadmap, Comm-Links and forums, \
