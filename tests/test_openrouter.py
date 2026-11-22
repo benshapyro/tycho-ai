@@ -25,7 +25,7 @@ from tycho.brain.openrouter import (
     chunks,
     route,
 )
-from tycho.brain.rounds import CUT_SHORT, LAST_CALL, MAX_CALLS, NO_PRESS_AFTER_SEARCH
+from tycho.brain.rounds import CARD_NOTE, CUT_SHORT, LAST_CALL, MAX_CALLS, NO_PRESS_AFTER_SEARCH
 from tycho.commands import CommandMatcher
 from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.packs import STAR_CITIZEN, built_in
@@ -215,6 +215,20 @@ def test_before_the_last_call_the_model_is_told_to_answer() -> None:
     client = FakeChat(*calls, text("RSI."))
     assert _ask(client, FakeLookup()) == Reply("RSI.")
     assert client.requests[2]["messages"][-1] == {"role": "user", "content": LAST_CALL}
+
+
+@pytest.mark.parametrize(
+    ("tile", "instant", "noted"), [(True, False, True), (False, False, False), (True, True, False)]
+)
+def test_after_a_look_up_with_the_tile_on_the_model_is_reminded_of_cards(
+    tile: bool, instant: bool, noted: bool
+) -> None:
+    """#490, as for Claude: only with the Tile on, and not after a fleet or settings note."""
+    client = FakeChat([*tool_call("ship_lookup", {"name": "Andromeda"}), *finished()], text("RSI."))
+    brain = _brain(client, FakeLookup(instant=instant), cards=lambda: tile)
+    asyncio.run(brain.decide(BrainRequest("who makes the Andromeda", KEYBINDS)))
+    sent = [m.get("content") for m in client.requests[1]["messages"] if m["role"] == "user"]
+    assert (CARD_NOTE in sent) is noted
 
 
 def test_an_act_after_a_look_up_is_still_checked() -> None:

@@ -6,6 +6,7 @@ the whole decision. What it picks becomes ordinary commands, so the safety gate,
 the planner, spoken confirmation and the action log treat it like the fast path.
 """
 
+import re
 from collections.abc import Callable, Collection
 from dataclasses import dataclass, field, replace
 
@@ -130,13 +131,17 @@ def parse_tool_call(
         except ValueError as e:
             if say and args.get("kind") in BRAIN_KINDS:
                 # An empty card with a line to say (#443): the player hears the line,
-                # not the error sound.
-                return Reply(say)
+                # not the error sound, less any sentence pointing at the Tile.
+                return Reply(_ON_THE_TILE.sub("", say).strip() or say)
             raise BrainError(f"show_card: {e}") from e
         if not say:
             raise BrainError("show_card: nothing to say")
         return Reply(say, card)
     raise BrainError(f"unknown tool {name!r}")
+
+
+_ON_THE_TILE = re.compile(r"(?<=[.!?])\s+[^.!?]*\bon the Tile\b[^.!?]*[.!?]?\s*$", re.IGNORECASE)
+"""The last sentence of a card's line when it points at the card ("Two more on the Tile.")."""
 
 
 def commands_for(

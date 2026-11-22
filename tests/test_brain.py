@@ -896,6 +896,11 @@ def test_an_empty_card_with_a_line_to_say_is_said_without_the_card() -> None:
     and the player heard the error sound instead of the line."""
     empty = _CARD | {"kind": "steps", "rows": [], "say": "Your power key is P."}
     assert parse_tool_call("show_card", empty, ACTIONS, SEQUENCES) == Reply("Your power key is P.")
+    # Its line never points at a Tile that shows nothing (review of #501).
+    pointing = empty | {"say": "Your power key is P. The steps are on the Tile."}
+    assert parse_tool_call("show_card", pointing, ACTIONS, SEQUENCES) == Reply(
+        "Your power key is P."
+    )
 
 
 def _offered(tile: bool) -> list[str]:
