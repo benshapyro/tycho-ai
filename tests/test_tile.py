@@ -6,7 +6,8 @@ import pytest
 
 from tycho.packs import STAR_CITIZEN, built_in
 from tycho.tile import BRAIN_KINDS, Board, Card, Row, from_tool, lifetime
-from tycho.tile.cards import ALL_KINDS, TITLE, TOOL_SCHEMA, clean, confirm, long_answer
+from tycho.tile.board import STRIP_SECONDS
+from tycho.tile.cards import ALL_KINDS, TITLE, TOOL_SCHEMA, clean, confirm, long_answer, notice
 from tycho.tile.design import TYCHO_ACCENT, accent_for
 
 SC = built_in(STAR_CITIZEN)
@@ -183,7 +184,62 @@ def test_one_at_a_time_a_new_card_replaces_the_last() -> None:
     board = Board(clock=Clock())
     board.show(_card("A"))
     board.show(_card("B"))
-    assert [s.card.title for s in board.view()] == ["B"]
+    assert [(s.card.title, s.strip) for s in board.view()] == [("B", False), ("A", True)]
+
+
+def test_a_card_that_gave_way_stays_a_while_as_a_strip_and_comes_back() -> None:
+    """#491, Ben's pick: the newest card in full, the last two as strips to bring back."""
+    clock = Clock()
+    board = Board(clock=clock)
+    board.show(_card("A"))
+    board.show(_card("B"))
+    clock.now += STRIP_SECONDS - 1  # B has faded; A's strip is still up
+    assert [(s.card.title, s.strip) for s in board.view()] == [("A", True)]
+    assert board.again()
+    assert [(s.card.title, s.strip, s.pinned) for s in board.view()] == [("A", False, True)]
+
+
+def test_a_strip_fades_after_a_while_and_cards_stay_stretches_it() -> None:
+    clock = Clock()
+    board = Board(clock=clock, stay=1.6)
+    board.show(_card("A"))
+    board.show(_card("B"))
+    clock.now += STRIP_SECONDS * 1.6 - 1
+    assert [s.card.title for s in board.view() if s.strip] == ["A"]
+    clock.now += 2
+    assert [s.card.title for s in board.view() if s.strip] == []
+
+
+def test_going_back_and_forward_through_the_cards() -> None:
+    """#491, Ben: "go back a card", "next card"."""
+    board = Board(clock=Clock())
+    for title in "ABC":
+        board.show(_card(title))
+
+    def tile() -> list[tuple[str, bool]]:
+        return [(s.card.title, s.strip) for s in board.view()]
+
+    assert tile() == [("C", False), ("B", True), ("A", True)]
+    assert not board.forward()  # nothing newer than C
+    assert board.again()
+    assert tile() == [("B", False), ("C", True), ("A", True)]
+    assert board.again()
+    assert tile() == [("A", False), ("C", True), ("B", True)]
+    assert not board.again()  # A is the oldest kept
+    assert board.forward()
+    assert tile() == [("B", False), ("C", True), ("A", True)]
+    assert board.forward()
+    assert tile() == [("C", False), ("B", True), ("A", True)]
+    assert board.view()[0].pinned  # a card brought back stays until it gives way
+
+
+def test_a_question_or_a_notice_that_gives_way_leaves_no_strip() -> None:
+    board = Board(clock=Clock())
+    board.show(confirm("Eject? Say confirm.", 5.0))
+    board.show(_card("A"))
+    board.show(notice("Speech moved to the processor."))
+    board.show(_card("B"))
+    assert [(s.card.title, s.strip) for s in board.view()] == [("B", False), ("A", True)]
 
 
 def test_a_pinned_card_shrinks_to_a_strip_and_comes_back() -> None:
@@ -200,11 +256,15 @@ def test_a_pinned_card_shrinks_to_a_strip_and_comes_back() -> None:
     assert [(s.card.title, s.strip, s.pinned) for s in board.view()] == [("A", False, True)]
 
 
-def test_only_one_strip_is_kept() -> None:
+def test_only_the_last_two_strips_are_kept_newest_first() -> None:
     board = Board(clock=Clock())
-    for title in "ABC":
-        board.show(_card(title), pinned=True)
-    assert [(s.card.title, s.strip) for s in board.view()] == [("C", False), ("B", True)]
+    for title in "ABCD":
+        board.show(_card(title), pinned=title == "A")
+    assert [(s.card.title, s.strip) for s in board.view()] == [
+        ("D", False),
+        ("C", True),
+        ("B", True),
+    ]
 
 
 def test_two_at_once_the_oldest_gives_way() -> None:

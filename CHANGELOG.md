@@ -9,6 +9,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ## [Unreleased]
 
 ### Added
+- With one card at a time, the card that gives way now stays as a thin strip for a minute, and so does the one before it. Say "go back a card" or "last card" to bring one back, and "next card" to go forward again. "Hide the tile" and "keep the tile there" also work now. ([#491](https://github.com/benshapyro/tycho-ai/issues/491))
 - Two new Tile cards: a loadout (what a ship is fitted with, by slot and size, for questions like "what's the best loadout for my M80?") and a comparison (two ships side by side, figure against figure). Lists of numbers now show a bar for each, so the biggest and smallest stand out at a glance. ([#491](https://github.com/benshapyro/tycho-ai/issues/491))
 
 ### Changed
