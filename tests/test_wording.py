@@ -121,8 +121,18 @@ def test_the_focus_check_names_the_chosen_game(
     monkeypatch.setattr(windows, "foreground_executable", lambda: "")
     finding = doctor.focus_finding("Second Game", "Second.exe", seconds=0)
     assert "Switch to Second Game" in capsys.readouterr().out
-    assert finding.detail.startswith("Second Game wasn't in front (another program was)")
+    assert finding.detail.startswith("Second Game wasn't in front. Tycho only presses")
     assert "Star Citizen" not in finding.detail
+
+
+def test_the_focus_check_names_the_program_in_front_when_it_can_tell(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from tycho.input import windows
+
+    monkeypatch.setattr(windows, "foreground_executable", lambda: "notepad.exe")
+    finding = doctor.focus_finding("Second Game", "Second.exe", seconds=0)
+    assert finding.detail.startswith("Second Game wasn't in front (notepad.exe was).")
 
 
 def test_a_game_tycho_presses_nothing_in_has_no_focus_check(
