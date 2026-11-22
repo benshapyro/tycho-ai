@@ -2258,3 +2258,14 @@ def test_pausing_mid_request_leaves_the_light_until_it_ends() -> None:
         await r.session.close()
 
     run(scenario)
+
+
+def test_the_brain_is_told_what_a_misheard_word_may_be() -> None:
+    """#509: "the address" for the Idris got "which ship?". The words stay as heard (it's
+    a real word), but the brain is told what it may be."""
+    brain = FakeBrain(Reply("Hold Mouse 1."))
+    r = _conversation("how do you shoot the guns on the address", brain=brain)
+    assert r.results[0].status == "replied"
+    (asked,) = brain.asked
+    assert asked.text.startswith("how do you shoot the guns on the address")
+    assert asked.text.endswith('[Speech-to-text: "address" may be the Idris.]')

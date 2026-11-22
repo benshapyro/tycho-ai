@@ -1,5 +1,7 @@
 # Star Citizen words that general speech-to-text models get wrong.
 # One term per line, in its canonical spelling. Lines starting with # are ignored.
+# "Idris = address": everyday words a term is misheard as, comma-separated. They're
+# never rewritten ("what's the address" is real), only passed to the brain as a hint.
 # A seed list: the plan is to generate this from the Star Citizen Wiki and UEX APIs.
 
 # Systems, planets and moons
@@ -81,12 +83,12 @@ Prospector
 MOLE
 Vulture
 Reclaimer
-Carrack
+Carrack = carrot
 Hammerhead
 Hercules
 Starfarer
 Polaris
-Idris
+Idris = address
 Javelin
 Corsair
 Cutlass

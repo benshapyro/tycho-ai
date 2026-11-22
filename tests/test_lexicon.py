@@ -121,3 +121,25 @@ def test_one_word_right_at_the_spelling_cut_off_is_still_fixed() -> None:
     stricter = Lexicon(["Carracks"], min_word_spelling_similarity=0.76).correct("the kurracks")
     assert stricter.text == "the kurracks"
     assert [h.heard for h in stricter.hints] == ["kurracks"]
+
+
+def test_a_word_the_pack_says_a_term_is_misheard_as_is_a_hint_for_the_brain() -> None:
+    # #509: "the guns on the address" is the Idris, but "address" is a real word and
+    # spelled nothing like it, so it's never rewritten: the brain is told instead.
+    lexicon = Lexicon.default(pack=SC)
+    corrected = lexicon.correct("how do you shoot the guns on the address?")
+    assert corrected.text == "how do you shoot the guns on the address?"
+    assert [(h.heard, h.term) for h in corrected.hints] == [("address", "Idris")]
+    assert corrected.for_brain == (
+        'how do you shoot the guns on the address?\n[Speech-to-text: "address" may be the Idris.]'
+    )
+    # A real address is left as it is too; only the brain sees the hint.
+    assert lexicon.correct("what's the address of that shop").text.endswith("that shop")
+    # Nothing to tell: the brain gets the words alone.
+    assert lexicon.correct("landing gear").for_brain == "landing gear"
+
+
+def test_misheard_words_match_whole_words_only() -> None:
+    lexicon = Lexicon(["Idris"], misheard=[("address", "Idris")])
+    assert lexicon.correct("the addresses").hints == ()
+    assert [h.heard for h in lexicon.correct("The Address").hints] == ["Address"]
