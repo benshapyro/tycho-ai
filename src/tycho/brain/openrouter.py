@@ -510,7 +510,7 @@ class OpenRouterBrain:
             text += f"\n{self._reference.strip()}\n"
         # cache_control is for the models that need it marked (Anthropic's, Gemini's);
         # OpenRouter drops it for the rest, which cache by themselves or not at all.
-        part = {"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}
+        part = {"type": "text", "text": text, "cache_control": cache_control(self._model)}
         self._system = {"role": "system", "content": [part]}
         self._briefed = briefing_hash(text)
 
@@ -565,6 +565,16 @@ def route(hosts: Sequence[str] = (), sort: str | None = None) -> dict[str, objec
     if sort is not None:
         pinned["sort"] = sort
     return pinned
+
+
+def cache_control(model: str) -> dict[str, str]:
+    """How long the briefing stays cached. Claude's for an hour, as ``ClaudeBrain``'s:
+    play is bursty, with gaps of 5 to 60 minutes, and OpenRouter's default of 5 minutes
+    let the cache go cold between them (about 3 s more on the next request). Other
+    models get the default: an hour is Anthropic's, and others may refuse it."""
+    if model.startswith("anthropic/"):
+        return {"type": "ephemeral", "ttl": "1h"}
+    return {"type": "ephemeral"}
 
 
 def _served(host: str) -> str:

@@ -22,6 +22,7 @@ from tycho.brain.openrouter import (
     OpenRouterBrain,
     OpenRouterClient,
     Prices,
+    cache_control,
     chunks,
     route,
 )
@@ -90,7 +91,7 @@ def test_the_request_is_openai_shaped_with_the_same_briefing_and_tools() -> None
     assert "reasoning" not in body  # each model as its provider runs it, unless asked
     system, user = body["messages"]
     assert system["role"] == "system"
-    assert system["content"][0]["cache_control"] == {"type": "ephemeral"}
+    assert system["content"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
     assert "v_toggle_landing_system" in system["content"][0]["text"]
     assert user["content"][0]["text"] == "[9 November 2026]"
     assert user["content"][1]["text"] == "gear down"
@@ -495,3 +496,9 @@ def test_a_whole_card_at_the_output_limit_is_still_shown() -> None:
     )
     assert isinstance(decided, Reply)
     assert decided.card is not None
+
+
+def test_claude_keeps_its_briefing_cached_for_an_hour_and_others_get_the_default() -> None:
+    # OpenRouter's default is 5 minutes, shorter than the gaps in play.
+    assert cache_control("anthropic/claude-haiku-5.5") == {"type": "ephemeral", "ttl": "1h"}
+    assert cache_control("google/gemini-3.8-flash") == {"type": "ephemeral"}
