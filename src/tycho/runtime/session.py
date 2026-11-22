@@ -444,7 +444,8 @@ class Session:
             still_trying=lambda: self._trying,
         )
         if status == "done" and planned.toggled and not trying and not progress.announced:
-            progress.say, progress.toggled = toggle_receipt(planned.toggled), True
+            said = toggle_receipt(planned.toggled, progress.say, others=planned.others)
+            progress.say, progress.toggled = said, True
         return end(status, detail)
 
     async def _ask_brain(self, text: str, own_keys: str = "") -> Picked | Reply | str:

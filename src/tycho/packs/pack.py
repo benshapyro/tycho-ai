@@ -90,7 +90,7 @@ class Parts:
 LOOSENING = ("not_danger", "mode_guards", "state_guards", "accepted_risks")
 """The safety lists that make a check let something through. Only a pack that ships
 inside Tycho, reviewed like code, may set them (ADR 18)."""
-_SAFETY = frozenset({"confirm", "travel", "facts", *LOOSENING})
+_SAFETY = frozenset({"confirm", "travel", "facts", "toggles", *LOOSENING})
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,11 +112,20 @@ class Safety:
     """Facts, and the control contexts they rule out (built-in packs only)."""
     accepted_risks: frozenset[str] = frozenset()
     """Contexts a command may accept the risk of (built-in packs only)."""
+    toggles: tuple[str, ...] = ()
+    """Words in an action's name or label that mean it flips or cycles a state, so
+    Tycho says it can't see which way it went (#29). Any pack may list them: they only
+    make Tycho claim less."""
     keys_off: str = ""
     """Set when Tycho may press nothing (advisor mode, #191), to the sentence that says
     why. The gate's first check refuses every press while it's set. It comes from the
     pack's mode or the player's ``key_actions`` setting (``as_run``), never from
     ``safety.toml``."""
+
+    def flips(self, name: str, label: str) -> bool:
+        """Whether the action ``name`` (``label``) is one of the pack's toggles."""
+        said = f"{name} {label}".lower()
+        return any(word in said for word in self.toggles)
 
 
 @dataclass(frozen=True, slots=True)
@@ -468,6 +477,7 @@ def _safety(table: Mapping[str, object], where: str, *, built_in: bool) -> Safet
         mode_guards=MappingProxyType(_guards(table, "mode_guards", where)),
         state_guards=MappingProxyType(state_guards),
         accepted_risks=frozenset(_strings(table, "accepted_risks", where)),
+        toggles=tuple(word.lower() for word in _strings(table, "toggles", where)),
     )
 
 

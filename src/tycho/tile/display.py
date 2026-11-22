@@ -150,6 +150,11 @@ class TileDisplay:
             self._changed = True
             return self.on and self._board.again()
 
+    def forward(self) -> bool:
+        with self._lock:
+            self._changed = True
+            return self.on and self._board.forward()
+
     def clear(self) -> None:
         with self._lock:
             self._board.clear()

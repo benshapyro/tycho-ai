@@ -17,12 +17,62 @@ CANCEL_WORDS = frozenset({"cancel", "abort", "negative", "belay that", "never mi
 """Replies to a question. Whole utterances only, and no command may use them as phrases."""
 TILE_WORDS: dict[str, frozenset[str]] = {
     "pin": frozenset(
-        {"keep that up", "keep it up", "keep that", "pin that", "pin it", "leave that up"}
+        {
+            "keep that up",
+            "keep it up",
+            "keep that",
+            "pin that",
+            "pin it",
+            "leave that up",
+            "keep that there",
+            "keep the tile there",
+            "keep the tile up",
+            "keep the card up",
+        }
     ),
     "clear": frozenset(
-        {"clear", "clear that", "clear the tile", "clear tile", "hide that", "dismiss that"}
+        {
+            "clear",
+            "clear that",
+            "clear the tile",
+            "clear tile",
+            "hide that",
+            "dismiss that",
+            "hide the tile",
+            "hide tile",
+            "hide the card",
+            "clear the card",
+        }
     ),
-    "again": frozenset({"show that again", "show it again", "bring that back", "bring it back"}),
+    # Going back and forward through the cards that gave way (#491).
+    "again": frozenset(
+        {
+            "show that again",
+            "show it again",
+            "bring that back",
+            "bring it back",
+            "go back a card",
+            "back a card",
+            "previous card",
+            "last card",
+            "show me the last card",
+            "go back a tile",
+            "back a tile",
+            "previous tile",
+            "last tile",
+            "show me the last tile",
+        }
+    ),
+    "forward": frozenset(
+        {
+            "go forward a card",
+            "forward a card",
+            "next card",
+            "go forward a tile",
+            "forward a tile",
+            "next tile",
+        }
+    ),
     "show": frozenset(
         {"show me that", "show that", "show me", "put that on the tile", "put it on the tile"}
     ),

@@ -26,6 +26,11 @@ confirm = [
 # path's words, but the brain's reading of looser words asks first (ADR 14).
 travel = ["v_toggle_qdrive_engagement", "v_toggle_jump_request"]
 
+# Words in an action's name or label that mean it flips or cycles a state: pressed for
+# a direction ("open the doors" with only the toggle bound), Tycho says it can't see
+# which way it went (#29). "Cycle attacker" isn't one: it picks a target.
+toggles = ["toggle", "swap", "mode_cycle"]
+
 # Harmless actions the backstop words would catch: choosing a fire mode, the missile
 # camera, or cycling targets to whoever is attacking you. (Built-in packs only.)
 not_danger = ["fire_mode", "firemode", "staggered_fire", "cinematic", "cycle_attacker"]

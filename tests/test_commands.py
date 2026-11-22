@@ -310,6 +310,12 @@ def test_no_command_uses_the_tiles_words_as_a_phrase() -> None:
     assert tile_command("Keep that up.") == "pin"
     assert tile_command("Clear the Tile") == "clear"
     assert tile_command("clear the target") is None  # whole utterances only
+    # Ben's words for the Tile (#491).
+    assert tile_command("Hide the tile.") == "clear"
+    assert tile_command("Keep the tile there") == "pin"
+    assert tile_command("Go back a card") == "again"
+    assert tile_command("Show me the last tile") == "again"
+    assert tile_command("Next card.") == "forward"
 
 
 def test_no_command_uses_say_that_again_as_a_phrase() -> None:

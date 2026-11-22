@@ -275,7 +275,7 @@ class Settings(BaseModel):
     )
     tile_cards_at_once: tiles.CardsAtOnce = Field(
         default="one",
-        description="One card at a time (a kept card shrinks to a strip), or two.",
+        description="One card at a time (the last two shrink to strips to bring back), or two.",
         json_schema_extra=_rule("yes", "now"),
     )
     tile_cards_stay: tiles.CardsStay = Field(
