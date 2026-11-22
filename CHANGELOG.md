@@ -13,6 +13,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ### Fixed
 - "Open hangar" heard as "open hangers", and "close doors" heard as "closed doors", now work instantly instead of waiting for the brain. ([#358](https://github.com/benshapyro/tycho-ai/issues/358))
+- Tycho no longer hears an everyday word such as "hunger" as a game word that only sounds like it ("hangar"). ([#505](https://github.com/benshapyro/tycho-ai/issues/505))
 
 ### Changed
 - With the brain through OpenRouter, Tycho now tells OpenRouter never to use a host that keeps or trains on what you say, whatever your OpenRouter account's privacy settings are. ([#488](https://github.com/benshapyro/tycho-ai/issues/488))
