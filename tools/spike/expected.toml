@@ -32,3 +32,6 @@
 "what's the nearest refinery" = ["brain"]
 "how long is the quantum jump to Hurston" = ["brain"]
 "is my Cutlass loadout any good" = ["brain"]
+"open hangars" = ["request_departure"]
+"closed doors" = ["doors_close"]
+"enter remote turret" = ["remote_turret_1"]
