@@ -11,6 +11,9 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ### Added
 - Two new Tile cards: a loadout (what a ship is fitted with, by slot and size, for questions like "what's the best loadout for my M80?") and a comparison (two ships side by side, figure against figure). Lists of numbers now show a bar for each, so the biggest and smallest stand out at a glance. ([#491](https://github.com/benshapyro/tycho-ai/issues/491))
 
+### Changed
+- Tycho gets the brain ready while you hold push-to-talk, so its answer starts a little sooner, and the first question after a break of an hour or more is no longer about 3 seconds slower. ([#21](https://github.com/benshapyro/tycho-ai/issues/21))
+
 ## [0.9.0] - 2026-11-22
 
 ### Added

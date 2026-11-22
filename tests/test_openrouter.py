@@ -15,16 +15,8 @@ from tests.fakes.fake_lookup import FakeLookup
 from tycho import credentials
 from tycho.brain import BrainError, BrainRequest, Reply, RunActions
 from tycho.brain.decisions import UnboundAction
-from tycho.brain.openrouter import (
-    MAX_TOKENS,
-    REASONING_TOKENS,
-    SAID_CHARACTERS,
-    OpenRouterBrain,
-    OpenRouterClient,
-    Prices,
-    chunks,
-    route,
-)
+from tycho.brain.openrouter import MAX_TOKENS, REASONING_TOKENS, OpenRouterBrain, Prices, route
+from tycho.brain.openrouter_http import SAID_CHARACTERS, OpenRouterClient, chunks
 from tycho.brain.rounds import CARD_NOTE, CUT_SHORT, LAST_CALL, MAX_CALLS, NO_PRESS_AFTER_SEARCH
 from tycho.commands import CommandMatcher
 from tycho.keybinds import Action, Keybinds, KeyInput

@@ -2,7 +2,7 @@
 
 Status: living document. Decisions are recorded in [adr/](adr) (index in [adr/README.md](adr/README.md)), and this page summarises them. Anything still unproven is marked **(to measure)**.
 
-**Where it stands (0.8, November 2026).** Built: push-to-talk, local speech recognition, the fast path, the brain (Claude, direct or through OpenRouter), the safety gate with spoken confirmation, the action log, the ElevenLabs voice, look-ups (game files, UEX, the Star Citizen Wiki, web search), the player's fleet, settings by voice, the Tile ([ADR 16](adr/0016-the-tile.md)), the app window and tray ([ADR 17](adr/0017-the-app.md)), game packs with World of Warcraft: Forever as an advisor-only pack ([ADR 18](adr/0018-game-packs.md)), and opt-in crash reports ([ADR 4](adr/0004-built-for-every-player.md)). A narrow `Game.log` reader is built (a plotted quantum route, leaving the pilot seat), for the safety gate's guards. Not built yet: screen vision, the full state tracker (stage 2 below), a wake word, and a local voice. Sections 4.3 and 4.4 describe that planned design.
+**Where it stands (0.8, November 2026).** Built: push-to-talk, local speech recognition, the fast path, the brain (Claude, direct or through OpenRouter), the safety gate with spoken confirmation, the action log, the ElevenLabs voice, look-ups (game files, UEX, the Star Citizen Wiki, web search), the player's fleet, settings by voice, the Tile ([ADR 16](adr/0016-the-tile.md)), the app window and tray ([ADR 17](adr/0017-the-app.md)), game packs with World of Warcraft: Forever as an advisor-only pack ([ADR 18](adr/0018-game-packs.md)), and opt-in crash reports ([ADR 4](adr/0004-built-for-every-player.md)). A `Game.log` reader is built (a plotted quantum route, leaving the pilot seat, the HUD's notifications, joining a server), for the safety gate's guards; what else it knows is ready for the brain and for speaking up (0.10). Not built yet: screen vision, the full state tracker (stage 2 below), a wake word, and a local voice. Sections 4.3 and 4.4 describe that planned design.
 
 ## 1. What Tycho is
 
@@ -111,6 +111,8 @@ Rules:
 
 *Planned (stage 2); not built.*
 
+The first version is decided in [ADR 14's amendment](adr/0014-the-brain-voice-and-sequences.md) (22 November 2026): only the per-request trigger, off by default; the standing permission waits for its own decision.
+
 - **Per-request trigger:** a word the user chooses ("look", say) captures the game window together with what was said, and sends both to the brain.
 - **Standing permission (off by default):** a setting that lets Tycho capture whenever the state tracker needs to confirm something.
 - Only the game window is captured, never the whole desktop.
@@ -187,7 +189,7 @@ Settings (one schema, voice and file editing) arrive in stage 1. The settings GU
 ## 7. Open questions
 
 1. ~~Which default voice and persona tone tests best over long sessions?~~ Answered by a listening test; see [ADR 9](adr/0009-voice.md). Long-session fatigue is still untested.
-2. Should Tycho ever speak unprompted, for example to warn about low fuel? If so, how do we keep it from becoming noise?
-3. How much does `Game.log` record in the current patch? This sets how much the state tracker must rely on vision.
+2. Should Tycho ever speak unprompted, for example to warn about low fuel? If so, how do we keep it from becoming noise? *Answered 22 November 2026 (ADR 14's amendment): yes, off by default, per kind, only for what the log records, at most one every 30 s.*
+3. How much does `Game.log` record in the current patch? This sets how much the state tracker must rely on vision. *Answered for build 13220821 (22 Nov 2026, #30):* plotting a quantum route and arriving, letting go of a ship's controls (not taking them), the HUD's notifications (monitored space, jurisdictions, armistice zones) and joining a server. Nothing about power, shields, fuel, gear, lights or modes, and no mission lines in the session surveyed. `games/star_citizen/loglines.py` lists what Tycho reads.
 4. Can local speech-to-text run alongside the game without a noticeable frame-rate cost? On the graphics card it couldn't on one player's PC (graphics crashes, #188), so since 0.8 it runs on the processor by default. The frame-rate cost there is still **(to measure)**.
 5. What will CIG say when asked directly about a user-triggered voice keybind tool? See [ADR 3](adr/0003-staying-within-cig-rules.md).

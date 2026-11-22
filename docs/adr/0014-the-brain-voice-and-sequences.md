@@ -78,3 +78,54 @@ What leaves the PC, for the README's list:
 ## Update, 6 November 2026: several tools in one reply
 
 Claude was asked for one tool a reply (`disable_parallel_tool_use`). In the play session that cost a call per look-up when a question needed two, and lost a fleet note said with a command ("I'm in my Pitbull, power off": the act ended the request first). Tool use is now parallel (#149, #156). Look-ups in one reply run together, and a fleet or settings note runs alongside an act, which waits up to a second for it. Only the first act in a reply is pressed, and every act is still checked and goes through the safety gate. The brain eval judged it before it merged (6 November 2026): 161/172 pass, 0 wrong presses (1 on main), acting picks p50 1,215 ms (1,589 on main), 1.59 calls a request; the Pitbull case passes. A command said with a ship note waits for the note: 5.5 s to the press in that case.
+
+## Amendment, 22 November 2026: looking at the game window when asked
+
+*Status: accepted. The maintainer approved this text on 22 November 2026 (#524), after agreeing to the direction: only on request, the game window only, off by default ([#31](https://github.com/benshapyro/tycho-ai/issues/31)).*
+
+**Context.** Some questions need what's on the screen: "is this contract worth it?", "what's that ship?". The game's log doesn't record most of it ([#30](https://github.com/benshapyro/tycho-ai/issues/30)). Architecture 4.4 planned two ways to look: when the player asks, and a standing permission for Tycho to look on its own. A picture of the screen is new data leaving the PC, so it belongs in this ADR's privacy list.
+
+**Decision.** Tycho looks at the game only when the player asks, and only if they have turned it on.
+
+- **Off by default, asked once at setup** *(maintainer, 22 November 2026)*. A `look_at_screen` setting, off until the player says yes. Setup's privacy step asks it next to the crash reports question, in plain words, for example "Let Tycho look at your game window when you ask it to? Only the game window, never saved. You can turn this off any time." Yes and no are equal choices; neither is picked for them, and skipping leaves it off. Players who set Tycho up before this ships are asked once, on the next start. It can be changed any time in the window's privacy settings or in `settings.toml`. By voice it only turns off (`lower_only`, ADR 5): "stop looking at my screen" works, nothing said turns it on. Asked to look while it's off, Tycho says it's off and where to turn it on, and sends nothing.
+- **Only when asked, and the code decides, not the model.** A look happens only when what the player said asks for one: the pack's look phrases ("take a look", "look at this", "what am I looking at"), matched in the transcript like the fast path, before the brain is called. The brain gets the picture; it can't take one. When the brain thinks a look would help and none was asked for, it may ask "Want me to take a look?", and a "yes" within the follow-up window (30 s) counts as asking.
+- **The game window only.** One frame of the pack's game window (`window` in `pack.toml`) through the Windows Graphics Capture API (ADR 3), never the desktop or another window. The Tile is a separate window, so it isn't in the picture. If the game window isn't found, nothing is captured and Tycho says so. A pack without a `window` can't look.
+- **Kept in memory, then gone.** The frame is scaled down to what the model needs, sent with that one request, and dropped. It is never written to disk, never kept for follow-ups (a follow-up that needs it again asks again), and never put in the log, the brain traces (#282, which record only that a picture was sent and its size), the action log or a crash report. "Save that" stays for later.
+- **Heard every time.** A short camera sound plays when the frame is taken, so a capture is never silent.
+- **Where it goes.** To the brain's provider with the question: Anthropic, or OpenRouter and then Anthropic when `brain_provider = "openrouter"` (with the no-retention request, #488). Nowhere else.
+- **Never on the fast path, never for pressing.** A look answers questions. Nothing in the picture can press a key or skip the safety gate; what the brain reads in it is as untrusted as the log (ADR 10).
+
+**Not decided here.** Tycho looking on its own (architecture 4.4's standing permission, and checking a toggle's state before pressing it) needs its own amendment and the maintainer's yes.
+
+**Consequences.**
+- The README's "What leaves your PC" table gains a row when this ships: "A picture of the game window, only when you ask Tycho to look, with look-at-screen on".
+- One more setup question in the privacy step (#364's onboarding), with the same "what's sent" detail as crash reports.
+- A capture boundary (a Protocol with a fake, ADR 4) and the camera sound. Vision cases join the brain eval: asked to look, not asked, and asked while off.
+- Each look costs more than a text request (the picture's tokens); the cost and the time to an answer are measured before it ships (architecture 6: under 4 s).
+
+## Amendment, 22 November 2026: speaking up without being asked
+
+*Status: accepted. The maintainer approved this text on 22 November 2026 (#524), after agreeing to the direction: narrow, off by default, only what the game's log records ([#4](https://github.com/benshapyro/tycho-ai/issues/4); architecture open question 2).*
+
+**Context.** Until now Tycho speaks only after the player does ("Who speaks when", above). Some news is worth hearing unasked: a mission objective done, a contract a party member shared. The risk is noise over hours of play. The log reader ([#30](https://github.com/benshapyro/tycho-ai/issues/30)) now makes a few such events reliable to spot.
+
+**Decision.** Tycho may speak up on its own, in short fixed lines, about a few kinds of event the game's log records, each one only if the player turned it on.
+
+- **Off by default, chosen per kind.** A `callouts` setting lists the kinds turned on; it starts empty. The pack names the kinds it offers, from what its log reader can see (for Star Citizen, after #30's survey of the current patch: for example mission objectives, contracts shared with you, a party member leaving). The window's settings list them with an example line each. By voice, both ways ("tell me about mission updates", "stop the callouts"): speaking up loosens no safeguard and sends nothing new (ADR 5).
+- **Only what the log records.** No guesses from the clock or from keys Tycho pressed. Things the log doesn't record (fuel, shields, health) are left out until Tycho can see them, which is a separate decision.
+- **Speaking only, never pressing.** A callout never presses a key, never asks to confirm, and never calls the brain to decide anything (ADR 3: nothing acts on a timer by itself).
+- **Fixed lines, from the pack.** Each kind has its line in the pack, in the voice-and-tone guide's style. A line may carry one short name from the log (a mission's title), cleaned and cut like Tile text; the log is untrusted and never reaches the brain this way. It costs one ElevenLabs line; no brain call.
+- **Never in the way.**
+  - At most one callout every 30 seconds; others in that time are dropped, not queued, so Tycho never catches up with a backlog.
+  - Never while the player holds push-to-talk, while Tycho is speaking or waiting for "confirm", or within a few seconds after the player last spoke. Pressing push-to-talk stops one at once, like any line.
+  - Not when the game announces the same thing itself.
+  - Without a voice, the line goes to the Tile as a notice if the Tile is on, else nowhere.
+- **Combat.** The log can't tell Tycho a fight is on, so there is no automatic quiet-in-combat rule yet. "Stop the callouts" turns them all off at once, and the 30-second limit keeps the rest short.
+- **Logged.** Each callout goes in the log with its kind and time, so noise can be found and tuned.
+
+**Not decided here.** Callouts from the screen (low fuel, shield damage), callouts the brain writes, and a combat rule each need their own amendment.
+
+**Consequences.**
+- A small callout stage beside the session, fed by the log reader, with a fake log in tests: each rule above (off by default, the 30 s limit, the busy cases) gets a test.
+- Packs gain an optional `[callouts]` table: each kind's id, line and the log fact it follows. It is data, like the rest of a pack (ADR 18).
+- Nothing new leaves the PC beyond the spoken text that already goes to ElevenLabs.
