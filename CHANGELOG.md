@@ -8,6 +8,8 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-22
+
 ### Added
 - The Tile now shows cards over World of Warcraft: Forever too, in gold, for lists, steps and routes that are easier to read than hear. Setup tells you to set Display Mode to Windowed (Fullscreen), which the Tile needs. ([#381](https://github.com/benshapyro/tycho-ai/issues/381))
 - Setup's last step, Try it, is now a real test. Hold your button and speak: the window shows what Tycho heard and the keys it would press, and nothing reaches the game while that step is open and in front, so you can try it at the desktop. Switch to the game and Tycho presses keys again. After a first run's setup, the window opens again on that step once Tycho is listening. ([#464](https://github.com/benshapyro/tycho-ai/pull/464))
@@ -161,7 +163,8 @@ The first release with an installer, as a preview. Earlier versions weren't rele
 - A fleet Tycho remembers, and speech recognition on your PC.
 - A check for a newer version when Tycho starts (it never updates itself).
 
-[Unreleased]: https://github.com/benshapyro/tycho-ai/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/benshapyro/tycho-ai/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.8.0
 [0.7.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.7.0
 [0.6.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.6.0
 [0.5.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.5.0
