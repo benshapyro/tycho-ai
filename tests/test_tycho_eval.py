@@ -836,7 +836,7 @@ def test_an_allowed_pick_refused_for_a_key_clash_is_its_own_outcome() -> None:
     outcome = _act(("v_eject",), keybinds)
     assert outcome.actions == ["v_eject"]
     assert outcome.refused.startswith("refused")
-    assert outcome.clash
+    assert outcome.clash == "v_eject"
     verdict = e.grade(outcome, {"expect": ["actions"], "allow": ["v_eject"]}, {"v_eject"})
     assert verdict.startswith(e.KEY_CLASH)
     assert not verdict.startswith("WRONG PRESS")
@@ -844,6 +844,41 @@ def test_an_allowed_pick_refused_for_a_key_clash_is_its_own_outcome() -> None:
     # A pick the case forbids is still a wrong press, clash or not.
     never = e.grade(outcome, {"expect": ["actions"], "never": ["v_eject"]}, {"v_eject"})
     assert never.startswith("WRONG PRESS ['v_eject']; the gate refused it (refused")
+
+
+def test_a_clash_excuses_only_the_allowed_press_that_clashed() -> None:
+    """From the review of #498: an extra pick the case doesn't ask for isn't excused."""
+    e = _eval()
+    outcome = _outcome(
+        kind="actions",
+        actions=["v_lights_toggle", "v_eject"],
+        refused="refused: Eject is on ralt+y",
+        clash="v_eject",
+    )
+    rule: dict[str, Any] = {"expect": ["actions"], "allow": ["v_eject"]}
+    assert e.grade(outcome, rule, {"v_eject", "v_lights_toggle"}).startswith("WRONG PRESS")
+    rule["must"] = [["v_lights_toggle"]]
+    assert e.grade(outcome, rule, {"v_eject", "v_lights_toggle"}).startswith(e.KEY_CLASH)
+    outcome.clash = "v_lights_toggle"  # the clash was on a press the case doesn't allow
+    assert e.grade(outcome, rule, {"v_eject", "v_lights_toggle"}).startswith("WRONG PRESS")
+
+
+def test_a_step_with_no_pressable_key_before_a_clash_is_not_a_clash() -> None:
+    """From the review of #498: plan_request refuses "no_key" at the first step, so the
+    clash on the second never decides anything."""
+    from tycho.commands import Command
+
+    e = _eval()
+    keybinds = _with(("v_self_destruct", "ralt+y"), ("v_lights_toggle", "notakey"))
+    outcome = _act(("v_lights_toggle", "v_eject"), keybinds)
+    assert outcome.refused.startswith("no_key")
+    assert outcome.clash == ""
+    commands = (
+        Command(id="lights", say=(), actions=("v_lights_toggle",)),
+        Command(id="eject", say=(), actions=("v_eject",)),
+    )
+    assert e._refused_for_clash(commands, keybinds, frozenset(), SC.safety) == ""
+    assert e._refused_for_clash(commands[1:], keybinds, frozenset(), SC.safety) == "v_eject"
 
 
 def test_an_allowed_pick_refused_for_another_reason_is_still_a_wrong_press() -> None:
@@ -1048,7 +1083,7 @@ def test_the_model_benchmark_asks_for_the_hour_long_cache_tycho_does() -> None:
             messages = Messages()
 
     brains = Brains()
-    brains._anthropic = Client()  # pyright: ignore[reportAttributeAccessIssue]
+    brains._anthropic = Client()  # pyright: ignore[reportAttributeAccessIssue, reportPrivateUsage]
     with pytest.raises(Stop):
         brains.ask("claude-haiku-5-5", "the briefing", "lights on", "low")
     assert sent["system"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}

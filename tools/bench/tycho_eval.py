@@ -96,6 +96,7 @@ from tycho.games.star_citizen.store import KeybindStore
 from tycho.games.star_citizen.trade_lookup import trade_lookups
 from tycho.games.star_citizen.uex import UexApi
 from tycho.games.star_citizen.wiki import WikiApi
+from tycho.input import NotPressable, UnsupportedKey, plan
 from tycho.input.plan import pressable_input
 from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput, key_text
 from tycho.knowledge.web import WebSearch
@@ -180,9 +181,9 @@ class Outcome:
     refused: str = ""
     """Why the safety gate would refuse the pick, pressing nothing; empty if it wouldn't.
     A refusal outranks a question, so a refused pick never "asks" (#311)."""
-    clash: bool = False
-    """The gate refused because the pick's key is also a confirm-grade action's on these
-    keybinds (#494): the keybinds' fault, not the model's."""
+    clash: str = ""
+    """The action the gate refused only because its key is also a confirm-grade action's
+    on these keybinds (#494): the keybinds' fault, not the model's. Empty otherwise."""
     ms: float = 0.0
     looked_up: int = 0
     """Look-ups the brain made for this request."""
@@ -311,11 +312,12 @@ def grade(
     if bad := (never | (UNASKED - asked)).intersection(outcome.actions):
         return f"WRONG PRESS {sorted(bad)}{gate}"
     allowed = set(rule.get("allow", [])).intersection(outcome.actions)
-    if allowed and outcome.refused and outcome.clash:
-        # The case allows the pick and the gate would have asked, but on these keybinds
-        # its key is also another confirm-grade action's (#494): the same for every
-        # model, so it's its own outcome, not a wrong press and not a pass.
-        return f"{KEY_CLASH} {sorted(allowed)} ({outcome.refused})"
+    if outcome.clash in allowed and set(outcome.actions) <= allowed | asked:
+        # The case allows the refused pick, nothing else was picked that the case doesn't
+        # ask for, and the gate would have asked, but on these keybinds its key is also
+        # another confirm-grade action's (#494): the same for every model, so it's its
+        # own outcome, not a wrong press and not a pass.
+        return f"{KEY_CLASH} {[outcome.clash]} ({outcome.refused})"
     if allowed and outcome.refused:
         return f"WRONG PRESS (the gate refused it: {outcome.refused}) {sorted(allowed)}"
     if allowed and not outcome.asks:
@@ -584,22 +586,25 @@ def _plan(
     outcome.actions = pressed(commands, keybinds)
     if isinstance(planned, Refusal):  # never Questions: it's planned as confirmed
         outcome.refused = f"{planned.status}: {planned.detail}"
-        outcome.clash = _refused_for_clash(commands, keybinds, facts, lists)
+        if planned.status == "refused" and not lists.keys_off:
+            outcome.clash = _refused_for_clash(commands, keybinds, facts, lists)
         outcome.notes.append(f"Tycho would press nothing ({outcome.refused})")
 
 
 def _refused_for_clash(
     commands: tuple[Command, ...], keybinds: Keybinds, facts: frozenset[str], lists: Safety
-) -> bool:
-    """Whether the first press the gate refuses for these commands is refused because a
-    confirm-grade action shares its key (#494), as ``plan_request`` walks them."""
+) -> str:
+    """The action whose press the gate refuses first for these commands, if it refuses it
+    because a confirm-grade action shares its key (#494), else "". It walks them as
+    ``plan_request`` does, stopping wherever that would refuse for another reason."""
     for part in (step for command in commands for step in command.expand()):
         command = part.command
         resolved = resolve(command, keybinds)
         setup = [a for name in command.setup if (a := keybinds.get(name)) and a.bound]
         if resolved.action is None or len(setup) < len(command.setup):
-            return False
-        for position, action in enumerate((*setup, resolved.action)):
+            return ""
+        presses = (*setup, resolved.action)
+        for position, action in enumerate(presses):
             verdict = safety.check(
                 command,
                 action,
@@ -611,8 +616,13 @@ def _refused_for_clash(
             )
             if not verdict.allowed and not verdict.ask:
                 clash = safety.key_clash(action, keybinds, command, position, lists=lists)
-                return clash is not None
-    return False
+                return action.name if clash is not None else ""
+        try:
+            for action in presses:
+                plan(action, keybinds.modes)
+        except NotPressable, UnsupportedKey:
+            return ""  # plan_request refuses this step as no_key, before any later clash
+    return ""
 
 
 MATCHER = load_commands(built_in(STAR_CITIZEN))
@@ -1294,6 +1304,7 @@ def compare(direct: Run, routed: Run, per_hour: float = PER_HOUR) -> list[str]:
     rows = [
         ("pass", "passed", "d"),
         ("wrong presses", "wrong_presses", "d"),
+        ("key clashes", "key_clashes", "d"),
         ("errors", "errors", "d"),
         ("mean calls", "mean_calls", ".2f"),
         ("p50 ms", "p50_ms", ".0f"),
