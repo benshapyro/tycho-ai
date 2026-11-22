@@ -22,7 +22,6 @@ from tycho.brain.openrouter import (
     OpenRouterBrain,
     OpenRouterClient,
     Prices,
-    cache_control,
     chunks,
     route,
 )
@@ -54,9 +53,9 @@ GEAR = {"actions": ["v_toggle_landing_system"], "say": "Gear."}
 
 def _brain(client: FakeChat, *lookups: FakeLookup, **kwargs: Any) -> OpenRouterBrain:
     kwargs.setdefault("pack", SC)
+    kwargs.setdefault("model", MODEL)
     return OpenRouterBrain(
         MATCHER,
-        model=MODEL,
         client=client,
         lookups=lookups,
         today=lambda: datetime.date(2026, 11, 9),
@@ -498,7 +497,8 @@ def test_a_whole_card_at_the_output_limit_is_still_shown() -> None:
     assert decided.card is not None
 
 
-def test_claude_keeps_its_briefing_cached_for_an_hour_and_others_get_the_default() -> None:
+def test_only_claude_keeps_its_briefing_cached_for_an_hour() -> None:
     # OpenRouter's default is 5 minutes, shorter than the gaps in play.
-    assert cache_control("anthropic/claude-haiku-5.5") == {"type": "ephemeral", "ttl": "1h"}
-    assert cache_control("google/gemini-3.8-flash") == {"type": "ephemeral"}
+    other = FakeChat(text("Hi."))
+    asyncio.run(_brain(other, model="google/gemini-3.8-flash").decide(BrainRequest("hi", KEYBINDS)))
+    assert other.requests[0]["messages"][0]["content"][0]["cache_control"] == {"type": "ephemeral"}
