@@ -186,7 +186,9 @@ class ClaudeBrain:
         if self._preparing is not None and not self._preparing.done():
             self._preparing.cancel()
             await asyncio.gather(self._preparing, return_exceptions=True)
-        await asyncio.gather(*self._draining, return_exceptions=True)  # within DRAIN_SECONDS
+        for task in self._draining:  # each closes its stream as it's cancelled
+            task.cancel()
+        await asyncio.gather(*self._draining, return_exceptions=True)
         for lookup in self._lookups.values():  # fetches that outlived their look-up (#240)
             if (close := getattr(lookup, "close", None)) is not None:
                 with contextlib.suppress(Exception):

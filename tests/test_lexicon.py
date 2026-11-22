@@ -129,10 +129,14 @@ def test_a_word_the_pack_says_a_term_is_misheard_as_is_a_hint_for_the_brain() ->
     lexicon = Lexicon.default(pack=SC)
     corrected = lexicon.correct("how do you shoot the guns on the address?")
     assert corrected.text == "how do you shoot the guns on the address?"
-    assert [(h.heard, h.term) for h in corrected.hints] == [("address", "Idris")]
+    assert [(h.heard, h.term) for h in corrected.misheard] == [("address", "Idris")]
     assert corrected.for_brain == (
-        'how do you shoot the guns on the address?\n[Speech-to-text: "address" may be the Idris.]'
+        'how do you shoot the guns on the address?\n[Speech-to-text: "address" may be "Idris".]'
     )
+    # Sound-alike hints are too common to send ("station" for Stanton, review of #522).
+    station = lexicon.correct("the station is right ahead")
+    assert station.hints
+    assert station.for_brain == "the station is right ahead"
     # A real address is left as it is too; only the brain sees the hint.
     assert lexicon.correct("what's the address of that shop").text.endswith("that shop")
     # Nothing to tell: the brain gets the words alone.
@@ -141,5 +145,5 @@ def test_a_word_the_pack_says_a_term_is_misheard_as_is_a_hint_for_the_brain() ->
 
 def test_misheard_words_match_whole_words_only() -> None:
     lexicon = Lexicon(["Idris"], misheard=[("address", "Idris")])
-    assert lexicon.correct("the addresses").hints == ()
-    assert [h.heard for h in lexicon.correct("The Address").hints] == ["Address"]
+    assert lexicon.correct("the addresses").misheard == ()
+    assert [h.heard for h in lexicon.correct("The Address").misheard] == ["Address"]

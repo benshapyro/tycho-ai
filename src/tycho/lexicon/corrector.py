@@ -84,15 +84,20 @@ class Corrected:
     replacements: tuple[Replacement, ...]
     hints: tuple[Replacement, ...] = ()
     """Possible terms left in place, e.g. "station" might be Stanton."""
+    misheard: tuple[Replacement, ...] = ()
+    """Words the pack says a term is often heard as ("address" for the Idris), left in
+    place: the brain is told what they may be (#509)."""
 
     @property
     def for_brain(self) -> str:
-        """The text, with what its hints may be, for the brain to judge in context
-        (#509): "address" alone is a real word, but "the guns on the address" is the
-        Idris. Only the brain can tell, so it's told, never rewritten."""
-        if not self.hints:
+        """The text, with what its misheard words may be, for the brain to judge in
+        context (#509): "address" alone is a real word, but "the guns on the address" is
+        the Idris. Only the brain can tell, so it's told, never rewritten. Only the
+        pack's own list: sound-alike hints such as "station" are too common (review of
+        #522)."""
+        if not self.misheard:
             return self.text
-        maybe = "; ".join(f'"{h.heard}" may be the {h.term}' for h in self.hints)
+        maybe = "; ".join(f'"{h.heard}" may be "{h.term}"' for h in self.misheard)
         return f"{self.text}\n[Speech-to-text: {maybe}.]"
 
 
@@ -179,11 +184,12 @@ class Lexicon:
                 replacements.append(change)
         out.append(text[cursor:])
         fixed = "".join(out)
-        known = {h.heard.lower() for h in hints}
-        for word, term in self._misheard:
-            if (found := word.search(fixed)) and found.group().lower() not in known:
-                hints.append(Replacement(found.group(), term, 0.0))
-        return Corrected(fixed, tuple(replacements), tuple(hints))
+        misheard = tuple(
+            Replacement(found.group(), term, 0.0)
+            for word, term in self._misheard
+            if (found := word.search(fixed))
+        )
+        return Corrected(fixed, tuple(replacements), tuple(hints), misheard)
 
     def _match(self, heard: list[str]) -> tuple[_Term, float] | None:
         """The closest term to these words, if close enough."""

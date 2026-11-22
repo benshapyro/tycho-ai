@@ -2268,4 +2268,4 @@ def test_the_brain_is_told_what_a_misheard_word_may_be() -> None:
     assert r.results[0].status == "replied"
     (asked,) = brain.asked
     assert asked.text.startswith("how do you shoot the guns on the address")
-    assert asked.text.endswith('[Speech-to-text: "address" may be the Idris.]')
+    assert asked.text.endswith('[Speech-to-text: "address" may be "Idris".]')
