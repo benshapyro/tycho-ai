@@ -14,7 +14,7 @@ Repository: https://github.com/benshapyro/tycho-ai. README: https://github.com/b
 - **Never see, ask for or handle an API key.** Not in chat, not in a file, not in an environment variable, not piped into a command. `tycho key set <name>` refuses piped input on purpose. Keys are entered by the user in a console window you open for them (step 3), and live only in Windows Credential Manager.
 - **Never touch the game's files.** Don't edit anything in the Star Citizen folder, `actionmaps.xml` included. Tycho only reads the game.
 - **Don't run `tycho run` in your own shell.** It listens to the microphone and presses keys. Start it in a window for the user (step 6), and only when they say they're ready.
-- **Ask before downloading a lot**: the speech model is 2.5 GB, and the graphics card libraries are 1.2 GB. Say the size and where it goes.
+- **Ask before downloading a lot**: the speech model is 0.7 GB (2.5 GB more if the user sets speech recognition to the graphics card), and the graphics card libraries are 1.2 GB. Say the size and where it goes.
 - **Ask before installing or upgrading.** Installing is per-user (no administrator prompt) into `%LOCALAPPDATA%\Programs\Tycho`.
 - Prefer your structured question tool, if you have one, for the user's choices.
 
@@ -113,7 +113,7 @@ Use single quotes, so the backslashes are kept as written. To use PTU's keybinds
 
 ### Speech model (finding "Speech model")
 
-Ask first, since it's 2.5 GB into `%LOCALAPPDATA%\tycho\models`. To put it on another drive, set the user environment variable `TYCHO_MODELS` to a folder there before downloading.
+Ask first, since it's 0.7 GB into `%LOCALAPPDATA%\tycho\models` (3.1 GB with `transcription_device = "gpu"`, which also needs the full model). To put it on another drive, set the user environment variable `TYCHO_MODELS` to a folder there before downloading.
 
 ```powershell
 $tycho = "$env:LOCALAPPDATA\Programs\Tycho\tycho.exe"
@@ -124,7 +124,7 @@ This takes a few minutes. If the connection drops, run it again and it continues
 
 ### Graphics card (finding "Speech recognition")
 
-If its `fix` is `tycho gpu install`, the user's NVIDIA card can recognise speech about 10x faster after a one-time 1.2 GB download. Ask, then run:
+Speech recognition runs on the processor by default, so the game keeps the graphics card: Tycho on the same card was behind GPU crashes in games (#188). Only suggest the card if the user asks for faster recognition and accepts that risk; they set `transcription_device = "gpu"` first. If the finding's `fix` is then `tycho gpu install`, the card can recognise speech about 10x faster after a one-time 1.2 GB download. Ask, then run:
 
 ```powershell
 $tycho = "$env:LOCALAPPDATA\Programs\Tycho\tycho.exe"

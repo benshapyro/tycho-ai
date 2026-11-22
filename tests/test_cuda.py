@@ -214,14 +214,13 @@ def test_the_hint_fires_when_cuda_is_missing_and_not_when_memory_is_short(
     monkeypatch.setattr(ParakeetTranscriber, "load", loaded)
     monkeypatch.setattr(assemble, "device_choice", no_cuda)
     caplog.set_level(logging.INFO)
-    assemble.load_transcriber(Settings())
+    assemble.load_transcriber(Settings(transcription_device="gpu"))
     assert "uv run tycho gpu install" in caplog.text
 
-    caplog.clear()
-    assemble.load_transcriber(
-        Settings(transcription_device="cpu")
-    )  # the player chose the processor
-    assert "gpu install" not in caplog.text
+    for setting in ("cpu", "auto"):  # the processor, chosen or on purpose (#188)
+        caplog.clear()
+        assemble.load_transcriber(Settings(transcription_device=setting))
+        assert "gpu install" not in caplog.text
 
 
 def test_removing_while_tycho_runs_is_refused(
