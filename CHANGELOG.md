@@ -20,6 +20,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - A notice that comes while Tycho says "Let me check." during a look-up is now said before the answer, and the filler line isn't cut off. ([#440](https://github.com/benshapyro/tycho-ai/issues/440))
 
 - Names and quotes in Greek or Cyrillic on the Tile now draw in Windows' own fonts. Since 0.8's bundled fonts they drew as boxes. ([#458](https://github.com/benshapyro/tycho-ai/issues/458))
+
 ### Changed
 - Answers with more than a few numbers, such as a trade route or a loadout, now go on the Tile more often, with one sentence spoken. Asking to see "something interesting" on the Tile gets a card, not a question back. ([#490](https://github.com/benshapyro/tycho-ai/issues/490))
 - A stray word that isn't a request, or one misheard, gets "Copy." instead of a question back, and "is that you?" gets a few words. A vague "the usual" gets a question, never a guess. ([#359](https://github.com/benshapyro/tycho-ai/issues/359), [#495](https://github.com/benshapyro/tycho-ai/issues/495))
