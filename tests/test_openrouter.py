@@ -112,11 +112,11 @@ def test_an_effort_is_asked_for_only_when_given() -> None:
     assert client.requests[0]["reasoning"] == {"effort": "low", "exclude": True}
 
 
-def test_no_host_is_pinned_unless_asked() -> None:
-    # OpenRouter then picks the host as it always does (mostly on price).
+def test_no_host_is_pinned_unless_asked_and_none_may_keep_data() -> None:
+    # OpenRouter then picks the host as it always does, among those that keep no data (#488).
     client = FakeChat(text("Hi."))
     asyncio.run(_brain(client).decide(BrainRequest("hi", KEYBINDS)))
-    assert "provider" not in client.requests[0]
+    assert client.requests[0]["provider"] == {"data_collection": "deny"}
 
 
 def test_pinned_hosts_are_sent_in_order_with_no_fallback() -> None:
@@ -125,7 +125,7 @@ def test_pinned_hosts_are_sent_in_order_with_no_fallback() -> None:
     brain = _brain(client, hosts=["Cerebras", " groq "])
     asyncio.run(brain.decide(BrainRequest("hi", KEYBINDS)))
     asyncio.run(brain.decide(BrainRequest("hello", KEYBINDS)))
-    pinned = {"order": ["cerebras", "groq"], "allow_fallbacks": False}
+    pinned = {"data_collection": "deny", "order": ["cerebras", "groq"], "allow_fallbacks": False}
     assert [r["provider"] for r in client.requests] == [pinned, pinned]
 
 
@@ -133,12 +133,17 @@ def test_the_warm_up_goes_to_the_pinned_host_too() -> None:
     # Otherwise it would warm a cache on a host the run never uses.
     client = FakeChat(text("Hi."))
     asyncio.run(_brain(client, hosts=["groq"]).warm(KEYBINDS))
-    assert client.requests[0]["provider"] == {"order": ["groq"], "allow_fallbacks": False}
+    assert client.requests[0]["provider"] == {
+        "data_collection": "deny",
+        "order": ["groq"],
+        "allow_fallbacks": False,
+    }
 
 
 def test_a_host_can_be_picked_by_latency() -> None:
-    assert route(sort="latency") == {"sort": "latency"}
+    assert route(sort="latency") == {"data_collection": "deny", "sort": "latency"}
     assert route(["cerebras"], "latency") == {
+        "data_collection": "deny",
         "order": ["cerebras"],
         "allow_fallbacks": False,
         "sort": "latency",
