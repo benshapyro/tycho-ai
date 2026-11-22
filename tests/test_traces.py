@@ -282,6 +282,7 @@ def test_the_reader_summarises_the_last_run_and_lists_its_wrong_presses(tmp_path
                 {"type": "meta", "traces": "run 2"},
                 {"heard": "gear down", "verdict": "pass"},
                 {"heard": "eject", "verdict": "WRONG PRESS (not confirmed first) ['v_eject']"},
+                {"heard": "launch missiles", "verdict": "KEY CLASH (the keybinds) ['v_m']"},
             )
         ),
         "utf-8",
@@ -291,7 +292,8 @@ def test_the_reader_summarises_the_last_run_and_lists_its_wrong_presses(tmp_path
     run, chosen = reader.pick(loaded)
     assert run == "run 2"
     assert len(chosen) == 3
-    text = "\n".join(reader.summary(chosen, run, wrong=reader.wrong_presses(results, run)))
+    wrong, clashes = reader.wrong_presses(results, run), reader.key_clashes(results, run)
+    text = "\n".join(reader.summary(chosen, run, wrong=wrong, clashes=clashes))
     assert "3 brain requests" in text
     assert "actions 1" in text
     assert "error 1" in text
@@ -299,6 +301,8 @@ def test_the_reader_summarises_the_last_run_and_lists_its_wrong_presses(tmp_path
     assert "came back as errors: 1" in text
     assert "Error: 'eject': BrainError: no answer" in text
     assert "Wrong presses in the eval: 1" in text
+    assert "Key clashes in the eval (the keybinds, not the model): 1" in text  # #504
+    assert "'launch missiles': KEY CLASH" in text
     assert "'old case'" not in text  # another run's
     slowest = text[text.index("Slowest:") :]
     assert slowest.index("2400 ms") < slowest.index("700 ms")  # slowest first

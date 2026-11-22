@@ -184,6 +184,9 @@ class Outcome:
     setup: list[str] = field(default_factory=list[str])
     """The setup actions of the commands picked, in ``actions`` when the gate refused:
     Tycho's own presses for the command, not the model's picks."""
+    matched: list[str] = field(default_factory=list[str])
+    """For ``no_key``: the game actions of the built-in commands the fast path matched,
+    fallbacks included, so ``must`` can still check it matched the right one (#512)."""
     clash: str = ""
     """The action the gate refused only because its key is also a confirm-grade action's
     on these keybinds (#494): the keybinds' fault, not the model's. Empty otherwise."""
@@ -309,6 +312,9 @@ def grade(
     if outcome.kind == "error":
         return "error"
     if outcome.kind == "no_key":  # the fast path's command has no key here (#508)
+        for group in rule.get("must", []):  # it still has to be the right command (#512)
+            if not set(group).intersection(outcome.matched):
+                return f"missing {'/'.join(group)} (matched {outcome.matched}, no key)"
         if {"reply", "look_up"} & set(rule["expect"]) or keys_off:
             return "pass"
         return f"expected {'/'.join(sorted(rule['expect']))} ({outcome.refused})"
@@ -378,9 +384,11 @@ def too_long(outcome: Outcome, rule: dict[str, Any], say_words: int) -> str:
 
 SENTENCE = re.compile(r"[^.?!]+[.?!]+(?=\s|$)")
 NOT_AN_END = re.compile(
-    r"\.{2,}|\u2026|\b(?:e\.g|i\.e|etc|vs|approx|Mr|Mrs|Dr|St)\.", re.IGNORECASE
+    r"\.{2,}|\u2026|\b(?:e\.g|i\.e|vs|approx|Mr|Mrs|Dr|St)\.|\betc\.(?!\s+(?-i:[A-Z]))",
+    re.IGNORECASE,
 )
-"""An ellipsis or an abbreviation's full stop, which doesn't end a sentence."""
+"""An ellipsis or an abbreviation's full stop, which doesn't end a sentence. "etc." does
+when a capital letter follows it ("Fuel, ammo, etc. Want the rest?", #512)."""
 
 
 def long_question(say: str) -> int:
@@ -605,6 +613,7 @@ def _plan(
             # A built-in command whose action has no key on these keybinds (#508): Tycho
             # says so and presses nothing. Nobody picked a key, so it's no press at all.
             outcome.kind = "no_key"
+            outcome.matched = [a for c in commands for s in c.expand() for a in s.command.actions]
         outcome.notes.append(f"Tycho would press nothing ({outcome.refused})")
 
 

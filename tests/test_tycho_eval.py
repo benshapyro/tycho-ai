@@ -528,7 +528,7 @@ def test_each_result_says_which_host_served_it() -> None:
         logger.setLevel(level)
     assert [o.hosts for o in outcomes] == [["Cerebras"], ["Cerebras"]]
     assert costs.hosts == ["Groq", "Cerebras", "Cerebras"]
-    pinned = {"order": ["cerebras"], "allow_fallbacks": False}
+    pinned = e.route(["cerebras"])  # what the eval sends (#497)
     summary = e.metrics(e.Run("openrouter", "openai/gpt-oss-120b", outcomes, costs, pinned))
     assert summary["hosts"] == {"Cerebras": 2}  # the warm-up isn't a case
     assert summary["route"] == pinned
@@ -883,8 +883,13 @@ def test_a_fast_path_command_with_no_key_bound_is_not_a_wrong_press() -> None:
     rule["must"] = [["v_enter_remote_turret_1"]]
     verdict = e.grade(outcome, rule, set())
     assert verdict == "pass"
+    outcome.verdict = verdict  # metrics counts verdicts, so the check below can fail (#512)
     summary = e.metrics(e.Run("anthropic", "some/model", [outcome], e._Costs()))
     assert summary["wrong_presses"] == 0
+    # The fast path matching another unbound command doesn't pass (#512).
+    wrong = e.grade(outcome, {**rule, "must": [["v_some_other_action"]]}, set())
+    assert wrong.startswith("missing v_some_other_action")
+    assert "WRONG" not in wrong
     # A case that wants only a press doesn't pass on a missing key, but isn't a wrong one.
     only = e.grade(outcome, {"expect": ["actions"]}, set())
     assert only.startswith("expected actions")
@@ -1146,6 +1151,8 @@ def test_the_model_benchmark_asks_for_the_hour_long_cache_tycho_does() -> None:
         ("It's 3.5 km away, isn't it?", 0),  # a decimal point isn't a sentence end
         ("Hmm... which one?", 0),  # from the review of #500
         ("Which one, e.g. the engine or the music?", 0),
+        ("Fuel, ammo, etc. Want the rest?", 2),  # from the review of #510 (#512)
+        ("Fuel, ammo, etc. or the rest?", 0),
     ],
 )
 def test_a_question_longer_than_a_sentence_is_measured(say: str, sentences: int) -> None:
