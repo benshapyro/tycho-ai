@@ -48,7 +48,7 @@ announced = true
 # The same air traffic control key asks to leave when parked at a pad or in a hangar.
 [[command]]
 id = "request_departure"
-say = ["request departure", "request takeoff", "request take off", "request to depart", "request clearance to depart", "request launch", "request clearance", "request clearance to leave", "get clearance to leave", "clearance to leave", "open the hangar", "open the hangar doors", "open hangar", "open hangar doors"]
+say = ["request departure", "request takeoff", "request take off", "request to depart", "request clearance to depart", "request launch", "request clearance", "request clearance to leave", "get clearance to leave", "clearance to leave", "open the hangar", "open the hangar doors", "open hangar", "open hangar doors", "open the hangar door", "open hangar door", "open the hangars", "open hangars"]
 actions = ["v_atc_request"]
 announced = true
 
@@ -60,7 +60,7 @@ actions = ["v_open_all_doors", "v_toggle_all_doors"]
 
 [[command]]
 id = "doors_close"
-say = ["close the doors", "close doors", "close all doors", "close all the doors", "shut the doors"]
+say = ["close the doors", "close doors", "close all doors", "close all the doors", "shut the doors", "closed doors", "closed the doors", "closed all doors", "closed all the doors"]
 actions = ["v_close_all_doors", "v_toggle_all_doors"]
 
 [[command]]
@@ -297,6 +297,28 @@ actions = ["v_weapon_aim_type_cycle"]
 id = "exit_seat"
 say = ["exit seat", "exit the seat", "get out of the seat", "leave the seat", "get up"]
 actions = ["pl_exit"]
+
+# Remote turrets (#356), from a turret seat such as the Idris's. The game has no key
+# for any of the three by default: the player binds them. Without a number, the first.
+[[command]]
+id = "remote_turret_1"
+say = ["enter remote turret", "enter the remote turret", "enter a remote turret", "enter remote turret one", "enter remote turret 1", "remote turret one", "remote turret 1"]
+actions = ["v_enter_remote_turret_1"]
+
+[[command]]
+id = "remote_turret_2"
+say = ["enter remote turret two", "enter remote turret 2", "remote turret two", "remote turret 2"]
+actions = ["v_enter_remote_turret_2"]
+
+[[command]]
+id = "remote_turret_3"
+say = ["enter remote turret three", "enter remote turret 3", "remote turret three", "remote turret 3"]
+actions = ["v_enter_remote_turret_3"]
+
+[[command]]
+id = "remote_turret_exit"
+say = ["exit remote turret", "exit the remote turret", "leave the remote turret", "leave remote turret"]
+actions = ["turret_remote_exit"]
 
 [[command]]
 id = "eject"
