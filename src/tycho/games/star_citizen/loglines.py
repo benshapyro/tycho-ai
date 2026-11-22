@@ -91,7 +91,9 @@ _RELEASED = re.compile(
     r"ClearDriver: Local client node \[\d+\] releasing control token for '([^']+)'"
 )
 _NOTIFICATION = re.compile(r'Added notification "(.*?)"\s*\[\d+\]')
-_JURISDICTION = re.compile(r"^Entered (.+) Jurisdiction$")
+_JURISDICTION = re.compile(r"^Entered ([A-Za-z][A-Za-z&' ]{0,30}) Jurisdiction$")
+"""A jurisdiction's name is a place's or a faction's ("UEE", "Rough & Ready", "People's
+Alliance"): letters, "&" and apostrophes, at most four words. A callout says it (#4)."""
 _SHIP_NUMBER = re.compile(r"_\d+$")
 
 
@@ -171,7 +173,6 @@ def _notification(line: str) -> Line | None:
             return Line(LEFT_MONITORED, said, clears=(MONITORED,))
         return Line(kind, said)
     if (match := _JURISDICTION.match(said)) and len(match.group(1).split()) <= 4:
-        # A jurisdiction is a place's name ("UEE", "Rough & Ready"), a few words at most.
         return Line(JURISDICTION, said, keep=True, name=match.group(1))
     return None
 
