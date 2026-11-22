@@ -172,7 +172,7 @@ class Outcome:
     heard: str
     tag: str
     route: str = ""  # "fast" or "brain"
-    kind: str = ""  # "actions", "reply" or "error"
+    kind: str = ""  # "actions", "reply", "no_key" or "error"
     actions: list[str] = field(default_factory=list[str])
     say: str = ""
     asks: bool = False
@@ -308,6 +308,10 @@ def grade(
     never = (set(GLOBAL_NEVER) | set(rule.get("never", []))) - set(rule.get("allow", []))
     if outcome.kind == "error":
         return "error"
+    if outcome.kind == "no_key":  # the fast path's command has no key here (#508)
+        if {"reply", "look_up"} & set(rule["expect"]) or keys_off:
+            return "pass"
+        return f"expected {'/'.join(sorted(rule['expect']))} ({outcome.refused})"
     asked = {action for group in rule.get("must", []) for action in group}
     # A pick the gate refuses still fails (the gate is the backstop, not the bar), but
     # the verdict names the refusal, not a missing confirm (#311).
@@ -597,6 +601,10 @@ def _plan(
         outcome.refused = f"{planned.status}: {planned.detail}"
         if planned.status == "refused" and not lists.keys_off:
             outcome.clash = _refused_for_clash(commands, keybinds, facts, lists)
+        if planned.status == "no_key" and outcome.route == "fast":
+            # A built-in command whose action has no key on these keybinds (#508): Tycho
+            # says so and presses nothing. Nobody picked a key, so it's no press at all.
+            outcome.kind = "no_key"
         outcome.notes.append(f"Tycho would press nothing ({outcome.refused})")
 
 

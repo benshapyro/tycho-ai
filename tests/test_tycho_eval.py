@@ -863,6 +863,32 @@ def test_a_clash_excuses_only_the_allowed_press_that_clashed() -> None:
     assert e.grade(outcome, rule, {"v_eject", "v_lights_toggle"}).startswith("WRONG PRESS")
 
 
+def test_a_fast_path_command_with_no_key_bound_is_not_a_wrong_press() -> None:
+    """#508: "enter remote turret" takes the fast path to an action with no key on these
+    keybinds. Tycho presses nothing and says so; nobody picked a key."""
+    from tycho.lexicon import Lexicon
+
+    e = _eval()
+    rule: dict[str, Any] = {"heard": "enter remote turret", "expect": ["actions", "reply"]}
+    outcome = asyncio.run(
+        e.run_case(
+            rule, Lexicon.default(pack=SC), _ScriptedBrain(0, None), _with(), lists=SC.safety
+        )
+    )
+    assert outcome.route == "fast"
+    assert outcome.kind == "no_key"
+    assert outcome.refused.startswith("no_key")
+    rule["must"] = [["v_enter_remote_turret_1"]]
+    verdict = e.grade(outcome, rule, set())
+    assert verdict == "pass"
+    summary = e.metrics(e.Run("anthropic", "some/model", [outcome], e._Costs()))
+    assert summary["wrong_presses"] == 0
+    # A case that wants only a press doesn't pass on a missing key, but isn't a wrong one.
+    only = e.grade(outcome, {"expect": ["actions"]}, set())
+    assert only.startswith("expected actions")
+    assert "WRONG" not in only
+
+
 def test_a_clash_on_a_command_with_setup_presses_is_still_a_clash() -> None:
     """From the review of #500: a refused command's setup presses are Tycho's, not picks
     the model made, so they don't turn a key clash into a wrong press."""
