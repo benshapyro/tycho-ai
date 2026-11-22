@@ -372,7 +372,7 @@ def test_claude_is_asked_the_way_adr_14_says() -> None:
     assert request["output_config"] == {"effort": "low"}
     assert request["tool_choice"] == {"type": "auto"}  # several tools a reply (#149, #156)
     assert request["system"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
-    assert {t["name"] for t in request["tools"]} == {"run_actions", "run_sequence"}
+    assert {t["name"] for t in request["tools"]} == {"run_actions", "run_sequence", "player_keys"}
     assert all(t["strict"] for t in request["tools"])
 
 
@@ -564,7 +564,12 @@ def test_look_ups_are_offered_alongside_the_acts() -> None:
     client = _Calls(([], _final("RSI.")))
     _ask(client, FakeLookup())
     (request,) = client.requests
-    assert [t["name"] for t in request["tools"]] == ["run_sequence", "run_actions", "ship_lookup"]
+    assert [t["name"] for t in request["tools"]] == [
+        "run_sequence",
+        "run_actions",
+        "ship_lookup",
+        "player_keys",
+    ]
     assert all(t["strict"] for t in request["tools"])
 
 

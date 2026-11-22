@@ -624,6 +624,25 @@ expect = ["actions"]
 must = [["v_power_toggle_shields", "v_power_set_shields_off"]]
 tag = "unbound"
 
+# --- The player's own keys (#357) ------------------------------------------
+# From a play session on 0.6.0: "how do you shoot the guns on the Idris?" got "Hold
+# the primary fire button", with the player's keybinds loaded.
+[[case]]
+heard = "how do you shoot the guns on the Idris"
+mode = "coach"
+expect = ["reply"]
+tools = ["player_keys"]
+max_calls = 2
+tag = "keys"
+
+[[case]]
+heard = "what's my key for strafing up"
+mode = "lookup"
+expect = ["reply"]
+tools = ["player_keys"]
+max_calls = 2
+tag = "keys"
+
 # --- Chatter: not a request -------------------------------------------------
 
 [[case]]

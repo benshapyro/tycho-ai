@@ -34,6 +34,7 @@ from anthropic.types import MessageParam, TextBlockParam, ToolParam, ToolResultB
 from tycho.brain.briefing import briefing, offered_actions
 from tycho.brain.decisions import BrainError, BrainRequest, Decision, Exchange, Reply
 from tycho.brain.lookups import Lookup, LookupResult
+from tycho.brain.player_keys import keyed
 from tycho.brain.providers import ANTHROPIC_HAIKU
 from tycho.brain.rounds import (
     ACTS,
@@ -148,7 +149,7 @@ class ClaudeBrain:
         self._sequences = (
             sorted(c.id for c in matcher.commands if c.is_sequence) if self._keys else []
         )
-        self._lookups = {lookup.name: lookup for lookup in lookups}
+        lookups, self._lookups = keyed(lookups, self._keys, lambda: self._for)
         if clash := ACTS & self._lookups.keys():
             raise ValueError(f"a look-up can't be named {', '.join(sorted(clash))}")
         self._tools = _tools(self._sequences, lookups, keys=self._keys)

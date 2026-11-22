@@ -95,7 +95,7 @@ def test_the_request_is_openai_shaped_with_the_same_briefing_and_tools() -> None
     assert user["content"][0]["text"] == "[9 November 2026]"
     assert user["content"][1]["text"] == "gear down"
     names = [t["function"]["name"] for t in body["tools"]]
-    assert names == ["run_sequence", "run_actions"]
+    assert names == ["run_sequence", "run_actions", "player_keys"]
     assert all(t["type"] == "function" for t in body["tools"])
 
 
@@ -171,7 +171,7 @@ def test_cards_are_offered_only_while_the_tile_is_on() -> None:
     brain = _brain(client, FakeLookup(), cards=lambda: True)
     asyncio.run(brain.decide(BrainRequest("hi", KEYBINDS)))
     names = [t["function"]["name"] for t in client.requests[0]["tools"]]
-    assert names == ["run_sequence", "run_actions", "show_card", "ship_lookup"]
+    assert names == ["run_sequence", "run_actions", "show_card", "ship_lookup", "player_keys"]
 
 
 def test_a_look_up_goes_back_as_a_tool_message_and_the_model_answers() -> None:
