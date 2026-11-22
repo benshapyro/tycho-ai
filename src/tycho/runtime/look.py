@@ -89,16 +89,44 @@ def says_yes(text: str) -> bool:
     return " ".join(normalize(text)) in YES_WORDS
 
 
-def wants_a_look(text: str, eyes: Eyes | None, *, offered: bool) -> bool:
-    """Whether the player asked to look: a look phrase, or "yes" just after an offer."""
+FILLER = frozenset(
+    {"tycho", "please", "hey", "ok", "okay", "can", "could", "would", "you", "go", "ahead"}
+)
+"""Words around a look phrase that still leave it only a look ("tycho, take a look please")."""
+
+
+def only_a_look(text: str, phrases: Sequence[str]) -> bool:
+    """Whether all of ``text`` is a look: a "yes", or one look phrase with at most
+    ``FILLER`` around it. "Take a look at what Laranite sells for" is a question too."""
+    said = " ".join(normalize(text))
+    if said in YES_WORDS:
+        return True
+    for phrase in filter(None, (" ".join(normalize(p)) for p in phrases)):
+        before, found, after = f" {said} ".partition(f" {phrase} ")
+        if found and FILLER.issuperset((before + " " + after).split()):
+            return True
+    return False
+
+
+def wants_a_look(text: str, eyes: Eyes | None, *, offered: bool, on: bool = True) -> bool:
+    """Whether the player asked to look: a look phrase, or "yes" just after an offer.
+    With looking off, only a request that is all a look is (to say it's off): a
+    question that also says "take a look" goes on to be answered as before."""
     if eyes is None:
         return False
-    return asks_to_look(text, eyes.phrases) or (offered and says_yes(text))
+    asked = asks_to_look(text, eyes.phrases) or (offered and says_yes(text))
+    return asked and (on or only_a_look(text, eyes.phrases))
 
 
-async def look(eyes: Eyes | None, on: bool, feedback: Feedback) -> Picture | Unseen:
+async def look(
+    eyes: Eyes | None, on: bool, feedback: Feedback, text: str = "", wanted: bool = True
+) -> Picture | Unseen | None:
     """One picture of the game window, if looking is ``on``, with the camera sound; or
-    why there's none. Taken off the event loop, and never kept here."""
+    why there's none. Taken off the event loop, and never kept here. None when no look
+    was ``wanted``, or with no picture and more asked than a look (``only_a_look``):
+    the brain answers without one."""
+    if not wanted:
+        return None
     if not on:
         return Unseen("refused", "looking at the game window is off", OFF)
     if eyes is None:
@@ -107,6 +135,8 @@ async def look(eyes: Eyes | None, on: bool, feedback: Feedback) -> Picture | Uns
         picture = await asyncio.to_thread(eyes.camera.take)
     except CaptureError as e:
         log.warning("No picture of the game window: %s", e)
+        if not only_a_look(text, eyes.phrases):
+            return None
         return Unseen("failed", f"no picture: {e}", NOT_SEEN)
     feedback.camera()  # every capture is heard (ADR 14)
     log.info("Took a picture of the game window (%d bytes, %dx%d)", *_shape(picture))

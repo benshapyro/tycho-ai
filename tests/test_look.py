@@ -37,7 +37,7 @@ from tycho.feedback import SoundFeedback, camera_sound
 from tycho.keybinds import Keybinds
 from tycho.packs import PackError, built_in, load_pack
 from tycho.runtime.conversation import would_speak
-from tycho.runtime.look import NOT_SEEN, OFF, Eyes, asks_to_look, says_yes
+from tycho.runtime.look import NOT_SEEN, OFF, Eyes, asks_to_look, only_a_look, says_yes
 from tycho.runtime.messages import Result
 from tycho.runtime.routing import NotUnderstood, Picked, ToBrain, route
 from tycho.settings import Settings
@@ -196,6 +196,60 @@ def test_asked_to_look_with_it_off_says_so_and_takes_and_sends_nothing() -> None
     assert (result.status, result.commands) == ("refused", ("look",))
     assert speaker.spoken == [OFF]
     assert "Settings, Privacy" in OFF
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "can you take a look at what Laranite sells for in Area 18?",
+        "have a look at my fleet, which ship has the most cargo?",
+    ],
+)
+def test_with_looking_off_a_question_that_says_take_a_look_is_still_answered(said: str) -> None:
+    camera = FakeCamera(PICTURE)
+    brain = FakeBrain(Reply("About 27 aUEC a unit."))
+    speaker = FakeSpeaker()
+    r = _talk(said, brain=brain, eyes=_eyes(camera), looking=False, speaker=speaker)
+    assert camera.taken == 0
+    (asked,) = brain.asked
+    assert asked.picture is None
+    assert asked.text.lower().startswith(said.lower()[:12])
+    assert r.results[0].commands == ()
+    assert speaker.spoken == ["About 27 aUEC a unit."]
+
+
+def test_with_the_game_window_gone_a_question_that_says_take_a_look_is_still_answered() -> None:
+    camera = FakeCamera(CaptureError("no StarCitizen.exe window is open"))
+    brain = FakeBrain(Reply("About 27 aUEC a unit."))
+    said = "take a look at what Laranite sells for in Area 18"
+    r = _talk(said, brain=brain, eyes=_eyes(camera), looking=True)
+    (asked,) = brain.asked
+    assert asked.picture is None
+    assert r.results[0].status == "replied"
+
+
+@pytest.mark.parametrize(
+    ("said", "only"),
+    [
+        ("take a look", True),
+        ("Tycho, take a look please", True),
+        ("can you have a look", True),
+        ("yes", True),
+        ("what am I looking at?", True),
+        ("take a look at the price of Laranite", False),
+        ("have a look at my fleet", False),
+    ],
+)
+def test_only_a_request_that_is_all_a_look_counts_as_only_a_look(said: str, only: bool) -> None:
+    assert only_a_look(said, SC.look) is only
+
+
+def test_asked_only_to_look_with_it_off_hears_how_to_turn_it_on() -> None:
+    brain = FakeBrain()
+    speaker = FakeSpeaker()
+    _talk("Tycho, take a look please", brain=brain, eyes=_eyes(), looking=False, speaker=speaker)
+    assert brain.asked == []
+    assert speaker.spoken == [OFF]
 
 
 def test_without_the_game_window_nothing_is_sent_and_the_player_hears_why() -> None:

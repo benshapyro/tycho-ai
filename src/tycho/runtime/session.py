@@ -152,10 +152,8 @@ class Session:
         self._brain_warming: asyncio.Task[None] | None = None
         self._conversation = Conversation(clock)
         times = Times(brain_seconds, search_seconds, search_limit, looking_seconds, looking_limit)
-        lately, voice = self._conversation.follow_ups, self._voice
-        self._asker = Asker(
-            brain, times, matcher, safety_lists, voice, keybinds, lately, self._may_look
-        )
+        lately, voice, may = self._conversation.follow_ups, self._voice, self._may_look
+        self._asker = Asker(brain, times, matcher, safety_lists, voice, keybinds, lately, may)
         self._confirm_seconds = confirm_seconds
         self._question: Question | None = None
         self._samplerate = samplerate
@@ -378,13 +376,14 @@ class Session:
         question, self._question = self._question, None
         if question is not None and self._display is not None:
             self._display.answered()
+        offered = self._conversation.offered_look()
         routed = route(
             text,
             self._matcher,
             tile=self._display is not None and self._display.on,
             brain=self._brain is not None,
             keys=not self._safety_lists.keys_off,
-            look=wants_a_look(text, self._eyes, offered=self._conversation.offered_look()),
+            look=wants_a_look(text, self._eyes, offered=offered, on=self._looking),
         )
         trace.mark("match")
         if isinstance(routed, Reserved):
@@ -415,8 +414,8 @@ class Session:
             confirmed = False
             progress.by_brain = True
             keys = own_keys(routed.matched, self._keybinds()) if routed.matched else ""
-            seen = await look(self._eyes, self._looking, self._feedback) if routed.look else None
-            progress.commands = (LOOK,) if routed.look else ()
+            seen = await look(self._eyes, self._looking, self._feedback, text, routed.look)
+            progress.commands = (LOOK,) if seen is not None else ()
             if isinstance(seen, Unseen):  # off, or no game window: nothing is sent
                 return seen.result(progress, request, trace, heard, text)
             picked = await self._asker.ask(corrected.for_brain, keys, seen)
