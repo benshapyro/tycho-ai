@@ -8,14 +8,25 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ## [Unreleased]
 
+### Added
+- New commands for remote turrets, such as the Idris's: "enter remote turret" (or "enter remote turret two" or "three") and "exit remote turret". The game has no key for entering one by default, so bind Enter Remote Turret 1, 2 and 3 in the game's keybinds first. ([#356](https://github.com/benshapyro/tycho-ai/issues/356))
+
+### Fixed
+- A card the brain left empty no longer ends in the not-done sound: Tycho says its line without the card. ([#443](https://github.com/benshapyro/tycho-ai/issues/443))
+- "Open hangar" heard as "open hangers", and "close doors" heard as "closed doors", now work instantly instead of waiting for the brain. ([#358](https://github.com/benshapyro/tycho-ai/issues/358))
+- Tycho no longer hears an everyday word such as "hunger" as a game word that only sounds like it ("hangar"). ([#505](https://github.com/benshapyro/tycho-ai/issues/505))
+- Setup's Try it is safer. What you say there is tried, not pressed, even if you switch to the game while Tycho is still working it out. If the window misses your switch to the game and Try it stays on, what you say there plays the not-done sound and nothing is pressed, rather than a done sound for keys that never reached the game. After setting up a new game you picked in Settings, the window opens on Try it, as after a first run. Actions with no name in the game's files now read as words ("Toggle landing system"), not as raw ids, and a follow-up question no longer takes something you only tried as done. ([#467](https://github.com/benshapyro/tycho-ai/issues/467), [#465](https://github.com/benshapyro/tycho-ai/issues/465))
+- Tycho no longer says it "stopped unexpectedly last time" when you ended it from Task Manager after the window hit a harmless Windows error that it recovered from. ([#474](https://github.com/benshapyro/tycho-ai/issues/474))
+- A notice that comes while Tycho says "Let me check." during a look-up is now said before the answer, and the filler line isn't cut off. ([#440](https://github.com/benshapyro/tycho-ai/issues/440))
+
 ### Changed
 - Answers with more than a few numbers, such as a trade route or a loadout, now go on the Tile more often, with one sentence spoken. Asking to see "something interesting" on the Tile gets a card, not a question back. ([#490](https://github.com/benshapyro/tycho-ai/issues/490))
 - A stray word that isn't a request, or one misheard, gets "Copy." instead of a question back, and "is that you?" gets a few words. A vague "the usual" gets a question, never a guess. ([#359](https://github.com/benshapyro/tycho-ai/issues/359), [#495](https://github.com/benshapyro/tycho-ai/issues/495))
 - With key actions off, Tycho now knows every key you've bound, steering, strafing and emotes included, and says when one is held ("Boost (Hold)"). Asked for your strafe key, it names it instead of saying there's none. ([#437](https://github.com/benshapyro/tycho-ai/issues/437))
+- In setup, skipping the Keys step in Star Citizen now shows it as skipped, not as still to do: a key is optional there, since the built-in phrases work without one. At the window's smallest size, Next sits fully in view, and in World of Warcraft: Forever, What to say now shows any problem with your own commands file. ([#448](https://github.com/benshapyro/tycho-ai/issues/448))
+- **Quit** is now at the bottom of the left side of Tycho's window, so it's easy to find. It's still under Settings, Updates, and on Tycho's icon by the clock. ([#486](https://github.com/benshapyro/tycho-ai/issues/486))
 - With the brain through OpenRouter, Tycho now tells OpenRouter never to use a host that keeps or trains on what you say, whatever your OpenRouter account's privacy settings are. ([#488](https://github.com/benshapyro/tycho-ai/issues/488))
-
-### Fixed
-- A card the brain left empty no longer ends in the not-done sound: Tycho says its line without the card. ([#443](https://github.com/benshapyro/tycho-ai/issues/443))
+- `tycho check`'s focus test no longer says "(another program was)" when it can't tell which program was in front; it names the program only when it knows. ([#430](https://github.com/benshapyro/tycho-ai/issues/430))
 
 ## [0.8.0] - 2026-11-22
 
@@ -35,7 +46,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ### Changed
 - With the brain through OpenRouter, Tycho now keeps its instructions cached with Anthropic for an hour between requests, as it does when you use Claude directly. Before, the cache lasted 5 minutes, so the first thing you asked after a quiet spell took about 3 seconds longer.
 - **Speech recognition now runs on the processor by default, so the game keeps the graphics card.** With Tycho's speech model on the same card as the game (3 GB of its memory), one player's PC had graphics crashes in two games and a full freeze. Tycho now uses a smaller 8-bit copy of the same model on the processor: as accurate, and about 0.4 seconds a phrase instead of about 0.25 with the game running. **The first start after upgrading downloads it, 0.7 GB, once**; new players download 0.7 GB instead of 2.5. If you want the card's speed and have the memory to spare, set Speech recognition to the graphics card (Settings, Advanced, or `transcription_device = "gpu"` in `settings.toml`). ([#188](https://github.com/benshapyro/tycho-ai/issues/188))
-- Home in Tycho's window says how Tycho is in a much bigger word, so you can read it from across the room: amber when something needs fixing, grey when paused. Settings rows light up on their left edge under the pointer, and section labels are smaller.
+- Home in Tycho's window says how Tycho is in a much bigger word, so you can read it from across the room: amber when something needs fixing, grey when paused. Settings rows light up on their left edge under the pointer, and section labels are smaller. ([#471](https://github.com/benshapyro/tycho-ai/pull/471))
 - The Tile page in Tycho's window now has a switch for each kind of card your game uses, instead of a box to type card names into. World of Warcraft: Forever no longer lists Star Citizen's ship and fleet cards. ([#422](https://github.com/benshapyro/tycho-ai/issues/422))
 - The Tile's preview in Tycho's window shows a card in your game's own words: World of Warcraft: Forever no longer shows a Star Citizen trade card. The Tile's colour choice that follows the game is now called `game` (it was `ship`; an older `settings.toml` still works). ([#422](https://github.com/benshapyro/tycho-ai/issues/422))
 - Tycho's window and the Tile now use their own fonts, so they look the same on every PC.

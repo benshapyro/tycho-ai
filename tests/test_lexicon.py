@@ -90,3 +90,18 @@ def test_case_only_changes_are_not_reported() -> None:
 
 def test_default_lexicon_loads() -> None:
     assert len(Lexicon.default(pack=SC)) > 100
+
+
+@pytest.mark.parametrize(("heard", "term"), [("hunger", "hangar"), ("hungers", "hangars")])
+def test_an_everyday_word_spelled_unlike_the_term_is_only_a_hint(heard: str, term: str) -> None:
+    # #505: they share a sound key, but "I'm hungers" isn't about the hangar.
+    corrected = Lexicon.default(pack=SC).correct(f"I'm {heard}")
+    assert corrected.text == f"I'm {heard}"
+    assert [(h.heard, h.term) for h in corrected.hints] == [(heard, term)]
+
+
+@pytest.mark.parametrize(
+    ("heard", "fixed"), [("open hanger", "open hangar"), ("Open hangers.", "Open hangars.")]
+)
+def test_a_close_spelling_of_the_term_is_still_fixed(heard: str, fixed: str) -> None:
+    assert Lexicon.default(pack=SC).correct(heard).text == fixed

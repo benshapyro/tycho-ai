@@ -14,6 +14,7 @@ from tests.test_runtime import Rig, rig, run
 from tycho import settings
 from tycho.desktop import shell
 from tycho.desktop.tray import TrayIcon
+from tycho.runtime.speaking import FILLERS
 from tycho.settings import Settings
 from tycho.start.run import TILE_STOPPED
 from tycho.tile import Card
@@ -121,6 +122,30 @@ def test_a_notice_waits_for_the_line_being_said() -> None:
     run(test)
     assert speaker.spoken == ["Gear down.", SAID]
     assert speaker.stopped == []  # neither line was cut off
+
+
+def test_a_notice_told_during_a_filler_is_said_before_the_answer() -> None:
+    # #440: the answer stopped the queued notice, which then cut the filler off too.
+    speaker = FakeSpeaker(seconds=0.05)
+    r = rig(speaker=speaker)
+
+    async def test() -> None:
+        stop = asyncio.Event()
+        running = asyncio.create_task(r.session.run(stop))
+        await asyncio.sleep(0.01)
+        voice = r.session._voice  # pyright: ignore[reportPrivateUsage]
+        voice.fill()  # a web search started: "Let me check."
+        await asyncio.sleep(0.01)
+        r.session.tell(SAID)
+        await asyncio.sleep(0.01)
+        voice.start(speaker, "It's at Lorville.", lambda: None)  # the answer
+        await asyncio.sleep(0.3)
+        stop.set()
+        await running
+
+    run(test)
+    assert speaker.spoken == [FILLERS[0], SAID, "It's at Lorville."]
+    assert speaker.stopped == []  # none was cut off
 
 
 def test_push_to_talk_stops_a_notice_and_the_line_before_it() -> None:

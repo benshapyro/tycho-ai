@@ -58,12 +58,13 @@ FALLBACK_MODELS = frozenset({"claude-sonnet-5-5", "claude-opus-5-5"})
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 # OpenAI-compatible providers: name -> (base URL, credential name).
 PROVIDERS = {"cerebras": ("https://api.cerebras.ai/v1", "cerebras")}
-# USD per million tokens: input, output, cache read, cache write.
+# USD per million tokens: input, output, cache read, cache write. Claude's writes are the
+# 1-hour cache's, twice the input price, as Tycho asks for an hour (#489).
 # Cerebras rates are from third-party listings (Oct 2026); check the provider's page.
 PRICES = {
-    "claude-haiku-5-5": (0.10, 0.50, 0.01, 0.125),
-    "claude-sonnet-5-5": (2.00, 10.00, 0.20, 2.50),
-    "claude-opus-5-5": (4.00, 20.00, 0.20, 5.00),
+    "claude-haiku-5-5": (0.10, 0.50, 0.01, 0.20),
+    "claude-sonnet-5-5": (2.00, 10.00, 0.20, 4.00),
+    "claude-opus-5-5": (4.00, 20.00, 0.20, 8.00),
     "cerebras:gpt-oss-120b": (0.35, 0.75, 0.35, 0.35),
     "cerebras:qwen-3.8-27b": (0.99, 1.49, 0.99, 0.99),
 }
@@ -202,7 +203,7 @@ class Brains:
         if self._anthropic is None:
             self._anthropic = anthropic.Anthropic(api_key=_key("anthropic"))
         system_blocks: list[BetaTextBlockParam] = [
-            {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+            {"type": "text", "text": system, "cache_control": {"type": "ephemeral", "ttl": "1h"}}
         ]
         fallback = model in FALLBACK_MODELS
         started = time.perf_counter()

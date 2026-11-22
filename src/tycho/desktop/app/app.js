@@ -109,7 +109,7 @@
   const tried = (live) => live.exchanges.filter((e) => e.at >= trying);
   let askingCrash = false; // set up before crash reports existed: ask once (ADR 4)
   // A step is ticked when what it asks for is there, not when it was walked past: a
-  // skipped one keeps its number, marked as still to do.
+  // skipped one keeps its number, marked as still to do, unless the game doesn't need it.
   function stepDone(name, s) {
     if (name === "Game") return !s.game.needed || s.game.found;
     if (name === "Keys") return brainKey(s);
@@ -117,11 +117,16 @@
     if (name === "Privacy") return s.crash_reports != null;
     return true;
   }
+  // Skipped on purpose and not needed: a brain key in a game where Tycho's built-in
+  // phrases work without one (#448). Calm, not "still to do" every time setup opens.
+  const stepOptional = (name, s) => name === "Keys" && s.pack.can_press;
   function stepper(s) {
     return `<ol class="steps">${STEPS.map((name, i) => {
       const past = i < step, done = past && stepDone(name, s);
-      const cls = i === step ? "now" : done ? "done" : past ? "todo" : "";
-      return `<li class="${cls}"${past && !done ? ' title="Still to do"' : ""}><b>${done ? "✓" : i === STEPS.length - 1 ? "✦" : i + 1}</b>${esc(name)}</li>`;
+      const skipped = past && !done && stepOptional(name, s);
+      const cls = i === step ? "now" : done ? "done" : skipped ? "skipped" : past ? "todo" : "";
+      const title = skipped ? ' title="Skipped. You can add it later."' : past && !done ? ' title="Still to do"' : "";
+      return `<li class="${cls}"${title}><b>${done ? "✓" : skipped ? "–" : i === STEPS.length - 1 ? "✦" : i + 1}</b>${esc(name)}</li>`;
     }).join("")}</ol>`;
   }
   function stepNav(nextOk, next = "Next") {
@@ -449,8 +454,8 @@
   const row = (r) => `<div class="set"><div><b>${esc(r.label)}</b>${r.description ? `<p>${esc(r.description)}</p>` : ""}<div class="meta">${chips(r)}</div></div><div class="ctl">${control(r)}</div></div>`;
 
   let setupState = null;
-  async function settingsView() {
-    data = await api.settings();
+  async function settingsView(shared) {
+    data = shared;
     if (tab === "Game and controls") setupState = await api.setup_state();
     // Advanced last: what most players never need to change.
     const names = [...data.groups.map((g) => g.name).filter((n) => n !== TILE && n !== ADVANCED), "Keys", "Updates", ADVANCED];
@@ -473,8 +478,8 @@
   // The Tile's own place: its settings beside a preview drawn by the Tile itself.
   const TILE = "The Tile";
   const ADVANCED = "Advanced";
-  async function tileView() {
-    data = await api.settings();
+  async function tileView(shared) {
+    data = shared;
     const group = data.groups.find((g) => g.name === TILE);
     page.innerHTML = `<h1>The Tile</h1><p class="lede">A small card over your game when there's something worth seeing, like a list of prices. It never takes a click away from the game.</p>
       <div class="tilepage"><div class="rows">${group ? group.rows.map(row).join("") : ""}</div><div class="preview"><img id="tilePreview" alt="The Tile as it's set now, over a cockpit"><span class="caption">Preview · drawn by the Tile itself · 2560 × 1440</span></div></div>`;
@@ -547,17 +552,7 @@
     return [u.problem || "Couldn't check.", "err"];
   }
   function bindUpdates() {
-    $("#quitTycho")?.addEventListener("click", async () => {
-      const b = $("#quitTycho");
-      b.disabled = true;
-      try {
-        const r = await api.quit();
-        if (!r.ok) { $("#quitErr").textContent = r.problem; b.disabled = false; }
-      } catch (e) {
-        $("#quitErr").textContent = "Couldn't quit. Use Quit on Tycho's icon by the clock.";
-        b.disabled = false;
-      }
-    });
+    $("#quitTycho")?.addEventListener("click", () => quit($("#quitTycho"), (t) => { $("#quitErr").textContent = t; }));
     $("#checkUpdates")?.addEventListener("click", async () => {
       const b = $("#checkUpdates"), msg = $("#updateMsg");
       b.disabled = true; msg.className = "note"; msg.textContent = "Checking…";
@@ -583,6 +578,19 @@
       }
     });
   }
+  // Quit, from Settings' Updates tab or the foot of the places (#486): asks the Host, as
+  // the tray's Quit does. A problem is said beside the button, or as a toast.
+  async function quit(b, say) {
+    b.disabled = true;
+    try {
+      const r = await api.quit();
+      if (!r.ok) { say(r.problem); b.disabled = false; }
+    } catch (e) {
+      say("Couldn't quit. Use Quit on Tycho's icon by the clock.");
+      b.disabled = false;
+    }
+  }
+  $("#quitSide").addEventListener("click", () => quit($("#quitSide"), toast));
   let lastUpdate = { state: "" };
   /* The last check's answer: the notice opens the Updates tab with its button (#376). */
   function notice(u) {
@@ -638,7 +646,8 @@
         <p class="lede">There are no commands to list for ${esc(d.game_name)}.</p>
         <div class="card frame" id="noCommands"><h3>Just ask</h3>
           <p>${esc(d.keys_off)}</p>
-          <p>Hold your push-to-talk button and ask in your own words. Every question goes to the brain, so there are no set phrases to learn.</p></div>`;
+          <p>Hold your push-to-talk button and ask in your own words. Every question goes to the brain, so there are no set phrases to learn.</p>
+          ${d.warnings.map((w) => `<p class="warn-line">${esc(w)}</p>`).join("")}</div>`;
       return;
     }
     const noKey = rows.filter((r) => !r.sequence && !r.key && d.game).length;
@@ -718,13 +727,15 @@
     document.body.classList.toggle("solo", firstRun && view === "setup");
     document.body.classList.toggle("insetup", view === "setup");
     try {
-      await gameBox(); // in first-run setup too: the game's colour follows the pick
+      // One fetch of the settings a view: the game box and the view's own (#454).
+      const shared = await api.settings();
+      gameBox(shared); // in first-run setup too: the game's colour follows the pick
       if (view === "status") await status();
-      else if (view === "tile") await tileView();
+      else if (view === "tile") await tileView(shared);
       else if (view === "setup") await setupView();
       else if (view === "pack") await packView();
       else if (view === "commands") await commandsView();
-      else await settingsView();
+      else await settingsView(shared);
     } catch (e) {
       page.innerHTML = `<h1>Something went wrong</h1><p class="lede">${esc(e && e.message ? e.message : e)}</p>`;
     }
@@ -732,8 +743,8 @@
   document.querySelectorAll("nav [data-view]").forEach((b) => b.addEventListener("click", () => { view = b.dataset.view; render(); }));
   // The chosen game under the places, and the way to another one (Settings, where the
   // other game's own setup shows first, #364).
-  async function gameBox() {
-    const rows = (await api.settings()).groups.flatMap((g) => g.rows);
+  function gameBox(shared) {
+    const rows = shared.groups.flatMap((g) => g.rows);
     const game = rows.find((r) => r.name === "game");
     const pressing = rows.find((r) => r.name === "key_actions")?.value !== false;
     const p = game && game.packs && game.packs.find((x) => x.id === game.value);
@@ -753,6 +764,7 @@
     $("#ver").textContent = about.version;
     firstRun = Boolean(about.first_run);
     canQuit = Boolean(about.can_quit);
+    $("#quitSide").hidden = !canQuit;
     if (firstRun) view = "setup";
     else if (about.opening === "try_it") { view = "setup"; step = STEPS.indexOf("Try it"); }
     else if (about.ask_crash_reports) { askingCrash = true; view = "setup"; step = STEPS.indexOf("Privacy"); }

@@ -365,6 +365,38 @@ mode = "command"
 expect = ["actions", "reply"]
 tag = "mishearing"
 
+# --- Heard in play on 0.6.0, 2026-11-11 (#358, #356) -----------------------------
+# The first two now take the fast path; the turret only works once the player binds it.
+
+[[case]]
+heard = "Open hangers."
+mode = "command"
+expect = ["actions"]
+must = [["v_atc_request"]]
+tag = "mishearing"
+
+[[case]]
+heard = "Closed doors."
+mode = "command"
+expect = ["actions"]
+must = [["v_close_all_doors", "v_toggle_all_doors"]]
+tag = "mishearing"
+
+[[case]]
+heard = "how do you shoot the guns on the address?"
+mode = "coach"
+expect = ["reply", "look_up"]
+answer = true
+mentions = [["Idris", "turret"]]
+tag = "mishearing"
+
+[[case]]
+heard = "Enter remote turret."
+mode = "command"
+expect = ["actions", "reply"]
+must = [["v_enter_remote_turret_1"]]
+tag = "unbound"
+
 # --- Vague: should ask ------------------------------------------------------
 
 [[case]]

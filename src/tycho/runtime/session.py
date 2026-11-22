@@ -80,7 +80,7 @@ from tycho.runtime.routing import (
     route,
 )
 from tycho.runtime.speaking import Speaking, Telling, log_failure, refused_keys_off
-from tycho.runtime.tiling import tile_word, to_tile
+from tycho.runtime.tiling import tile_request, to_tile
 from tycho.tile.cards import notice
 
 log = logging.getLogger(__name__)
@@ -254,7 +254,9 @@ class Session:
             self._tail_pending = True
             if self._display is not None:
                 self._display.thinking()
-            self._current = asyncio.create_task(self._serve(next(self._ids)))
+            # Try it is decided now, as the button is let go (#467): switching to the
+            # game while the brain thinks mustn't turn a try into a real press.
+            self._current = asyncio.create_task(self._serve(next(self._ids), self._trying))
 
     async def idle(self) -> Result | None:
         """Wait for the request in flight, if any, and for Tycho to finish saying it."""
@@ -301,7 +303,7 @@ class Session:
         if self._current is not None and not self._current.done():
             self._current.cancel()
 
-    async def _serve(self, request: int) -> Result:
+    async def _serve(self, request: int, trying: bool = False) -> Result:
         trace = Trace(self._clock)
         cancel = self._cancel = threading.Event()
         progress = Progress()
@@ -311,7 +313,7 @@ class Session:
             self._tail_pending = False
             clip = self._audio.stop()
             trace.mark("tail")
-            result = await self._process(request, clip, trace, cancel, progress)
+            result = await self._process(request, clip, trace, cancel, progress, trying)
         except asyncio.CancelledError:
             cancel.set()
             self._report(progress.result(request, "cancelled", trace))
@@ -335,6 +337,7 @@ class Session:
         trace: Trace,
         cancel: threading.Event,
         progress: Progress,
+        trying: bool,
     ) -> Result:
         if len(clip) / self._samplerate < MIN_CLIP_SECONDS:
             return Progress().result(request, "empty", trace, detail="too short")
@@ -367,8 +370,12 @@ class Session:
         trace.mark("match")
         if isinstance(routed, Reserved):
             word = routed.word
+            said = (request, trace, heard, text)
             if word == "say_again":
-                return self._say_again(request, trace, heard, text, question)
+                line, now = self._conversation.last_line, self._clock()
+                answer = say_again(line, question, now, self._confirm_seconds)
+                self._question = answer.reopened  # asked again: it waits afresh
+                return answer.result(*said)
             if word == "confirm" or word == "cancel":
                 answer = answered(word, question, self._clock())
                 if isinstance(answer, Answer):
@@ -379,7 +386,8 @@ class Session:
                 commands, confirmed = answer.commands, True
                 progress.by_brain, progress.say = answer.by_brain, answer.say
             else:
-                return self._tile(request, word, trace, heard, text)
+                assert self._display is not None  # noqa: S101 - only routed with a display
+                return tile_request(self._display, word, self._conversation.last_reply, *said)
         elif isinstance(routed, NotUnderstood):
             return Progress().result(request, "not_understood", trace, heard, text, routed.reason)
         elif isinstance(routed, Picked):
@@ -436,7 +444,7 @@ class Session:
             sleep=self._sleep,
             progress=progress,
             trace=trace,
-            trying=self._trying,
+            trying=trying,
         )
         return end(status, detail)
 
@@ -456,25 +464,6 @@ class Session:
             searching=self._voice.fill,
             checking=self._voice.check,
         )
-
-    def _tile(self, request: int, what: str, trace: Trace, heard: str, text: str) -> Result:
-        """A word to the Tile (``tiling.tile_word``)."""
-        assert self._display is not None  # noqa: S101 - only called with a display
-        detail = tile_word(self._display, what, self._conversation.last_reply)
-        progress = Progress(commands=(f"tile_{what}",))
-        status: Status = "not_understood" if detail else "done"
-        return progress.result(request, status, trace, heard, text, detail)
-
-    def _say_again(
-        self, request: int, trace: Trace, heard: str, text: str, question: Question | None
-    ) -> Result:
-        """Tycho's last line again (``asking.say_again``)."""
-        now = self._clock()
-        answer = say_again(self._conversation.last_line, question, now, self._confirm_seconds)
-        if answer.reopened is not None:
-            self._question = answer.reopened
-        progress = Progress(answer.commands, say=answer.say, question=answer.question)
-        return progress.result(request, answer.status, trace, heard, text, answer.detail)
 
     def _report(self, result: Result) -> None:
         speak = self._speaker is not None and would_speak(result)

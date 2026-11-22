@@ -4,6 +4,7 @@ import faulthandler
 import os
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -138,3 +139,62 @@ def test_the_next_start_tells_the_player_once(
     assert told == [[crashes.STOPPED.format(file=kept[0])], []]  # shown on the Tile, once
     assert caplog.text.count("stopped unexpectedly") == 1
     assert faulthandler.is_enabled()  # and this run is being recorded
+
+
+# --- Handled exceptions aren't crashes (#474) -------------------------------------------
+
+HANDLED = """Windows fatal exception: code 0x8001010d
+
+Current thread 0x00002b1c (most recent call first):
+  File "C:\\tycho\\webview\\platforms\\winforms.py", line 808 in create
+"""
+
+
+def test_a_handled_com_error_left_by_a_task_manager_kill_isnt_a_crash(tmp_path: Path) -> None:
+    """The window's message loop handles 0x8001010d, but faulthandler writes it. Ended
+    from Task Manager after that, the file stays: the next start mustn't say "stopped
+    unexpectedly" for it."""
+    (tmp_path / crashes.LIVE).write_text(HANDLED, encoding="utf-8")
+    assert crashes.watch(tmp_path) is None
+    crashes.stop()
+    assert crashes.past(tmp_path) == []
+    assert crashes.finding(tmp_path) is None
+
+
+def test_a_real_crash_after_a_handled_error_is_still_a_crash(tmp_path: Path) -> None:
+    died = HANDLED + "\nWindows fatal exception: access violation\n\nCurrent thread:\n"
+    (tmp_path / crashes.LIVE).write_text(died, encoding="utf-8")
+    found = crashes.watch(tmp_path)
+    crashes.stop()
+    assert found is not None
+    assert "access violation" in found.read_text(encoding="utf-8")
+
+
+def test_only_handled_reads_each_record() -> None:
+    assert crashes.only_handled(HANDLED)
+    assert not crashes.only_handled("Fatal Python error: Segmentation fault\n")
+    assert not crashes.only_handled(HANDLED + "Fatal Python error: Aborted\n")
+    assert not crashes.only_handled("Windows fatal exception: access violation\n")
+    assert not crashes.only_handled("something else entirely\n")
+
+
+def test_stopping_from_several_threads_at_once_is_safe(tmp_path: Path) -> None:
+    """#440: the console's close and WM_ENDSESSION call stop on Windows' threads while
+    the main thread reaches atexit's."""
+    errors: list[BaseException] = []
+
+    def stop() -> None:
+        try:
+            crashes.stop()
+        except BaseException as e:
+            errors.append(e)
+
+    for _ in range(20):
+        crashes.watch(tmp_path)
+        threads = [threading.Thread(target=stop) for _ in range(4)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+    assert errors == []
+    assert not (tmp_path / crashes.LIVE).exists()

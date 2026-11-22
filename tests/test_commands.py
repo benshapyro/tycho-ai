@@ -31,6 +31,8 @@ def _ids(text: str) -> str:
         ("target whoever's shooting at us", "target_attacker"),
         ("Full throttle!", "throttle_max"),
         ("cut the throttle", "throttle_min"),
+        ("Enter the remote turret two.", "remote_turret_2"),  # #356
+        ("leave the remote turrets", "remote_turret_exit"),
     ],
 )
 def test_matches_unseen_wordings(text: str, expected: str) -> None:
@@ -71,6 +73,10 @@ def test_defers_what_it_cannot_be_sure_of(text: str) -> None:
         ("lock gimbals", "gimbals_unlock"),
         ("unlock gimbals", "gimbals_lock"),
         ("gimbal lock", "gimbals_toggle"),  # a toggle could unlock them
+        ("closed doors", "doors_open"),
+        ("enter remote turret", "remote_turret_exit"),
+        ("exit remote turret", "remote_turret_1"),
+        ("enter remote turret three", "remote_turret_2"),
     ],
 )
 def test_never_flips_meaning(text: str, never: str) -> None:
@@ -228,6 +234,17 @@ def test_no_two_commands_are_confusable() -> None:
         ("option for", "brain"),  # a number misheard is never guessed
         ("request loading", "brain"),  # not a landing request
         ("request docking", "request_docking"),  # was wrongly a landing request
+        # Heard in play on 0.6.0 (#358): both went to the brain, five times slower.
+        ("Open hangers.", "request_departure"),  # the lexicon makes it hangars
+        ("Closed doors.", "doors_close"),
+        ("closed door", "doors_close"),
+        ("the doors are closed", "brain"),  # a remark, not a request
+        ("unlocked doors", "brain"),  # never close doors for a word like closed
+        ("close the hangar", "brain"),  # not the request that opens it
+        ("get in the remote turret", "brain"),  # was "get out of the remote turret"
+        ("enter remote turret four", "brain"),  # there are three
+        ("exit remote turret one", "brain"),  # a number on the way out isn't guessed
+        ("remote turret", "brain"),  # too little to act on
     ],
 )
 def test_opposites_and_neighbours_never_cross(text: str, expected: str) -> None:
