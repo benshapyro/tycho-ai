@@ -30,6 +30,9 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - With the brain through OpenRouter, Tycho now tells OpenRouter never to use a host that keeps or trains on what you say, whatever your OpenRouter account's privacy settings are. ([#488](https://github.com/benshapyro/tycho-ai/issues/488))
 - `tycho check`'s focus test no longer says "(another program was)" when it can't tell which program was in front; it names the program only when it knows. ([#430](https://github.com/benshapyro/tycho-ai/issues/430))
 
+### Fixed
+- With speech recognition on the processor (the default), Tycho now uses at most as many threads as your PC has cores, so a 4-core laptop keeps more for the game. If the new speech model couldn't download after an update, Tycho starts on the one you already have instead of not starting. `tycho gpu install` now says how to move speech recognition to the graphics card, and `tycho check` says when the old 2.5 GB model is no longer used and can be deleted. ([#480](https://github.com/benshapyro/tycho-ai/issues/480))
+
 ## [0.8.0] - 2026-11-22
 
 ### Added

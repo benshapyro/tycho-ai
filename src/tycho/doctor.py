@@ -10,6 +10,7 @@ import logging
 import sys
 import time
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -25,7 +26,14 @@ from tycho.ptt.binding import DeviceKind
 from tycho.ptt.conflicts import conflict_warnings
 from tycho.ptt.devices import describe
 from tycho.settings import Settings
-from tycho.stt import PARAKEET_V2, ModelStore, download_size, speech_models
+from tycho.stt import (
+    PARAKEET_V2,
+    PARAKEET_V2_INT8,
+    ModelSpec,
+    ModelStore,
+    download_size,
+    speech_models,
+)
 from tycho.stt.choice import GPU_HELP, MODEL_HELP, device_choice, device_name, gpu_hint
 from tycho.voice import choice as voice_choice
 from tycho.voice.choice import VOICE_KEY_HELP, choose_voice, elevenlabs_key
@@ -68,6 +76,24 @@ def speech_finding(current: Settings) -> Finding:
     if nvidia_driver() is None:  # nothing to do about it: fine, just slower
         return Finding("ok", "Speech recognition", "on the processor (no NVIDIA card)")
     return Finding("warn", "Speech recognition", detail)
+
+
+def _unused_full_model(specs: tuple[ModelSpec, ...], folder: Path) -> str:
+    """Speech on the processor uses only the 8-bit copy: a full model left from before
+    0.9 can go (#480)."""
+    if PARAKEET_V2 in specs:
+        return ""
+    names = {f.name for f in PARAKEET_V2_INT8.files}
+    spare = [f for f in PARAKEET_V2.files if f.name not in names and (folder / f.name).is_file()]
+    if not spare:
+        return ""
+    size = sum(f.size for f in spare) / 1e9
+    files = ", ".join(f.name for f in spare)
+    return (
+        f". The full model ({size:.1f} GB: {files}) isn't used with speech recognition on "
+        "the processor. You can delete those files to free the space; Tycho downloads them "
+        "again if you set it to the graphics card."
+    )
 
 
 def diagnose(current: Settings, *, quick: bool = False) -> Iterator[Finding]:
@@ -158,7 +184,8 @@ def checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Finding
     model = ModelStore(paths.models_dir())
     specs = speech_models(device_choice(current).device)
     if model.has(specs):
-        yield Finding("ok", "Speech model", str(model.folder(PARAKEET_V2)))
+        folder = model.folder(PARAKEET_V2)
+        yield Finding("ok", "Speech model", f"{folder}{_unused_full_model(specs, folder)}")
     else:
         size = download_size(specs) / 1e9
         yield Finding(
