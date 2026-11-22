@@ -25,6 +25,8 @@
 #
 # max_words: (replies) the most words the spoken reply may have: one short sentence
 #            for a simple question (docs/voice-and-tone.md, #363).
+# key_for:   (replies) actions whose key, from the player's keybinds, the reply must name
+#            (#357). Skipped when none of them is bound.
 #
 # Action names are from the author's bound keys. Actions with no key can't be
 # chosen, so requests for them should get a reply explaining that.
@@ -623,6 +625,27 @@ mode = "command"
 expect = ["actions"]
 must = [["v_power_toggle_shields", "v_power_set_shields_off"]]
 tag = "unbound"
+
+# --- The player's own keys (#357) ------------------------------------------
+# From a play session on 0.6.0: "how do you shoot the guns on the Idris?" got "Hold
+# the primary fire button", with the player's keybinds loaded.
+[[case]]
+heard = "how do you shoot the guns on the Idris"
+mode = "coach"
+expect = ["reply"]
+# Graded on naming the key, from player_keys or the briefing's own lists (keys off).
+key_for = ["v_attack1_group1"]
+max_calls = 2
+tag = "keys"
+
+[[case]]
+heard = "what's my key for strafing up"
+mode = "lookup"
+expect = ["reply"]
+# Graded on naming the key, from player_keys or the briefing's own lists (keys off).
+key_for = ["v_strafe_up"]
+max_calls = 2
+tag = "keys"
 
 # --- Chatter: not a request -------------------------------------------------
 
