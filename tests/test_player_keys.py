@@ -63,3 +63,12 @@ def test_the_briefing_says_when_to_look_up_a_key() -> None:
 
     text = " ".join(instructions(built_in(STAR_CITIZEN)).split())
     assert "or which key does it, call player_keys" in text
+
+
+def test_the_briefing_reads_a_misheard_ship_name_as_the_ship() -> None:
+    """#509: "how do you shoot the guns on the address?" got "which ship do you mean?"."""
+    from tycho.brain.briefing import instructions
+    from tycho.packs import STAR_CITIZEN, built_in
+
+    text = " ".join(instructions(built_in(STAR_CITIZEN)).split())
+    assert "Ship names are misheard as everyday words too" in text
