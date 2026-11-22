@@ -276,3 +276,18 @@ def test_a_try_it_result_isnt_a_follow_up_the_brain_takes_as_done() -> None:
     assert exchange.outcome.startswith("only tried landing_gear in setup")
     assert "nothing was pressed" in exchange.outcome
     assert "did " not in exchange.outcome
+
+
+def test_going_back_and_forward_a_card_by_voice() -> None:
+    """#491: "go back a card" and "next card" walk the cards that gave way."""
+    from tests.fakes.fake_display import FakeDisplay
+    from tycho.runtime.tiling import tile_word
+    from tycho.tile import Card, Row
+
+    display = FakeDisplay()
+    for title in "AB":
+        display.show(Card("list", title=title, rows=(Row("Everus Harbor", value="3,048"),)))
+    assert tile_word(display, "forward", ("", None)) == "nothing on the Tile for that"
+    assert tile_word(display, "again", ("", None)) == ""
+    assert tile_word(display, "forward", ("", None)) == ""
+    assert display.calls[-2:] == ["again", "forward"]

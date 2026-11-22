@@ -14,6 +14,8 @@ def tile_word(display: Display, what: str, last_reply: tuple[str, Card | None]) 
         done = display.pin()
     elif what == "again":
         done = display.again()
+    elif what == "forward":
+        done = display.forward()
     elif what == "clear":
         display.clear()
         done = True
