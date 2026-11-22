@@ -24,6 +24,9 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - With the brain through OpenRouter, Tycho now tells OpenRouter never to use a host that keeps or trains on what you say, whatever your OpenRouter account's privacy settings are. ([#488](https://github.com/benshapyro/tycho-ai/issues/488))
 - `tycho check`'s focus test no longer says "(another program was)" when it can't tell which program was in front; it names the program only when it knows. ([#430](https://github.com/benshapyro/tycho-ai/issues/430))
 
+### Fixed
+- Names and quotes in Greek or Cyrillic on the Tile now draw in Windows' own fonts. Since 0.8's bundled fonts they drew as boxes. ([#458](https://github.com/benshapyro/tycho-ai/issues/458))
+
 ## [0.8.0] - 2026-11-22
 
 ### Added

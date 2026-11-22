@@ -25,7 +25,10 @@ from PIL import Image, ImageDraw
 from tycho.tile.board import Shown
 from tycho.tile.cards import SPECS, Card
 from tycho.tile.design import CORE, TYCHO_ACCENT
-from tycho.tile.faces import Font, font
+from tycho.tile.faces import Face, Font, bundled_draws, font
+from tycho.tile.faces import fit as _fit
+from tycho.tile.faces import text_width as _width
+from tycho.tile.faces import wrap as _wrap
 
 type Light = Literal["listening", "thinking"] | None
 type Rgba = tuple[int, int, int, int]
@@ -62,45 +65,6 @@ def rgba(hex_colour: str, alpha: float = 1.0) -> Rgba:
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), round(255 * alpha)
 
 
-def _width(text: str, f: Font, tracking: float = 0.0) -> float:
-    return f.getlength(text) + tracking * max(0, len(text) - 1)
-
-
-def _wrap(text: str, f: Font, width: float, lines: int = 99) -> list[str]:
-    """``text`` in lines no wider than ``width``; the last cut with an ellipsis."""
-    out: list[str] = []
-    line = ""
-    for word in text.split():
-        while _width(word, f) > width:  # a word longer than the line: break it
-            cut = max(1, int(len(word) * width / _width(word, f)) - 1)
-            if line:
-                out.append(line)
-                line = ""
-            out.append(word[:cut])
-            word = word[cut:]
-        candidate = f"{line} {word}".strip()
-        if _width(candidate, f) <= width:
-            line = candidate
-        else:
-            out.append(line)
-            line = word
-    if line:
-        out.append(line)
-    if len(out) > lines:
-        out = out[:lines]
-        out[-1] = _fit(out[-1] + "…", f, width)
-    return out
-
-
-def _fit(text: str, f: Font, width: float, tracking: float = 0.0) -> str:
-    """``text`` cut with an ellipsis to fit ``width``."""
-    if _width(text, f, tracking) <= width:
-        return text
-    while text and _width(text + "…", f, tracking) > width:
-        text = text[:-1]
-    return text.rstrip() + "…"
-
-
 # --- one card -------------------------------------------------------------------
 
 
@@ -133,6 +97,11 @@ class _Pen:
         self.text = rgba("#ffffff") if hc else rgba(CORE.text)
         self.dim = rgba("#c8d2e0") if hc else rgba(CORE.dim)
         self.well = (255, 255, 255, 18 if hc else 9)
+        # Greek, Cyrillic or a €: the whole card in Windows' faces, not boxes (#458).
+        self.windows = not bundled_draws(*card.shown())
+
+    def font(self, face: Face, size: int) -> Font:
+        return font(face, size, self.windows)
 
     def px(self, n: float) -> int:
         return round(n * self.u)
@@ -149,7 +118,7 @@ class _Pen:
     # The parts every card has.
 
     def kicker(self) -> None:
-        f = font("label", self.px(14))
+        f = self.font("label", self.px(14))
         g = self.px(14)
         self.glyph(self.pad, self.y + self.px(1), g, self.kick)
         x = self.pad + g + self.px(8)
@@ -167,7 +136,7 @@ class _Pen:
     def title(self) -> None:
         if not self.card.title:
             return
-        f = font("label", self.px(25))
+        f = self.font("label", self.px(25))
         for line in _wrap(self.card.title.upper(), f, self.inner, lines=2):
             self.caps((self.pad, self.y), line, f, self.text, 0.05)
             self.y += self.px(27)
@@ -201,9 +170,9 @@ class _Pen:
         fleet = self.card.kind == "fleet"
         best_first = self.card.kind in ("list", "fleet")
         name_f, value_f, small_f = (
-            font("strong", self.px(18)),
-            font("number", self.px(19)),
-            font("text", self.px(14)),
+            self.font("strong", self.px(18)),
+            self.font("number", self.px(19)),
+            self.font("text", self.px(14)),
         )
         for i, row in enumerate(self.card.rows):
             best = best_first and i == 0 and not row.dim
@@ -248,7 +217,7 @@ class _Pen:
         self.y += self.px(2)
 
     def recipe(self) -> None:
-        name_f, value_f = font("text", self.px(18)), font("number", self.px(18))
+        name_f, value_f = self.font("text", self.px(18)), self.font("number", self.px(18))
         for row in self.card.rows:
             top, h = self.y, self.px(28)
             self.d.rectangle((self.pad, top, self.pad + self.inner, top + h), fill=self.well)
@@ -271,9 +240,9 @@ class _Pen:
 
     def route(self) -> None:
         small, place, price = (
-            font("label", self.px(13)),
-            font("strong", self.px(18)),
-            font("number", self.px(16)),
+            self.font("label", self.px(13)),
+            self.font("strong", self.px(18)),
+            self.font("number", self.px(16)),
         )
         arrow_w = self.px(26)
         leg_w = (self.inner - arrow_w) / 2
@@ -296,6 +265,7 @@ class _Pen:
                 fill=self.text,
             )
         mid = self.pad + leg_w + arrow_w / 2
+        # Tycho's own arrow, not the card's words: always the bundled face, which has it.
         arrow = font("strong", self.px(20))  # Share Tech Mono has no arrow; Saira has
         self.d.text(
             (mid - arrow.getlength("→") / 2, self.y + h / 2 - self.px(12)),
@@ -316,7 +286,7 @@ class _Pen:
             width=max(1, self.px(1)),
         )
         self.y += self.px(8)
-        big, small = font("number", self.px(38)), font("label", self.px(14))
+        big, small = self.font("number", self.px(38)), self.font("label", self.px(14))
         value_w = _width(value, big)
         self.caps(
             (self.pad, self.y + self.px(16)),
@@ -329,7 +299,7 @@ class _Pen:
         self.y += self.px(42)
 
     def specs(self) -> None:
-        small, value_f = font("label", self.px(12)), font("number", self.px(20))
+        small, value_f = self.font("label", self.px(12)), self.font("number", self.px(20))
         col = (self.inner - self.px(5)) / 2
         h = self.px(48)
         for i, row in enumerate(self.card.rows):
@@ -353,7 +323,7 @@ class _Pen:
         self.y += math.ceil(len(self.card.rows) / 2) * (h + self.px(5)) + self.px(3)
 
     def steps(self) -> None:
-        f, n = font("text", self.px(18)), font("number", self.px(18))
+        f, n = self.font("text", self.px(18)), self.font("number", self.px(18))
         gutter = self.px(26)
         for i, row in enumerate(self.card.rows):
             self.d.text((self.pad, self.y), str(i + 1), font=n, fill=self.accent)
@@ -364,11 +334,11 @@ class _Pen:
 
     def headlines(self) -> None:
         f, n = (
-            font(
+            self.font(
                 "text",
                 self.px(17),
             ),
-            font("number", self.px(15)),
+            self.font("number", self.px(15)),
         )
         date_w = max((_width(r.value, n) for r in self.card.rows), default=0) + self.px(12)
         for row in self.card.rows:
@@ -379,7 +349,7 @@ class _Pen:
             self.y += self.px(5)
 
     def words(self, size: int = 18, lines: int = 6) -> None:
-        f = font("text", self.px(size))
+        f = self.font("text", self.px(size))
         for paragraph in self.card.body:
             for line in _wrap(paragraph, f, self.inner, lines=lines):
                 self.d.text((self.pad, self.y), line, font=f, fill=self.text)
@@ -389,7 +359,7 @@ class _Pen:
     def confirm(self) -> None:
         """The question, beside room for the countdown ring (drawn per frame)."""
         ring = self.px(54)
-        big, f = font("label", self.px(32)), font("text", self.px(16))
+        big, f = self.font("label", self.px(32)), self.font("text", self.px(16))
         x = self.pad + ring + self.px(16)
         question = self.card.body[0] if self.card.body else ""
         asked, _, rest = question.partition("?")
@@ -475,7 +445,7 @@ def strip_image(card: Card, look: Look) -> Image.Image:
     pen = _Pen(card, look)
     pen.d = d
     pen.glyph(round(12 * u), round(10 * u), round(14 * u), rgba(look.accent))
-    f = font("label", round(15 * u))
+    f = pen.font("label", round(15 * u))
     title = _fit(
         (card.title or card.label or card.kind).upper(), f, w - round(70 * u), 0.08 * f.size
     )
