@@ -257,6 +257,7 @@
         ${s.todo.length ? `<div id="todo"><p class="warn-line">Tycho still needs:</p>${s.todo.map((t) => `<div class="keyrow"><span>${esc(t.what)}</span><button class="btn frame" type="button" data-goto="${esc(t.step)}">Go to ${esc(STEP_OF[t.step] || t.step)}</button></div>`).join("")}
           <p class="note">Or close this window and finish later: what you've chosen is kept.</p></div>` : ""}
         ${say.length ? `<div class="field"><label>Hold your button and say</label>${list(say.map((e) => `“${e}”`), "say")}</div>` : `<p>Hold your button and ask Tycho something about ${esc(s.pack.name)}.</p>`}
+        ${s.pack.can_press && !presses(s.pack) && brainKey(s) ? `<p class="note" id="keysOffSay">Key actions are off, so Tycho tells you the key for a command instead of pressing it.</p>` : ""}
         ${brainKey(s) ? "" : `<p class="warn-line" id="noBrain">${presses(s.pack) ? "With no Anthropic or OpenRouter key, only the built-in phrases work: What to say lists them." : `With no Anthropic or OpenRouter key${s.pack.can_press ? " and key actions off" : ""}, Tycho can't answer in ${esc(s.pack.name)}. Add one in the Keys step.`}</p>`}
         ${list(s.pack.tips, "tips")}
         <p class="note">${firstRun ? "Press Start Tycho. Once it's listening, this window opens again here so you can try it, with nothing sent to the game. Its star sits by the clock (if you don't see it, it's under the ^ arrow there): click it to open this window again, or open Tycho from the Start menu." : "Changes apply when Tycho next starts."}</p>

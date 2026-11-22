@@ -451,6 +451,28 @@ def test_a_skipped_key_is_still_to_do_with_key_actions_off(
         setup.next()
     setup.at("Try it")
     expect(page.locator("#noBrain")).to_contain_text("and key actions off, Tycho can't answer")
+    expect(page.locator("#keysOffSay")).to_have_count(0)  # #noBrain says it all
+    setup.close()
+
+
+def test_try_it_says_commands_are_told_not_pressed_with_key_actions_off(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """From the review of #521: with key actions off, the built-in phrases Try it lists
+    press nothing, so it says Tycho names the key instead."""
+    settings.save(Settings(key_actions=False), path)
+    setup = Setup(browser, path)
+    page = setup.page
+    setup.at("Game")
+    setup.next()
+    setup.at("Keys")
+    page.locator("#k-anthropic").fill(ANTHROPIC)
+    page.locator("[data-store='anthropic']").click()
+    expect(page.locator("#keysForm")).to_contain_text("Wxyz")
+    for _ in range(3):
+        setup.next()
+    setup.at("Try it")
+    expect(page.locator("#keysOffSay")).to_contain_text("tells you the key")
     setup.close()
 
 
