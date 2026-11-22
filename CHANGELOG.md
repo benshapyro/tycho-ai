@@ -8,6 +8,9 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ## [Unreleased]
 
+### Changed
+- When Tycho can only reach an action through a toggle (say, "open the doors" with only Open/Close Doors bound), it now says "Toggled Open/Close Doors. I can't see which way it went." instead of a line that claims the doors are open. Give the action its own key and the line goes away. Actions the game announces itself, like the landing gear, stay quiet as before. ([#29](https://github.com/benshapyro/tycho-ai/issues/29))
+
 ## [0.9.0] - 2026-11-22
 
 ### Added

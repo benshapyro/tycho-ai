@@ -30,6 +30,8 @@ def would_speak(result: Result) -> bool:
     """Whether this result has a line for the player, given a voice to say it."""
     if result.commands == ("say_again",):
         return result.done and bool(result.say)
+    if result.toggled:  # the fast path's too: it can't tell which way a toggle went
+        return result.done and not result.announced and bool(result.say)
     if not result.by_brain or not result.say.strip():
         return False
     return result.status == "replied" or (result.done and not result.announced)
