@@ -47,7 +47,7 @@ Worked through on 15 November 2026 (Tycho 0.7.0 plus the 0.8 changes so far).
 | **What look-ups tell the brain when they miss** | `brain/lookups.py`, `games/star_citizen/*_lookup.py`, `knowledge/web.py` | Fine: each says what to do instead ("answer without it"). |
 | **Settings: names and descriptions** (the window's Settings, `settings.toml`, the settings tool) | `settings.py`, `desktop/bridge/state.py` (labels), `desktop/bridge/settings_page.py` (tabs) | Fixed here: web search and the Tile's nudge no longer name Star Citizen or a ship; Star Citizen's own settings say so. The Tile's card kinds are named by each pack (#422). |
 | **Settings by voice** ("Voice at 40%. Say undo to put it back.") | `spoken_settings.py`, `tile/display.py` | Fine. |
-| **The window's pages** | `desktop/app/app.js`, `index.html`, and the bridge modules in `desktop/bridge/` | Fixed here: the Commands search box. Setup's game step still assumes Star Citizen: the onboarding work, #364. The Tile's preview card: #422. |
+| **The window's pages** | `desktop/app/app.js`, `index.html`, and the bridge modules in `desktop/bridge/` | Fixed here: the Commands search box. Setup's game step: fixed in the onboarding work (#364). The Tile's preview card: fixed in #422. |
 | **The tray** | `desktop/menu.py`, `desktop/tray.py`, `desktop/shell.py` | Fine. |
 | **The Tile's own cards** (questions, warnings, notices) | `tile/cards.py`, `tile/display.py`, `start/run.py` | Fine. |
 | **`tycho check`** | `doctor.py`, `findings.py`, `brain_choice.py`, `voice/choice.py`, `stt/choice.py`, `ptt/conflicts.py`, and the game's part in `games/star_citizen/checks.py` | Fixed here: the focus check names the chosen game, and is skipped where Tycho presses nothing. |
@@ -61,6 +61,5 @@ Worked through on 15 November 2026 (Tycho 0.7.0 plus the 0.8 changes so far).
 ### Still to do
 
 - #421: what the brain is sent in every game still carries Star Citizen's examples. It needs Star Citizen's eval, on the maintainer's PC.
-- #364: setup's game step (onboarding).
 - #359: whether short stray utterances get a reply at all.
 - Star Citizen's eval now has `say_words = 15` and `never_say`; they're first measured on its next run.
