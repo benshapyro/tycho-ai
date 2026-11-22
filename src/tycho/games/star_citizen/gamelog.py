@@ -10,21 +10,28 @@ and are they still in the seat?". What the author's Game.log showed, 2026-10-31:
 - calibration notifications only for other players' ships, never the player's own;
 - nothing about operator mode, NAV or SCM, or weapons.
 
-Lines are matched by their wording, which a patch can change. Unrecognised lines
-leave the state unknown, which makes commands that need it refuse.
+Lines are matched by their wording, which a patch can change: the patterns are in
+``loglines.py``, each tested against a real line. Unrecognised lines leave the state
+unknown, which makes commands that need it refuse.
+
+Besides the gate's facts, the reader keeps what's true now (the route, the player's
+last ship) and the latest events (a jump ended, the HUD's notifications), each with
+the time the game logged it: ``situation()`` (#30), for what Tycho tells the brain
+and says on its own.
 """
 
 import threading
+from collections import deque
 from pathlib import Path
+
+from tycho.games.star_citizen import loglines
+from tycho.situation import Logged, Situation
 
 QUANTUM_ROUTE = "quantum_route_set"
 """A quantum route is plotted and not yet flown, and the player hasn't left the pilot seat."""
 
-_ROUTE_PLOTTED = b"Successfully calculated route to"
-_ARRIVED = b"Arrived at Final Destination"
-_LEFT_SEAT = (b"<Vehicle Control Flow>", b"ClearDriver")
-_MARKERS = (_ROUTE_PLOTTED, _ARRIVED, _LEFT_SEAT[1])
-"""A chunk with none of these needs no line-by-line look: most of the log is other news."""
+RECENT = 50
+"""How many of the latest events ``situation()`` keeps."""
 _HEADER_BYTES = 256
 """The log's first lines name the session; a different start means the game restarted."""
 MAX_BACKLOG_BYTES = 8 << 20
@@ -46,6 +53,9 @@ class GameLog:
         self._partial = b""
         self._skipping = False
         self._facts: set[str] = set()
+        self._now: dict[str, Logged] = {}
+        self._recent: deque[Logged] = deque(maxlen=RECENT)
+        self._number = 0
         self.readable = False
         """Whether the last read found the log."""
 
@@ -54,6 +64,12 @@ class GameLog:
         with self._lock:
             self._catch_up()
             return frozenset(self._facts)
+
+    def situation(self) -> Situation:
+        """The facts, what's true now and the latest events. Blocking, like ``facts``."""
+        with self._lock:
+            self._catch_up()
+            return Situation(frozenset(self._facts), tuple(self._now.values()), tuple(self._recent))
 
     def _catch_up(self) -> None:
         try:
@@ -86,7 +102,8 @@ class GameLog:
         if self._skipping and lines:
             lines.pop(0)  # the end of a line whose start was skipped
             self._skipping = False
-        if not any(marker in data for marker in _MARKERS):
+        # A chunk with no marker needs no line-by-line look: most of the log is other news.
+        if not any(marker in data for marker in loglines.MARKERS):
             return
         for line in lines:
             self._apply(line)
@@ -97,10 +114,27 @@ class GameLog:
         self._partial = b""
         self._skipping = False
         self._facts.clear()
+        self._now.clear()
+        self._recent.clear()
 
-    def _apply(self, line: bytes) -> None:
-        # Matched as bytes: decoding every line of a long session was most of the time.
-        if _ROUTE_PLOTTED in line:
+    def _apply(self, raw: bytes) -> None:
+        # Matched as bytes first: decoding every line of a long session was most of the time.
+        line = loglines.read(raw)
+        if line is None:
+            return
+        self._number += 1
+        logged = Logged(line.kind, line.said, loglines.when(raw), self._number)
+        if line.set_route is True:
             self._facts.add(QUANTUM_ROUTE)
-        elif _ARRIVED in line or all(part in line for part in _LEFT_SEAT):
+        elif line.set_route is False:
             self._facts.discard(QUANTUM_ROUTE)
+        for kind in line.clears:
+            self._now.pop(kind, None)
+        if line.keep:
+            self._now.pop(line.kind, None)  # the newest last
+            self._now[line.kind] = logged
+        if line.ship:
+            said = f"Last at the controls of the {line.ship}"
+            self._now.pop(loglines.SHIP, None)
+            self._now[loglines.SHIP] = Logged(loglines.SHIP, said, logged.at, self._number)
+        self._recent.append(logged)
