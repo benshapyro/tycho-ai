@@ -52,6 +52,9 @@ class Shown:
     """When it went up, on the board's clock: for the timer bar along its foot."""
     order: int = 0
     """When it was first shown, counted: going back and forward keep it (#491)."""
+    brought_back: bool = False
+    """Brought back by "go back a card": up until another card takes its place, then a
+    strip that fades like any other."""
 
     @property
     def pinned(self) -> bool:
@@ -96,11 +99,19 @@ class Board:
         self._put(card, pinned=pinned, seconds=seconds, order=self._count)
         return True
 
-    def _put(self, card: Card, *, pinned: bool, seconds: float | None, order: int) -> None:
+    def _put(
+        self,
+        card: Card,
+        *,
+        pinned: bool,
+        seconds: float | None,
+        order: int,
+        brought_back: bool = False,
+    ) -> None:
         self._make_room()
         now = self._clock()
         until = None if pinned else now + (seconds or lifetime(card, self.stay))
-        self._shown.insert(0, Shown(card, until, since=now, order=order))
+        self._shown.insert(0, Shown(card, until, since=now, order=order, brought_back=brought_back))
 
     def _make_room(self) -> None:
         self._expire()
@@ -111,7 +122,8 @@ class Board:
                 if shown.strip:
                     strips.append(shown)
                 elif shown.card.kind not in NO_STRIP:
-                    until = None if shown.pinned else now + STRIP_SECONDS * self.stay
+                    kept = shown.pinned and not shown.brought_back
+                    until = None if kept else now + STRIP_SECONDS * self.stay
                     strips.append(replace(shown, strip=True, until=until, since=now))
             self._shown = sorted(strips, key=lambda s: s.order, reverse=True)[:STRIPS]
         else:
@@ -139,7 +151,9 @@ class Board:
     def _step(self, *, back: bool) -> bool:
         self._expire()
         full = [s.order for s in self._shown if not s.strip]
-        here = full[0] if full else (None if back else 0)
+        if not full and not back:
+            return False  # nothing showing to go forward from
+        here = full[0] if full else None
         strips = [s for s in self._shown if s.strip]
         if back:
             found = [s for s in strips if here is None or s.order < here]
@@ -150,7 +164,7 @@ class Board:
         if target is None:
             return False
         self._shown.remove(target)
-        self._put(target.card, pinned=True, seconds=None, order=target.order)
+        self._put(target.card, pinned=True, seconds=None, order=target.order, brought_back=True)
         return True
 
     def clear(self) -> None:

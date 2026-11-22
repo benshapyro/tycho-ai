@@ -233,6 +233,29 @@ def test_going_back_and_forward_through_the_cards() -> None:
     assert board.view()[0].pinned  # a card brought back stays until it gives way
 
 
+def test_a_card_brought_back_fades_as_a_strip_once_it_gives_way() -> None:
+    """Review of #541: brought back, it stays until another takes its place; then its
+    strip fades like any other, so the Tile can go invisible again."""
+    clock = Clock()
+    board = Board(clock=clock)
+    for title in "ABC":
+        board.show(_card(title))
+    assert board.again()  # B
+    board.show(_card("D"))
+    clock.now += STRIP_SECONDS + 1
+    assert board.view() == ()
+
+
+def test_next_card_with_nothing_showing_does_nothing() -> None:
+    clock = Clock()
+    board = Board(clock=clock)
+    board.show(_card("A"))
+    board.show(_card("B"))
+    clock.now += lifetime(_card("B")) + 1  # B fades; A's strip is still up
+    assert not board.forward()
+    assert [(s.card.title, s.strip) for s in board.view()] == [("A", True)]
+
+
 def test_a_question_or_a_notice_that_gives_way_leaves_no_strip() -> None:
     board = Board(clock=Clock())
     board.show(confirm("Eject? Say confirm.", 5.0))
