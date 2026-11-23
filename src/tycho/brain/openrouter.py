@@ -42,16 +42,16 @@ from tycho.brain.priming import Primer
 from tycho.brain.rounds import (
     ACTS,
     MAX_CALLS,
-    NO_PRESS_AFTER_SEARCH,
     Round,
     Turn,
     credited,
     final_reply,
     last_note,
     ms,
-    tool_specs,
     traced,
+    unpressed,
 )
+from tycho.brain.tools import tool_specs
 from tycho.brain.traces import TraceFile, briefing_hash
 from tycho.commands import CommandMatcher
 from tycho.keybinds import Keybinds
@@ -296,9 +296,8 @@ class OpenRouterBrain:
         for call in range(MAX_CALLS):
             decided, message, round_ = await self._call(messages, started, turn)
             if decided is not None:
-                if turn.searched and not isinstance(decided, Reply):
-                    log.warning("The brain chose to act after a web search; not pressing")
-                    return Reply(NO_PRESS_AFTER_SEARCH)
+                if (held := unpressed(turn, decided)) is not None:
+                    return held
                 if isinstance(decided, Reply):
                     return credited(decided, turn.credits)
                 return decided

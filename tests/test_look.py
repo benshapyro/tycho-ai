@@ -515,10 +515,11 @@ def test_the_camera_sound_plays_even_with_the_sounds_turned_off() -> None:
 
 
 def test_players_set_up_before_looking_are_asked_once_in_a_game_that_can_look() -> None:
-    assert setup.unasked(Settings(crash_reports=False)) == ("look_at_screen",)
-    assert setup.unasked(Settings(crash_reports=False, look_at_screen=False)) == ()
-    assert setup.unasked(Settings(crash_reports=False, game="wow-forever")) == ()
-    assert setup.unasked(Settings()) == ("crash_reports", "look_at_screen")
+    asked = Settings(crash_reports=False, keep_history=False)
+    assert setup.unasked(asked) == ("look_at_screen",)
+    assert setup.unasked(asked.model_copy(update={"look_at_screen": False})) == ()
+    assert setup.unasked(asked.model_copy(update={"game": "wow-forever"})) == ()
+    assert setup.unasked(Settings()) == ("crash_reports", "look_at_screen", "keep_history")
 
 
 def test_the_privacy_step_lists_the_picture_only_where_tycho_can_look(tmp_path: Path) -> None:

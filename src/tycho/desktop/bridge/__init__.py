@@ -17,6 +17,7 @@ Updates are checked, never installed: the page learns whether a newer Tycho is o
 can ask for its release page to open in the browser. The page never names a web address.
 """
 
+from tycho.desktop.bridge.history_page import HistoryPage
 from tycho.desktop.bridge.home_page import HomePage
 from tycho.desktop.bridge.memory_page import MemoryPage
 from tycho.desktop.bridge.setup_page import SetupPage
@@ -24,6 +25,6 @@ from tycho.desktop.bridge.tile_page import TilePage
 from tycho.desktop.bridge.updates_page import UpdatesPage
 
 
-class Bridge(SetupPage, UpdatesPage, TilePage, HomePage, MemoryPage):
+class Bridge(SetupPage, UpdatesPage, TilePage, HomePage, MemoryPage, HistoryPage):
     """The page's one way in: every page's calls on one object (#399). Setup's page
     builds on the Settings and Commands pages, so they come with it."""

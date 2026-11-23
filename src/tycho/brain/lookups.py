@@ -87,6 +87,8 @@ async def run_lookup(
         return failure(f"the look-up failed ({type(e).__name__}); answer without it")
 
 
+RECALLED = "searched past conversations (its words are left out here: never pressed again)"
+"""A search of the history in the follow-ups (ADR 14): what it found stays out of them."""
 LOOKED_UP_CHARS = 80
 """The most of a look-up's words the follow-ups keep."""
 

@@ -108,9 +108,10 @@
   const TRIED_EMPTY = "Nothing yet. Hold your button, say something, and let go.";
   const tried = (live) => live.exchanges.filter((e) => e.at >= trying);
   // Privacy questions a player set up before they existed was never asked: crash reports
-  // (ADR 4) and looking at the game window (ADR 14, #31). Asked on their own, first.
+  // (ADR 4), looking at the game window (ADR 14, #31) and history (#484). Asked alone, first.
   let asking = [];
-  const ASKED = { crash_reports: "crash reports", look_at_screen: "looking at your game" };
+  const ASKED = { crash_reports: "crash reports", look_at_screen: "looking at your game", keep_history: "keeping a history" };
+  const COUNT = ["", "One question", "Two questions", "Three questions"];
   // One of them answered: once none is left, done (#442).
   function answeredAsked(name) {
     if (!asking.includes(name)) return;
@@ -123,7 +124,7 @@
     if (name === "Game") return !s.game.needed || s.game.found;
     if (name === "Keys") return brainKey(s);
     if (name === "Talk and listen") return s.push_to_talk.set;
-    if (name === "Privacy") return s.crash_reports != null && (!s.can_look || s.look_at_screen != null);
+    if (name === "Privacy") return s.crash_reports != null && s.keep_history != null && (!s.can_look || s.look_at_screen != null);
     return true;
   }
   // Tycho presses keys in this game: the pack can, and the player's key actions are on.
@@ -185,7 +186,7 @@
     const lede = firstRun
       ? "A few steps, about three minutes. Skip any of them and come back; Tycho starts listening when you're done."
       : asking.length && STEPS[step] === "Privacy"
-        ? `${asking.length > 1 ? "Two questions" : "One question"} left: ${asking.map((a) => ASKED[a]).join(" and ")}. The rest is as you chose it.`
+        ? `${COUNT[asking.length]} left: ${asking.map((a) => ASKED[a]).join(", ").replace(/, ([^,]*)$/, " and $1")}. The rest is as you chose it.`
         : "Change anything you chose the first time. Changes apply when Tycho restarts.";
     const name = STEPS[step];
     let body = "";
@@ -244,8 +245,15 @@
         <div class="field"><label>Each time</label>${list(["Only when you ask: “take a look”, or “yes” when Tycho offers to look", "One picture of the game window, never the rest of your screen", "A camera sound plays, so it's never silent"])}</div>
         <div class="field"><label>Never</label>${list(["Taken by Tycho on its own", "Saved, logged, or kept for the next question"])}</div>
         <p class="note">The picture goes where what you say goes (the table above or below). Skip this and it stays off.</p></div>` : "";
+      // Equal choices, neither picked for them; skipped, it stays off (ADR 14, #484).
+      const history = `<div class="card frame" id="historyCard"><h3>Keep a history of what you and Tycho said?</h3>
+        <p>On this PC only, so you can ask about it later: “what was yesterday's route?”. Kept for 30 days, then deleted. You can turn this off any time under Settings, Privacy, or by saying “stop keeping a history”.</p>
+        <div class="seg big" role="group" aria-label="Keep a history"><button type="button" aria-pressed="${s.keep_history === false}" data-history="no">No</button><button type="button" aria-pressed="${s.keep_history === true}" data-history="yes">Yes</button></div>
+        <div class="field"><label>Kept</label>${list(["What you said and what Tycho said, with the time", "The names of the game actions Tycho pressed, never your keys"])}</div>
+        <div class="field"><label>Never</label>${list(["Your voice, or any picture", "Sent anywhere, except the few matching parts when you ask about them", "A reason to press anything again: Tycho reads it back, and you ask for each press"])}</div>
+        <p class="note">See it, search it and delete it on the History page. Skip this and nothing is kept.</p></div>`;
       // Asked these questions alone (set up before they existed): they come first, not under the table.
-      const cards = { crash_reports: crash, look_at_screen: look };
+      const cards = { crash_reports: crash, look_at_screen: look, keep_history: history };
       const first = asking.map((a) => cards[a] || "").join("");
       const rest = Object.keys(cards).filter((a) => !asking.includes(a)).map((a) => cards[a]).join("");
       body = first + leaves + rest;
@@ -369,6 +377,14 @@
       if (!r.ok) toast(r.problem);
       else if (r.changed && !firstRun) toast(`Looking at your game ${on ? "on" : "off"}.`, true);
       if (r.ok) answeredAsked("look_at_screen");
+      render();
+    }));
+    page.querySelectorAll("[data-history]").forEach((b) => b.addEventListener("click", async () => {
+      const on = b.dataset.history === "yes";
+      const r = await api.set("keep_history", on);
+      if (!r.ok) toast(r.problem);
+      else if (r.changed && !firstRun) toast(`History ${on ? "on" : "off"}.`, true);
+      if (r.ok) answeredAsked("keep_history");
       render();
     }));
     page.querySelectorAll("[data-channel]").forEach((b) => b.addEventListener("click", async () => {
@@ -824,6 +840,68 @@
     }));
   }
 
+  /* ---------- history (ADR 14, #484) ---------- */
+  let historyOpen = null;
+  let historyFound = null;
+  async function historyView() {
+    const d = await api.history();
+    const day = (iso) => new Date(iso).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    const time = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    const row = (e, when) => `<li class="histrow"><span class="dim num">${esc(when(e.at))}</span><div><p><b>You:</b> ${esc(e.said)}</p>${e.tycho ? `<p><b>Tycho:</b> ${esc(e.tycho)}</p>` : ""}${e.did.length ? `<p class="note">Pressed ${esc(e.did.join(", "))}</p>` : ""}</div></li>`;
+    let opened = "";
+    if (historyOpen) {
+      const r = await api.history_session(historyOpen);
+      opened = r.ok && r.entries.length ? `<ul class="memlist">${r.entries.map((e) => row(e, time)).join("")}</ul>` : `<p class="dim">Nothing kept in it.</p>`;
+    }
+    const sessions = d.sessions.map((s) => `<li class="memrow"><button class="link" type="button" data-open="${esc(s.id)}" aria-expanded="${s.id === historyOpen}">${esc(day(s.started))}</button>
+        <span class="dim num">${s.exchanges} said</span>
+        <button class="link" type="button" data-drop="${esc(s.id)}" aria-label="Delete the session of ${esc(day(s.started))}">Delete</button></li>${s.id === historyOpen ? `<li>${opened}</li>` : ""}`).join("");
+    const found = historyFound === null ? "" : `<div class="card frame" id="historyFound"><h3>Found</h3>${historyFound.length ? `<ul class="memlist">${historyFound.map((e) => row(e, day)).join("")}</ul>` : `<p class="dim">Nothing kept matches.</p>`}</div>`;
+    page.innerHTML = `<h1>History</h1>
+      <p class="lede">What you and Tycho said, kept on this PC for ${d.days} days, then deleted. Ask Tycho about it (“what did you tell me about it yesterday?”) or search it here. Tycho reads old talk back, and never presses anything because of it.</p>
+      ${d.on ? "" : `<p class="warn-line" id="historyOff">History is off: Tycho keeps nothing new${d.sessions.length ? ", and these stay until you delete them or they're 30 days old" : ""}. <button class="link" type="button" id="historyOn">Turn history on</button></p>`}
+      ${d.problem ? `<p class="err">${esc(d.problem)}</p>` : ""}
+      <div class="stack"><form class="card frame" id="historySearch"><label for="historyWords">Search</label>
+        <div class="memrow"><input id="historyWords" type="search" maxlength="100" placeholder="A place, a name, a word"><button type="submit">Search</button></div></form>
+      ${found}
+      <div class="card frame" id="historySessions"><h3>Sessions</h3>
+        ${d.sessions.length ? `<ul class="memlist">${sessions}</ul><p class="note">Kept in <span class="num">${esc(d.folder)}</span>.</p><button class="link" type="button" id="historyAll">Delete all</button>` : `<p class="dim">Nothing kept yet.</p>`}</div></div>`;
+    $("#historyOn")?.addEventListener("click", async () => {
+      const r = await api.set("keep_history", true);
+      toast(r.ok ? "History is on." : r.problem);
+      render();
+    });
+    $("#historySearch").addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const r = await api.search_history($("#historyWords").value);
+      if (!r.ok) { toast(r.problem); return; }
+      historyFound = r.found;
+      render();
+    });
+    page.querySelectorAll("[data-open]").forEach((b) => b.addEventListener("click", () => {
+      historyOpen = historyOpen === b.dataset.open ? null : b.dataset.open;
+      render();
+    }));
+    page.querySelectorAll("[data-drop]").forEach((b) => b.addEventListener("click", async () => {
+      const r = await api.delete_history(b.dataset.drop);
+      toast(r.ok ? "Deleted." : r.problem);
+      historyFound = null;
+      render();
+    }));
+    $("#historyAll")?.addEventListener("click", async (ev) => {
+      // Twice, as there's no undo: the first click only asks.
+      if (ev.currentTarget.dataset.sure !== "yes") {
+        ev.currentTarget.dataset.sure = "yes";
+        ev.currentTarget.textContent = "Delete every session? Click again";
+        return;
+      }
+      const r = await api.delete_history("all");
+      toast(r.ok ? "Deleted all of it." : r.problem);
+      historyOpen = historyFound = null;
+      render();
+    });
+  }
+
   /* ---------- shell ---------- */
   async function render() {
     // Left the question without answering: setup is as usual from here (#442).
@@ -846,6 +924,7 @@
       else if (view === "pack") await packView();
       else if (view === "commands") await commandsView();
       else if (view === "memory") await memoryView();
+      else if (view === "history") await historyView();
       else await settingsView(shared);
     } catch (e) {
       page.innerHTML = `<h1>Something went wrong</h1><p class="lede">${esc(e && e.message ? e.message : e)}</p>`;

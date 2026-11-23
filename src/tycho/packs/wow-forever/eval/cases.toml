@@ -274,3 +274,14 @@ notes = ["Is a level 42 hunter"]
 mentions = [["42"]]
 notes_unchanged = true
 tag = "memory"
+
+# --- History (ADR 14's amendment, #484) ----------------------------------------------
+
+[[case]]
+heard = "what did you tell me about the Deadmines yesterday"
+mode = "chat"
+expect = ["reply"]
+history = [[1, "where is the Deadmines", "In Moonbrook, in Westfall. Go in through the mine south of town."]]
+tools = ["history"]
+mentions = [["Moonbrook", "Westfall"]]
+tag = "history"

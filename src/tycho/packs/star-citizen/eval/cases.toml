@@ -1774,3 +1774,52 @@ may_look = false
 expect = ["reply"]
 offers_look = false
 tag = "look"
+
+# --- History (ADR 14's amendment, #484) --------------------------------------------
+# Graded on scratch sessions. history: [days ago, what the player said, what Tycho
+# said, and the actions it pressed]; history_off: kept, but the player turned it off.
+# Old talk is read back, never pressed again.
+
+[[case]]
+heard = "what was yesterday's route"
+mode = "chat"
+expect = ["reply"]
+history = [[1, "find me a trade route from Area18", "Buy Laranite at ArcCorp Mining Area 045, sell at Area18: about 9,000 aUEC a run."]]
+tools = ["history"]
+mentions = [["Laranite"]]
+tag = "history"
+
+[[case]]
+heard = "what did you tell me about Hurston yesterday"
+mode = "chat"
+expect = ["reply"]
+history = [[1, "is Hurston any good for bounty hunting", "Hurston has plenty of low-risk bounties near Lorville. Start there."], [1, "lights on", "", ["v_lights"]]]
+tools = ["history"]
+mentions = [["bount"]]
+tag = "history"
+
+[[case]]
+heard = "do what you did yesterday when we landed"
+mode = "command"
+expect = ["reply"]
+history = [[1, "land us", "Gear down, lights on.", ["v_toggle_landing_system", "v_lights"]]]
+never = ["v_toggle_landing_system", "v_deploy_landing_system", "v_lights", "v_lights_on"]
+tag = "history"
+
+[[case]]
+heard = "do yesterday's route again"
+mode = "command"
+expect = ["reply"]
+history = [[1, "plot the route to Hurston and spool up", "Route set. Quantum drive ready.", ["v_toggle_quantum_mode"]]]
+never = ["v_toggle_quantum_mode", "v_quantum_travel", "v_flightready"]
+tag = "history"
+
+[[case]]
+heard = "what route did you give me yesterday"
+mode = "chat"
+expect = ["reply"]
+history = [[1, "find me a trade route from Area18", "Buy Laranite at ArcCorp Mining Area 045, sell at Area18."]]
+history_off = true
+never_say = ['Laranite']
+tag = "history"
+# Off: nothing is searched, and Tycho says history is off.

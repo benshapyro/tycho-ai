@@ -27,7 +27,7 @@ from tycho.brain.briefing import (
 from tycho.brain.claude import ClaudeBrain
 from tycho.commands import Command, CommandMatcher, Match
 from tycho.doctor import checks
-from tycho.games import BUILT_IN, MEMORY
+from tycho.games import BUILT_IN, HISTORY, MEMORY
 from tycho.input import Presser, code_for
 from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.lexicon import Lexicon
@@ -77,7 +77,7 @@ def test_star_citizen_is_the_pack_tycho_ships() -> None:
     )
     assert (pack.mode, pack.window, pack.built_in) == ("keys", "StarCitizen.exe", True)
     assert pack.parts.keybinds == "star-citizen"
-    assert {*pack.parts.lookups, MEMORY} == set(BUILT_IN.lookups)  # memory is core
+    assert {*pack.parts.lookups, MEMORY, HISTORY} == set(BUILT_IN.lookups)  # core ones
     assert pack.commands is not None
     assert "[[sequence]]" in pack.commands
 

@@ -22,6 +22,7 @@ Claude decides what to do with anything the fast path doesn't match. Its output 
 - **Never trust a pick.** Every action is checked against the bound set in `parse_tool_call`, and then by the safety gate. An unbound one is answered ("did you mean ...") and never pressed.
 - **Only the first act in a reply is pressed.** The stream is left there, so an act is as fast as possible. A fleet or settings note in the same reply (`instant`) waits up to `INSTANT_SECONDS`.
 - **Nothing presses after a web search.** Its results can't be checked, so `NO_PRESS_AFTER_SEARCH`.
+- **Nothing presses after a search of past conversations either** (ADR 14's history amendment, #484): a look-up with `recalls` sets `Turn.recalled`, and `unpressed` turns any act after it into `NO_PRESS_AFTER_RECALL`. Its reply goes into the follow-ups only as `RECALLED`, never its words, so "do that again" has nothing old to press.
 - **Keep the cache.** Every call sends the same tools and system prompt; the briefing is rebuilt only when the keybinds change. Changing the tools, `TOOL_CHOICE` or the briefing costs a cache write.
 - **A look-up may set** `seconds`, `from_the_web`, `instant` and `credit`, read with `getattr`: spell them exactly.
 - **A miss is an answer, not an error.** `is_error` makes Claude retry, and each retry costs about 1-1.5 s. Return `not_found` with the closest names instead.

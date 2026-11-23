@@ -95,6 +95,12 @@ def logs_dir() -> Path:
     return data_dir() / "logs"
 
 
+def history_dir() -> Path:
+    """Past conversations, one file per play session, only with ``keep_history`` on
+    (ADR 14, #484). On this PC only: never the roaming config folder."""
+    return data_dir() / "history"
+
+
 def crash_reports_dir() -> Path:
     """Crash reports waiting to be sent, only while the player has said yes (#199)."""
     return data_dir() / "crash_reports"

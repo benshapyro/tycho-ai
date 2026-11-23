@@ -28,8 +28,7 @@ from tycho.voice import voices
 CURRENT_VERSION = 1
 
 type Game = Literal["star-citizen", "wow-forever"]
-"""The game packs that ship inside Tycho (ADR 18); a test keeps it the same as
-``packs.installed()``."""
+"""The game packs that ship inside Tycho (ADR 18): a test checks ``packs.installed()``."""
 RENAMED_GAMES = {"world-of-warcraft": "wow-forever"}
 """Pack ids renamed before a release: a file saved on main may say the old one (#349)."""
 DEFAULT_CALL_ME = "Commander"
@@ -51,8 +50,7 @@ FILE_OR_APP = "in Tycho's window (Settings) or in settings.toml"
 FILE_FOR_NOW = "in settings.toml for now; Tycho's setup will change it in the window"
 
 NAME = re.compile(r"[\w .'-]{0,40}")
-"""What Tycho may call the player: letters, digits, spaces, apostrophes, hyphens and
-full stops, up to 40. It goes into every request to the brain, so nothing else."""
+"""What Tycho may call the player (40 letters, digits, spaces, ' - .): it goes to the brain."""
 
 
 class SettingsError(Exception):
@@ -336,6 +334,13 @@ class Settings(BaseModel):
         "the notes stay on your PC, unused. See them on the Memory page.",
         json_schema_extra=_rule("lower_only", "now", how=FILE_OR_APP),
     )
+    keep_history: bool | None = Field(
+        default=None,
+        description="Keep a history of what you and Tycho said, on this PC only, so you can "
+        'ask about it later ("what was yesterday\'s route?"). Kept 30 days; see, search and '
+        "delete it on the History page. Empty means not asked yet, and it's off.",
+        json_schema_extra=_rule("lower_only", "now", how=FILE_OR_APP),
+    )
     check_for_updates: bool = Field(
         default=True,
         description="When Tycho starts, and when its window opens, ask GitHub whether a newer "
@@ -415,9 +420,8 @@ def rule(name: str) -> dict[str, str]:
 
 
 def load(path: Path | None = None) -> Settings:
-    """Read settings, or the defaults if there's no file yet. A setting this Tycho doesn't
-    know is ignored (``unknown_keys`` names it): a typo, or a newer Tycho's setting in the
-    file, mustn't stop this one starting at all."""
+    """Read settings, or the defaults with no file. An unknown setting (a typo, a newer
+    Tycho's) is ignored (``unknown_keys``): it mustn't stop this one starting at all."""
     path = path or paths.settings_file()
     data = _read(path)
     if data is None:
@@ -455,9 +459,8 @@ def _read(path: Path) -> dict[str, Any] | None:
 def save(
     settings: Settings, path: Path | None = None, keep: Mapping[str, object] | None = None
 ) -> Path:
-    """Write settings atomically, so an interrupted save never leaves a broken file.
-    ``keep`` holds entries this Tycho doesn't know (``unknown_keys``), written back as
-    they were: a newer Tycho sharing the file mustn't lose them to an older one's save."""
+    """Write settings atomically. ``keep``: entries this Tycho doesn't know (``unknown_keys``),
+    written back as they were, so a newer Tycho sharing the file doesn't lose them."""
     path = path or paths.settings_file()
     text = to_toml(settings)
     if keep:
@@ -475,9 +478,8 @@ def save(
 
 
 def update(changes: Mapping[str, object], path: Path | None = None) -> Settings:
-    """Change some settings in the file and save it: everything else stays as it is now
-    in the file, including hand edits since Tycho started and entries it doesn't know.
-    Raises ``SettingsError`` if the result isn't valid; nothing is written then."""
+    """Change some settings in the file; the rest stays as the file has it now, hand edits
+    and unknown entries too. ``SettingsError`` if the result isn't valid: nothing written."""
     path = path or paths.settings_file()
     with _WRITING:
         return _update(changes, path)

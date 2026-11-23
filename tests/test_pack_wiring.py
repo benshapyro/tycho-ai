@@ -62,7 +62,8 @@ def _with_web(tmp_path: Path) -> GamePack:
 
 
 def test_the_brain_gets_only_the_look_ups_the_pack_names_and_no_web_search_without_it() -> None:
-    assert _offered(_brain(fake_pack())) == {"settings", "memory", "player_keys"}  # keys: #357
+    core = {"settings", "memory", "history"}
+    assert _offered(_brain(fake_pack())) == {*core, "player_keys"}  # keys: #357
     star_citizen = _offered(_brain(built_in(STAR_CITIZEN)))
     assert {"settings", "web_search", "update_fleet"} <= star_citizen
 
@@ -165,6 +166,7 @@ def test_star_citizen_s_look_ups_keep_their_order() -> None:
         "ship_purchases",
         "settings",
         "memory",  # core, after settings (ADR 8, #483)
+        "history",  # core, after memory (ADR 14, #484)
         "web_search",
         "player_keys",  # last, after the pack's (#357)
     ]

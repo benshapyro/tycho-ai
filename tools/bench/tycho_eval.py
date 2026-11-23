@@ -54,6 +54,7 @@ Usage: uv run python tools/bench/tycho_eval.py [cases.toml] [--tag ships] [--shi
 
 import argparse
 import asyncio
+import datetime
 import json
 import logging
 import os
@@ -83,7 +84,7 @@ from tycho.brain.claude import MODEL, ClaudeBrain
 from tycho.brain.looking import LOOK_OFFER
 from tycho.brain.lookups import Lookup, LookupResult
 from tycho.brain.openrouter import SORTS, OpenRouterBrain, Prices, route
-from tycho.brain.rounds import NO_PRESS_AFTER_SEARCH
+from tycho.brain.rounds import NO_PRESS_AFTER_RECALL, NO_PRESS_AFTER_SEARCH
 from tycho.brain.traces import TraceFile
 from tycho.brain_choice import anthropic_key, openrouter_key
 from tycho.commands import Command, CommandMatcher, resolve
@@ -98,6 +99,8 @@ from tycho.games.star_citizen.store import KeybindStore
 from tycho.games.star_citizen.trade_lookup import trade_lookups
 from tycho.games.star_citizen.uex import UexApi
 from tycho.games.star_citizen.wiki import WikiApi
+from tycho.history import Entry, History, HistoryFolder, session_id
+from tycho.history.tool import HistoryLookup
 from tycho.input import NotPressable, UnsupportedKey, plan
 from tycho.input.plan import pressable_input
 from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput, key_text
@@ -473,6 +476,20 @@ def set_notes(memory: Memory, rule: dict[str, Any]) -> None:
             store.add(note, memory.today())
 
 
+def set_history(history: History, rule: dict[str, Any]) -> None:
+    """A case's past conversations ("history": [days ago, what the player said, what
+    Tycho said, and the actions it pressed]), each in a session of its own day. History
+    is on for a case that has some, unless "history_off"."""
+    history.delete_all()
+    past = rule.get("history", [])
+    history.on = bool(past) and not rule.get("history_off")
+    today = history.now().replace(hour=21, minute=0, second=0, microsecond=0)
+    for days, said, tycho, *did in past:
+        at = today - datetime.timedelta(days=days)
+        names = tuple(did[0]) if did else ()
+        history.store.append(session_id(at.replace(hour=20)), Entry(at, said, tycho, names))
+
+
 def grade_memory(memory: Memory, rule: dict[str, Any]) -> str:
     """What a case says the notes hold afterwards: "notes_has" (words some note holds),
     "notes_lack" (words no note holds) and "notes_unchanged"."""
@@ -617,7 +634,10 @@ async def run_case(
             outcome.named_key = names_key(decision.text, rule, keybinds)
             if outcome.named_key is False:
                 outcome.notes.append("didn't name the player's key")
-        if decision.card is not None or decision.text == NO_PRESS_AFTER_SEARCH:
+        if decision.card is not None or decision.text in (
+            NO_PRESS_AFTER_SEARCH,
+            NO_PRESS_AFTER_RECALL,
+        ):
             outcome.calls += 1  # show_card (or an act after a search) ended its call early
         if decision.card is not None:
             outcome.card = decision.card.kind
@@ -1024,7 +1044,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     counted: _Counted | None = None
     reference = ""
     library = None
-    wanted = {*pack.parts.lookups, "settings", "memory"}  # as tycho run offers them (ADR 18)
+    wanted = {*pack.parts.lookups, "settings", "memory", "history"}  # as tycho run (ADR 18)
     if args.ships != "none" and "ships" in wanted:
         library = await ensure(WikiApi(), paths.knowledge_dir(), concepts=UexApi())
         print(f"Ship data: {len(library)} ships for {library.patch}, as {args.ships}")
@@ -1054,6 +1074,8 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     settings_tool = _Counted(SettingsTool(settings_file, live=LIVE), journal)
     # Memory too (ADR 8): scratch notes, set by each case ("notes"), never the player's own.
     memory = Memory(NoteFile(scratch / "memory.toml"), NoteFile(scratch / "game-memory.toml"))
+    # And past conversations (ADR 14, #484): scratch sessions, set by each case ("history").
+    history = History(HistoryFolder(scratch / "history"))
     lookups = pack_lookups(
         wanted,
         [
@@ -1064,6 +1086,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
             *(("trade", _Counted(lookup, journal)) for lookup in trade_lookups(UexApi())),
             ("settings", settings_tool),
             ("memory", _Counted(MemoryTool(memory), journal)),
+            ("history", _Counted(HistoryLookup(history), journal)),
             *(("web", _Counted(lookup, journal)) for lookup in web),
         ],
     )
@@ -1120,6 +1143,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
         for rule in rules:
             fleet.ships, fleet.flying = list(rule.get("fleet", [])), str(rule.get("flying", ""))
             set_notes(memory, rule)
+            set_history(history, rule)
             start = settings.Settings.model_validate(rule.get("settings", {}))
             settings.save(start, settings_file)
             settings_tool.inner = SettingsTool(settings_file, live=LIVE)
