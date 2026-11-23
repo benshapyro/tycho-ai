@@ -31,7 +31,8 @@ def show_last(
     display: Display, last_reply: tuple[str, Card | None], *, card_only: bool = False
 ) -> bool:
     """Put the last answer up and keep it there: its card, or (unless ``card_only``)
-    its words to read. False if there's nothing to show."""
+    its words to read. False if there's nothing to show. Pinned, even when it's already
+    up: the player asked to see it, so it stays until they move on (#565)."""
     said, card = last_reply
     if card is not None:
         return display.show(card, pinned=True)

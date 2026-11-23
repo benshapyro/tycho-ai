@@ -373,7 +373,10 @@ def looked_up(name: str, arguments: object, *, web: bool) -> str:
     if web:
         query = str(asked.get("query", "")).strip()
         return f'searched the web for "{query[:LOOKED_UP_CHARS]}"'
-    values = [str(v).strip() for v in asked.values() if isinstance(v, str | int | float)]
+    values: list[str] = []
+    for value in asked.values():  # ship_lookup and item_lookup take lists of names
+        items = cast(list[object], value) if isinstance(value, list) else [value]
+        values += [str(v).strip() for v in items if isinstance(v, str | int | float)]
     words = ", ".join(v for v in values if v)
     return f"looked up {name}" + (f" ({words[:LOOKED_UP_CHARS]})" if words else "")
 

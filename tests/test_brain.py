@@ -811,11 +811,17 @@ def test_a_search_says_its_waiting_once_and_its_answer_is_spoken() -> None:
 
 def test_a_reply_carries_what_its_request_looked_up() -> None:
     """#564: the follow-ups need to know a search happened, and what for."""
+    from tycho.brain.rounds import looked_up
+
     decision, _ = _ask_web(_Calls(_searches(), ([], _final("4.10.3 is on the PTU."))), _web())
     assert decision.looked_up == ('searched the web for "Star Citizen next patch"',)
     looked = _ask(_Calls(_looks_up(), ([], _final("RSI makes it."))), FakeLookup())
     assert looked.looked_up == ("looked up ship_lookup (Andromeda)",)
     assert _ask(_Calls(([], _final("RSI.")))).looked_up == ()
+    names = {"names": ["Cutlass Black", "Galaxy"], "detail": "loadout"}
+    assert looked_up("ship_lookup", names, web=False) == (
+        "looked up ship_lookup (Cutlass Black, Galaxy, loadout)"
+    )
 
 
 def test_other_look_ups_dont_say_theyre_waiting() -> None:
