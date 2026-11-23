@@ -71,6 +71,13 @@ jobs:
           $subsystem = [BitConverter]::ToUInt16($bytes, $pe + 0x5C)
           if ($subsystem -ne 2) { throw "tycho-app.exe isn't a windowed program (subsystem $subsystem)" }
           if ($LASTEXITCODE -ne 0) { throw "tycho key failed" }
+          # Looking at the game window (#31) runs in a child process of tycho.exe (#558).
+          # With no window to capture it must say why, not miss a WinRT module (#555).
+          $look = & $exe --capture-game-window 0 2>&1 | Out-String
+          Write-Output "capture child: exit $LASTEXITCODE, $look"
+          if ($LASTEXITCODE -ne 3) { throw "the capture child didn't answer 'no picture'" }
+          if ($look -match "ModuleNotFoundError|ImportError|No module") { throw "a WinRT module is missing" }
+          $global:LASTEXITCODE = 0  # exit 3 was the answer wanted; the step passes
 
       - name: Third-party notices, and nothing GPL or non-commercial
         run: uv run --no-sync python tools/notices.py dist/tycho

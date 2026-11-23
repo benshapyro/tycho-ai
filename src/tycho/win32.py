@@ -337,6 +337,9 @@ def _type_kernel32(k: ctypes.WinDLL) -> None:
     k.GetLogicalDrives.argtypes = []
     k.GetDriveTypeW.restype = wintypes.UINT
     k.GetDriveTypeW.argtypes = [S]
+    # The capture's child process crashes without a Windows error box (eyes/child.py).
+    k.SetErrorMode.restype = wintypes.UINT
+    k.SetErrorMode.argtypes = [wintypes.UINT]
 
 
 def _type_shell32(s: ctypes.WinDLL) -> None:
@@ -350,6 +353,16 @@ _TYPERS: dict[str, Callable[[ctypes.WinDLL], None]] = {
     "kernel32": _type_kernel32,
     "shell32": _type_shell32,
 }
+
+
+SEM_FAILCRITICALERRORS = 0x0001
+SEM_NOGPFAULTERRORBOX = 0x0002
+
+
+def no_crash_box() -> None:
+    """If this process crashes, Windows shows no "stopped working" box: for the
+    capture's child process, so a crash can't put a dialog over the game (#558)."""
+    kernel32().SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX)
 
 
 def message_box(text: str, title: str, flags: int) -> int:
