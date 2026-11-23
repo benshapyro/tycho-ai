@@ -24,7 +24,6 @@ import re
 import time
 from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import cast
 
 from tycho.brain.decisions import (
     BrainError,
@@ -34,7 +33,14 @@ from tycho.brain.decisions import (
     UnboundAction,
     parse_tool_call,
 )
-from tycho.brain.lookups import LOOKUP_SECONDS, Lookup, LookupResult, failure, run_lookup
+from tycho.brain.lookups import (
+    LOOKUP_SECONDS,
+    Lookup,
+    LookupResult,
+    failure,
+    looked_up,
+    run_lookup,
+)
 from tycho.brain.traces import Look, Trace, TraceFile
 from tycho.text import clip_spoken
 
@@ -156,12 +162,18 @@ class Turn:
     looked_up: list[str] = field(default_factory=list[str])
     """What the request looked up, in a few words each ("searched the web for ..."), so
     the follow-ups remember it (#564)."""
+    answering: Callable[[], None] | None = None
+    """Called as each call's stream starts: the provider has read its cache by then, even
+    if the request later times out or is cut off (#540)."""
 
     @classmethod
-    def of(cls, request: BrainRequest) -> Turn:
-        """A new turn for ``request``, with its callbacks."""
+    def of(cls, request: BrainRequest, answering: Callable[[], None] | None = None) -> Turn:
+        """A new turn for ``request``, with its callbacks, and the adapter's own
+        ``answering``."""
         size = request.picture.size if request.picture is not None else 0
-        return cls(request.waiting, request.looking, request.checking, picture=size)
+        return cls(
+            request.waiting, request.looking, request.checking, picture=size, answering=answering
+        )
 
 
 class Round:
@@ -185,6 +197,7 @@ class Round:
         self._sequences = sequences
         self._started = started
         self._checking = False
+        self._streamed = False
         self._instant: list[asyncio.Task[LookupResult]] = []
         """A fleet or settings note in the same reply as an act: it runs too (#156)."""
         self._looks: dict[asyncio.Task[LookupResult], Look] = {}
@@ -196,6 +209,10 @@ class Round:
     def streaming(self) -> None:
         """A piece of this call's stream arrived: the first one is the time to first
         token in the trace."""
+        if not self._streamed:
+            self._streamed = True
+            if self.turn.answering is not None:
+                self.turn.answering()
         if self.turn.trace is not None:
             self.turn.trace.streaming()
 
@@ -358,27 +375,6 @@ def noted(decided: Decision, turn: Turn) -> Decision:
     if isinstance(decided, Reply) and turn.looked_up:
         return dataclasses.replace(decided, looked_up=tuple(turn.looked_up))
     return decided
-
-
-LOOKED_UP_CHARS = 80
-"""The most of a look-up's words the follow-ups keep."""
-
-
-def looked_up(name: str, arguments: object, *, web: bool) -> str:
-    """A look-up in a few words, for the follow-ups (#564): a web search by its query,
-    any other by its name and what it was asked."""
-    asked: Mapping[str, object] = {}
-    if isinstance(arguments, dict):
-        asked = cast(Mapping[str, object], arguments)
-    if web:
-        query = str(asked.get("query", "")).strip()
-        return f'searched the web for "{query[:LOOKED_UP_CHARS]}"'
-    values: list[str] = []
-    for value in asked.values():  # ship_lookup and item_lookup take lists of names
-        items = cast(list[object], value) if isinstance(value, list) else [value]
-        values += [str(v).strip() for v in items if isinstance(v, str | int | float)]
-    words = ", ".join(v for v in values if v)
-    return f"looked up {name}" + (f" ({words[:LOOKED_UP_CHARS]})" if words else "")
 
 
 def _trace_lookup(trace: Trace, name: str, task: asyncio.Task[LookupResult]) -> Look:

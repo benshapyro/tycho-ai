@@ -811,7 +811,7 @@ def test_a_search_says_its_waiting_once_and_its_answer_is_spoken() -> None:
 
 def test_a_reply_carries_what_its_request_looked_up() -> None:
     """#564: the follow-ups need to know a search happened, and what for."""
-    from tycho.brain.rounds import looked_up
+    from tycho.brain.lookups import looked_up
 
     decision, _ = _ask_web(_Calls(_searches(), ([], _final("4.10.3 is on the PTU."))), _web())
     assert decision.looked_up == ('searched the web for "Star Citizen next patch"',)
@@ -1611,3 +1611,15 @@ def test_the_brain_never_promises_what_it_cant_keep(name: str) -> None:
     text = (Path(tycho.brain.__file__).parent / name).read_text("utf-8")
     assert "Never promise to change how you'll answer from now on" in text
     assert "may give the game's patch now: trust it over any patch you remember" in text
+
+
+def test_claude_isnt_offered_cards_its_game_doesnt_use() -> None:
+    """#528: only the kinds the game's Settings can hide."""
+    wow = built_in("wow-forever")
+    client = _Client([], _final("Fine."))
+    brain = ClaudeBrain(
+        CommandMatcher.default(pack=wow), client=cast(Any, client), cards=lambda: True, pack=wow
+    )
+    asyncio.run(brain.decide(BrainRequest("where to level", KEYBINDS)))
+    card = next(t for t in client.requests[0]["tools"] if t["name"] == "show_card")
+    assert "fleet" not in card["input_schema"]["properties"]["kind"]["enum"]
