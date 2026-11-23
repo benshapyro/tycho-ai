@@ -1,6 +1,6 @@
 # 16. The Tile: a panel over the game, drawn by Tycho
 
-Date: 2026-11-05 · Status: accepted; the in-game checks are still to do ([#2](https://github.com/benshapyro/tycho-ai/issues/2))
+Date: 2026-11-05 · Status: accepted. In-game checks: staying on top in Borderless and never taking focus over Star Citizen, checked on the maintainer's PC ([#470](https://github.com/benshapyro/tycho-ai/issues/470)); no Easy Anti-Cheat problem in daily play since 0.4; the HUD colours per ship are still estimates, to check in game
 
 ## Context
 
