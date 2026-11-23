@@ -49,6 +49,19 @@ LAZY_IMPORTS = (
     "tycho.desktop.window",
     "tycho.desktop.bridge",
     "webview",
+    # Looking at the game window (#31), in a child process (#558).
+    "tycho.eyes.child",
+    "tycho.eyes.windows",
+    "winrt.runtime",
+    "winrt.windows.foundation",
+    "winrt.windows.graphics",
+    "winrt.windows.graphics.capture",
+    "winrt.windows.graphics.capture.interop",
+    "winrt.windows.graphics.directx",
+    "winrt.windows.graphics.directx.direct3d11",
+    "winrt.windows.graphics.directx.direct3d11.interop",
+    "winrt.windows.graphics.imaging",
+    "winrt.windows.storage.streams",
     "clr",
 )
 
@@ -139,6 +152,10 @@ if __name__ == "__main__":
     multiprocessing.freeze_support()  # harmless if unused; required if anything spawns
     if sys.argv[1:] == ["--smoke-imports"]:
         sys.exit(smoke_imports())
+    from tycho.eyes import child
+
+    if sys.argv[1:2] == [child.FLAG]:  # one picture of the game window, for Tycho (#558)
+        sys.exit(child.main(sys.argv[2:]))
     if sys.stdout is None or sys.stderr is None:  # tycho-app.exe: no terminal
         sys.exit(windowed(sys.argv[1:]))
     from tycho.cli import main

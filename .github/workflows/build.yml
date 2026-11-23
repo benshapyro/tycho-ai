@@ -63,6 +63,12 @@ jobs:
           if ($out -notmatch "Settings") { throw "tycho check didn't run" }
           if ($out -notmatch "Star Citizen \(game pack \d") { throw "tycho check didn't load the game pack" }
           & $exe key --help | Out-Null
+          # Looking at the game window (#31) runs in a child process of tycho.exe (#558).
+          # With no window to capture it must say why, not miss a WinRT module (#555).
+          $look = & $exe --capture-game-window 0 2>&1 | Out-String
+          Write-Output "capture child: exit $LASTEXITCODE, $look"
+          if ($LASTEXITCODE -ne 3) { throw "the capture child didn't answer 'no picture'" }
+          if ($look -match "ModuleNotFoundError|ImportError|No module") { throw "a WinRT module is missing" }
           # The Start menu's Tycho (#146): built beside tycho.exe, with no console.
           $app = "dist\tycho\tycho-app.exe"
           if (-not (Test-Path $app)) { throw "tycho-app.exe is missing" }

@@ -12,7 +12,7 @@
 
 from pathlib import PurePath
 
-from PyInstaller.utils.hooks import collect_data_files, copy_metadata
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 ROOT = PurePath(SPECPATH).parent  # noqa: F821 - PyInstaller defines SPECPATH
 
@@ -46,6 +46,11 @@ a = Analysis(  # noqa: F821
         "tycho.desktop.window",  # the app window and its page (ADR 17)
         "tycho.desktop.bridge",
         "webview",
+        # Looking at the game window (#31): the WinRT modules import each other from C,
+        # which the analysis can't see (#555). Only the capture's child process loads them.
+        "tycho.eyes.child",
+        "tycho.eyes.windows",
+        *collect_submodules("winrt"),
     ],
     excludes=[
         "nvidia",

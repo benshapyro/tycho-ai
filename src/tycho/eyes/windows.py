@@ -3,8 +3,9 @@
 Only the window of the pack's program (``window`` in ``pack.toml``) is ever captured:
 never the desktop or another window. The Tile is a window of its own, so it isn't in
 the picture. A minimised or missing game window gives no picture, and the player is
-told why. The capture runs on one worker thread of its own, in Windows' multi-threaded
-apartment, and is closed as soon as one frame has arrived.
+told why. The capture runs in a short-lived child process (``eyes.child``, #558), in
+Windows' multi-threaded apartment, and is closed as soon as one frame has arrived: a
+crash copying the frame ends only the child.
 
 Nothing here is reached on import: the WinRT modules load on the first capture, so the
 rest of Tycho (and the cloud's tests) never need them.
@@ -14,12 +15,11 @@ import contextlib
 import ctypes
 import logging
 import time
-from concurrent.futures import BrokenExecutor, ThreadPoolExecutor
 from ctypes import wintypes
 from typing import TYPE_CHECKING
 
 from tycho import win32
-from tycho.eyes import CaptureError, Picture, shrink
+from tycho.eyes import CaptureError, Picture, child
 from tycho.input.windows import executable_of
 
 if TYPE_CHECKING:
@@ -39,22 +39,15 @@ class WindowsCamera:
 
     def __init__(self, executable: str) -> None:
         self.executable = executable
-        self._worker = _worker()
 
     def take(self) -> Picture:
         window = game_window(self.executable)
         if window is None:
             raise CaptureError(f"no {self.executable} window is open (or it's minimised)")
-        try:
-            frame = self._worker.submit(_frame, window).result()
-        except BrokenExecutor as e:  # its initializer failed: the next look gets a new one (#552)
-            self._worker.shutdown(wait=False, cancel_futures=True)
-            self._worker = _worker()
-            raise CaptureError(f"the capture thread stopped ({e})") from e
-        return shrink(frame)
+        return child.take(window)
 
     def close(self) -> None:
-        self._worker.shutdown(wait=False, cancel_futures=True)
+        pass
 
 
 def game_window(executable: str) -> int | None:
@@ -76,12 +69,14 @@ def game_window(executable: str) -> int | None:
     return max(found)[1] if found else None
 
 
-def _worker() -> ThreadPoolExecutor:
-    return ThreadPoolExecutor(1, "tycho-eyes", initializer=_multi_threaded)
+def frame_of(window: int) -> Image.Image:
+    """One frame of ``window``, on this thread: in the child process (``eyes.child``)."""
+    _multi_threaded()
+    return _frame(window)
 
 
 def _multi_threaded() -> None:
-    """The worker joins Windows' multi-threaded apartment, which a free-threaded frame
+    """The capture joins Windows' multi-threaded apartment, which a free-threaded frame
     pool needs. Already in one (or another), WinRT says so, and it carries on."""
     from winrt.runtime import ApartmentType, init_apartment
 
@@ -90,7 +85,7 @@ def _multi_threaded() -> None:
 
 
 def _frame(window: int) -> Image.Image:
-    """One frame of ``window``, without the mouse pointer. On the worker thread."""
+    """One frame of ``window``, without the mouse pointer."""
     from PIL import Image
     from winrt.windows.graphics.capture import Direct3D11CaptureFramePool
     from winrt.windows.graphics.capture.interop import create_for_window
