@@ -9,7 +9,7 @@ import ast
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "tycho"
-DLLS = ("user32", "gdi32", "kernel32", "shell32")
+DLLS = ("user32", "gdi32", "kernel32", "shell32", "ole32")
 
 
 def _called() -> dict[tuple[str, str], str]:

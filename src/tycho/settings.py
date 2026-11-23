@@ -11,11 +11,8 @@ sentence must never weaken a safeguard or your privacy (ADR 5), so some settings
 only go one way by voice: ``lower_only`` means lower, or off.
 """
 
-import os
 import re
-import tempfile
 import threading
-import tomllib
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -26,7 +23,7 @@ from tycho import paths
 from tycho.brain.providers import BrainModel, Provider, choose
 from tycho.callouts import CalloutKinds
 from tycho.ptt.binding import Binding
-from tycho.settings_toml import to_toml, toml_value
+from tycho.settings_toml import read_toml, to_toml, toml_value, write_atomic
 from tycho.tile import values as tiles
 from tycho.voice import voices
 
@@ -122,6 +119,19 @@ class Settings(BaseModel):
         ge=0.0,
         le=1.0,
         description="Volume of Tycho's voice. Zero turns it off.",
+        json_schema_extra=_rule("yes", "now"),
+    )
+    duck_game: bool = Field(
+        default=True,
+        description="Turn the game's sound down while Tycho speaks, and back up after, so you "
+        "hear Tycho over engines and combat. Only the game: voice chat is left alone.",
+        json_schema_extra=_rule("yes", "now"),
+    )
+    duck_level: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description="How loud the game is while Tycho speaks, as a share of where you left it.",
         json_schema_extra=_rule("yes", "now"),
     )
     voice: str = Field(
@@ -435,13 +445,10 @@ def unknown_keys(path: Path | None = None) -> tuple[str, ...]:
 
 
 def _read(path: Path) -> dict[str, Any] | None:
-    if not path.exists():
-        return None
     try:
-        # utf-8-sig: Notepad and PowerShell can save a byte-order mark, which TOML rejects.
-        return tomllib.loads(path.read_text("utf-8-sig"))
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
-        raise SettingsError(f"Couldn't read {path}: {e}") from e
+        return read_toml(path)
+    except ValueError as e:
+        raise SettingsError(str(e)) from e
 
 
 def save(
@@ -464,15 +471,7 @@ def save(
                 )
             kept.append(f"{name} = {toml_value(value)}")
         text += "\n".join(kept) + "\n"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handle, temp = tempfile.mkstemp(dir=path.parent, prefix=".settings.", suffix=".tmp")
-    try:
-        with os.fdopen(handle, "w", encoding="utf-8") as f:
-            f.write(text)
-        os.replace(temp, path)
-    except BaseException:
-        Path(temp).unlink(missing_ok=True)
-        raise
+    write_atomic(path, text)
     return path
 
 

@@ -1,7 +1,8 @@
 """Every Windows DLL Tycho calls, loaded here and nowhere else (#298, ADR 19): the
 Tile's window (ADR 16), the tray icon (ADR 17), key presses and the focus check, push
 to talk, the single-instance lock, the console's close guard, the game's drives, and
-finding the game's window to look at (``eyes``, #31).
+finding the game's window to look at (``eyes``, #31), and the game's volume in Windows'
+mixer while Tycho speaks (COM, ``voice/mixer.py``, #570).
 One copy, so a fix to a structure or an argument type reaches every caller.
 
 Each DLL is loaded and typed on first use. Every function a caller uses has its
@@ -11,6 +12,7 @@ checks that no other module loads a DLL (``tests/test_code_layout.py``).
 
 import ctypes
 import sys
+import uuid
 from collections.abc import Callable
 from ctypes import wintypes
 
@@ -163,6 +165,32 @@ def kernel32() -> ctypes.WinDLL:
 
 def shell32() -> ctypes.WinDLL:
     return _lib("shell32")
+
+
+def ole32() -> ctypes.WinDLL:
+    return _lib("ole32")
+
+
+def guid(text: str) -> GUID:
+    """A COM class or interface id, from its usual text form."""
+    u = uuid.UUID(text)
+    return GUID(u.time_low, u.time_mid, u.time_hi_version, (ctypes.c_ubyte * 8)(*u.bytes[8:]))
+
+
+def com_call(
+    obj: int, index: int, restype: object, argtypes: list[object], *args: object
+) -> object:
+    """Call the ``index``th method of the COM object ``obj`` (its vtable's order). A
+    method whose ``restype`` is ``HRESULT`` raises ``OSError`` when it fails."""
+    vtable = ctypes.cast(obj, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+    method = _FUNCTYPE(restype, ctypes.c_void_p, *argtypes)(vtable[index])  # pyright: ignore[reportArgumentType, reportCallIssue]
+    result = method(obj, *args)
+    if restype is HRESULT and isinstance(result, int) and result < 0:
+        raise OSError(f"COM call {index} failed: {result & 0xFFFFFFFF:#010x}")
+    return result
+
+
+HRESULT = ctypes.c_long
 
 
 def _type_user32(u: ctypes.WinDLL) -> None:
@@ -347,11 +375,27 @@ def _type_shell32(s: ctypes.WinDLL) -> None:
     s.Shell_NotifyIconW.argtypes = [wintypes.DWORD, ctypes.c_void_p]
 
 
+def _type_ole32(o: ctypes.WinDLL) -> None:
+    P = ctypes.c_void_p
+    # The game's volume while Tycho speaks (voice/mixer.py, #570).
+    o.CoInitializeEx.restype = HRESULT
+    o.CoInitializeEx.argtypes = [P, wintypes.DWORD]
+    o.CoCreateInstance.restype = HRESULT
+    o.CoCreateInstance.argtypes = [
+        ctypes.POINTER(GUID),
+        P,
+        wintypes.DWORD,
+        ctypes.POINTER(GUID),
+        ctypes.POINTER(P),
+    ]
+
+
 _TYPERS: dict[str, Callable[[ctypes.WinDLL], None]] = {
     "user32": _type_user32,
     "gdi32": _type_gdi32,
     "kernel32": _type_kernel32,
     "shell32": _type_shell32,
+    "ole32": _type_ole32,
 }
 
 
