@@ -145,7 +145,11 @@ SCHEMA: Mapping[str, object] = {
     "properties": {
         "query": {
             "type": "string",
-            "description": 'A short search query, e.g. "Star Citizen 4.11 patch".',
+            "description": (
+                'A short search query, e.g. "Star Citizen Galaxy loadout". No patch or '
+                "version number unless the player said one: results for an old patch "
+                "are stale."
+            ),
         }
     },
     "required": ["query"],

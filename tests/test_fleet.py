@@ -10,7 +10,7 @@ import pytest
 
 from tests.test_knowledge import CONCEPTS, LIBRARY
 from tycho.brain.claude import history
-from tycho.games.star_citizen.fleet import Fleet, FleetUpdate
+from tycho.games.star_citizen.fleet import Fleet, FleetUpdate, patch_line
 from tycho.games.star_citizen.ships import ShipLibrary, concepts_from_uex
 
 WITH_CONCEPTS = LIBRARY.with_concepts(concepts_from_uex(CONCEPTS[:3], LIBRARY.ships))
@@ -169,3 +169,22 @@ def test_the_tool_schema_suits_strict_tool_use(tmp_path: Path) -> None:
     schema = FleetUpdate(Fleet(tmp_path / "f.toml"), lambda: None).input_schema
     assert schema["additionalProperties"] is False
     assert schema["required"] == ["add", "remove", "flying"]
+
+
+def test_each_request_names_the_games_patch() -> None:
+    """#59: the brain judged what's current by what it remembered."""
+    library = ShipLibrary(LIBRARY.ships, version="4.10.3-LIVE.13220821", as_of="2026-11-23")
+    assert patch_line(library) == "[Game patch now: 4.10.3, from the Star Citizen Wiki]"
+    stale = ShipLibrary(LIBRARY.ships, version="4.10.2-LIVE.1", as_of="2026-11-01", stale=True)
+    assert "4.10.2 when last checked" in patch_line(stale)
+    assert patch_line(None) == ""
+
+
+def test_the_patch_goes_in_the_brains_header() -> None:
+    from tycho.games import BUILT_IN
+    from tycho.packs import STAR_CITIZEN, Workshop, built_in
+    from tycho.settings import Settings
+
+    built = BUILT_IN.lookups["ships"](Workshop(built_in(STAR_CITIZEN), Settings()))
+    assert built.about is not None
+    assert built.about() == ""  # no ship data yet

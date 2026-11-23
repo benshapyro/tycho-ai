@@ -809,6 +809,15 @@ def test_a_search_says_its_waiting_once_and_its_answer_is_spoken() -> None:
     assert len(waited) == 1
 
 
+def test_a_reply_carries_what_its_request_looked_up() -> None:
+    """#564: the follow-ups need to know a search happened, and what for."""
+    decision, _ = _ask_web(_Calls(_searches(), ([], _final("4.10.3 is on the PTU."))), _web())
+    assert decision.looked_up == ('searched the web for "Star Citizen next patch"',)
+    looked = _ask(_Calls(_looks_up(), ([], _final("RSI makes it."))), FakeLookup())
+    assert looked.looked_up == ("looked up ship_lookup (Andromeda)",)
+    assert _ask(_Calls(([], _final("RSI.")))).looked_up == ()
+
+
 def test_other_look_ups_dont_say_theyre_waiting() -> None:
     stop = _tool_stop("ship_lookup", {"name": "Andromeda"})
     first = (
@@ -1565,3 +1574,34 @@ def test_a_stream_an_act_left_is_closed_in_order_not_by_the_garbage_collector() 
         sys.unraisablehook = before
     assert decided == [RunActions(("v_toggle_landing_system",), "Gear.")] * 10
     assert problems == []
+
+
+def test_a_look_is_offered_only_where_the_screen_could_answer() -> None:
+    """#566: asked for a loadout from the pilot's seat, the brain offered a look twice."""
+    from tycho.brain.looking import LOOK_OFFER, MAY_OFFER
+
+    assert LOOK_OFFER in MAY_OFFER
+    assert "loadout" in MAY_OFFER
+    assert "which screen to open" in MAY_OFFER
+
+
+def test_web_search_queries_leave_out_patch_numbers() -> None:
+    """#568: the brain put "4.10" in a query, which finds an old patch's pages."""
+    from tycho.knowledge.web import SCHEMA
+
+    query = cast(dict[str, Any], SCHEMA["properties"])["query"]["description"]
+    assert not re.search(r"\d\.\d", query)  # its example once had one
+    assert "No patch or version number unless the player said one" in query
+
+
+@pytest.mark.parametrize("name", ["core.md", "advisor.md"])
+def test_the_brain_never_promises_what_it_cant_keep(name: str) -> None:
+    """#568: "I'll skip the Tile mentions" lasted half a minute. And #59: the header's
+    patch beats the brain's memory."""
+    from pathlib import Path
+
+    import tycho.brain
+
+    text = (Path(tycho.brain.__file__).parent / name).read_text("utf-8")
+    assert "Never promise to change how you'll answer from now on" in text
+    assert "may give the game's patch now: trust it over any patch you remember" in text

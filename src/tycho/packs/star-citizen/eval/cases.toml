@@ -334,6 +334,14 @@ must = [["v_weapon_countermeasure_decoy_launch"]]
 tag = "mishearing"
 
 [[case]]
+heard = "Shut all the doors."
+mode = "command"
+expect = ["actions"]
+must = [["v_toggle_all_doors", "v_close_all_doors"]]
+tag = "single"
+# Play session, 22 Nov 2026 (#567): missed the fast path and took 1.9 s.
+
+[[case]]
 heard = "Close the doors, please, the doors."
 mode = "command"
 expect = ["actions"]

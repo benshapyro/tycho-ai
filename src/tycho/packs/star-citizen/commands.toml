@@ -60,7 +60,7 @@ actions = ["v_open_all_doors", "v_toggle_all_doors"]
 
 [[command]]
 id = "doors_close"
-say = ["close the doors", "close doors", "close all doors", "close all the doors", "shut the doors", "closed doors", "closed the doors", "closed all doors", "closed all the doors"]
+say = ["close the doors", "close doors", "close all doors", "close all the doors", "shut the doors", "shut doors", "shut all doors", "shut all the doors", "closed doors", "closed the doors", "closed all doors", "closed all the doors"]
 actions = ["v_close_all_doors", "v_toggle_all_doors"]
 
 [[command]]
