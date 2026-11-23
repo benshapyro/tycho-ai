@@ -70,19 +70,21 @@ ANSWER_ONLY = Unseen(
 """The brain picked keys to press in a request with a picture: nothing is pressed."""
 
 
-NOT_NOW = frozenset({"not", "dont", "stop", "never", "off", "disable", "without"})
-"""Words that turn a look phrase around ("don't look at my screen", "stop looking"):
-never a look. That goes to the brain, which can turn looking off (``settings``)."""
-NOT_NOW_REACH = 4
-"""How many words before a look phrase, in the same clause, a ``NOT_NOW`` word turns it
-around. Further away, or after it ("take a look, is my shield off?"), it's about
-something else (#554)."""
+NOT_NOW = frozenset({"not", "dont", "never"})
+"""Words that turn a look phrase around anywhere before it in the same clause ("I don't
+really want you to look at my screen"): never a look. That goes to the brain, which can
+turn looking off (``settings``)."""
+NOT_NEAR = frozenset({"stop", "off", "disable", "without"})
+"""Words that turn it around only just before it ("stop, take a look" is a clause apart;
+"turn off ... looking"), within ``NOT_NEAR_REACH`` words. After the phrase ("take a look,
+is my shield off?") neither kind counts: it's about something else (#554)."""
+NOT_NEAR_REACH = 4
 _CLAUSES = re.compile(r"[,.;:!?]+")
 
 
 def asks_to_look(text: str, phrases: Sequence[str]) -> bool:
     """Whether ``text`` holds one of ``phrases``, word for word, anywhere in it, and
-    doesn't say not to just before it (``NOT_NOW``, ``NOT_NOW_REACH``)."""
+    doesn't say not to before it (``NOT_NOW``, ``NOT_NEAR``)."""
     wanted = [words for words in (normalize(p) for p in phrases) if words]
     return any(_asked(normalize(clause), wanted) for clause in _CLAUSES.split(text))
 
@@ -90,7 +92,8 @@ def asks_to_look(text: str, phrases: Sequence[str]) -> bool:
 def _asked(words: list[str], phrases: list[list[str]]) -> bool:
     return any(
         words[start : start + len(phrase)] == phrase
-        and not NOT_NOW.intersection(words[max(0, start - NOT_NOW_REACH) : start])
+        and not NOT_NOW.intersection(words[:start])
+        and not NOT_NEAR.intersection(words[max(0, start - NOT_NEAR_REACH) : start])
         for phrase in phrases
         for start in range(len(words) - len(phrase) + 1)
     )

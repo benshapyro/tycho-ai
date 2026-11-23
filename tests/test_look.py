@@ -155,6 +155,7 @@ def test_a_not_or_off_away_from_the_look_phrase_doesnt_cancel_it(said: str) -> N
 def test_saying_not_to_look_in_more_words_still_isnt_a_look() -> None:
     assert not asks_to_look("I don't want you to look at my screen", SC.look)
     assert not asks_to_look("please never take a look", SC.look)
+    assert not asks_to_look("I don't really want you to take a look", SC.look)
 
 
 def test_only_a_plain_yes_answers_the_offer() -> None:

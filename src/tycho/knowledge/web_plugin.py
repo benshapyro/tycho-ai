@@ -35,9 +35,9 @@ ENGINE = "perplexity"
 the fewest wrong answers; Firecrawl is refused under zero data retention."""
 RESULTS = 5
 SECONDS = 8.0
+"""How long the search may take: 1.5 s typical, 4.1 s at the slowest in #365."""
 REFUSED = frozenset({401, 402, 403})
 """OpenRouter's answers when the key itself can't be used: revoked, or out of credit."""
-"""How long the search may take: 1.5 s typical, 4.1 s at the slowest in #365."""
 SEARCH_PROMPT = (
     "Web search results for the player's question follow. Answer from them as your brief "
     "says: never cite, link or name a URL, because the answer is read aloud."
@@ -109,9 +109,12 @@ class PluginSearch:
 
     @property
     def seconds(self) -> float:
-        if self._refused and self._fallback is not None:
-            return float(getattr(self._fallback, "seconds", SECONDS))
-        return SECONDS
+        """With a fallback, its time limit too: the brain reads this before the search
+        starts, so the first search after a refusal has the fallback's time (#559 review).
+        OpenRouter's own request still stops at ``SECONDS``."""
+        if self._fallback is None:
+            return SECONDS
+        return max(SECONDS, float(getattr(self._fallback, "seconds", SECONDS)))
 
     async def prepare(self) -> None:
         return None

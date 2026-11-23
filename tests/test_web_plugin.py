@@ -181,7 +181,7 @@ def test_a_refused_openrouter_key_searches_with_the_anthropic_key_from_then_on(
     Anthropic key works from searching."""
     anthropic = _Anthropic()
     search, bodies, _ = _search({"error": {"message": "no"}}, status=status, fallback=anthropic)
-    assert search.seconds < anthropic.seconds
+    assert search.seconds == anthropic.seconds  # read before the first search starts
 
     async def twice() -> list[Any]:
         found = [await search.run({"query": q}) for q in ("one", "two")]
@@ -195,6 +195,12 @@ def test_a_refused_openrouter_key_searches_with_the_anthropic_key_from_then_on(
     assert len(bodies) == 1  # OpenRouter isn't asked again
     assert search.seconds == anthropic.seconds
     assert anthropic.closed
+
+
+def test_without_a_fallback_the_search_keeps_its_own_time_limit() -> None:
+    search, _, _ = _search(_reply("x"))
+    assert search.seconds == 8.0
+    asyncio.run(search.close())
 
 
 def test_a_server_error_isnt_a_refused_key() -> None:
