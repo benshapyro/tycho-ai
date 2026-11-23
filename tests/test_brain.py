@@ -1565,3 +1565,15 @@ def test_a_stream_an_act_left_is_closed_in_order_not_by_the_garbage_collector() 
         sys.unraisablehook = before
     assert decided == [RunActions(("v_toggle_landing_system",), "Gear.")] * 10
     assert problems == []
+
+
+def test_claude_isnt_offered_cards_its_game_doesnt_use() -> None:
+    """#528: only the kinds the game's Settings can hide."""
+    wow = built_in("wow-forever")
+    client = _Client([], _final("Fine."))
+    brain = ClaudeBrain(
+        CommandMatcher.default(pack=wow), client=cast(Any, client), cards=lambda: True, pack=wow
+    )
+    asyncio.run(brain.decide(BrainRequest("where to level", KEYBINDS)))
+    card = next(t for t in client.requests[0]["tools"] if t["name"] == "show_card")
+    assert "fleet" not in card["input_schema"]["properties"]["kind"]["enum"]

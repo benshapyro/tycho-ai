@@ -16,7 +16,6 @@ can be paid in that time instead of after it:
 """
 
 import asyncio
-import contextlib
 import logging
 import time
 from collections.abc import Awaitable, Callable
@@ -62,6 +61,9 @@ class Primer:
         """``_task`` writes the cache (rather than opening a connection)."""
         self._busy = 0
         """Warm-ups running outside priming (the start-up one): a press waits for them."""
+        self._warmups: set[asyncio.Future[None]] = set()
+        """Each running ``warming``'s end, which a request waits for as it does a press's
+        write (#540)."""
 
     def used(self, *, cache: bool = True) -> None:
         """A request to the provider just went, or one ended with an answer: the
@@ -93,19 +95,27 @@ class Primer:
         the cache write: the look-ups' loading, which can take minutes after a patch,
         leaves presses free to open the connection."""
         self._busy += 1
+        done = asyncio.get_running_loop().create_future()
+        self._warmups.add(done)
         try:
             return await warm_up()
         finally:
             self._busy -= 1
+            self._warmups.discard(done)
+            done.set_result(None)
 
     async def going(self, seconds: float = SETTLE_SECONDS) -> None:
         """A request is about to go. It first waits up to ``seconds`` for a cache write
-        a press started, so it reads the cache instead of writing it again (#533); then
-        its connection counts as used. Call ``used`` when it has its answer."""
+        a press started (#533), or the start-up or keybinds warm-up (#540), so it reads
+        the cache instead of writing it again; then its connection counts as used. Call
+        ``used`` once its first answer starts arriving (#540), and again when it has its
+        answer."""
+        writes: set[asyncio.Future[None]] = set(self._warmups)
         task = self._task
         if task is not None and not task.done() and self._writing:
-            with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(asyncio.shield(task), seconds)
+            writes.add(task)
+        if writes:
+            await asyncio.wait(writes, timeout=seconds)  # never cancels them
         self.used(cache=False)
 
     async def _rewarm_cache(self) -> None:

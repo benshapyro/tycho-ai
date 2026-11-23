@@ -62,7 +62,7 @@ from tycho.commands import CommandMatcher
 from tycho.eyes import Picture
 from tycho.keybinds import Keybinds
 from tycho.packs import GamePack
-from tycho.tile.cards import TOOL_DESCRIPTION, TOOL_SCHEMA
+from tycho.tile.cards import show_card
 
 log = logging.getLogger(__name__)
 
@@ -77,15 +77,6 @@ DRAIN_SECONDS = 10.0
 (#518): longer than the client's 8 s read timeout."""
 # Haiku 5.5 per million tokens: input, output, cache read, cache write (1 hour).
 _PRICES = (0.10, 0.50, 0.01, 0.20)
-
-
-SHOW_CARD: ToolParam = {
-    "name": "show_card",
-    "description": TOOL_DESCRIPTION,
-    "strict": True,
-    "input_schema": dict(TOOL_SCHEMA),
-}
-"""Offered only while the Tile is on, so Claude never says "on the Tile" without one."""
 
 
 def _tools(
@@ -181,6 +172,9 @@ class ClaudeBrain:
         if clash := ACTS & self._lookups.keys():
             raise ValueError(f"a look-up can't be named {', '.join(sorted(clash))}")
         self._tools = _tools(self._sequences, lookups, keys=self._keys)
+        self._show_card = cast(ToolParam, {**show_card(pack.tile.cards), "strict": True})
+        """Offered only while the Tile is on, so Claude never says "on the Tile" without
+        one; only the kinds this game's Settings can hide (#528)."""
         self._reference = reference
         self._about = about
         self._cards = cards
@@ -264,7 +258,7 @@ class ClaudeBrain:
 
     async def decide(self, request: BrainRequest) -> Decision:
         self._brief(request.keybinds)
-        turn = Turn.of(request)
+        turn = Turn.of(request, self._primer.used)
         if self._traces is not None:
             turn.trace = self._traces.start(
                 "anthropic", self._model, self._briefed, request.text, len(request.recent)
@@ -391,7 +385,7 @@ class ClaudeBrain:
         if not self._cards():
             return self._tools
         acts = 2 if self._keys else 0  # after run_sequence and run_actions, if offered
-        return [*self._tools[:acts], SHOW_CARD, *self._tools[acts:]]
+        return [*self._tools[:acts], self._show_card, *self._tools[acts:]]
 
     def _brief(self, keybinds: Keybinds) -> None:
         """Rebuild the briefing only when the keybinds change, so the cache holds."""

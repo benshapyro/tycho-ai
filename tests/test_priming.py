@@ -1,6 +1,7 @@
 """Getting the brain ready as push-to-talk goes down (#21, ``brain/priming.py``)."""
 
 import asyncio
+import contextlib
 import json
 from typing import Any
 
@@ -10,7 +11,7 @@ import httpx2
 from tests.fakes.fake_chat import FakeChat, text
 from tests.test_brain import _end, _message_start, _sse  # pyright: ignore[reportPrivateUsage]
 from tycho.brain.claude import ClaudeBrain
-from tycho.brain.decisions import BrainRequest
+from tycho.brain.decisions import BrainError, BrainRequest
 from tycho.brain.openrouter import OpenRouterBrain
 from tycho.brain.priming import CACHE_STALE_SECONDS, IDLE_SECONDS, Primer
 from tycho.commands import CommandMatcher
@@ -333,3 +334,112 @@ def test_openrouter_opens_its_connection_too(monkeypatch: Any) -> None:
 
     asyncio.run(go())
     assert chat.connected == 1
+
+
+def test_a_request_waits_for_the_start_up_warm_up_too() -> None:
+    """#540: a request in the first seconds wrote the cache a second time alongside the
+    start-up warm-up."""
+    rig = _Rig()
+    seen: list[str] = []
+
+    async def warm_up() -> None:
+        await asyncio.sleep(0.05)
+        seen.append("written")
+
+    async def go() -> None:
+        warming = asyncio.create_task(rig.primer.warming(warm_up))
+        await asyncio.sleep(0)
+        await rig.primer.going()
+        seen.append("asked")
+        await warming
+
+    asyncio.run(go())
+    assert seen == ["written", "asked"]
+
+
+def test_a_request_waits_for_the_start_up_warm_up_only_so_long() -> None:
+    rig = _Rig()
+
+    async def go() -> bool:
+        warming = asyncio.create_task(rig.primer.warming(lambda: asyncio.sleep(5)))
+        await asyncio.sleep(0)
+        await rig.primer.going(0.01)
+        still = not warming.done()
+        warming.cancel()
+        return still
+
+    assert asyncio.run(go())
+
+
+def _stale_openrouter(chat: FakeChat, monkeypatch: Any) -> tuple[OpenRouterBrain, list[float]]:
+    """An OpenRouter brain whose cache was last read long ago."""
+    brain = OpenRouterBrain(MATCHER, model="anthropic/claude-haiku-5.5", client=chat, pack=SC)
+    now = [0.0]
+    monkeypatch.setattr("tycho.brain.priming.now", lambda: now[0])
+    brain._primer.used()  # pyright: ignore[reportPrivateUsage]
+    now[0] += CACHE_STALE_SECONDS - 60
+    return brain, now
+
+
+def _due(brain: OpenRouterBrain | ClaudeBrain, now: list[float]) -> bool:
+    """Whether a press now would write the cache again."""
+    return now[0] - brain._primer._cached > CACHE_STALE_SECONDS  # pyright: ignore[reportPrivateUsage]
+
+
+def test_a_request_cut_off_after_its_answer_started_still_read_the_cache(
+    monkeypatch: Any,
+) -> None:
+    """#540: only a request that ended with an answer renewed the cache's hour, so one
+    that timed out mid-answer left the next press to write it again for nothing."""
+    chat = FakeChat([*text("Hi")[:1], BrainError("cut off")])
+    brain, now = _stale_openrouter(chat, monkeypatch)
+
+    async def go() -> None:
+        with contextlib.suppress(BrainError):
+            await brain.decide(BrainRequest("hello", KEYBINDS))
+        await brain.close()
+
+    asyncio.run(go())
+    now[0] += 120
+    assert not _due(brain, now)
+
+
+def test_a_failed_openrouter_request_doesnt_count_as_reading_the_cache(
+    monkeypatch: Any,
+) -> None:
+    """#540: a request refused before any answer read no cache."""
+    chat = FakeChat([BrainError("OpenRouter returned an error (500)")])
+    brain, now = _stale_openrouter(chat, monkeypatch)
+
+    async def go() -> None:
+        with contextlib.suppress(BrainError):
+            await brain.decide(BrainRequest("hello", KEYBINDS))
+        await brain.close()
+
+    asyncio.run(go())
+    now[0] += 120
+    assert _due(brain, now)
+
+
+def test_a_failed_claude_request_doesnt_count_as_reading_the_cache(monkeypatch: Any) -> None:
+    def answer(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(500, json={"type": "error", "error": {"type": "api_error"}})
+
+    client = anthropic.AsyncAnthropic(
+        api_key="sk-ant-test",
+        max_retries=0,
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(answer)),
+    )
+    brain = ClaudeBrain(MATCHER, client=client, pack=SC)
+    now = [0.0]
+    monkeypatch.setattr("tycho.brain.priming.now", lambda: now[0])
+    brain._primer.used()  # pyright: ignore[reportPrivateUsage]
+    now[0] += CACHE_STALE_SECONDS + 60
+
+    async def go() -> None:
+        with contextlib.suppress(BrainError):
+            await brain.decide(BrainRequest("hello", KEYBINDS))
+        await brain.close()
+
+    asyncio.run(go())
+    assert _due(brain, now)

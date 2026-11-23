@@ -152,12 +152,18 @@ class Turn:
     picture: int = 0
     """The size of the game window's picture sent with the request (#31): only that is
     traced."""
+    answering: Callable[[], None] | None = None
+    """Called as each call's stream starts: the provider has read its cache by then, even
+    if the request later times out or is cut off (#540)."""
 
     @classmethod
-    def of(cls, request: BrainRequest) -> Turn:
-        """A new turn for ``request``, with its callbacks."""
+    def of(cls, request: BrainRequest, answering: Callable[[], None] | None = None) -> Turn:
+        """A new turn for ``request``, with its callbacks, and the adapter's own
+        ``answering``."""
         size = request.picture.size if request.picture is not None else 0
-        return cls(request.waiting, request.looking, request.checking, picture=size)
+        return cls(
+            request.waiting, request.looking, request.checking, picture=size, answering=answering
+        )
 
 
 class Round:
@@ -181,6 +187,7 @@ class Round:
         self._sequences = sequences
         self._started = started
         self._checking = False
+        self._streamed = False
         self._instant: list[asyncio.Task[LookupResult]] = []
         """A fleet or settings note in the same reply as an act: it runs too (#156)."""
         self._looks: dict[asyncio.Task[LookupResult], Look] = {}
@@ -192,6 +199,10 @@ class Round:
     def streaming(self) -> None:
         """A piece of this call's stream arrived: the first one is the time to first
         token in the trace."""
+        if not self._streamed:
+            self._streamed = True
+            if self.turn.answering is not None:
+                self.turn.answering()
         if self.turn.trace is not None:
             self.turn.trace.streaming()
 
