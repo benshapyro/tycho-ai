@@ -58,7 +58,7 @@ PERSONAL = re.compile(
     r"brothers?|sisters?|siblings?|friends?|cousins?|uncle|aunt|grand\w+|nan|age|"
     r"career|employer|office|school|uni|university|college|teacher|neighbou?rs?)|"
     r"i'?m from|i am from|i come from|i grew up|"
-    r"i'?m (?:\d{1,2}(?!\s*\w)|an? \d{1,2}[- ]years?[- ]old)|"
+    r"i'?m (?:\d{1,2}(?!\s*\w)|(?:an? )?\d{1,2}[- ]?(?:years?|yrs?)\b)|"
     r"i work (?:as|at|in|for)|for a living|i'?m an? (?:nurse|teacher|doctor|student|"
     r"lawyer|accountant|programmer|developer|electrician|plumber|chef|cook|soldier)|"
     r"health|sick|medic\w*|diagnos\w*|disabilit\w*|adhd|autis\w*|depress\w*|anxiety|"
