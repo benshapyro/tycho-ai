@@ -296,7 +296,7 @@ def test_without_a_voice_a_callout_goes_to_the_tile() -> None:
 
 def test_without_a_voice_a_callout_never_pushes_an_answer_s_card_off() -> None:
     """#550: with one card at a time, a notice 4 s after an answer shrank the answer
-    to a strip before it was read. The callout waits its turn: it isn't shown."""
+    to a strip before it was read. That callout is dropped, as when Tycho is busy."""
     from tycho.tile import Card, Row
 
     async def scenario() -> FakeDisplay:
