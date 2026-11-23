@@ -197,6 +197,11 @@ KNOWN = {
     "no_errors",
     "max_words",
     "key_for",
+    "notes",
+    "every_game_notes",
+    "notes_has",
+    "notes_lack",
+    "notes_unchanged",
 }
 
 

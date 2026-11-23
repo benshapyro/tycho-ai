@@ -26,6 +26,7 @@ from tycho.packs.parts import (
 
 __all__ = [
     "BUILT_IN",
+    "MEMORY",
     "SETTINGS",
     "GameDataError",
     "GameFolder",
@@ -206,6 +207,23 @@ def _settings(workshop: Workshop) -> Built:
     return Built((SettingsTool(live=workshop.live, offered=workshop.pack.callouts),))
 
 
+def _memory(workshop: Workshop) -> Built:
+    """The player's notes (ADR 8, #483): every game's and this game's, in each request's
+    header while ``memory`` is on, and the tool that saves and forgets them."""
+    from tycho import paths
+    from tycho.memory import Memory, NoteFile
+    from tycho.memory.tool import MemoryTool
+
+    memory = Memory(
+        NoteFile(paths.memory_file()),
+        NoteFile(paths.game_memory_file(workshop.pack.id)),
+        on=workshop.current.memory,
+    )
+    if workshop.live is not None:
+        workshop.live["memory"] = memory.set_on
+    return Built((MemoryTool(memory),), about=memory.block)
+
+
 def _web(workshop: Workshop) -> Built:
     """Web search, if the player left it on: through OpenRouter's web plugin when they
     have an OpenRouter key (#365), otherwise Anthropic's own search."""
@@ -267,7 +285,9 @@ def ship_accent(flying: str, library: ShipLibrary | None, tile: Tile) -> str | N
 
 
 SETTINGS = "settings"
-"""The look-up every pack gets, named or not: the player's spoken settings."""
+"""A look-up every pack gets, named or not: the player's spoken settings."""
+MEMORY = "memory"
+"""A look-up every pack gets, named or not: the player's notes (ADR 8)."""
 
 BUILT_IN = Registry(
     # game/install.py: the RSI Launcher's library folder, and the player's channel.
@@ -284,6 +304,7 @@ BUILT_IN = Registry(
         "mining": _mining,
         "trade": _trade,
         SETTINGS: _settings,
+        MEMORY: _memory,
         "web": _web,
     },
 )

@@ -255,3 +255,22 @@ heard = "say that again"
 mode = "command"
 expect = ["say_again"]
 tag = "settings"
+
+# --- Memory (ADR 8, #483) ------------------------------------------------------------
+
+[[case]]
+heard = "remember I'm a level 42 hunter"
+mode = "settings"
+expect = ["reply"]
+tools = ["memory"]
+notes_has = ["hunter"]
+tag = "memory"
+
+[[case]]
+heard = "what level am I again"
+mode = "chat"
+expect = ["reply"]
+notes = ["Is a level 42 hunter"]
+mentions = [["42"]]
+notes_unchanged = true
+tag = "memory"

@@ -33,6 +33,7 @@ from tycho.brain.decisions import (
     UnboundAction,
     parse_tool_call,
 )
+from tycho.brain.heard import Heard, hearing
 from tycho.brain.lookups import (
     LOOKUP_SECONDS,
     Lookup,
@@ -152,27 +153,29 @@ class Turn:
     refused: bool = False
     """This call's reply held a refused act: its result asks for another pick."""
     looked: bool = False
-    """This call's reply looked something up for an answer (not a fleet or settings
-    note): its results get ``CARD_NOTE`` while the Tile is on (#490)."""
+    """This reply looked something up to answer (no note): its results get ``CARD_NOTE`` (#490)."""
     trace: Trace | None = None
     """What the request did, when tracing is on (#282)."""
     picture: int = 0
-    """The size of the game window's picture sent with the request (#31): only that is
-    traced."""
+    """The size of the game window's picture sent with the request (#31): all that's traced."""
     looked_up: list[str] = field(default_factory=list[str])
-    """What the request looked up, in a few words each ("searched the web for ..."), so
-    the follow-ups remember it (#564)."""
+    """What the request looked up, in a few words each, for the follow-ups (#564)."""
     answering: Callable[[], None] | None = None
-    """Called as each call's stream starts: the provider has read its cache by then, even
-    if the request later times out or is cut off (#540)."""
+    """Called as each call's stream starts: the cache was read, even if it's cut off (#540)."""
+    heard: Heard | None = None
+    """What the player said, for a look-up that checks they asked for it (ADR 8)."""
 
     @classmethod
     def of(cls, request: BrainRequest, answering: Callable[[], None] | None = None) -> Turn:
-        """A new turn for ``request``, with its callbacks, and the adapter's own
-        ``answering``."""
+        """A new turn for ``request``, with its callbacks and the adapter's ``answering``."""
         size = request.picture.size if request.picture is not None else 0
         return cls(
-            request.waiting, request.looking, request.checking, picture=size, answering=answering
+            request.waiting,
+            request.looking,
+            request.checking,
+            picture=size,
+            answering=answering,
+            heard=Heard.of(request),
         )
 
 
@@ -348,9 +351,13 @@ class Round:
 
 
 async def traced(traces: TraceFile | None, turn: Turn, deciding: Awaitable[Decision]) -> Decision:
-    """The request's decision, with its trace line written once it ends, however it
-    ends (#282). Without ``traces`` (players, unless ``TYCHO_TRACE`` is on), only the
-    decision. A reply carries what the request looked up (#564)."""
+    """The request's decision, its trace line written however it ends (#282; only with
+    ``traces``), and what it looked up (#564). Its look-ups see what was ``heard``."""
+    with hearing(turn.heard):
+        return await _traced(traces, turn, deciding)
+
+
+async def _traced(traces: TraceFile | None, turn: Turn, deciding: Awaitable[Decision]):
     trace = turn.trace
     if traces is None or trace is None:
         return noted(await deciding, turn)
