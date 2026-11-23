@@ -118,8 +118,8 @@ class Settings(BaseModel):
     )
     duck_game: bool = Field(
         default=True,
-        description="Turn the game's sound down while Tycho speaks, and back up after, so you "
-        "hear Tycho over engines and combat. Only the game: voice chat is left alone.",
+        description="Turn the game's sound down while Tycho speaks so you hear it over engines "
+        "and combat. Only the game: other programs, like Discord, are left alone.",
         json_schema_extra=_rule("yes", "now"),
     )
     duck_level: float = Field(

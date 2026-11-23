@@ -3,18 +3,21 @@
 Windows' Core Audio keeps an audio session for each program playing sound, with the
 volume the mixer's per-app slider shows. This finds the game's sessions, by its
 program's name (the pack's ``window``), on every active output device, and reads or
-sets their volume: what a player does by hand in the mixer, nothing in the game (ADR 3).
+sets each one's volume: what a player does by hand in the mixer, nothing in the game
+(ADR 3). Each is named by its session identifier, which Windows keeps the level under, so
+it stays the same when the game restarts (#578).
 COM through ``win32``, no new dependency.
 """
 
 import ctypes
 import logging
-from collections.abc import Callable, Generator, Iterator
+from collections.abc import Callable, Generator, Iterator, Mapping
 from contextlib import contextmanager
 from ctypes import wintypes
 
 from tycho import win32
 from tycho.input.windows import executable_of_process
+from tycho.voice.ducking import ALL, Levels
 
 log = logging.getLogger(__name__)
 
@@ -35,7 +38,7 @@ _COLLECTION_COUNT, _COLLECTION_ITEM = 3, 4  # IMMDeviceCollection
 _ACTIVATE = 3  # IMMDevice
 _GET_SESSION_ENUMERATOR = 5  # IAudioSessionManager2
 _SESSION_COUNT, _GET_SESSION = 3, 4  # IAudioSessionEnumerator
-_GET_PROCESS_ID = 14  # IAudioSessionControl2
+_GET_SESSION_IDENTIFIER, _GET_PROCESS_ID = 12, 14  # IAudioSessionControl2
 _SET_MASTER_VOLUME, _GET_MASTER_VOLUME = 3, 4  # ISimpleAudioVolume
 
 
@@ -45,9 +48,9 @@ class WindowsGameVolume:
     def __init__(self, executable: str) -> None:
         self._executable = executable.lower()
 
-    def get(self) -> float | None:
-        levels: list[float] = []
-        for volume in self._volumes():
+    def get(self) -> Levels:
+        levels: Levels = {}
+        for name, volume in self._volumes():
             level = ctypes.c_float()
             win32.com_call(
                 volume,
@@ -56,19 +59,24 @@ class WindowsGameVolume:
                 [ctypes.POINTER(ctypes.c_float)],
                 ctypes.byref(level),
             )
-            levels.append(level.value)
-        return max(levels) if levels else None
+            # Two sessions under one name share the level Windows keeps: the louder.
+            levels[name] = max(level.value, levels.get(name, 0.0))
+        return levels
 
-    def set(self, level: float) -> bool:
-        level = min(max(level, 0.0), 1.0)
+    def set(self, levels: Mapping[str, float]) -> bool:
         found = False
-        for volume in self._volumes():
+        for name, volume in self._volumes():
+            level = levels.get(name, levels.get(ALL))
+            if level is None:
+                continue
+            level = min(max(level, 0.0), 1.0)
             win32.com_call(volume, _SET_MASTER_VOLUME, _H, [ctypes.c_float, _P], level, None)
             found = True
         return found
 
-    def _volumes(self) -> Iterator[int]:
-        """Each of the game's sessions' ``ISimpleAudioVolume``, released after use."""
+    def _volumes(self) -> Iterator[tuple[str, int]]:
+        """Each of the game's sessions' name and ``ISimpleAudioVolume``, released after
+        use."""
         ole32 = win32.ole32()
         ole32.CoInitializeEx(None, _COINIT_MULTITHREADED)  # once per thread; repeats are fine
         enumerator = _P()
@@ -93,7 +101,7 @@ class WindowsGameVolume:
                     with _owned(device) as on_device:
                         yield from self._sessions(on_device)
 
-    def _sessions(self, on_device: _Call) -> Iterator[int]:
+    def _sessions(self, on_device: _Call) -> Iterator[tuple[str, int]]:
         manager = _out(
             on_device,
             _ACTIVATE,
@@ -108,22 +116,42 @@ class WindowsGameVolume:
                 count = ctypes.c_int()
                 listing(_SESSION_COUNT, _H, [ctypes.POINTER(ctypes.c_int)], ctypes.byref(count))
                 for i in range(count.value):
-                    control = _out(listing, _GET_SESSION, [ctypes.c_int], i)
-                    with _owned(control) as session:
-                        if self._is_the_games(session):
+                    try:
+                        control = _out(listing, _GET_SESSION, [ctypes.c_int], i)
+                        with _owned(control) as session:
+                            name = self._the_games(session)
+                            if name is None:
+                                continue
                             volume = _query(session, _ISIMPLE_AUDIO_VOLUME)
-                            with _owned(volume):
-                                yield volume
+                    except OSError as e:
+                        # One session failing (a headset unplugged mid-walk) skips only
+                        # that session, not the rest (#579).
+                        log.debug("Skipped an audio session: %s", e)
+                        continue
+                    with _owned(volume):
+                        yield name, volume
 
-    def _is_the_games(self, session: _Call) -> bool:
+    def _the_games(self, session: _Call) -> str | None:
+        """The session's identifier if it's the game's, else None."""
         control2 = _query(session, _IAUDIO_SESSION_CONTROL2)
         with _owned(control2) as asking:
             pid = wintypes.DWORD()
-            # Not HRESULT-checked: a session of several processes answers with a warning.
-            asking(
-                _GET_PROCESS_ID, ctypes.c_long, [ctypes.POINTER(wintypes.DWORD)], ctypes.byref(pid)
+            # Unsigned, so ``com_call`` doesn't raise on it (``win32.HRESULT`` is
+            # ``c_long``): a session of several processes answers with a warning, which
+            # is positive. A failure is negative as a signed number.
+            hr = asking(
+                _GET_PROCESS_ID, ctypes.c_ulong, [ctypes.POINTER(wintypes.DWORD)], ctypes.byref(pid)
             )
-        return bool(pid.value) and executable_of_process(pid.value).lower() == self._executable
+            if not isinstance(hr, int) or hr & 0x80000000 or not pid.value:
+                return None
+            if executable_of_process(pid.value).lower() != self._executable:
+                return None
+            text = _P()  # a string Windows made, freed here
+            asking(_GET_SESSION_IDENTIFIER, _H, [_PP], ctypes.byref(text))
+            try:
+                return ctypes.wstring_at(text.value) if text.value else self._executable
+            finally:
+                win32.ole32().CoTaskMemFree(text)
 
 
 type _Call = Callable[..., object]
