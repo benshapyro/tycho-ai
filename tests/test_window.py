@@ -423,6 +423,7 @@ def test_nothing_private_is_offered_to_the_page() -> None:
             "quit",
             "recent",
             "remove_phrase",
+            "remove_second_push_to_talk",
             "remove_key",
             "save_hangar",
             "search_history",

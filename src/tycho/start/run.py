@@ -16,7 +16,8 @@ from tycho.doctor import start_update_check
 from tycho.findings import TYCHO
 from tycho.history import follow, kept
 from tycho.packs import GameDataError, built_in
-from tycho.ptt.devices import describe, input_sources
+from tycho.ptt.binding import every_binding
+from tycho.ptt.devices import describe, describe_all, input_sources
 from tycho.runtime.messages import Result
 from tycho.runtime.recent import Recent
 from tycho.settings import Settings, SettingsError
@@ -252,12 +253,13 @@ def _start(
         if rebound is None or (binding := rebound.push_to_talk_binding) is None:
             return 1
         current = rebound
+    bindings = every_binding(current.push_to_talk, current.push_to_talk_2)
 
     pack = game_pack(current)
     if starting is not None:
         starting.doing("Reading your keybinds")
     # A pack with no keybinds part (an advisor, #191) has none to read, and no game folder.
-    store = load_keybinds(current, binding) if pack.parts.keybinds is not None else None
+    store = load_keybinds(current, bindings) if pack.parts.keybinds is not None else None
     transcriber = load_transcriber(current, starting.doing if starting is not None else None)
     action_log = FileActionLog()
     log.info("Action log: %s", action_log.path)
@@ -310,7 +312,7 @@ def _start(
         game_state = game_state_for(pack, store)
         session = build_session(
             current,
-            binding,
+            bindings,
             store,
             transcriber,
             game_state=game_state,
@@ -337,7 +339,7 @@ def _start(
         tile.on_stopped = lambda _why: session.tell(TILE_STOPPED)  # said, once (#297)
         for said in unseen:  # the Tile is off or didn't open: said aloud once listening
             session.tell(said)
-        log.info("Listening. Hold %s and speak; press Ctrl+C to stop.", describe(binding))
+        log.info("Listening. Hold %s and speak; press Ctrl+C to stop.", describe_all(bindings))
         if starting is not None:
             starting.close()  # the tray's own star takes its place
         restart = False
@@ -382,18 +384,45 @@ NO_BUTTON = (
 )
 
 
-def bind_command(current: Settings) -> Settings | None:
+def bind_command(current: Settings, *, second: bool = False) -> Settings | None:
+    """Choose the push-to-talk button, or with ``second`` another one held the same way
+    (#621): pressing the first button then isn't taken as the second."""
     from tycho.ptt import windows as win
     from tycho.ptt.monitor import capture_binding
 
+    ignore = {win.LEFT_MOUSE}
+    if second:
+        first = current.push_to_talk_binding
+        if first is None:
+            print("Choose your first push-to-talk button before a second: run `tycho bind`.")
+            return None
+        ignore.add(first)
+        print("Press the second button you want to hold while talking, say one on your")
+        print(f"joystick. {describe(first)} stays your push-to-talk too.")
+    else:
+        print("Press the button you want to hold while talking: a keyboard key, a mouse")
+        print("button (not left click) or a joystick button. A mouse side button works well.")
     sources = input_sources(None)
-    print("Press the button you want to hold while talking: a keyboard key, a mouse")
-    print("button (not left click) or a joystick button. A mouse side button works well.")
-    found = capture_binding(sources, ignore=frozenset({win.LEFT_MOUSE}), timeout=30)
+    found = capture_binding(sources, ignore=frozenset(ignore), timeout=30)
     if found is None:
         print("No button pressed within 30 seconds; nothing changed.")
         return None
-    updated = current.model_copy(update={"push_to_talk": str(found)})
+    name = "push_to_talk_2" if second else "push_to_talk"
+    changes: dict[str, object] = {name: str(found)}
+    if not second and current.push_to_talk_2 == str(found):
+        changes["push_to_talk_2"] = None  # the same button twice is one button
+    updated = current.model_copy(update=changes)
     path = settings.save(updated)
-    print(f"Push-to-talk is now {describe(found)}. Saved to {path}")
+    which = "Your second push-to-talk button" if second else "Push-to-talk"
+    print(f"{which} is now {describe(found)}. Saved to {path}")
     return updated
+
+
+def remove_second_command(current: Settings) -> int:
+    """Back to one push-to-talk button."""
+    if current.push_to_talk_2 is None:
+        print("You have one push-to-talk button already; nothing changed.")
+        return 0
+    path = settings.save(current.model_copy(update={"push_to_talk_2": None}))
+    print(f"Removed your second push-to-talk button. Saved to {path}")
+    return 0

@@ -20,7 +20,12 @@ class HomePage(State):
         name: object = ""
         if button:
             try:
-                name = _shown("push_to_talk", settings.load(self._path).push_to_talk)
+                current = settings.load(self._path)
+                name = " or ".join(
+                    str(_shown(n, getattr(current, n)))
+                    for n in ("push_to_talk", "push_to_talk_2")
+                    if getattr(current, n)
+                )
             except settings.SettingsError:
                 name = ""
         return {

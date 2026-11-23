@@ -94,13 +94,13 @@ def _session(
     monkeypatch: pytest.MonkeyPatch,
     current: Settings | None = None,
 ) -> Any:
-    def no_sources(binding: Binding | None) -> list[InputSource]:
+    def no_sources(binding: Binding | None, *more: Binding) -> list[InputSource]:
         return []  # no Windows input here
 
     monkeypatch.setattr(assemble, "input_sources", no_sources)
     return assemble.build_session(
         current or Settings(),
-        Binding.parse("mouse:0x06"),
+        [Binding.parse("mouse:0x06")],
         cast(Any, store),
         FakeTranscriber(),
         audio=FakeAudioSource(16_000),

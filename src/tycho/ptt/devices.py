@@ -3,6 +3,8 @@
 Out of ``app.py`` (#398), so the desktop doesn't import the app to use them.
 """
 
+from collections.abc import Iterable
+
 from tycho.ptt.binding import Binding, DeviceKind
 from tycho.ptt.monitor import InputSource
 
@@ -15,12 +17,18 @@ def describe(binding: Binding) -> str:
     return win.describe(binding)
 
 
-def input_sources(binding: Binding | None) -> list[InputSource]:
-    """Keyboard and mouse always; joysticks when the binding needs them (or to capture one)."""
+def describe_all(bindings: Iterable[Binding]) -> str:
+    """Every push-to-talk button by its name: "Mouse side (forward) or joystick button 3"."""
+    return " or ".join(describe(binding) for binding in bindings)
+
+
+def input_sources(binding: Binding | None, *more: Binding) -> list[InputSource]:
+    """Keyboard and mouse always; joysticks when a binding needs them, or with None (to
+    capture one)."""
     from tycho.ptt.windows import KeyboardMouseSource
 
     sources: list[InputSource] = [KeyboardMouseSource()]
-    if binding is None or binding.kind is DeviceKind.JOYSTICK:
+    if binding is None or any(b.kind is DeviceKind.JOYSTICK for b in (binding, *more)):
         sources.append(PollThreadJoysticks())
     return sources
 

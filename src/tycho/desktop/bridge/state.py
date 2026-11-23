@@ -17,7 +17,7 @@ from tycho.packs.parts import HangarImport
 from tycho.runtime.recent import Exchange
 from tycho.settings import Settings
 
-SETUP_CHOICES = frozenset({"game_root", "push_to_talk", "microphone"})
+SETUP_CHOICES = frozenset({"game_root", "push_to_talk", "push_to_talk_2", "microphone"})
 """Chosen with their own controls (a folder, a button press, a device), from setup."""
 UNDO_DEPTH = 20
 DEVICES_SECONDS = 10.0
@@ -135,6 +135,7 @@ def setting_label(name: str) -> str:
         "game": "Game",
         "game_root": "Game folder",
         "push_to_talk": "Push-to-talk",
+        "push_to_talk_2": "Second push-to-talk",
         "transcription_device": "Speech recognition on",
         "voice": "Voice",
         "voice_model": "Voice model",

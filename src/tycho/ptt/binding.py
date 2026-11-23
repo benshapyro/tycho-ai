@@ -2,7 +2,9 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Self
+from typing import Annotated, Self
+
+from pydantic import AfterValidator
 
 
 class DeviceKind(StrEnum):
@@ -51,3 +53,20 @@ class Binding:
             return cls(kind, int(rest, 0))
         except ValueError:
             raise ValueError(f"malformed binding {text!r}") from None
+
+
+def _checked(value: str | None) -> str | None:
+    if value is not None:
+        Binding.parse(value)  # raises ValueError with a readable message
+    return value
+
+
+Button = Annotated[str | None, AfterValidator(_checked)]
+"""A push-to-talk button as a setting, e.g. ``mouse:0x06``: a malformed one is refused."""
+
+
+def every_binding(first: str | None, second: str | None) -> tuple[Binding, ...]:
+    """Every push-to-talk button from the settings, the first first: holding any of them
+    listens (#621). A second counts only with a first, and the same button only once."""
+    both = (first, second if first else None)
+    return tuple(dict.fromkeys(Binding.parse(b) for b in both if b))

@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from tycho import paths
 from tycho.brain.providers import BrainModel, Provider, choose
 from tycho.callouts import CalloutKinds
-from tycho.ptt.binding import Binding
+from tycho.ptt.binding import Binding, Button
 from tycho.settings_toml import read_toml, to_toml, toml_value, write_atomic
 from tycho.tile import values as tiles
 from tycho.voice import voices
@@ -65,11 +65,16 @@ class Settings(BaseModel):
         description="Settings file format version.",
         json_schema_extra=_rule("no", how="Tycho sets it"),
     )
-    push_to_talk: str | None = Field(
+    push_to_talk: Button = Field(
         default=None,
         description="The button you hold while talking to Tycho, e.g. mouse:0x06 for a mouse "
         "side button. Set it by pressing the button in setup.",
         json_schema_extra=_rule("no", how="run `tycho bind` and press the button"),
+    )
+    push_to_talk_2: Button = Field(
+        default=None,
+        description="A second push-to-talk button, held the same way: say, a joystick button.",
+        json_schema_extra=_rule("no", how="run `tycho bind --second` and press the button"),
     )
     microphone: str | None = Field(
         default=None,
@@ -358,13 +363,6 @@ class Settings(BaseModel):
     def _renamed_colour(cls, value: object) -> object:
         """``ship`` was the game's colour's old name (#422): an older settings file keeps it."""
         return "game" if value == "ship" else value
-
-    @field_validator("push_to_talk")
-    @classmethod
-    def _valid_binding(cls, value: str | None) -> str | None:
-        if value is not None:
-            Binding.parse(value)  # raises ValueError with a readable message
-        return value
 
     @field_validator("call_me", "call_me_says")
     @classmethod

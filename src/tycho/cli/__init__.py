@@ -20,7 +20,7 @@ from tycho.cli.commands import (
 )
 from tycho.doctor import UNKNOWN_SETTING
 from tycho.settings import Settings, SettingsError
-from tycho.start.run import bind_command, run_command
+from tycho.start.run import bind_command, remove_second_command, run_command
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -56,7 +56,16 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument(
         "--json", action="store_true", help="print the findings as JSON, for scripts and agents"
     )
-    commands.add_parser("bind", help="choose the push-to-talk button")
+    bind = commands.add_parser("bind", help="choose the push-to-talk button")
+    second = bind.add_mutually_exclusive_group()
+    second.add_argument(
+        "--second",
+        action="store_true",
+        help="choose a second push-to-talk button, say one on a joystick (#621)",
+    )
+    second.add_argument(
+        "--remove-second", action="store_true", help="go back to one push-to-talk button"
+    )
     commands.add_parser("sounds", help="play the done, not-done and asking sounds")
     commands.add_parser("credits", help="where Tycho's data and speech model come from")
     model = commands.add_parser("model", help="download the speech model now, or see if it's here")
@@ -92,7 +101,9 @@ def _dispatch(args: argparse.Namespace, current: Settings) -> int:
         case "actions":
             return actions_command(current, args.words)
         case "bind":
-            return 0 if bind_command(current) else 1
+            if args.remove_second:
+                return remove_second_command(current)
+            return 0 if bind_command(current, second=args.second) else 1
         case "sounds":
             return sounds_command(current)
         case "credits":

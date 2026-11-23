@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from tycho import paths, settings
+from tycho.ptt.binding import every_binding
 from tycho.settings import Settings, SettingsError
 
 
@@ -42,6 +43,7 @@ def test_the_file_explains_each_setting(tmp_path: Path) -> None:
         ('voice_model = "eleven_v3"', "voice_model"),
         ('transcription_device = "tpu"', "transcription_device"),
         ('push_to_talk = "elbow:1"', "push_to_talk"),
+        ('push_to_talk_2 = "elbow:2"', "push_to_talk_2"),
         ("version = 99", "newer Tycho"),
         ("this is not toml", "Couldn't read"),
     ],
@@ -91,6 +93,18 @@ def test_push_to_talk_parses_to_a_binding() -> None:
     binding = Settings(push_to_talk="mouse:0x06").push_to_talk_binding
     assert binding is not None
     assert str(binding) == "mouse:0x06"
+
+
+def test_a_second_push_to_talk_button_listens_too() -> None:
+    """#621: a mouse button and a stick button; the second only with a first, and the
+    same button once."""
+    both = Settings(push_to_talk="mouse:0x06", push_to_talk_2="joystick:vkb-l:3")
+    assert [str(b) for b in every_binding(both.push_to_talk, both.push_to_talk_2)] == [
+        "mouse:0x06",
+        "joystick:vkb-l:3",
+    ]
+    assert every_binding(None, "joystick:vkb-l:3") == ()
+    assert len(every_binding("mouse:0x06", "mouse:0x06")) == 1
 
 
 def test_schema_has_descriptions_for_the_settings_screen() -> None:
