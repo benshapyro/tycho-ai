@@ -82,6 +82,8 @@ class Ducker:
         self._lowering: asyncio.Task[None] | None = None
         self._raising: asyncio.Task[None] | None = None
         self._failed = False
+        self._setting: asyncio.Future[bool] | None = None
+        """The slider's last move, which may outlive a cancelled fade."""
 
     def set_on(self, value: object) -> None:
         """``duck_game`` changed by voice or in the window: off puts the game back now."""
@@ -96,10 +98,7 @@ class Ducker:
 
     def down(self) -> None:
         """A line starts: lower the game, without waiting."""
-        self._lines += 1
-        if self._raising is not None:
-            self._raising.cancel()  # it carries on down from wherever the fade got to
-            self._raising = None
+        self._lines += 1  # a fade up stops at its next step and leaves the rest to this
         if self.on:
             self._lowering = asyncio.get_running_loop().create_task(self._lower())
 
@@ -130,6 +129,8 @@ class Ducker:
             if task is not None and not task.done():
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
+        if self._setting is not None:  # a step a cancel left still moving the slider
+            await asyncio.wait({self._setting})
         async with self._lock:
             if self._original is not None:
                 await self._set(self._original)
@@ -138,8 +139,8 @@ class Ducker:
     def _raise_soon(self, delay: float) -> None:
         if self._original is None and not self._saved.exists():
             return
-        if self._raising is not None:
-            self._raising.cancel()
+        # Never cancelled mid-fade (a step may be moving the slider): a line that starts
+        # stops it between steps (#577's review).
         self._raising = asyncio.get_running_loop().create_task(self._raise(delay))
 
     async def _lower(self) -> None:
@@ -163,6 +164,8 @@ class Ducker:
         if delay:
             await self._sleep(delay)
         async with self._lock:
+            if self._lines:
+                return  # another line started: it keeps the game down
             if self._original is None:
                 await self._put_back_saved()
                 return
@@ -171,8 +174,8 @@ class Ducker:
                 return  # the game closed: the level waits on disk for the next chance
             if self._moved(now):
                 return
-            await self._fade(now, self._original, UP_SECONDS)
-            self._forget()
+            if await self._fade(now, self._original, UP_SECONDS, until=lambda: self._lines > 0):
+                self._forget()
 
     def _moved(self, now: float) -> bool:
         """Whether the player moved the slider: if so, their level wins."""
@@ -182,13 +185,18 @@ class Ducker:
         self._forget()
         return True
 
-    async def _fade(self, start: float, end: float, seconds: float) -> None:
+    async def _fade(
+        self, start: float, end: float, seconds: float, until: Callable[[], bool] = lambda: False
+    ) -> bool:
+        """Move the slider from ``start`` to ``end`` in steps. Whether it got there: it
+        stops early if the game goes, or between steps once ``until`` is true."""
         steps = max(1, round(seconds / STEP_SECONDS))
         for step in range(1, steps + 1):
-            if not await self._set(start + (end - start) * step / steps):
-                return
+            if until() or not await self._set(start + (end - start) * step / steps):
+                return False
             if step < steps:
                 await self._sleep(seconds / steps)
+        return True
 
     async def _put_back_saved(self) -> None:
         """A level saved on disk with nothing lowered now: a crash or a closed game left
@@ -210,8 +218,14 @@ class Ducker:
             return None
 
     async def _set(self, level: float) -> bool:
+        # Shielded: a cancel can't stop the thread moving the slider, so it mustn't stop
+        # Tycho noting where the slider went either (#577's review).
+        self._setting = asyncio.ensure_future(asyncio.to_thread(self._volume.set, level))
         try:
-            done = await asyncio.to_thread(self._volume.set, level)
+            done = await asyncio.shield(self._setting)
+        except asyncio.CancelledError:
+            self._left = level
+            raise
         except Exception as e:
             self._failure(e)
             return False

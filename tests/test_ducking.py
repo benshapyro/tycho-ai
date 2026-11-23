@@ -299,3 +299,53 @@ def test_windows_mixer_finds_no_sound_for_a_program_that_isnt_running() -> None:
         assert volume.set(0.5) is False
     except OSError:
         pass  # a CI runner with no audio service
+
+
+def test_a_line_starting_mid_fade_up_still_puts_the_game_back_after(tmp_path: Path) -> None:
+    """#577's review: a line that began while the slider was being moved left Tycho's
+    note one step behind, read as the player's own change, and the game stayed down."""
+    import threading
+
+    volume = FakeGameVolume(1.0)
+    slow = threading.Event()
+    slow.set()
+
+    class Slow(FakeGameVolume):
+        """Windows finishes a move before it answers a read, as one mixer would."""
+
+        moving = 0
+        done = threading.Condition()
+
+        def get(self) -> float | None:
+            with self.done:
+                self.done.wait_for(lambda: self.moving == 0)
+            return volume.get()
+
+        def set(self, level: float) -> bool:
+            with self.done:
+                self.moving += 1
+            slow.wait()
+            try:
+                return volume.set(level)
+            finally:
+                with self.done:
+                    self.moving -= 1
+                    self.done.notify_all()
+
+    ducker = Ducker(Slow(), tmp_path / "ducked.json")  # real waits, as in play
+    ducking = Ducking(FakeSpeaker(seconds=0.3), ducker)
+
+    async def go() -> None:
+        await ducking.speak("Checking.")
+        await asyncio.sleep(0.4)  # the hold, then the fade up has begun
+        slow.clear()  # a step is moving the slider as the next line starts
+        await asyncio.sleep(0.1)  # the fade's next step is stuck moving it
+        line = asyncio.create_task(ducking.speak("Found it."))
+        await asyncio.sleep(0.05)
+        slow.set()
+        await line
+        await asyncio.sleep(1.2)
+
+    asyncio.run(go())
+    assert volume.level == pytest.approx(1.0)
+    assert not (tmp_path / "ducked.json").exists()
