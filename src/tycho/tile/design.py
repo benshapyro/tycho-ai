@@ -58,6 +58,17 @@ def game_accent(game: str) -> str:
         return TYCHO_ACCENT
 
 
+def game_cards(game: str) -> tuple[str, ...]:
+    """The kinds Claude may show in the game pack ``game`` (``cards.offered``): the only
+    ones its Settings can hide, so the only ones shown (#576)."""
+    from tycho.tile.cards import offered
+
+    try:
+        return offered(built_in(game).tile.cards)
+    except PackError:
+        return offered(())
+
+
 def accent_for_maker(maker: str, tile: Tile) -> str:
     """The accent for a maker's name ("Drake Interplanetary"), or Tycho's own. ``tile``
     is the game pack's tile.toml: ``makers`` maps a maker's first word to its prefix, for

@@ -301,6 +301,14 @@ def offered(own: Collection[str]) -> tuple[Kind, ...]:
     return tuple(k for k in BRAIN_KINDS if k in NAMES or k in own)
 
 
+_ONLY_WITH: Mapping[str, tuple[tuple[str, str], ...]] = {
+    "ship": (("specs, ", ""), (", such as two ships", "")),
+    "loadout": ((" or loadout rows", ""),),
+}
+"""Words in ``TOOL_DESCRIPTION`` outside a kind's own line that only make sense with that
+kind, and what they become without it (#576)."""
+
+
 def show_card(own: Collection[str]) -> dict[str, object]:
     """The ``show_card`` tool for a game whose pack names ``own`` kinds: only the kinds
     it ``offered``, in the list and in the description (#528). With every kind, it's
@@ -309,6 +317,10 @@ def show_card(own: Collection[str]) -> dict[str, object]:
     left_out = tuple(f"- {k}:" for k in BRAIN_KINDS if k not in kinds)
     lines = TOOL_DESCRIPTION.split("\n")
     described = "\n".join(line for line in lines if not line.startswith(left_out or ("\0",)))
+    for kind_left_out in BRAIN_KINDS:
+        if kind_left_out not in kinds:
+            for words, instead in _ONLY_WITH.get(kind_left_out, ()):
+                described = described.replace(words, instead)
     properties = cast(Mapping[str, object], TOOL_SCHEMA["properties"])
     kind = {**cast(Mapping[str, object], properties["kind"]), "enum": list(kinds)}
     schema = {**TOOL_SCHEMA, "properties": {**properties, "kind": kind}}

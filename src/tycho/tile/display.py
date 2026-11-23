@@ -16,8 +16,8 @@ from collections.abc import Callable
 
 from tycho.settings import Settings
 from tycho.tile.board import Board, Shown
-from tycho.tile.cards import ALL_KINDS, Card, Kind, confirm, notice
-from tycho.tile.design import PICKS, TEXT_SIZES, TYCHO_ACCENT, game_accent
+from tycho.tile.cards import ALL_KINDS, BRAIN_KINDS, Card, Kind, confirm, notice
+from tycho.tile.design import PICKS, TEXT_SIZES, TYCHO_ACCENT, game_accent, game_cards
 from tycho.tile.draw import Light, Look, draw
 from tycho.tile.screens import Where, connected
 from tycho.tile.window import SAME, Frame, Screen, TileWindow, screen_of_foreground
@@ -226,6 +226,9 @@ class TileDisplay:
         self._board.stay = STAY[s.tile_cards_stay]
         self._board.quiet = s.tile_quiet
         hidden = {k.strip() for k in s.tile_hidden_cards.split(",") if k.strip()}
+        # A card this game doesn't offer, from a model that ignored the tool's list
+        # (OpenRouter's aren't held to it): its Settings have no switch for it (#576).
+        hidden |= set(BRAIN_KINDS) - set(game_cards(s.game))
         kinds: frozenset[Kind] = frozenset(k for k in ALL_KINDS if k in hidden)
         self._board.hidden = kinds
 
