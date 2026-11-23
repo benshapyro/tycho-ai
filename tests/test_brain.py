@@ -842,6 +842,60 @@ def test_nothing_is_pressed_after_a_web_search() -> None:
     assert decision == Reply(NO_PRESS_AFTER_SEARCH)
 
 
+def _recalls() -> tuple[list[Any], Any]:
+    """A call where Claude searches past conversations and stops to wait for it."""
+    stop = _tool_stop("history", {"words": "landing", "day": "yesterday"})
+    return [stop], SimpleNamespace(
+        content=[stop.content_block], stop_reason="tool_use", usage=_final("").usage
+    )
+
+
+def _past() -> Any:
+    """The real history look-up, over a session from yesterday where the gear went down."""
+    from tests.fakes.fake_history import FakeHistory
+    from tycho.history import Entry, History
+    from tycho.history.tool import HistoryLookup
+
+    now = datetime.datetime(2026, 11, 23, 20, 0).astimezone()
+    then = now - datetime.timedelta(days=1)
+    landed = Entry(then, "land us", "Gear down.", ("v_toggle_landing_system",))
+    store = FakeHistory({f"{then:%Y-%m-%d_%H-%M-%S}": [landed]})
+    return HistoryLookup(History(store, on=True, now=lambda: now))
+
+
+def test_nothing_is_pressed_after_a_search_of_past_conversations() -> None:
+    """ADR 14's amendment (#484): old talk is never permission to press. "Do what you did
+    when we landed yesterday" is told, not done, even when the model picks the press."""
+    from tycho.brain.lookups import RECALLED
+    from tycho.brain.rounds import NO_PRESS_AFTER_RECALL
+
+    act = _tool_stop("run_actions", {"actions": ["v_toggle_landing_system"], "say": "Gear."})
+    lookups = (_past(),)
+    client = _Calls(_recalls(), ([act], None))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=cast(Any, lookups), pack=SC)
+    request = BrainRequest("do what you did when we landed yesterday", KEYBINDS)
+    assert asyncio.run(brain.decide(request)) == Reply(NO_PRESS_AFTER_RECALL)
+    # In the same reply as the search, too: the act after it isn't pressed.
+    both = ([*_recalls()[0], act], None)
+    brain = ClaudeBrain(
+        MATCHER, client=cast(Any, _Calls(both)), lookups=cast(Any, lookups), pack=SC
+    )
+    assert asyncio.run(brain.decide(request)) == Reply(NO_PRESS_AFTER_RECALL)
+    # Read back, it's an answer, and the follow-ups learn only that past talk was searched.
+    said: tuple[list[Any], Any] = (
+        [],
+        _final("Yesterday you said land us, and I put the gear down."),
+    )
+    client = _Calls(_recalls(), said)
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=cast(Any, lookups), pack=SC)
+    answer = asyncio.run(brain.decide(request))
+    assert isinstance(answer, Reply)
+    assert answer.looked_up == (RECALLED,)
+    sent = json.dumps(client.requests[1]["messages"][-1]["content"])
+    assert "Gear down." in sent
+    assert "never permission to press" in sent
+
+
 def test_acting_without_a_search_still_presses() -> None:
     act = _tool_stop("run_actions", {"actions": ["v_toggle_landing_system"], "say": "Gear."})
     decision, _ = _ask_web(_Calls(([act], None)), _web())

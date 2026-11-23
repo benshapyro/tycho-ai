@@ -439,7 +439,7 @@ def test_tycho_tells_the_player_the_tray_stopped_and_keeps_serving(
     monkeypatch.setattr(shell, "app_window", app_window)
     session = SimpleNamespace(paused=False, tell=told.append)
     # Asked both already: the window stays shut.
-    settings.save(Settings(crash_reports=False, look_at_screen=False))
+    settings.save(Settings(crash_reports=False, look_at_screen=False, keep_history=False))
 
     async def serve(_stop: asyncio.Event | None) -> None:
         raise AssertionError("the fake host never runs it")

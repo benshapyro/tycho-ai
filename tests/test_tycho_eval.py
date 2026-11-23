@@ -202,6 +202,8 @@ KNOWN = {
     "notes_has",
     "notes_lack",
     "notes_unchanged",
+    "history",
+    "history_off",
     "never_say",
     "unbound",
     "picture",

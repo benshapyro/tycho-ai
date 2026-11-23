@@ -405,3 +405,19 @@ def test_a_memory_note_never_reaches_a_crash_report(tmp_path: Path) -> None:
     text = json.dumps(found).lower()
     for planted in ("zyzx", "outpost", "blackvein", "trades"):
         assert planted not in text, planted
+
+
+def test_past_talk_never_reaches_a_crash_report(tmp_path: Path) -> None:
+    # ADR 14's amendment (#484): history is "anything the player or Tycho said".
+    from tycho.history import Entry, HistoryFolder
+
+    blocked = tmp_path / "history"
+    blocked.write_text("", "utf-8")  # a file where the folder goes: writing fails
+    said = Entry(datetime.datetime(2026, 11, 23, 21, 0).astimezone(), "Zzyzx Outpost run")
+    with pytest.raises(FileExistsError) as raised:
+        HistoryFolder(blocked).append("2026-11-23_21-00-00", said)
+    found = scrub(build(raised.value, CONTEXT), [NAME])
+    assert found is not None
+    text = json.dumps(found).lower()
+    for planted in ("zyzx", "outpost"):
+        assert planted not in text, planted

@@ -433,7 +433,9 @@ def test_once_listening_a_second_start_opens_the_trays_window(
     monkeypatch.setattr(tycho.desktop.tray, "TrayIcon", _Tray)
     monkeypatch.setattr(tycho.desktop.host, "Host", Host)
     monkeypatch.setattr(shell, "app_window", lambda **_options: _Window(_Requests()))
-    settings.save(Settings(crash_reports=False, look_at_screen=False))  # asked: no window
+    settings.save(
+        Settings(crash_reports=False, look_at_screen=False, keep_history=False)
+    )  # asked: no window
     requests = _Requests()
     session = SimpleNamespace(paused=False)
     outcome = shell.serve_with_tray(session, {}, None, requests, serve=_serve)  # type: ignore[arg-type]
@@ -469,7 +471,14 @@ def test_a_player_never_asked_about_crash_reports_gets_the_window_at_start(
         def run(self, _open: object) -> None:
             pass
 
-    settings.save(Settings(push_to_talk="mouse:0x06", crash_reports=answer, look_at_screen=False))
+    settings.save(
+        Settings(
+            push_to_talk="mouse:0x06",
+            crash_reports=answer,
+            look_at_screen=False,
+            keep_history=False,
+        )
+    )
     monkeypatch.setattr(tycho.desktop.tray, "TrayIcon", _Tray)
     monkeypatch.setattr(tycho.desktop.host, "Host", Host)
     monkeypatch.setattr(shell, "app_window", lambda **_options: _Window(_Requests()))

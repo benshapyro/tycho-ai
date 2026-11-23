@@ -114,12 +114,12 @@ route is down, a request fails, as Claude direct would."""
 
 
 def lookup_order(named: Sequence[str]) -> list[str]:
-    """The look-ups to build, in the pack's order, each once. ``settings`` and ``memory``
-    are core: a pack that doesn't name them gets them before ``web``, or last."""
-    from tycho.games import MEMORY, SETTINGS
+    """The look-ups to build, in the pack's order, each once. ``settings``, ``memory`` and
+    ``history`` are core: a pack that doesn't name them gets them before ``web``, or last."""
+    from tycho.games import HISTORY, MEMORY, SETTINGS
 
     order = list(dict.fromkeys(named))
-    for core in (SETTINGS, MEMORY):
+    for core in (SETTINGS, MEMORY, HISTORY):
         if core not in order:
             order.insert(order.index("web") if "web" in order else len(order), core)
     return order

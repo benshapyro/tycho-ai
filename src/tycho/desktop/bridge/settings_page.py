@@ -40,6 +40,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
     "Safety": ("key_actions", "confirm_seconds"),
     "Privacy": (
         "memory",
+        "keep_history",
         "keep_transcripts",
         "web_search",
         "web_search_open",

@@ -212,13 +212,15 @@ def needs_setup(current: Settings, pc: SetupPC | None = None, pack: GamePack | N
 def unasked(current: Settings) -> tuple[str, ...]:
     """The privacy questions a player who set Tycho up before they existed was never
     asked, so the window opens on setup's Privacy step at start until they answer:
-    crash reports (ADR 4, #199), and looking at the game window in a game that can
-    (ADR 14, #31). Skipping leaves each off."""
+    crash reports (ADR 4, #199), looking at the game window in a game that can (ADR 14,
+    #31), and keeping a history (ADR 14, #484). Skipping leaves each off."""
     names: list[str] = []
     if current.crash_reports is None:
         names.append("crash_reports")
     if current.look_at_screen is None and can_look(current.game):
         names.append("look_at_screen")
+    if current.keep_history is None:
+        names.append("keep_history")
     return tuple(names)
 
 

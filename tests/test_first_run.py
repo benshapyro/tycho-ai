@@ -176,7 +176,7 @@ def test_the_page_learns_whether_this_is_a_first_run(path: Path) -> None:
 
 def test_a_broken_settings_file_doesnt_ask_about_crash_reports(path: Path) -> None:
     """#442: the window says what's wrong with the file instead; nothing is asked."""
-    asked = ["crash_reports", "look_at_screen"]
+    asked = ["crash_reports", "look_at_screen", "keep_history"]
     assert _bridge(path).about()["ask_privacy"] == asked  # never asked
     path.write_text("crash_reports = [\n", "utf-8")
     assert _bridge(path).about()["ask_privacy"] == []
@@ -524,6 +524,9 @@ def test_what_leaves_the_pc_follows_the_game_and_the_settings(path: Path) -> Non
         "Anthropic (web search)",
     ]
     assert to[-2:] == ["GitHub", "Hugging Face"]
+    history = [row for row in leaves if "past conversations" in row["what"]]  # #484
+    assert [row["to"] for row in history] == ["Anthropic (Claude)"]
+    assert "Off now" in history[0]["when"]
     assert "bound actions" in leaves[0]["what"]
     # #435: the voice check at start, and a stored key's own check, are listed too.
     assert "once when it starts" in leaves[1]["when"]
@@ -544,6 +547,7 @@ def test_what_leaves_the_pc_follows_the_game_and_the_settings(path: Path) -> Non
         "OpenRouter, then Anthropic",
         "ElevenLabs",
         "The key's own provider",
+        "OpenRouter, then Anthropic",  # past conversations, asked about (#484)
         "GitHub",
         "Hugging Face",
     ]

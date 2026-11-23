@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from tycho.brain import Exchange
 from tycho.brain.looking import LOOK_OFFER
+from tycho.brain.lookups import RECALLED
 from tycho.runtime.look import LOOK
 from tycho.runtime.messages import Result
 from tycho.tile import Card
@@ -97,6 +98,11 @@ class Conversation:
             # What it looked up and showed too (#564): told only what it said, the brain
             # denied searching, and searched the same thing again.
             did = [*result.looked_up]
+            if RECALLED in did:
+                # Nothing from past talk goes into the follow-ups (ADR 14): "do that
+                # again" after it has nothing to press, and asks.
+                self._remember_only(result.text, RECALLED)
+                return
             if result.card is not None:
                 did.append(f"showed a card on the Tile: {result.card.title or result.card.kind}")
             outcome = "; ".join([*did, f"said: {result.say}"])
@@ -111,5 +117,8 @@ class Conversation:
             outcome = f"did {', '.join(result.commands)} (pressed {', '.join(result.pressed)})"
         else:
             outcome = f"couldn't: {result.status}" + (f", {result.detail}" if result.detail else "")
-        self._recent = [*self._recent, Exchange(result.text, outcome)][-FOLLOW_UP_LIMIT:]
+        self._remember_only(result.text, outcome)
+
+    def _remember_only(self, said: str, outcome: str) -> None:
+        self._recent = [*self._recent, Exchange(said, outcome)][-FOLLOW_UP_LIMIT:]
         self._recent_at = self._clock()

@@ -68,7 +68,8 @@ how Tycho works: its voice (George, Sarah, Lily or Brian) and sound volumes, tur
 the game down while Tycho speaks (duck_game: "stop turning the game down"; duck_level: \
 how loud the game is then), how long they have to say "confirm", \
 web search, keeping transcripts, update checks, crash reports, looking at the game window \
-(look_at_screen: "stop looking at my screen"), game channel, speech recognition device, \
+(look_at_screen: "stop looking at my screen"), keeping a history of what was said \
+(keep_history: "stop keeping a history"), game channel, speech recognition device, \
 and callouts: the kinds of game event Tycho tells the player about unasked \
 ("get" lists them; set a kind to add it, "-kind" to take it away, "only kind", "off" for "stop the \
 callouts"). action "get" reads them all, with which can change by voice. action "set" \

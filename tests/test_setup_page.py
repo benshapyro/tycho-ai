@@ -350,7 +350,11 @@ def test_picking_another_game_in_settings_shows_its_own_setup_first(
 ) -> None:
     settings.save(
         Settings(
-            push_to_talk="mouse:0x06", game_channel="PTU", crash_reports=False, look_at_screen=False
+            push_to_talk="mouse:0x06",
+            game_channel="PTU",
+            crash_reports=False,
+            look_at_screen=False,
+            keep_history=False,
         ),
         path,
     )
@@ -389,7 +393,9 @@ def test_a_player_set_up_before_crash_reports_is_asked_once(
 ) -> None:
     """ADR 4: players who set up before crash reports existed are asked on their next
     start, on setup's Privacy step, and once they answer the window goes on as usual."""
-    settings.save(Settings(push_to_talk="mouse:0x06", look_at_screen=False), path)
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", look_at_screen=False, keep_history=False), path
+    )
     setup = Setup(browser, path, first_run=False)
     page = setup.page
     setup.at("Privacy")
@@ -527,24 +533,29 @@ def test_at_the_smallest_window_next_is_wholly_in_view(setup: Setup) -> None:
 def test_a_player_set_up_before_looking_existed_is_asked_once(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
-    """ADR 14's amendment (#31): players who set up before Tycho could look are asked on
-    their next start, both questions first when neither was answered, and the window
-    goes on as usual once both are. Skipping leaves looking off."""
+    """ADR 14's amendments (#31, #484): players who set up before Tycho could look, or
+    keep a history, are asked on their next start, every unanswered question first, and
+    the window goes on as usual once all are. Skipping leaves each off."""
     settings.save(Settings(push_to_talk="mouse:0x06"), path)
     setup = Setup(browser, path, first_run=False)
     page = setup.page
     setup.at("Privacy")
-    lede = "Two questions left: crash reports and looking at your game"
+    lede = "Three questions left: crash reports, looking at your game and keeping a history"
     expect(page.locator(".lede")).to_contain_text(lede)
     cards = page.locator("main > .card")
     expect(cards.nth(0)).to_have_id("crashCard")
     expect(cards.nth(1)).to_have_id("lookCard")
+    expect(cards.nth(2)).to_have_id("historyCard")
     page.locator("#crashCard [data-crash='no']").click()
-    setup.at("Privacy")  # one still to answer: still here
-    expect(page.locator(".lede")).to_contain_text("One question left: looking at your game")
+    setup.at("Privacy")  # two still to answer: still here
+    lede = "Two questions left: looking at your game and keeping a history"
+    expect(page.locator(".lede")).to_contain_text(lede)
     page.locator("#lookCard [data-look='yes']").click()
+    expect(page.locator(".lede")).to_contain_text("One question left: keeping a history")
+    page.locator("#historyCard [data-history='no']").click()
     expect(page.locator("#homeState")).to_be_visible()
     assert setup.saved().look_at_screen is True
+    assert setup.saved().keep_history is False
     setup.close()
     again = Setup(browser, path, first_run=False)  # the next start: answered, not asked
     expect(again.page.locator("#homeState")).to_be_visible()
@@ -564,8 +575,9 @@ def test_the_one_crash_question_comes_before_the_table(
     for _ in range(3):
         first.next()
     first.at("Privacy")
-    expect(first.page.locator("main > .card").nth(-2)).to_have_id("crashCard")
-    expect(first.page.locator("main > .card").last).to_have_id("lookCard")
+    expect(first.page.locator("main > .card").nth(-3)).to_have_id("crashCard")
+    expect(first.page.locator("main > .card").nth(-2)).to_have_id("lookCard")
+    expect(first.page.locator("main > .card").last).to_have_id("historyCard")
     first.close()
 
 
@@ -576,7 +588,11 @@ def test_a_game_tycho_only_advises_in_has_no_empty_pages(
     for keys, and another game's folder settings."""
     settings.save(
         Settings(
-            game="wow-forever", push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False
+            game="wow-forever",
+            push_to_talk="mouse:0x06",
+            crash_reports=False,
+            look_at_screen=False,
+            keep_history=False,
         ),
         path,
     )
@@ -598,7 +614,10 @@ def test_a_game_tycho_only_advises_in_has_no_empty_pages(
     setup.close()
     # A game with a folder keeps them.
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
     )
     there = Setup(browser, path, first_run=False)
     there.page.get_by_role("button", name="Settings", exact=True).click()
@@ -613,7 +632,11 @@ def test_an_advisor_games_commands_page_says_the_files_warnings(
     """#448: the "Just ask" card left out what was wrong in the player's commands file."""
     settings.save(
         Settings(
-            game="wow-forever", push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False
+            game="wow-forever",
+            push_to_talk="mouse:0x06",
+            crash_reports=False,
+            look_at_screen=False,
+            keep_history=False,
         ),
         path,
     )
@@ -634,7 +657,10 @@ def test_a_view_change_fetches_the_settings_once(
     """#454: the game box fetched every setting (and loaded every pack) on each view
     change, and Settings and The Tile then fetched them again."""
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
     )
     setup = Setup(browser, path, first_run=False)
     page = setup.page
@@ -660,7 +686,10 @@ def test_a_newer_version_makes_get_the_button_to_press(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
     )
     setup = Setup(browser, path, first_run=False)
     page = setup.page
@@ -687,7 +716,11 @@ def test_the_places_are_down_the_side_and_home_shows_one_thing_to_fix(
     left, the game under them, at most one thing to fix on Home, and the Tile on its own."""
     settings.save(
         Settings(
-            game="wow-forever", push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False
+            game="wow-forever",
+            push_to_talk="mouse:0x06",
+            crash_reports=False,
+            look_at_screen=False,
+            keep_history=False,
         ),
         path,
     )
@@ -700,7 +733,7 @@ def test_the_places_are_down_the_side_and_home_shows_one_thing_to_fix(
     page = setup.page
     nav = page.locator("nav[aria-label='Places'] button")
     # Each place by its name; Home and What to say may carry a count once checks come in.
-    places = ["Home", "What to say", "Memory", "The Tile", "Settings"]  # Memory: #483
+    places = ["Home", "What to say", "Memory", "History", "The Tile", "Settings"]  # #483, #484
     expect(nav).to_have_text([re.compile(rf"^{p}\b") for p in places])
     expect(page.locator("#gameBox")).to_contain_text("World of Warcraft: Forever")
     expect(page.locator("#gameBox")).to_contain_text("Tycho only talks")
@@ -756,7 +789,11 @@ def test_the_window_takes_the_games_own_colour(
     """ADR 17 (amended): one accent per game, from the game's pack."""
     settings.save(
         Settings(
-            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, game="wow-forever"
+            push_to_talk="mouse:0x06",
+            crash_reports=False,
+            look_at_screen=False,
+            keep_history=False,
+            game="wow-forever",
         ),
         path,
     )
@@ -773,7 +810,10 @@ def test_home_says_its_listening_and_shows_the_last_exchanges_from_memory(
     """ADR 17 (amended): Home says in one line whether Tycho is listening and which
     button to hold, and lists the last exchanges, newest first, as they come in."""
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
     )
     recent = Recent()
     recent.add(Result(1, "done", text="gear down", say="Landing gear down."))
@@ -804,7 +844,10 @@ def test_home_state_word_is_big_and_coloured_by_state_console_plus(
     """Console plus (Ben, 16 Nov 2026): Home's state word reads from across the room,
     paused shows grey rather than as a problem, and section labels carry a slash mark."""
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
     )
     setup = Setup(browser, path, first_run=False, recent=Recent(), listening=True)
     page = setup.page
@@ -826,7 +869,10 @@ def test_home_state_word_is_amber_when_stuck_and_smaller_in_a_narrow_window(
     """#472: stuck beats paused (amber, not grey), and the narrow window's smaller word
     applies: it came before the 54px rule, so 54px always won."""
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
     )
     checks = [{"level": "fail", "what": "Brain", "detail": "no key", "fix": "add a key"}]
     setup = Setup(browser, path, first_run=False, findings=checks, listening=False)
@@ -848,7 +894,10 @@ def test_home_state_word_is_grey_when_paused(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
     )
     setup = Setup(browser, path, first_run=False, recent=Recent(), listening=False)
     page = setup.page
@@ -871,7 +920,10 @@ def test_quit_is_at_the_foot_of_the_places(
 ) -> None:
     """#486 (Ben, from play): Quit was only in Settings, Updates, an odd place to look."""
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
     )
     setup = Setup(browser, path, first_run=False, can_quit=True)
     page = setup.page
@@ -902,7 +954,10 @@ def test_after_a_first_run_try_it_is_real_and_sends_nothing(
     it. What the player says shows there with what Tycho would press, and nothing
     reaches the game until they leave the step."""
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
     )
     recent = Recent()
     recent.add(Result(1, "done", text="from before", say="Old."))
@@ -929,7 +984,10 @@ def test_try_it_ends_when_the_player_goes_back_a_step(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
     )
     setup = Setup(browser, path, first_run=False, listening=True, opening="try_it")
     setup.at("Try it")
@@ -947,7 +1005,10 @@ def test_try_it_ends_when_the_player_switches_to_the_game(
     """Review of #464: left open on Try it, nothing reached the game, and Tycho still
     played done. Try it lasts only while the window is in front."""
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
     )
     setup = Setup(browser, path, first_run=False, listening=True, opening="try_it")
     setup.at("Try it")
@@ -993,6 +1054,7 @@ def test_the_tile_page_lists_the_games_own_kinds_of_card(
             push_to_talk="mouse:0x06",
             crash_reports=False,
             look_at_screen=False,
+            keep_history=False,
             game=game,
             game_root=None,
         ),
@@ -1028,6 +1090,7 @@ def test_a_kind_hidden_in_another_game_stays_hidden(
             push_to_talk="mouse:0x06",
             crash_reports=False,
             look_at_screen=False,
+            keep_history=False,
             game="wow-forever",
             tile_hidden_cards="ship",
         ),
@@ -1048,7 +1111,10 @@ def test_the_tile_page_picks_the_tiles_screen(
     """#447: follow the game (as before), or a screen plugged in now. A chosen screen
     that isn't plugged in stays listed, so opening the page doesn't lose it."""
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
     )
     setup = Setup(browser, path, first_run=False)
     page = setup.page
@@ -1069,6 +1135,7 @@ def test_the_tile_page_picks_the_tiles_screen(
             push_to_talk="mouse:0x06",
             crash_reports=False,
             look_at_screen=False,
+            keep_history=False,
             tile_screen=r"\\.\DISPLAY7",
         ),
         path,
@@ -1085,7 +1152,10 @@ def test_home_has_no_exchanges_list_while_tycho_isnt_running(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
     )
     setup = Setup(browser, path, first_run=False)
     expect(setup.page.locator("#homeState h1")).to_have_text("Ready")
@@ -1103,6 +1173,7 @@ def test_setup_run_again_shows_another_game_before_switching(
             push_to_talk="mouse:0x06",
             crash_reports=False,
             look_at_screen=False,
+            keep_history=False,
             voice="The Ship's Mind",
         ),
         path,
@@ -1171,7 +1242,10 @@ def test_settings_imports_a_hangar_after_showing_what_changes(
 def test_a_game_with_no_fleet_has_no_hangar_import(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
-    settings.save(Settings(game="wow-forever", crash_reports=False, look_at_screen=False), path)
+    settings.save(
+        Settings(game="wow-forever", crash_reports=False, look_at_screen=False, keep_history=False),
+        path,
+    )
     setup = Setup(browser, path, first_run=False)
     setup.page.get_by_role("button", name="Settings", exact=True).click()
     setup.page.get_by_role("tab", name="Game and controls").click()
@@ -1191,7 +1265,10 @@ def test_the_memory_page_lists_every_note_and_deletes_one(
     from tycho.memory import NoteFile
 
     settings.save(
-        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
     )
     day = datetime.date(2026, 11, 23)
     NoteFile(paths.memory_file()).add("Likes short answers", day)
@@ -1223,7 +1300,11 @@ def test_with_memory_off_the_page_says_so_and_turns_it_on(
 ) -> None:
     settings.save(
         Settings(
-            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, memory=False
+            push_to_talk="mouse:0x06",
+            crash_reports=False,
+            look_at_screen=False,
+            keep_history=False,
+            memory=False,
         ),
         path,
     )
@@ -1235,4 +1316,70 @@ def test_with_memory_off_the_page_says_so_and_turns_it_on(
     page.get_by_role("button", name="Turn memory on").click()
     expect(page.locator("#memoryOff")).to_have_count(0)
     assert setup.saved().memory is True
+    setup.close()
+
+
+def test_the_history_page_opens_searches_and_deletes_sessions(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#484 (ADR 14): each session kept, what was said in it, a search box, and deleting
+    one session or, after a second click, all of them."""
+    import datetime
+
+    from tycho import paths
+    from tycho.history import Entry, HistoryFolder
+
+    settings.save(
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=True
+        ),
+        path,
+    )
+    store = HistoryFolder(paths.history_dir())
+    now = datetime.datetime.now().astimezone().replace(microsecond=0)
+    route = "Buy Laranite at ArcCorp Mining Area 045, sell at Area18."
+    store.append(
+        f"{now - datetime.timedelta(hours=2):%Y-%m-%d_%H-%M-%S}", Entry(now, "a route", route)
+    )
+    later = f"{now - datetime.timedelta(hours=1):%Y-%m-%d_%H-%M-%S}"
+    store.append(later, Entry(now, "gear down", "Gear down.", ("v_toggle_landing_system",)))
+    setup = Setup(browser, path, first_run=False)
+    page = setup.page
+    page.get_by_role("button", name="History", exact=True).click()
+    expect(page.locator("#historyOff")).to_have_count(0)
+    rows = page.locator("#historySessions .memrow")
+    expect(rows).to_have_count(2)
+    rows.first.locator("[data-open]").click()  # newest first
+    expect(page.locator("#historySessions")).to_contain_text("Pressed v_toggle_landing_system")
+    page.locator("#historyWords").fill("Area18")
+    page.get_by_role("button", name="Search", exact=True).click()
+    expect(page.locator("#historyFound")).to_contain_text("ArcCorp Mining Area 045")
+    rows.first.locator("[data-drop]").click()
+    expect(rows).to_have_count(1)
+    assert later not in [p.id for p in store.sessions()]
+    page.locator("#historyAll").click()  # asks first
+    expect(page.locator("#historyAll")).to_contain_text("Click again")
+    assert len(store.sessions()) == 1
+    page.locator("#historyAll").click()
+    expect(page.locator("#historySessions")).to_contain_text("Nothing kept yet")
+    assert store.sessions() == []
+    setup.close()
+
+
+def test_with_history_off_the_page_says_so_and_turns_it_on(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    settings.save(
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
+    )
+    setup = Setup(browser, path, first_run=False)
+    page = setup.page
+    page.get_by_role("button", name="History", exact=True).click()
+    expect(page.locator("#historyOff")).to_contain_text("History is off")
+    page.get_by_role("button", name="Turn history on").click()
+    expect(page.locator("#historyOff")).to_have_count(0)
+    assert setup.saved().keep_history is True
     setup.close()

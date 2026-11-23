@@ -54,6 +54,7 @@ class SetupPage(SettingsPage, CommandsPage):
             "leaves": _leaves(pack, current),
             "crash_reports": current.crash_reports,  # None: not asked yet (ADR 4)
             "look_at_screen": current.look_at_screen,  # None: not asked yet (#31)
+            "keep_history": current.keep_history,  # None: not asked yet (#484)
             "can_look": bool(pack.look),
             "todo": todo,
             "channels": list(setting_choices(Settings.model_fields["game_channel"].annotation)),
@@ -277,6 +278,16 @@ def _leaves(pack: GamePack, current: Settings) -> list[dict[str, str]]:
                 + ": Settings, Privacy.",
             }
         )
+    rows.append(
+        {
+            "to": brain,
+            "what": "Parts of your past conversations, kept on this PC, only when you ask "
+            "about them",
+            "when": "Only with history on. "
+            + ("On now" if current.keep_history else "Off now")
+            + ": Settings, Privacy.",
+        }
+    )
     lookups = f"{pack.name} look-ups"
     rows += [{"to": lookups, "what": line, "when": ""} for line in pack.setup.sends]
     rows.append(

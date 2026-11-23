@@ -14,8 +14,10 @@ from tycho.brain_choice import load_brain
 from tycho.desktop import shell
 from tycho.doctor import start_update_check
 from tycho.findings import TYCHO
+from tycho.history import follow, kept
 from tycho.packs import GameDataError, built_in
 from tycho.ptt.devices import describe, input_sources
+from tycho.runtime.messages import Result
 from tycho.runtime.recent import Recent
 from tycho.settings import Settings, SettingsError
 from tycho.start.assemble import (
@@ -296,6 +298,13 @@ def _start(
             if name == "tile" or name.startswith("tile_"):
                 live[name] = lambda v, name=name: tile.change(name, v)
     recent = Recent()  # Home's last exchanges: memory only (ADR 17)
+    history = kept(current.keep_history is True)  # on the PC, only if they said yes (#484)
+    follow(live, history)
+
+    def ended(result: Result) -> None:
+        recent.add(result)
+        history.record(result)
+
     with Microphone(device=microphone_device(current.microphone)) as mic:
         log.info("Microphone: %s", mic.name)
         game_state = game_state_for(pack, store)
@@ -318,7 +327,7 @@ def _start(
             display=display,
             camera=WindowsCamera(pack.window) if pack.window and pack.look else None,
             pack=pack,
-            on_result=recent.add,
+            on_result=ended,
         )
         live["confirm_seconds"] = lambda v: session.set_confirm_seconds(_float(v))
         live["look_at_screen"] = lambda v: session.set_looking(v is True)
@@ -352,6 +361,7 @@ def _start(
                 asyncio.run(serve(session, store, callouts=callouts))
         finally:
             action_log.close()
+            history.close()
             if display is not None:
                 display.close()
     if mic.overflows:

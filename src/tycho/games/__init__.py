@@ -26,6 +26,7 @@ from tycho.packs.parts import (
 
 __all__ = [
     "BUILT_IN",
+    "HISTORY",
     "MEMORY",
     "SETTINGS",
     "GameDataError",
@@ -236,6 +237,18 @@ def _memory(workshop: Workshop) -> Built:
     return Built((MemoryTool(memory),), about=memory.block)
 
 
+def _history(workshop: Workshop) -> Built:
+    """Searching past conversations (ADR 14's amendment, #484), while ``keep_history``
+    is on. Kept by the session (``tycho.history``); this only reads."""
+    from tycho.history import follow, kept
+    from tycho.history.tool import HistoryLookup
+
+    history = kept(workshop.current.keep_history is True)
+    if workshop.live is not None:
+        follow(workshop.live, history)
+    return Built((HistoryLookup(history),))
+
+
 def _web(workshop: Workshop) -> Built:
     """Web search, if the player left it on: through OpenRouter's web plugin when they
     have an OpenRouter key (#365), otherwise Anthropic's own search."""
@@ -300,6 +313,8 @@ SETTINGS = "settings"
 """A look-up every pack gets, named or not: the player's spoken settings."""
 MEMORY = "memory"
 """A look-up every pack gets, named or not: the player's notes (ADR 8)."""
+HISTORY = "history"
+"""A look-up every pack gets, named or not: past conversations (ADR 14, #484)."""
 
 BUILT_IN = Registry(
     # game/install.py: the RSI Launcher's library folder, and the player's channel.
@@ -317,6 +332,7 @@ BUILT_IN = Registry(
         "trade": _trade,
         SETTINGS: _settings,
         MEMORY: _memory,
+        HISTORY: _history,
         "web": _web,
     },
 )

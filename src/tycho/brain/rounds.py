@@ -9,7 +9,7 @@ when a tool call is complete, so the rules live here once:
 - only the first act in a reply is pressed;
 - a fleet or settings note (``instant``) in the same reply as an act finishes first,
   for up to ``INSTANT_SECONDS``;
-- nothing presses after a web search (``NO_PRESS_AFTER_SEARCH``);
+- nothing presses after a web search or a search of past talk (``unpressed``, ADR 14);
 - "Checking." is said only once a reply with look-ups is known not to end in a press.
 
 When tracing is on (``traces``, #282), the round records each call, tool call and
@@ -22,7 +22,7 @@ import difflib
 import logging
 import re
 import time
-from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from tycho.brain.decisions import (
@@ -36,6 +36,7 @@ from tycho.brain.decisions import (
 from tycho.brain.heard import Heard, hearing
 from tycho.brain.lookups import (
     LOOKUP_SECONDS,
+    RECALLED,
     Lookup,
     LookupResult,
     failure,
@@ -51,6 +52,9 @@ MAX_CALLS = 3
 """Calls to the model per request: up to two rounds of look-ups, then the answer (ADR 15)."""
 NO_PRESS_AFTER_SEARCH = (
     "I looked that up online, so I won't press anything for it. Say the command again."
+)
+NO_PRESS_AFTER_RECALL = (
+    "That's from an earlier talk, so I won't press it again. Ask for it now if you want it."
 )
 ACTS = frozenset({"run_actions", "run_sequence", "show_card"})
 INSTANT_SECONDS = 1.0
@@ -84,63 +88,6 @@ TOOL_AS_TEXT = re.compile(r"\b[a-z_]{3,}\s*\(\s*\{", re.IGNORECASE)
 _MARKUP = re.compile(r"[*`#]+")
 
 
-def tool_specs(
-    sequences: list[str], lookups: Iterable[Lookup] = (), *, keys: bool = True
-) -> list[dict[str, object]]:
-    """Every tool but ``show_card``, as name, description and JSON schema: each adapter
-    puts them in its own provider's shape. Without ``keys`` (advisor mode, #191) there's
-    no ``run_actions`` or ``run_sequence``: only look-ups."""
-    looks: list[dict[str, object]] = [
-        {
-            "name": lookup.name,
-            "description": lookup.description,
-            "input_schema": dict(lookup.input_schema),
-        }
-        for lookup in lookups
-    ]
-    if not keys:
-        return looks
-    return [
-        {
-            "name": "run_sequence",
-            "description": "Run one of the player's named sequences.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string", "enum": sequences or [""]},
-                    "say": {"type": "string", "description": "A short spoken line."},
-                },
-                "required": ["name", "say"],
-                "additionalProperties": False,
-            },
-        },
-        {
-            "name": "run_actions",
-            "description": "Press game actions, in order, with the player's own keys.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "actions": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Action names from the list, e.g. v_flightready.",
-                    },
-                    "say": {
-                        "type": "string",
-                        "description": (  # what a toggle did can't be seen (#545)
-                            'A short spoken line. For a toggle ("Open/Close Doors"), say you'
-                            " toggled it, never which way: you can't see it."
-                        ),
-                    },
-                },
-                "required": ["actions", "say"],
-                "additionalProperties": False,
-            },
-        },
-        *looks,
-    ]
-
-
 @dataclass
 class Turn:
     """What one request has done so far, across its calls to the model."""
@@ -168,6 +115,7 @@ class Turn:
     answering: Callable[[], None] | None = None
     """Called as each call's stream starts: the cache was read, even if it's cut off (#540)."""
     heard: Heard | None = None  # what the player said, for the memory tool (ADR 8)
+    recalled: bool = False  # searched past conversations: nothing presses (ADR 14, #484)
 
     @classmethod
     def of(cls, request: BrainRequest, answering: Callable[[], None] | None = None) -> Turn:
@@ -264,6 +212,9 @@ class Round:
                 # not to end in an act (#176).
                 turn.looking()
                 self._checking = True
+            if getattr(chosen, "recalls", False):
+                turn.recalled = True
+                turn.looked_up.append(RECALLED)  # its words stay out of the follow-ups
             web = bool(getattr(chosen, "from_the_web", False))
             if web or not getattr(chosen, "instant", False):  # not a fleet or settings note
                 turn.looked_up.append(looked_up(name, arguments, web=web))
@@ -372,11 +323,21 @@ async def _traced(traces: TraceFile | None, turn: Turn, deciding: Awaitable[Deci
     stopped = ""
     if isinstance(decided, Reply) and decided.text == NO_PRESS_AFTER_SEARCH:
         stopped = "act after a web search; not pressed"
+    elif isinstance(decided, Reply) and decided.text == NO_PRESS_AFTER_RECALL:
+        stopped = "act after a search of past conversations; not pressed"
     elif isinstance(decided, Reply) and decided.text == CUT_SHORT:
         stopped = "cut off at the output limit"
     trace.ended(decided, stopped)
     traces.write(trace)
     return decided
+
+
+def unpressed(turn: Turn, decided: Decision) -> Reply | None:
+    """Said instead of an act after a web search, or a search of past talk (ADR 14)."""
+    if isinstance(decided, Reply) or not (turn.searched or turn.recalled):
+        return None
+    log.warning("The brain chose to act after a search; not pressing")
+    return Reply(NO_PRESS_AFTER_SEARCH if turn.searched else NO_PRESS_AFTER_RECALL)
 
 
 def noted(decided: Decision, turn: Turn) -> Decision:
