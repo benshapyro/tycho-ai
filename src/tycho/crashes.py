@@ -16,6 +16,7 @@ import atexit
 import contextlib
 import faulthandler
 import logging
+import os
 import re
 import threading
 import time
@@ -36,6 +37,16 @@ KEEP = 5
 RECENT_SECONDS = 3 * 24 * 3600.0
 """How long ``tycho check`` and the window's status keep saying Tycho crashed."""
 STOPPED = "Tycho stopped unexpectedly last time. What it was doing is in {file}."
+
+NOTE_START = "Tycho is running."
+"""How every version's note starts, so a later wording is still known as the note."""
+NOTE = (
+    f"{NOTE_START} A native crash is written below. So are some Windows exceptions "
+    "that Windows or .NET then handles, such as code 0x8001010d: Tycho goes on after "
+    "those, and this file is removed when Tycho stops.\n\n"
+)
+"""The live file's first lines (#582): a "Windows fatal exception" written here while
+Tycho goes on isn't a crash, and anyone reading the file mid-run should know that."""
 
 HANDLED = frozenset({"code 0x8001010d"})
 """Windows exceptions ``faulthandler`` writes that Windows or .NET then handles (#474).
@@ -62,6 +73,8 @@ def watch(folder: Path | None = None) -> Path | None:
         try:
             folder.mkdir(parents=True, exist_ok=True)
             _file = live.open("w", encoding="utf-8")
+            _file.write(NOTE)
+            _file.flush()  # faulthandler writes after it, straight to the file
         except OSError as e:
             log.warning("Couldn't open %s, so a crash wouldn't be recorded: %s", live, e)
             return found
@@ -93,24 +106,36 @@ def only_handled(record: str) -> bool:
     return bool(headers) and all(header.group(1) in HANDLED for header in headers)
 
 
+def _without_note(text: str) -> str:
+    """``text`` without its leading note, whatever its wording was in the version that
+    wrote it: up to the first record, or all of it if there's none (#582)."""
+    if not text.startswith(NOTE_START):
+        return text  # a file from before the note
+    first = _HEADER.search(text)
+    return text[first.start() :] if first else ""
+
+
 def _keep(live: Path) -> Path | None:
     """The last run's file, if it's there: kept under a dated name if anything was
-    written to it, and removed if not (Tycho was ended from outside, or the PC lost
-    power: nothing to read)."""
+    written to it after ``NOTE``, and removed if not (Tycho was ended from outside, or
+    the PC lost power: nothing to read)."""
     try:
         if not live.exists():
             return None
         stat = live.stat()
-        if stat.st_size == 0:
+        record = _without_note(live.read_text(encoding="utf-8", errors="replace"))
+        if not record.strip():
             live.unlink()
             return None
-        if only_handled(live.read_text(encoding="utf-8", errors="replace")):
+        if only_handled(record):
             log.info("The last run's %s held only handled Windows exceptions", live.name)
             live.unlink()
             return None
         when = time.strftime("%Y-%m-%d-%H%M%S", time.localtime(stat.st_mtime))
         kept = live.with_name(f"crash-{when}.txt")
-        live.replace(kept)
+        kept.write_text(record, encoding="utf-8")  # without the note: it's no longer true
+        os.utime(kept, (stat.st_atime, stat.st_mtime))  # when it crashed, not now
+        live.unlink()
     except OSError as e:
         log.warning("Couldn't read the last run's crash file %s: %s", live, e)
         return None

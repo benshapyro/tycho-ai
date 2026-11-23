@@ -76,8 +76,7 @@ CARD_NOTE = (
 """Added to a look-up's results while the Tile is on (#490). The briefing's rule is far
 from the answer: in play, a trade route and a loadout were spoken, numbers and all."""
 CUT_SHORT = "That answer ran too long for me. Ask me for part of it."
-"""Said when the model's reply hit the output limit before it was whole: a how-to or a
-plan on a card can (#266). Better than the error sound, and true whichever part was cut."""
+"""Said when a reply hit the output limit before it was whole (#266): true whatever was cut."""
 CUT_OFF = frozenset({"max_tokens", "length"})
 """How each provider says a reply stopped at the output limit (Anthropic, OpenAI's shape)."""
 TOOL_AS_TEXT = re.compile(r"\b[a-z_]{3,}\s*\(\s*\{", re.IGNORECASE)
@@ -126,7 +125,13 @@ def tool_specs(
                         "items": {"type": "string"},
                         "description": "Action names from the list, e.g. v_flightready.",
                     },
-                    "say": {"type": "string", "description": "A short spoken line."},
+                    "say": {
+                        "type": "string",
+                        "description": (  # what a toggle did can't be seen (#545)
+                            'A short spoken line. For a toggle ("Open/Close Doors"), say you'
+                            " toggled it, never which way: you can't see it."
+                        ),
+                    },
                 },
                 "required": ["actions", "say"],
                 "additionalProperties": False,
@@ -162,21 +167,17 @@ class Turn:
     """What the request looked up, in a few words each, for the follow-ups (#564)."""
     answering: Callable[[], None] | None = None
     """Called as each call's stream starts: the cache was read, even if it's cut off (#540)."""
-    heard: Heard | None = None
-    """What the player said, for a look-up that checks they asked for it (ADR 8)."""
+    heard: Heard | None = None  # what the player said, for the memory tool (ADR 8)
 
     @classmethod
     def of(cls, request: BrainRequest, answering: Callable[[], None] | None = None) -> Turn:
         """A new turn for ``request``, with its callbacks and the adapter's ``answering``."""
         size = request.picture.size if request.picture is not None else 0
-        return cls(
-            request.waiting,
-            request.looking,
-            request.checking,
-            picture=size,
-            answering=answering,
-            heard=Heard.of(request),
+        turn = cls(
+            request.waiting, request.looking, request.checking, picture=size, answering=answering
         )
+        turn.heard = Heard.of(request)
+        return turn
 
 
 class Round:

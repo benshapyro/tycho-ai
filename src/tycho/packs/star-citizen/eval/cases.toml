@@ -240,6 +240,16 @@ expect = ["actions"]
 must = [["v_power_toggle", "v_power_set_on", "v_flightready"], ["v_lights", "v_lights_on"], ["v_atc_request"]]
 tag = "chain"
 
+# The doors have only their toggle here, so the line can't say they're open (#545).
+[[case]]
+heard = "get the lights on and open the doors for the crew"
+mode = "command"
+expect = ["actions"]
+must = [["v_lights", "v_lights_on"], ["v_toggle_all_doors"]]
+unbound = ["v_open_all_doors"]
+never_say = ['\bopen(s|ed|ing)?\b(?!/)']
+tag = "chain"
+
 [[case]]
 heard = "lower the gear and turn on the lights"
 mode = "command"
@@ -1716,3 +1726,51 @@ tools = ["memory"]
 notes_has = ["Carrack", "Cutlass"]
 tag = "memory"
 # The old note stays until the player says to forget it: Tycho asks.
+
+# --- Looking at the game (#31, #548) -------------------------------------------
+# picture: one drawn by tools/bench/pictures.py, sent as a look is. may_look: looking
+# is on (it is whenever there's a picture). offers_look: the reply must end with exactly
+# "Want me to take a look?" (true), or never offer (false).
+
+[[case]]
+heard = "take a look, what am I looking at?"
+mode = "chat"
+picture = "planet"
+expect = ["reply"]
+mentions = [["Hurston", "planet"]]
+offers_look = false
+tag = "look"
+
+[[case]]
+heard = "take a look, how much fuel have I got?"
+mode = "chat"
+picture = "planet"
+expect = ["reply"]
+mentions = [["23"]]
+offers_look = false
+tag = "look"
+
+[[case]]
+heard = "what's that ship right in front of me?"
+mode = "chat"
+may_look = true
+expect = ["reply"]
+offers_look = true
+tag = "look"
+
+[[case]]
+heard = "which planet is Lorville on?"
+mode = "chat"
+may_look = true
+expect = ["reply"]
+mentions = [["Hurston"]]
+offers_look = false
+tag = "look"
+
+[[case]]
+heard = "what kind of ship is that one right in front of me?"
+mode = "chat"
+may_look = false
+expect = ["reply"]
+offers_look = false
+tag = "look"
