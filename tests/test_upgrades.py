@@ -251,6 +251,24 @@ def test_a_long_hand_written_fleet_loses_no_ship(tmp_path: Path) -> None:
     assert fleet.describe(None).count("Ship ") == MAX_SHIPS
 
 
+def test_a_fleet_broken_while_tycho_runs_is_not_written_over(tmp_path: Path) -> None:
+    """Edited by hand mid-session into a shape Tycho can't read: the next change
+    mustn't replace it. Fixed again, it's read as usual."""
+    path = tmp_path / "fleet.toml"
+    Fleet(path, ["Cutlass Black"]).save()
+    running = Fleet.load(path)
+    path.write_text('ships = "Cutlass Black", "Carrack"\n', "utf-8")
+    running.refresh()
+    assert running.ships == ["Cutlass Black"]  # still known this session
+    with pytest.raises(FleetFileError, match="won't change it"):
+        running.save()
+    assert path.read_text("utf-8") == 'ships = "Cutlass Black", "Carrack"\n'
+    path.write_text('ships = ["Cutlass Black", "Carrack"]\n', "utf-8")
+    running.refresh()
+    assert running.ships == ["Cutlass Black", "Carrack"]
+    running.save()
+
+
 @pytest.mark.parametrize(
     "text", ['ships = "Cutlass Black"\n', 'ships = ["Cutlass Black"]\nimported = "Carrack"\n']
 )

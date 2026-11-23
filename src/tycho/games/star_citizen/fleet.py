@@ -102,13 +102,17 @@ class Fleet:
 
     def refresh(self) -> None:
         """Read the file again if something else changed it since (an import from the
-        command line while Tycho runs), so the next save doesn't undo that change."""
-        if self.problem or (stamp := _stamp(self.path)) == self._stamp:
+        command line while Tycho runs), so the next save doesn't undo that change. A file
+        that can't be read now (a hand edit) keeps the list in memory and is never saved
+        over (#612) until it reads again."""
+        if (stamp := _stamp(self.path)) == self._stamp:
             return
         fresh = Fleet.load(self.path)
-        if fresh.problem:  # being written right now, or broken: keep what's in memory
+        self._stamp = stamp
+        if fresh.problem:
+            self.problem = fresh.problem
             return
-        self.ships, self.imported, self._stamp = fresh.ships, fresh.imported, stamp
+        self.ships, self.imported, self.problem = fresh.ships, fresh.imported, ""
 
     def remove(self, entry: str) -> None:
         """Take ``entry`` out of the fleet, and out of the last import's list."""
