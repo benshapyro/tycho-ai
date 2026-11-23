@@ -1,13 +1,24 @@
 """The Tile (#2): the card kit Claude fills, and the rules for what shows and for how long."""
 
+import re
 from typing import Any
 
 import pytest
 
-from tycho.packs import STAR_CITIZEN, built_in
+from tycho.packs import STAR_CITIZEN, built_in, installed
 from tycho.tile import BRAIN_KINDS, Board, Card, Row, from_tool, lifetime
 from tycho.tile.board import STRIP_SECONDS
-from tycho.tile.cards import ALL_KINDS, TITLE, TOOL_SCHEMA, clean, confirm, long_answer, notice
+from tycho.tile.cards import (
+    ALL_KINDS,
+    TITLE,
+    TOOL_DESCRIPTION,
+    TOOL_SCHEMA,
+    clean,
+    confirm,
+    long_answer,
+    notice,
+    show_card,
+)
 from tycho.tile.design import TYCHO_ACCENT, accent_for
 
 SC = built_in(STAR_CITIZEN)
@@ -378,3 +389,30 @@ def test_steps_lose_the_numbers_claude_gives_them_since_the_tile_numbers_them() 
         "Pay",
         "Land",
     ]
+
+
+@pytest.mark.parametrize("game", installed())
+def test_settings_can_hide_every_card_the_brain_can_show(game: str) -> None:
+    """#528: in WoW: Forever the brain could show ship, fleet and loadout cards, and
+    Settings had no switch for them."""
+    from tycho.desktop.bridge.settings_page import card_kinds
+
+    switches = {row["kind"] for row in card_kinds(game)}
+    tool = show_card(built_in(game).tile.cards)
+    schema: dict[str, Any] = dict(tool["input_schema"])  # type: ignore[arg-type]
+    assert set(schema["properties"]["kind"]["enum"]) <= switches
+
+
+def test_a_game_without_ships_isnt_told_about_ship_cards() -> None:
+    tool = show_card(built_in("wow-forever").tile.cards)
+    schema: dict[str, Any] = dict(tool["input_schema"])  # type: ignore[arg-type]
+    assert not {"ship", "fleet", "loadout"} & set(schema["properties"]["kind"]["enum"])
+    described = str(tool["description"])
+    assert "- list:" in described
+    assert not re.search(r"^- (ship|fleet|loadout):", described, re.MULTILINE)
+
+
+def test_with_every_kind_the_tool_is_unchanged() -> None:
+    """Star Citizen names every kind: its tool, and so its cache, stay as they were."""
+    tool = show_card(SC.tile.cards)
+    assert (tool["description"], tool["input_schema"]) == (TOOL_DESCRIPTION, TOOL_SCHEMA)
