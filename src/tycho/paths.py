@@ -49,6 +49,17 @@ def fleet_file(pack: str) -> Path:
     return pack_dir(pack) / "fleet.toml"
 
 
+def memory_file() -> Path:
+    """The notes the player asked Tycho to remember in every game (ADR 8, #483)."""
+    return config_dir() / "memory.toml"
+
+
+def game_memory_file(pack: str) -> Path:
+    """The notes for one game. Under ``packs`` for every game, Star Citizen too, so it
+    never shares a name with the every-game file."""
+    return config_dir() / "packs" / pack / "memory.toml"
+
+
 def cache_dir() -> Path:
     return data_dir() / "cache"
 

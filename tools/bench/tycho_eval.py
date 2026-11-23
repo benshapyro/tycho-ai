@@ -103,6 +103,8 @@ from tycho.input.plan import pressable_input
 from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput, key_text
 from tycho.knowledge.web import WebSearch
 from tycho.lexicon import Lexicon
+from tycho.memory import Memory, NoteFile, Scope
+from tycho.memory.tool import MemoryTool
 from tycho.packs import STAR_CITIZEN, GamePack, Safety, as_run, built_in
 from tycho.runtime import routing
 from tycho.runtime.planning import Questions, Refusal, Steps, plan_request
@@ -452,6 +454,38 @@ def grade_fleet(fleet: Fleet, rule: dict[str, Any]) -> str:
             return f"fleet still has {name}"
     if "flying_after" in rule and fleet.flying != rule["flying_after"]:
         return f"flying {fleet.flying!r}, expected {rule['flying_after']!r}"
+    return "pass"
+
+
+def set_notes(memory: Memory, rule: dict[str, Any]) -> None:
+    """A case's notes before it runs ("notes": this game's; "every_game_notes"), with
+    nothing saved earlier: each case starts from them alone."""
+    memory.last = None
+    scopes: tuple[tuple[Scope, str], ...] = (
+        ("this game", "notes"),
+        ("every game", "every_game_notes"),
+    )
+    for scope, key in scopes:
+        store = memory.store(scope)
+        assert isinstance(store, NoteFile)  # noqa: S101 - the eval's own scratch files
+        store.path.unlink(missing_ok=True)
+        for note in rule.get(key, []):
+            store.add(note, memory.today())
+
+
+def grade_memory(memory: Memory, rule: dict[str, Any]) -> str:
+    """What a case says the notes hold afterwards: "notes_has" (words some note holds),
+    "notes_lack" (words no note holds) and "notes_unchanged"."""
+    now = [n.text.lower() for n in memory.notes()]
+    for words in rule.get("notes_has", []):
+        if not any(words.lower() in n for n in now):
+            return f"no note says {words!r} ({now})"
+    for words in rule.get("notes_lack", []):
+        if any(words.lower() in n for n in now):
+            return f"a note still says {words!r}"
+    started = [*rule.get("notes", []), *rule.get("every_game_notes", [])]
+    if rule.get("notes_unchanged") and sorted(now) != sorted(n.lower() for n in started):
+        return f"notes changed: {now}"
     return "pass"
 
 
@@ -990,7 +1024,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     counted: _Counted | None = None
     reference = ""
     library = None
-    wanted = {*pack.parts.lookups, "settings"}  # as tycho run offers them (ADR 18)
+    wanted = {*pack.parts.lookups, "settings", "memory"}  # as tycho run offers them (ADR 18)
     if args.ships != "none" and "ships" in wanted:
         library = await ensure(WikiApi(), paths.knowledge_dir(), concepts=UexApi())
         print(f"Ship data: {len(library)} ships for {library.patch}, as {args.ships}")
@@ -1018,6 +1052,8 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     if counted is not None:
         counted.journal = journal
     settings_tool = _Counted(SettingsTool(settings_file, live=LIVE), journal)
+    # Memory too (ADR 8): scratch notes, set by each case ("notes"), never the player's own.
+    memory = Memory(NoteFile(scratch / "memory.toml"), NoteFile(scratch / "game-memory.toml"))
     lookups = pack_lookups(
         wanted,
         [
@@ -1027,16 +1063,17 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
             ("mining", _Counted(MiningLookup(WikiApi()), journal)),
             *(("trade", _Counted(lookup, journal)) for lookup in trade_lookups(UexApi())),
             ("settings", settings_tool),
+            ("memory", _Counted(MemoryTool(memory), journal)),
             *(("web", _Counted(lookup, journal)) for lookup in web),
         ],
     )
 
-    # As tycho run does: the game's patch (#59), the fleet, then what to call the player
-    # (#15), by the pack's default (#349): no player has chosen a name here.
+    # As tycho run does: the game's patch (#59), the fleet, the player's notes (ADR 8),
+    # then what to call them (#15), by the pack's default (#349): no name chosen here.
     address = Address.for_pack(pack).header()
 
     def about() -> str:
-        lines = (patch_line(library), fleet.describe(library), address)
+        lines = (patch_line(library), fleet.describe(library), memory.block(), address)
         return "\n".join(p for p in lines if p)
 
     def cards() -> bool:
@@ -1082,6 +1119,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     try:
         for rule in rules:
             fleet.ships, fleet.flying = list(rule.get("fleet", [])), str(rule.get("flying", ""))
+            set_notes(memory, rule)
             start = settings.Settings.model_validate(rule.get("settings", {}))
             settings.save(start, settings_file)
             settings_tool.inner = SettingsTool(settings_file, live=LIVE)
@@ -1115,6 +1153,8 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
                 outcome.verdict = grade_fleet(fleet, rule)
             if outcome.verdict == "pass":
                 outcome.verdict = grade_settings(settings_file, start, rule)
+            if outcome.verdict == "pass":
+                outcome.verdict = grade_memory(memory, rule)
             outcomes.append(outcome)
             _print(outcome)
     finally:

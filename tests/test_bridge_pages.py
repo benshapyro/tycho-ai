@@ -25,6 +25,7 @@ def test_the_page_calls_exactly_what_the_bridge_offers() -> None:
 def test_each_page_has_a_module_of_its_own() -> None:
     # #399: bridge.py was 708 lines; now a package, its calls grouped by page.
     from tycho.desktop.bridge.commands_page import CommandsPage
+    from tycho.desktop.bridge.memory_page import MemoryPage
     from tycho.desktop.bridge.settings_page import SettingsPage
     from tycho.desktop.bridge.setup_page import SetupPage
     from tycho.desktop.bridge.tile_page import TilePage
@@ -35,3 +36,4 @@ def test_each_page_has_a_module_of_its_own() -> None:
     assert Bridge.finish_setup is SetupPage.finish_setup
     assert Bridge.tile_preview is TilePage.tile_preview
     assert Bridge.check_updates is UpdatesPage.check_updates
+    assert Bridge.forget_note is MemoryPage.forget_note

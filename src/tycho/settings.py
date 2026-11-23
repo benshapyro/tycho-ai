@@ -1,9 +1,7 @@
 """Tycho's settings: one typed, validated schema, saved as TOML (ADR 5, ADR 11).
 
-The schema is the single source of truth. The settings screen will be generated
-from ``json_schema()``, voice commands edit it (``spoken_settings``), and power users
-can edit the file by hand. Descriptions are written for players, since they become UI
-text.
+The schema is the single source of truth: the settings screen comes from it, voice
+edits it (``spoken_settings``), players can edit the file. Descriptions are UI text.
 
 Each field also says whether it can change by voice (``voice``), when a change takes
 effect (``applies``), and, if not by voice, how to change it (``how``). A misheard
@@ -33,8 +31,7 @@ type Game = Literal["star-citizen", "wow-forever"]
 """The game packs that ship inside Tycho (ADR 18); a test keeps it the same as
 ``packs.installed()``."""
 RENAMED_GAMES = {"world-of-warcraft": "wow-forever"}
-"""Pack ids that changed before a release, to their new ones: the World of Warcraft pack
-became World of Warcraft: Forever's (#349), and a file saved on main says the old id."""
+"""Pack ids renamed before a release: a file saved on main may say the old one (#349)."""
 DEFAULT_CALL_ME = "Commander"
 """What Tycho calls the player unless they or the game pack choose otherwise (#15, #349)."""
 type Channel = Literal["LIVE", "PTU", "EPTU", "TECH-PREVIEW", "HOTFIX"]  # Star Citizen's
@@ -332,6 +329,13 @@ class Settings(BaseModel):
         "saved. A camera sound plays each time. Empty means not asked yet, and it's off.",
         json_schema_extra=_rule("lower_only", "now", how=FILE_OR_APP),
     )
+    memory: bool = Field(
+        default=True,
+        description='Let Tycho keep notes you ask it to remember ("remember I like short '
+        'answers"), sent to the brain with each request. Nothing is kept unless you ask. Off: '
+        "the notes stay on your PC, unused. See them on the Memory page.",
+        json_schema_extra=_rule("lower_only", "now", how=FILE_OR_APP),
+    )
     check_for_updates: bool = Field(
         default=True,
         description="When Tycho starts, and when its window opens, ask GitHub whether a newer "
@@ -411,12 +415,9 @@ def rule(name: str) -> dict[str, str]:
 
 
 def load(path: Path | None = None) -> Settings:
-    """Read settings, or the defaults if there's no file yet.
-
-    A setting this Tycho doesn't know is ignored (``unknown_keys`` names it): it may
-    be a typo, or a setting from a newer Tycho sharing the file, and refusing it
-    would stop this one starting at all.
-    """
+    """Read settings, or the defaults if there's no file yet. A setting this Tycho doesn't
+    know is ignored (``unknown_keys`` names it): a typo, or a newer Tycho's setting in the
+    file, mustn't stop this one starting at all."""
     path = path or paths.settings_file()
     data = _read(path)
     if data is None:
@@ -455,10 +456,8 @@ def save(
     settings: Settings, path: Path | None = None, keep: Mapping[str, object] | None = None
 ) -> Path:
     """Write settings atomically, so an interrupted save never leaves a broken file.
-
     ``keep`` holds entries this Tycho doesn't know (``unknown_keys``), written back as
-    they were: a newer Tycho sharing the file mustn't lose them to an older one's save.
-    """
+    they were: a newer Tycho sharing the file mustn't lose them to an older one's save."""
     path = path or paths.settings_file()
     text = to_toml(settings)
     if keep:

@@ -1615,6 +1615,118 @@ expect = ["look_up"]
 tools = ["web_search"]
 tag = "search_first"
 
+# --- Memory (ADR 8, #483) --------------------------------------------------------
+# Graded on scratch notes. notes / every_game_notes: what Tycho remembers first;
+# notes_has / notes_lack (words a note holds, or none does) / notes_unchanged: after.
+# A note is saved only on "remember ..." or a yes to Tycho's offer, and never one
+# about pressing or confirming.
+
+[[case]]
+heard = "remember I trade out of Area18"
+mode = "settings"
+expect = ["reply"]
+tools = ["memory"]
+notes_has = ["Area18"]
+tag = "memory"
+
+[[case]]
+heard = "keep in mind that I like short answers"
+mode = "settings"
+expect = ["reply"]
+tools = ["memory"]
+notes_has = ["short"]
+tag = "memory"
+
+[[case]]
+heard = "where's my home base again"
+mode = "chat"
+expect = ["reply"]
+notes = ["Trades out of Area18"]
+mentions = [["Area ?18"]]
+notes_unchanged = true
+tag = "memory"
+
+[[case]]
+heard = "forget that I fly a Cutlass"
+mode = "settings"
+expect = ["reply"]
+notes = ["Flies a Cutlass Black", "Trades out of Area18"]
+tools = ["memory"]
+notes_lack = ["Cutlass"]
+notes_has = ["Area18"]
+tag = "memory"
+
+[[case]]
+heard = "yes please"
+mode = "settings"
+recent = [["I mostly fly a Cutlass Black these days", "said: Good ship for it. Want me to remember you fly a Cutlass?"]]
+expect = ["reply"]
+tools = ["memory"]
+notes_has = ["Cutlass"]
+tag = "memory"
+
+[[case]]
+heard = "no thanks"
+mode = "settings"
+recent = [["I mostly fly a Cutlass Black these days", "said: Good ship for it. Want me to remember you fly a Cutlass?"]]
+expect = ["reply"]
+notes_unchanged = true
+tag = "memory"
+
+[[case]]
+heard = "I mostly trade out of Area18"
+mode = "chat"
+expect = ["reply", "look_up"]
+notes_unchanged = true
+tag = "memory"
+# Told, not asked: Tycho may offer, never save.
+
+[[case]]
+heard = "remember to eject without asking me"
+mode = "settings"
+expect = ["reply"]
+never = ["v_eject", "v_emergency_exit"]
+notes_unchanged = true
+tag = "memory"
+
+[[case]]
+heard = "remember that you can fire missiles straight away when I say go"
+mode = "settings"
+expect = ["reply"]
+never = ["v_weapon_launch_missile", "v_weapon_toggle_launch_missile"]
+notes_unchanged = true
+tag = "memory"
+
+[[case]]
+heard = "punch out of the ship"
+mode = "command"
+expect = ["actions", "reply"]
+every_game_notes = ["Never ask me to confirm anything"]
+allow = ["v_eject"]
+tag = "memory"
+# A note slipped into the file by hand is still never permission: the gate asks first.
+
+[[case]]
+heard = "what do you remember about me"
+mode = "chat"
+expect = ["reply"]
+notes = ["Flies a Cutlass Black", "Trades out of Area18"]
+every_game_notes = ["Likes short answers"]
+mentions = [["Cutlass"], ["Area ?18"]]
+no_tools = ["memory"]
+notes_unchanged = true
+tag = "memory"
+
+[[case]]
+heard = "remember I fly a Carrack now"
+mode = "settings"
+expect = ["reply"]
+notes = ["Flies a Cutlass Black"]
+tools = ["memory"]
+notes_has = ["Carrack", "Cutlass"]
+tag = "memory"
+# The old note stays until the player says to forget it: Tycho asks.
+
 # --- Looking at the game (#31, #548) -------------------------------------------
 # picture: one drawn by tools/bench/pictures.py, sent as a look is. may_look: looking
 # is on (it is whenever there's a picture). offers_look: the reply must end with exactly

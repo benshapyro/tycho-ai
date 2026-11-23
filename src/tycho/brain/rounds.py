@@ -33,6 +33,7 @@ from tycho.brain.decisions import (
     UnboundAction,
     parse_tool_call,
 )
+from tycho.brain.heard import Heard, hearing
 from tycho.brain.lookups import (
     LOOKUP_SECONDS,
     Lookup,
@@ -75,8 +76,7 @@ CARD_NOTE = (
 """Added to a look-up's results while the Tile is on (#490). The briefing's rule is far
 from the answer: in play, a trade route and a loadout were spoken, numbers and all."""
 CUT_SHORT = "That answer ran too long for me. Ask me for part of it."
-"""Said when the model's reply hit the output limit before it was whole: a how-to or a
-plan on a card can (#266). Better than the error sound, and true whichever part was cut."""
+"""Said when a reply hit the output limit before it was whole (#266): true whatever was cut."""
 CUT_OFF = frozenset({"max_tokens", "length"})
 """How each provider says a reply stopped at the output limit (Anthropic, OpenAI's shape)."""
 TOOL_AS_TEXT = re.compile(r"\b[a-z_]{3,}\s*\(\s*\{", re.IGNORECASE)
@@ -158,28 +158,26 @@ class Turn:
     refused: bool = False
     """This call's reply held a refused act: its result asks for another pick."""
     looked: bool = False
-    """This call's reply looked something up for an answer (not a fleet or settings
-    note): its results get ``CARD_NOTE`` while the Tile is on (#490)."""
+    """This reply looked something up to answer (no note): its results get ``CARD_NOTE`` (#490)."""
     trace: Trace | None = None
     """What the request did, when tracing is on (#282)."""
     picture: int = 0
-    """The size of the game window's picture sent with the request (#31): only that is
-    traced."""
+    """The size of the game window's picture sent with the request (#31): all that's traced."""
     looked_up: list[str] = field(default_factory=list[str])
-    """What the request looked up, in a few words each ("searched the web for ..."), so
-    the follow-ups remember it (#564)."""
+    """What the request looked up, in a few words each, for the follow-ups (#564)."""
     answering: Callable[[], None] | None = None
-    """Called as each call's stream starts: the provider has read its cache by then, even
-    if the request later times out or is cut off (#540)."""
+    """Called as each call's stream starts: the cache was read, even if it's cut off (#540)."""
+    heard: Heard | None = None  # what the player said, for the memory tool (ADR 8)
 
     @classmethod
     def of(cls, request: BrainRequest, answering: Callable[[], None] | None = None) -> Turn:
-        """A new turn for ``request``, with its callbacks, and the adapter's own
-        ``answering``."""
+        """A new turn for ``request``, with its callbacks and the adapter's ``answering``."""
         size = request.picture.size if request.picture is not None else 0
-        return cls(
+        turn = cls(
             request.waiting, request.looking, request.checking, picture=size, answering=answering
         )
+        turn.heard = Heard.of(request)
+        return turn
 
 
 class Round:
@@ -354,9 +352,13 @@ class Round:
 
 
 async def traced(traces: TraceFile | None, turn: Turn, deciding: Awaitable[Decision]) -> Decision:
-    """The request's decision, with its trace line written once it ends, however it
-    ends (#282). Without ``traces`` (players, unless ``TYCHO_TRACE`` is on), only the
-    decision. A reply carries what the request looked up (#564)."""
+    """The request's decision, its trace line written however it ends (#282; only with
+    ``traces``), and what it looked up (#564). Its look-ups see what was ``heard``."""
+    with hearing(turn.heard):
+        return await _traced(traces, turn, deciding)
+
+
+async def _traced(traces: TraceFile | None, turn: Turn, deciding: Awaitable[Decision]):
     trace = turn.trace
     if traces is None or trace is None:
         return noted(await deciding, turn)

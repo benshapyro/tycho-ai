@@ -39,6 +39,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
     "Game and controls": ("game", "push_to_talk", "microphone"),
     "Safety": ("key_actions", "confirm_seconds"),
     "Privacy": (
+        "memory",
         "keep_transcripts",
         "web_search",
         "web_search_open",

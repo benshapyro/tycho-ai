@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from tycho import brain_choice
-from tycho.games import BUILT_IN, SETTINGS
+from tycho.games import BUILT_IN, MEMORY, SETTINGS
 from tycho.packs import STAR_CITIZEN, Built, Workshop, built_in
 from tycho.settings import Settings
 
@@ -21,14 +21,15 @@ def test_every_look_up_a_built_in_pack_names_has_a_builder() -> None:
 @pytest.mark.parametrize(
     ("named", "built"),
     [
-        (["ships", "settings", "web"], ["ships", "settings", "web"]),
-        (["ships", "web"], ["ships", SETTINGS, "web"]),
-        (["items"], ["items", SETTINGS]),
-        ([], [SETTINGS]),
-        (["web", "items", "web"], [SETTINGS, "web", "items"]),
+        (["ships", "settings", "web"], ["ships", "settings", MEMORY, "web"]),
+        (["ships", "web"], ["ships", SETTINGS, MEMORY, "web"]),
+        (["items"], ["items", SETTINGS, MEMORY]),
+        ([], [SETTINGS, MEMORY]),
+        (["web", "items", "web"], [SETTINGS, MEMORY, "web", "items"]),
+        (["memory", "settings"], [MEMORY, SETTINGS]),
     ],
 )
-def test_the_look_ups_are_built_in_the_pack_s_order_with_settings_always(
+def test_the_look_ups_are_built_in_the_pack_s_order_with_settings_and_memory_always(
     named: list[str], built: list[str]
 ) -> None:
     assert brain_choice.lookup_order(named) == built

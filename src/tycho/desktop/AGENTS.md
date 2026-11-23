@@ -4,7 +4,7 @@ One Tycho process: the voice loop on its own thread (`host.py`), the tray icon o
 
 ## Rules
 
-- **The page's only way into Python is the `bridge` package**: one `Bridge` object, its calls in a module per page (`settings_page`, `setup_page`, `commands_page`, `updates_page`, `tile_page`) over the shared `state`. Every public name on it is a call the page can make, and `tests/test_bridge_pages.py` checks they're exactly the ones the page uses. It checks everything it's given. Keys go in and never come out: no method returns a key.
+- **The page's only way into Python is the `bridge` package**: one `Bridge` object, its calls in a module per page (`settings_page`, `setup_page`, `commands_page`, `updates_page`, `tile_page`, `memory_page`) over the shared `state`. Every public name on it is a call the page can make, and `tests/test_bridge_pages.py` checks they're exactly the ones the page uses. It checks everything it's given. Keys go in and never come out: no method returns a key.
 - **No local server.** The page loads from memory; pywebview's `js_api` is the bridge.
 - **The window must run on the main thread**, so the voice loop runs in `Host`. Live setting changes reach the loop through `Host.run_now`.
 - **pystray is LGPL:** the tray is our own Win32 code. Never add an LGPL or GPL dependency.
@@ -13,6 +13,7 @@ One Tycho process: the voice loop on its own thread (`host.py`), the tray icon o
 - **Every way Tycho ends cleanly calls `crashes.stop()`** (#428), or the next start says it crashed: `atexit`, the starting star's `os._exit`, Windows shutting down or signing out (`WM_ENDSESSION` in `tray.py`, `on_end_session`), and the console closing (`CloseGuard`'s `ending`). Neither of the last two runs `atexit`.
 - **Quit is in the window too** (at the foot of the places, #486, and Settings, Updates; `Bridge.quit`, #424): the tray icon can be hidden or gone. It asks the `Host` for `quit`, as the tray's menu does.
 - **A second start shows the running Tycho's window.** It uses a named event (`runtime/instance.py`, `OpenRequests`), not a server, and the window is raised once shown.
+- **The Memory page (#483) lists both memory files' notes and deletes one through `memory.NoteFile`** (tomlkit, comments stay). The fleet and the name beside them are read-only there; they keep their own places in Settings.
 - **The Commands page edits the player's `commands.toml` with tomlkit, so their comments stay.** A change is written only if the file then loads (`CommandMatcher.default`). Added phrases go in `[[phrases]]` entries; never copy a built-in command.
 
 - **The page's words follow `docs/voice-and-tone.md`.** The window shows whichever game is chosen, so a label or hint names no game: take the game's name from the bridge's data.

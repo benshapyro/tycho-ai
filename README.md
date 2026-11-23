@@ -132,6 +132,7 @@ The full list:
 | Service | What it receives | When |
 |---|---|---|
 | Anthropic (Claude) | What you said (as text); your bound actions with their keys, your commands and sequences; and your last few requests with what Tycho did, if they were in the last 30 seconds | Requests the built-in commands don't handle, plus one warm-up request when Tycho starts |
+| Anthropic or OpenRouter (whichever runs the brain) | Your memory notes: the short notes you asked Tycho to remember, for every game and for the game you're playing. They're kept on your PC in `memory.toml` files you can read and edit, and on the Memory page | With each request to the brain, unless memory is off (`memory = false`, or say "turn memory off"). Never in crash reports |
 | OpenRouter, instead of Anthropic | The same as Anthropic (Claude) above. OpenRouter forwards it to Anthropic, who runs the model, so both receive it | Only with `brain_provider = "openrouter"`, instead of sending it to Anthropic directly |
 | ElevenLabs | The text Tycho speaks; at start, which voice you chose, to check your key can use it | When Tycho speaks, and once when it starts |
 | The key's own provider (Anthropic, OpenRouter or ElevenLabs) | A key you store, to check it works | When you store it, and when you run `tycho check` |

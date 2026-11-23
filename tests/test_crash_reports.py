@@ -1,6 +1,7 @@
 """Crash reports, only if the player says yes (ADR 4's amendment, #199): what a report
 holds, what never leaves the PC, and saying no deletes what's waiting."""
 
+import datetime
 import json
 import threading
 from collections.abc import Iterator, Mapping
@@ -387,3 +388,20 @@ def test_tycho_s_project_is_a_sentry_dsn_with_no_secret_key() -> None:
 def test_tests_never_send_to_tycho_s_project(hooks: None) -> None:
     """conftest blanks DSN, so a test that turns reports on can't reach Sentry."""
     assert not crash_reports.start(True, lambda: True, CONTEXT)
+
+
+def test_a_memory_note_never_reaches_a_crash_report(tmp_path: Path) -> None:
+    # ADR 8: notes count as "anything the player said" in ADR 4's never-sent list.
+    from tycho.memory import MemoryFileError, NoteFile
+
+    note = "Trades out of Zzyzx Outpost with my org Blackvein"
+    broken = tmp_path / "memory.toml"
+    broken.mkdir()  # reading it fails inside the memory code, with the note in its locals
+    with pytest.raises(MemoryFileError) as raised:
+        NoteFile(broken).add(note, datetime.date(2026, 11, 23))
+    found = scrub(build(raised.value, CONTEXT), [NAME])
+    assert found is not None
+    assert found["error"] == "tycho.memory.MemoryFileError"
+    text = json.dumps(found).lower()
+    for planted in ("zyzx", "outpost", "blackvein", "trades"):
+        assert planted not in text, planted

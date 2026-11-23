@@ -237,3 +237,6 @@ ul.costs, ul.tips { color: var(--dim); font-size: 14px; }
 /* In setup a message sits above Back and Next, never on them. */
 body.insetup .toast { bottom: 86px; } /* clear of setup's Back and Next */
 main > .card + .card { margin-top: 12px; }
+.stack { display: grid; gap: 16px; }
+.memlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.memrow { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: baseline; }
