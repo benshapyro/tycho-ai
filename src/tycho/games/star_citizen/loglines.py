@@ -114,12 +114,13 @@ ITEM_NAME = re.compile(r"""[A-Za-z0-9][A-Za-z0-9 "'.&()/+-]{0,39}""")
 """An item's name as a callout may say it ("Killshot "Dominion Camo" Rifle", "Monde
 Helmet Hiro"): letters, digits and a few marks, at most 40, the longest a callout says."""
 _ITEM_KEY = re.compile(r"@(item_name_?[A-Za-z0-9_]{1,80})", re.IGNORECASE)
+_LONGEST_BLUEPRINT = len("Received Blueprint: @item_name_") + 80
 
 
-def clean(text: str) -> str:
-    """One line of plain text from the log, at most ``LIMIT`` characters."""
+def clean(text: str, limit: int = LIMIT) -> str:
+    """One line of plain text from the log, at most ``limit`` characters."""
     line = " ".join(_CONTROL.sub(" ", text).replace("<", "").replace(">", "").split())
-    return line if len(line) <= LIMIT else line[: LIMIT - 1].rstrip() + "…"
+    return line if len(line) <= limit else line[: limit - 1].rstrip() + "…"
 
 
 def place(name: str) -> str:
@@ -184,14 +185,16 @@ the voice (#531). A new kind joins here with a real line in ``tests/test_gamelog
 def _notification(line: str) -> Line | None:
     if "<SHUDEvent_OnNotification>" not in line or not (match := _NOTIFICATION.search(line)):
         return None
-    said = clean(match.group(1).rstrip(" :"))
+    text = match.group(1).rstrip(" :")
+    said = clean(text)
     if kind := KNOWN_NOTIFICATIONS.get(said):
         if kind == MONITORED:
             return Line(MONITORED, said, keep=True)
         if kind == LEFT_MONITORED:
             return Line(LEFT_MONITORED, said, clears=(MONITORED,))
         return Line(kind, said)
-    if match := _BLUEPRINT.match(said):
+    # Matched before cutting: a long item key cut to "…" fits neither pattern (#605).
+    if match := _BLUEPRINT.match(clean(text, limit=_LONGEST_BLUEPRINT)):
         return _blueprint(match.group(1).strip())
     if (match := _JURISDICTION.match(said)) and len(match.group(1).split()) <= 4:
         return Line(JURISDICTION, said, keep=True, name=match.group(1))

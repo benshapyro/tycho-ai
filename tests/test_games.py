@@ -1,6 +1,8 @@
 """The registry of built-in parts builds them (#396, ADR 19 step 5)."""
 
 import asyncio
+import os
+from pathlib import Path
 
 import pytest
 
@@ -93,3 +95,48 @@ def test_one_star_citizen_module_loads_only_what_it_needs() -> None:
         [sys.executable, "-c", script], capture_output=True, text=True, check=True
     )
     assert done.stdout.strip() == "['tycho.games.star_citizen.install']", done.stderr
+
+
+def test_item_names_come_from_the_loose_file_first_and_the_cache_second(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Nothing checked which names file the Game.log reader takes, or in what order (#605).
+    from tycho import games
+    from tycho.games.star_citizen import store
+
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / "global-old.ini").write_text("item_name_x=Old\n", "utf-8")
+    newest = cache / "global-new.ini"
+    newest.write_text("item_name_x=Cached\n", "utf-8")
+    os.utime(cache / "global-old.ini", (1, 1))
+    monkeypatch.setattr(store, "default_cache_dir", lambda: cache)
+    game = tmp_path / "LIVE"
+    assert games._game_text(lambda: game)("item_name_x") == "Cached"  # pyright: ignore[reportPrivateUsage]
+
+    loose = game / "Data" / "Localization" / "english" / "global.ini"
+    loose.parent.mkdir(parents=True)
+    loose.write_text("item_name_x=Loose\n", "utf-8")
+    assert games._game_text(lambda: game)("item_name_x") == "Loose"  # pyright: ignore[reportPrivateUsage]
+
+
+def test_memory_by_voice_reaches_the_notes_and_the_blueprint_list() -> None:
+    # Nothing checked that both the notes and the blueprint list follow "memory" (#608).
+    from tycho.games.star_citizen.owned_tool import OwnedTool
+    from tycho.memory.tool import MemoryTool
+    from tycho.spoken_settings import Live
+
+    live: Live = {}
+    workshop = Workshop(SC, Settings(memory=True), live=live)
+    items = BUILT_IN.lookups["items"](workshop)
+    tool, (memory_tool,) = items.lookups[2], BUILT_IN.lookups[MEMORY](workshop).lookups
+    assert isinstance(tool, OwnedTool)
+    assert isinstance(memory_tool, MemoryTool)
+    owned = tool._owned  # pyright: ignore[reportPrivateUsage]
+    notes = memory_tool._memory  # pyright: ignore[reportPrivateUsage]
+    assert (owned.on, notes.on) == (True, True)
+    live["memory"](False)
+    assert (owned.on, notes.on) == (False, False)
+    for lookup in items.lookups:
+        if (close := getattr(lookup, "close", None)) is not None:
+            asyncio.run(close())

@@ -99,7 +99,7 @@ class OwnedTool:
 
     async def _add(self, said: str) -> LookupResult:
         now = heard()
-        if now is None or not from_said(said, now.said):
+        if now is None or not _their_words(said, now.said):
             return failure("add only a blueprint the player just said they own, in their words")
         try:
             known = await self._known()
@@ -125,11 +125,26 @@ class OwnedTool:
         now = heard()
         if now is None or not FORGET.search(now.said):
             return failure("take a blueprint off only when the player asks to")
+        if not _their_words(said, now.said):  # #608: the one they named, not another
+            return failure("take off only a blueprint the player named, in their words")
         ranked = naming.ranked(said, {o.name: o for o in owned})
         if not ranked:
             return _result({"asked": said, "not_found": "no such blueprint in the list"})
-        removed = await asyncio.to_thread(self._owned.remove, ranked[0])
-        return _result({"removed" if removed else "not_found": ranked[0]})
+        exact = [n for n in ranked if naming.score(said, n) >= 1.0]
+        if len(exact) != 1 and len(ranked) > 1:
+            return _result({"asked": said, "which_one": ranked[:4], "ask": _WHICH})
+        name = exact[0] if exact else ranked[0]
+        removed = await asyncio.to_thread(self._owned.remove, name)
+        return _result({"removed" if removed else "not_found": name})
+
+
+_WHICH = "more than one in the list fits: ask the player which to take off, and take none yet"
+
+
+def _their_words(blueprint: str, said: str) -> bool:
+    """``blueprint`` is in the player's words, with numbers said any way ("three", "3",
+    "III"): ``from_said`` on both with numbers as digits."""
+    return from_said(naming.as_digits(blueprint), naming.as_digits(said))
 
 
 def _check(said: str, owned: list[Owned]) -> dict[str, object]:

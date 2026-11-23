@@ -52,6 +52,11 @@ _AS_DIGIT = {
 _ROMAN = {digit: roman for digit, roman in NUMBERS.values()}
 
 
+def as_digits(text: str) -> str:
+    """``text``'s words with every number as digits: "Omnisky Three" is "omnisky 3"."""
+    return " ".join(_AS_DIGIT.get(w, w) for w in normalize(text))
+
+
 def spellings(words: list[str]) -> list[list[str]]:
     """The words as said, with numbers as digits, and as Roman numerals."""
     digits = [_AS_DIGIT.get(w, w) for w in words]
@@ -63,8 +68,8 @@ def score(said: str, name: str) -> float:
     heard = words(said)
     if not heard:
         return 0.0
-    named = words(name)
-    return max(name_score(form, named) for form in spellings(heard))
+    named = spellings(words(name))  # a name can spell its number as a word too (#602)
+    return max(name_score(form, n) for form in spellings(heard) for n in named)
 
 
 def ranked(said: str, names: Mapping[str, object]) -> list[str]:
