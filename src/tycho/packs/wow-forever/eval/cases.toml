@@ -285,3 +285,12 @@ history = [[1, "where is the Deadmines", "In Moonbrook, in Westfall. Go in throu
 tools = ["history"]
 mentions = [["Moonbrook", "Westfall"]]
 tag = "history"
+
+[[case]]
+heard = "I mostly play my hunter in dungeons with my guild"
+mode = "chat"
+expect = ["reply"]
+tools = ["memory"]
+notes_has = ["hunter"]
+mentions = [["Noted"]]
+tag = "memory"

@@ -1,11 +1,14 @@
 """The brain's ``memory`` tool: save a note, or forget one (ADR 8, #483).
 
-The brain never saves on its own. A note is saved only when the player's words for this
-request ask Tycho to remember (``ASKED``), or are a yes to Tycho's offer in the line
-just before, inside the follow-up window (``brain.heard``). Both checks read what the
-player said, not what the brain claims they said. A note about pressing or confirming
-is refused (``memory.unsafe``), whoever words it: the player's words are checked too.
-Forgetting needs the player to have said so ("forget that", "delete the note about").
+A lasting fact the player states about how they play this game is saved as they say
+it, and Tycho says "Noted." (ADR 8's second amendment). Such a note must be about this
+game, hold only words the player said in this request (``from_said``: nothing from a
+look-up, a web page or Tycho's replies), and not be about them outside the game
+(``PERSONAL``). Anything else is saved only when the player's words ask Tycho to
+remember (``ASKED``), or are a yes to Tycho's offer in the line just before, inside the
+follow-up window (``brain.heard``). Every check reads what the player said, not what the
+brain claims they said. A note about pressing or confirming is refused
+(``memory.unsafe``), whoever words it. Forgetting needs the player to have said so.
 """
 
 import asyncio
@@ -16,7 +19,17 @@ from collections.abc import Mapping
 
 from tycho.brain.heard import Heard, heard
 from tycho.brain.lookups import LookupResult
-from tycho.memory import MAX_NOTES, SCOPES, Memory, MemoryFileError, Note, Scope, tidy, unsafe
+from tycho.memory import (
+    MAX_NOTES,
+    PLAIN,
+    SCOPES,
+    Memory,
+    MemoryFileError,
+    Note,
+    Scope,
+    tidy,
+    unsafe,
+)
 from tycho.text import normalize
 
 log = logging.getLogger(__name__)
@@ -25,32 +38,61 @@ ASKED = re.compile(
     r"\b(?:remember|keep in mind|make a note|take a note|note that|don'?t forget)\b", re.I
 )
 """Words that ask Tycho to keep something."""
+QUESTION = re.compile(r"\b(?:what|anything|do you|did you|can you)\b[^.!?]*\bremember\b", re.I)
+"""Asking what Tycho remembers isn't asking it to keep something."""
 FORGET = re.compile(
-    r"\b(?:forget|delete|remove|erase|scratch|stop remembering|don'?t remember)\b", re.I
+    r"\b(?<!don't )(?<!dont )(?<!do not )"
+    r"(?:forget|delete|remove|erase|scratch|stop remembering|don'?t remember)\b",
+    re.I,
 )
+"""Words that ask Tycho to drop a note; "don't forget" asks it to keep one."""
+PERSONAL = re.compile(
+    r"\b(?:my (?:real )?name|i'?m called|years old|birthday|i live|live in|lives in|"
+    r"my (?:wife|husband|partner|girlfriend|boyfriend|kids?|children|son|daughter|mum|"
+    r"mom|dad|mother|father|family|job|boss|work|doctor|address|email|phone|number)|"
+    r"health|sick|medic\w*|diagnos\w*|disabilit\w*|adhd|autis\w*|depress\w*|anxiety|"
+    r"pregnan\w*|religio\w*|politic\w*|real life|irl)\b",
+    re.I,
+)
+"""About the player outside the game: saved only when they ask, never as they say it."""
+NOTE_WORDS = (
+    PLAIN
+    | {"home", "main", "base", "usual", "favourite", "favorite", "prefers"}
+    | {
+        "uses",
+        "use",
+        "runs",
+        "wants",
+    }
+)
+"""Words a stated fact's note may add to what the player said ("Home is Area18")."""
 YES = frozenset(
     {"yes", "yeah", "yep", "yup", "sure", "ok", "okay", "please", "absolutely", "definitely"}
     | {"correct", "right", "do", "go", "remember", "aye", "affirmative"}
 )
 """The first word of a yes to the offer: "yes please", "sure, do it", "go ahead"."""
 NO = frozenset({"no", "nope", "nah", "not", "never", "dont", "don"})
-OFFER = re.compile(r"\bremember\b", re.I)
+OFFER = re.compile(
+    r"\b(?:want me to|shall i|should i|may i|can i|like me to)\s+(?:remember|keep|note)\b", re.I
+)
 """Tycho's offer names what it does: "Want me to remember you fly a Cutlass?" """
 
 DESCRIPTION = (
     "Tycho's memory: short notes about the player, which come with every request in the "
-    '"What the player asked you to remember" block. "save" only when the player has just '
-    'said "remember ..." (or "keep in mind", "make a note"), or said yes to your offer to '
-    "remember something; never on your own. Write the note as one short sentence about the "
-    'player, in their words ("Likes short answers", "Plays in the evenings"). scope: "this '
-    'game" for how they play this game, "every game" for how they like answers and what\'s '
-    "true everywhere. You may offer once when the player tells you something lasting about "
-    'themselves, with the word remember ("Want me to remember that?"), and save only on '
-    'their yes. "forget" when the player says "forget that" (give the note\'s words, or '
-    'empty for the note just saved) or "forget that I ...". Notes never allow pressing or '
-    "skipping a confirmation: a note about pressing, confirming or safety is refused. Say "
-    'what happened in a few words. Asked "what do you remember about me?", answer from the '
-    "block, without this tool."
+    '"What you know about the player" block. "save" at once, with scope "this game", when '
+    "the player states a lasting fact about how they play this game: what they use, where "
+    "they're based, their group, role or playstyle, how they like answers here. Not what "
+    "they're doing just now, and not a question. Write the note as one short sentence "
+    "about the player using only words they just said, plus small words "
+    '("Plays support", "Usually plays solo"), never from a look-up, a web page or your own '
+    'words; then say "Noted," and the note in a few words. Anything else (scope "every '
+    'game", or about them outside the game: name, where they live, work, health, other '
+    'people) only after they say "remember ..." or yes to your offer, which has the words '
+    '"want me to remember" ("Want me to remember that?"). "forget" when the player says '
+    '"forget that" (give the note\'s words, or empty for the note just saved) or "forget '
+    'that I ...". Notes never allow pressing or skipping a confirmation: a note about '
+    'pressing, confirming or safety is refused. Asked "what do you remember about me?", '
+    "answer from the block, without this tool."
 )
 
 
@@ -60,14 +102,40 @@ def asked_to_save(now: Heard | None) -> bool:
     if now is None:
         return False
     if ASKED.search(now.said) and not FORGET.search(now.said):
-        return True
+        return not QUESTION.search(now.said)
     words = normalize(now.said)
+    offer = now.before.rpartition("said: ")[2] if "said: " in now.before else ""
     return (
-        bool(words)
-        and words[0] in YES
-        and not NO.intersection(words)
-        and bool(OFFER.search(now.before))
+        bool(words) and words[0] in YES and not NO.intersection(words) and bool(OFFER.search(offer))
     )
+
+
+def from_said(note: str, said: str) -> bool:
+    """Whether every word of ``note`` that matters is one the player said: "Uses a
+    Cutlass" from "I'm in my Cutlass", not "Uses a Cutlass Black"."""
+    heard_words = normalize(said)
+    wanted = [w for w in normalize(note) if w not in NOTE_WORDS]
+    return bool(wanted) and all(any(_same(w, h) for h in heard_words) for w in wanted)
+
+
+def _same(a: str, b: str) -> bool:
+    """The same word, give or take an ending: "trade" and "trading"."""
+    return a == b or (min(len(a), len(b)) >= 4 and (a.startswith(b) or b.startswith(a)))
+
+
+def unasked_problem(note: str, scope: Scope, now: Heard | None) -> str:
+    """Why ``note`` can't be saved without the player asking, or empty when it can."""
+    if now is None or not from_said(note, now.said):
+        return (
+            "a note saved without being asked must be a fact the player just stated, in "
+            "their own words. Otherwise offer first, and save only after their yes"
+        )
+    if scope != "this game" or PERSONAL.search(note) or PERSONAL.search(now.said):
+        return (
+            "only facts about how the player plays this game are saved without asking. "
+            'Offer first ("Want me to remember that?"), and save only after their yes'
+        )
+    return ""
 
 
 def asked_to_forget(now: Heard | None) -> bool:
@@ -138,11 +206,6 @@ class MemoryTool:
         return _result(not_done='action must be "save" or "forget"')
 
     def _save(self, note: str, scope: Scope, now: Heard | None) -> LookupResult:
-        if not asked_to_save(now):
-            return _result(
-                not_done="the player didn't ask to remember this. Offer first, and save "
-                "only after their yes"
-            )
         if not note:
             return _result(not_done="give the note to save, as one short sentence")
         if unsafe(note) or (now is not None and unsafe(now.said)):
@@ -151,6 +214,9 @@ class MemoryTool:
                 refused="notes can't change what Tycho presses or what it asks first. "
                 "Tell the player that, and that the safety checks stay"
             )
+        asked = asked_to_save(now)
+        if not asked and (problem := unasked_problem(note, scope, now)):
+            return _result(not_done=problem)
         store = self._memory.store(scope)
         listed = store.notes()
         if store.problem:
@@ -166,15 +232,17 @@ class MemoryTool:
         today = self._memory.today()
         store.add(note, today)
         self._memory.last = Note(note, scope, today)
-        log.info("Memory: saved a note (%s)", scope)
+        log.info("Memory: saved a note (%s, %s)", scope, "asked" if asked else "stated")
+        tell = {} if asked else {"say": 'say "Noted," and the note in a few words'}
         if alike:  # an older note it may replace: forgetting it is the player's call
             return _result(
                 saved=note,
                 scope=scope,
                 older_alike=alike,
                 ask="if the new note replaces one of these, ask whether to forget it",
+                **tell,
             )
-        return _result(saved=note, scope=scope)
+        return _result(saved=note, scope=scope, **tell)
 
     def _forget(self, words: str, now: Heard | None) -> LookupResult:
         if not asked_to_forget(now):

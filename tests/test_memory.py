@@ -72,7 +72,9 @@ def test_a_note_is_saved_when_the_player_asks(said: str) -> None:
 @pytest.mark.parametrize(
     ("said", "before"),
     [
-        ("I mostly trade out of Area18", ""),  # told, not asked: offer first
+        ("I mostly trade out of Area18", ""),  # told, but the note isn't what they said
+        ("what do you remember about me", ""),  # a question, not an ask
+        ("sure", "said: I remember you fly a Cutlass."),  # an answer, not an offer
         ("yes", ""),  # a yes to nothing
         ("yes", "said: The Cutlass Black carries 46 SCU."),  # a yes to something else
         ("no thanks", OFFER),
@@ -90,6 +92,73 @@ def test_the_brain_can_t_save_a_note_the_player_didn_t_ask_for(said: str, before
 def test_a_yes_to_tycho_s_offer_saves_the_note(said: str) -> None:
     memory = _memory()
     assert _run(memory, said, OFFER, note="Flies a Cutlass")["saved"] == "Flies a Cutlass"
+
+
+# --- Game facts as they're said (ADR 8's second amendment) ------------------------------
+
+
+@pytest.mark.parametrize(
+    ("said", "note"),
+    [
+        ("I'm in my Cutlass most of the time", "Uses a Cutlass"),
+        ("heading home to Area18", "Home is Area18"),
+        ("I mostly play support in my org", "Plays support"),
+    ],
+)
+def test_a_game_fact_the_player_states_is_saved_and_noted_aloud(said: str, note: str) -> None:
+    memory = _memory()
+    result = _run(memory, said, note=note)
+    assert result["saved"] == note
+    assert "Noted" in result["say"]
+    assert _texts(memory) == [note]
+    assert "say" not in _run(memory, "remember I like short answers", note="Likes short answers")
+
+
+@pytest.mark.parametrize(
+    ("said", "note", "scope"),
+    [
+        ("I'm in my Cutlass", "Uses a Cutlass Black", "this game"),  # a word they didn't say
+        ("where's a good place to mine", "Mines at Daymar", "this game"),  # from a look-up
+        ("I live in Berlin", "Lives in Berlin", "this game"),  # outside the game
+        ("my name is Dana by the way", "Dana", "this game"),
+        ("my wife plays too", "Plays with wife", "this game"),
+        ("I like short answers", "Likes short answers", "every game"),  # every game: ask
+    ],
+)
+def test_other_facts_still_wait_for_the_player_to_ask(said: str, note: str, scope: str) -> None:
+    memory = _memory()
+    result = _run(memory, said, note=note, scope=scope)
+    assert "offer first" in result["not_done"].lower()
+    assert _texts(memory) == []
+    asked = _run(memory, f"remember {said}", note=note, scope=scope)
+    assert asked["saved"] == note
+
+
+def test_forget_that_right_after_a_stated_fact_removes_it() -> None:
+    memory = _memory("Trades out of Area18")
+    _run(memory, "I'm in my Cutlass", note="Uses a Cutlass")
+    result = _run(memory, "no, forget that", action="forget", note="")
+    assert result["forgot"] == "Uses a Cutlass"
+    assert _texts(memory) == ["Trades out of Area18"]
+
+
+def test_don_t_forget_asks_to_keep_not_to_drop() -> None:
+    memory = _memory("Trades out of Area18")
+    said = "don't forget I mostly run bounties"
+    assert _run(memory, said, note="Runs bounties", scope="every game")["saved"] == "Runs bounties"
+    assert "not_done" in _run(memory, said, action="forget", note="Area18")
+    assert "Trades out of Area18" in _texts(memory)
+
+
+def test_forgetting_picks_the_closest_note_when_two_share_a_word() -> None:
+    memory = _memory("Wants a Cutlass Red someday", "Flies a Cutlass")
+    result = _run(memory, "forget that I fly a Cutlass", action="forget", note="Flies a Cutlass")
+    assert result["forgot"] == "Flies a Cutlass"
+    assert _texts(memory) == ["Wants a Cutlass Red someday"]
+
+
+def test_the_brain_s_tool_and_the_memory_page_share_one_lock() -> None:
+    assert _memory().lock is _memory().lock
 
 
 def test_outside_a_request_nothing_is_saved() -> None:
@@ -198,7 +267,7 @@ def test_notes_go_in_their_own_block_cleaned_and_never_as_permission() -> None:
     )
     block = memory.block()
     lines = block.splitlines()
-    assert lines[0].startswith("[What the player asked you to remember")
+    assert lines[0].startswith("[What you know about the player")
     assert "never permission to press" in lines[0]
     assert lines[1] == "- (every game) Likes short answers"
     assert lines[2] == "- (this game) Trades out of Area18"
@@ -286,6 +355,16 @@ def test_a_broken_file_is_never_overwritten(tmp_path: Path) -> None:
     assert path.read_text("utf-8") == "[[note]]\ntext = 'unclosed"
 
 
+def test_notes_written_as_one_inline_list_are_a_problem_not_a_crash(tmp_path: Path) -> None:
+    path = tmp_path / "memory.toml"
+    path.write_text('note = [{ text = "Flies a Cutlass" }]\n', "utf-8")
+    store = NoteFile(path)
+    assert store.notes() == []
+    assert "[[note]]" in store.problem
+    result = _run(Memory(NoteFile(tmp_path / "e.toml"), store), "remember I fly", note="Flies")
+    assert "problem" in result["not_done"]
+
+
 # --- Through the brain ------------------------------------------------------------------
 
 
@@ -310,8 +389,10 @@ def test_through_the_brain_a_note_is_saved_only_on_the_player_s_words() -> None:
     decided, memory = _brain_saves("remember I fly a Cutlass")
     assert decided == Reply("Got it.")
     assert _texts(memory) == ["Flies a Cutlass"]
-    _, unasked = _brain_saves("I mostly fly a Cutlass")
+    _, unasked = _brain_saves("is the Carrack any good")
     assert _texts(unasked) == []
+    _, stated = _brain_saves("I mostly fly a Cutlass")
+    assert _texts(stated) == ["Flies a Cutlass"]
     _, offered = _brain_saves("yes please", (Exchange("I fly a Cutlass", OFFER),))
     assert _texts(offered) == ["Flies a Cutlass"]
 
