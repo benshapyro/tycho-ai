@@ -1,6 +1,7 @@
 """Turning the game down while Tycho speaks (#570, ``voice/ducking.py``)."""
 
 import asyncio
+import contextlib
 import json
 import sys
 from pathlib import Path
@@ -349,3 +350,29 @@ def test_a_line_starting_mid_fade_up_still_puts_the_game_back_after(tmp_path: Pa
     asyncio.run(go())
     assert volume.level == pytest.approx(1.0)
     assert not (tmp_path / "ducked.json").exists()
+
+
+def test_a_line_that_ends_before_the_game_went_down_still_puts_it_back(tmp_path: Path) -> None:
+    """#577's review: a line that failed at once left the game down until the next."""
+    import time
+
+    class SlowToRead(FakeGameVolume):
+        def get(self) -> float | None:
+            time.sleep(0.05)  # Windows walking every device's sessions
+            return super().get()
+
+    volume = SlowToRead(0.8)
+    ducker = _ducker(volume, tmp_path)
+
+    class Failing(FakeSpeaker):
+        async def speak(self, text: str, *, keep: bool = False) -> None:
+            await asyncio.sleep(0)  # the lowering has started reading the level
+            raise OSError("can't reach ElevenLabs")
+
+    async def go() -> None:
+        with contextlib.suppress(OSError):
+            await Ducking(Failing(), ducker).speak("Hi.")
+        await _settle()
+
+    asyncio.run(go())
+    assert volume.level == pytest.approx(0.8)

@@ -15,9 +15,6 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ### Fixed
 - In World of Warcraft: Forever, the brain no longer shows ship, fleet or loadout cards, which Settings had no switch to hide. Every card it can show now has a switch in Settings, under The Tile. ([#528](https://github.com/benshapyro/tycho-ai/issues/528))
 
-### Fixed
-- In World of Warcraft: Forever, the brain no longer shows ship, fleet or loadout cards, which Settings had no switch to hide. Every card it can show now has a switch in Settings, under The Tile. ([#528](https://github.com/benshapyro/tycho-ai/issues/528))
-
 ## [0.10.0] - 2026-11-23
 
 ### Added

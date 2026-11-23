@@ -159,6 +159,8 @@ class Ducker:
                 if now is None or self._moved(now):
                     return
             await self._fade(now, self._original * self.level, DOWN_SECONDS)
+            if self._lines == 0:  # the line ended while this was getting the level
+                self._raise_soon(0.0)
 
     async def _raise(self, delay: float) -> None:
         if delay:
