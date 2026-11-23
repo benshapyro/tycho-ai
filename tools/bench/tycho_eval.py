@@ -65,7 +65,7 @@ import time
 import tomllib
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -307,7 +307,8 @@ def grade(
     cases file's words from another game ("quantum" in World of Warcraft), which fail
     any case whose spoken line says one (#349). ``say_words``: the cases file's limit on
     the line spoken with a press, which is "a few words" (docs/voice-and-tone.md, #363);
-    0 is no limit. A case's own ``max_words`` limits its reply the same way."""
+    0 is no limit. A case's own ``max_words`` limits its reply the same way, and its
+    own ``never_say`` fails a line that says one of its words (#545)."""
     never = (set(GLOBAL_NEVER) | set(rule.get("never", []))) - set(rule.get("allow", []))
     if outcome.kind == "error":
         return "error"
@@ -354,6 +355,9 @@ def grade(
         return f"narrated its reply: {outcome.say!r}"
     if found := next((p.search(said) for p in never_say if p.search(said)), None):
         return f"said {found.group(0)!r}, from another game: {outcome.say!r}"
+    for pattern in rule.get("never_say", []):  # the case's own (#545)
+        if found := re.search(pattern, said, re.IGNORECASE):
+            return f"said {found.group(0)!r}, which this case rules out: {outcome.say!r}"
     if long := too_long(outcome, rule, say_words):
         return long
     if keys_off and outcome.kind == "reply" and CLAIMED.search(said.strip()):
@@ -741,6 +745,19 @@ def _inputs(entry: dict[str, Any]) -> list[list[str]]:
     return checked
 
 
+def without(keybinds: Keybinds, names: Sequence[str]) -> Keybinds:
+    """``keybinds`` with no key on these actions: a case's ``unbound``, for what Tycho
+    does when the player hasn't bound one ("open the doors" with only the toggle, #545).
+    """
+    if not names:
+        return keybinds
+    gone = set(names)
+    if missing := gone - {a.name for a in keybinds}:  # a misspelt name would unbind nothing
+        raise SystemExit(f"unbound names no action in these keybinds: {sorted(missing)}")
+    actions = (replace(a, inputs=()) if a.name in gone else a for a in keybinds)
+    return Keybinds(actions, keybinds.modes)
+
+
 def load_keybinds(path: Path) -> tuple[Keybinds, str, str]:
     """Keybinds written by ``export_keybinds``, the game build they came from, and the
     player's own commands (empty if they have none)."""
@@ -1054,11 +1071,12 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
                 await settings_tool.inner.run({"action": "set", "changes": changes})
                 start = settings.load(settings_file)
             traces.case = rule["heard"]
+            binds = without(keybinds, rule.get("unbound", []))
             outcome = await run_case(
                 rule,
                 lexicon,
                 brain,
-                keybinds,
+                binds,
                 counted,
                 journal,
                 costs,
@@ -1069,7 +1087,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
             outcome.verdict = grade(
                 outcome,
                 rule,
-                valid,
+                valid - set(rule.get("unbound", [])),
                 keys_off=bool(pack.safety.keys_off),
                 never_say=never_say,
                 say_words=say_words,

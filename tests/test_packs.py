@@ -50,9 +50,10 @@ from tycho.tile.design import accent_for, accent_for_maker
 
 SC = built_in(STAR_CITIZEN)
 
-STAR_CITIZEN_INSTRUCTIONS = "27525b8e998478e66b72df7a3887dc4d514a4f9db7ba49d2de3caebeecb61424"
+STAR_CITIZEN_INSTRUCTIONS = "383146390e9132d6f73e13ea519d48ae9551e16af4f1feb5b8b22f24e77f1de6"
 """The SHA-256 of Star Citizen's fixed briefing text: as it was before packs (main at
-6645025), then with "where is" and "how do I" searched on the first ask (#353). The
+6645025), then with "where is" and "how do I" searched on the first ask (#353), then
+saying a toggle was toggled, not which way (#545). The
 prompt cache and the eval's scores depend on it staying byte for byte the same. If you
 change the text on purpose, update this, and expect the cache to refill."""
 

@@ -9,7 +9,8 @@ Code here measures things and may call paid APIs. Product code under `src/` must
 - **Paid:** about 5 cents a run (measured 11 November 2026; more with web search or a larger model). Ask the maintainer before running it, and give the measured cost.
 - **It grades:**
   - the answer: wrong presses, what must be pressed, `mentions`, cards;
-  - the wording (`docs/voice-and-tone.md`, #363): the file's `never_say` (another game's words, in any reply: every pack's cases name the other packs' games, and `tests/test_wording.py` checks), the file's `say_words` (the most words in the line said with a press) and a case's `max_words` (the most words in its reply);
+  - the wording (`docs/voice-and-tone.md`, #363): the file's `never_say` (another game's words, in any reply: every pack's cases name the other packs' games, and `tests/test_wording.py` checks), the file's `say_words` (the most words in the line said with a press) a case's `max_words` (the most words in its reply) and a case's `never_say` (words its line must not say, such as a toggle's direction, #545);
+  - A case's `unbound` takes the key off those actions for that case only, to grade what Tycho does when the player hasn't bound one (#545). A name the keybinds don't have stops the run.
   - and how it was reached: `max_calls`, `tools`, `no_tools`, `no_errors`.
   - It also counts replies that end in a question and take more than one sentence (#430): a clarifying question is one sentence, but a reply may answer and then offer the rest, so it's a measure, not a verdict.
   - Only this eval grades wording. `brain_report.py` and `jev_report.py` read the same `cases.toml` with their own grader, which ignores `never_say`, `say_words` and `max_words` (#430).
