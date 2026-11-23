@@ -55,13 +55,14 @@ class Callouts:
         on: Iterable[str],
         *,
         busy: Callable[[], bool],
-        say: Callable[[str], None],
+        say: Callable[[str], bool],
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         utc: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         """``busy``: whether speaking now would talk over someone (``Session.busy``).
-        ``say``: speak up (``Session.call_out``). ``on``: the kinds turned on."""
+        ``say``: speak up (``Session.call_out``), and whether the line went out. ``on``:
+        the kinds turned on."""
         self._game_state = game_state
         self._by_logged = {logged: c for c in offered for logged in c.lines}
         self._offered = frozenset(c.id for c in offered)
@@ -133,9 +134,10 @@ class Callouts:
             if not name:
                 return self._dropped(event, "the log gave no name for its line")
             line = line.replace("{name}", name)
+        if not self._say(line):  # an answer's card was up: it doesn't count (#595)
+            return self._dropped(event, "it couldn't be said or shown now")
         self._said_at = now
         log.info("Callout %s (%s): %s", callout.id, event.kind, line)
-        self._say(line)
 
     def _dropped(self, event: Logged, why: str) -> None:
         log.info("Callout %s not said: %s", self._by_logged[event.kind].id, why)

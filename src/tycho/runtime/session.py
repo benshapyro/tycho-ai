@@ -490,9 +490,9 @@ class Session:
         running = self._current is not None and not self._current.done()
         return self._listening or running or asking or self._voice.talking or self._paused
 
-    def call_out(self, line: str) -> None:
+    def call_out(self, line: str) -> bool:
         """Speak up (#4), on the loop: said like any line, so push-to-talk stops it."""
-        self._telling.call_out(line)
+        return self._telling.call_out(line)
 
     def tell(self, said: str) -> None:
         """From any thread: something the player must know that no request asked for,

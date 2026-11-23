@@ -155,6 +155,7 @@ Tell them it listens to the microphone for a few seconds (they should say someth
 
 - **Discord on open mic.** Suggest binding Discord's **Push to Mute** (Discord, User Settings, Keybinds) to the same button as Tycho's push-to-talk, so their channel doesn't hear what they say to Tycho.
 - **Their own phrases and sequences.** Offer to add them with the `tycho-commands` skill.
+- **Their ships, from ccugame.app.** If they keep their hangar on ccugame.app, they can export it there (`ships.csv` or `fleetview.json`) and run `tycho fleet import <file>`. It shows what it will add and asks before saving; only ship names are kept.
 
 ## 6. First run
 
@@ -163,6 +164,8 @@ When the user is ready, start Tycho. It has no terminal: its star appears by the
 ```powershell
 Start-Process "$env:LOCALAPPDATA\Programs\Tycho\tycho-app.exe"
 ```
+
+If setup's Privacy step is still open, leave it to them: it asks whether to send crash reports, whether Tycho may look at the game window when asked, and whether to keep a history. Each is off until they say yes; never answer these for them, in the window or in `settings.toml`.
 
 From then on they start it from Start, **Tycho**. Opening it again while it runs brings up its window, as does clicking the star. Tell them how it works:
 
@@ -187,10 +190,11 @@ Give the user a short summary:
 | What | Where |
 |---|---|
 | The app | `%LOCALAPPDATA%\Programs\Tycho` |
-| Settings, the player's commands and fleet | `%APPDATA%\tycho\` (`settings.toml`, `commands.toml`, `fleet.toml`) |
+| Settings, the player's commands, fleet and notes | `%APPDATA%\tycho\` (`settings.toml`, `commands.toml`, `fleet.toml`, `memory.toml`, and `packs\<game>\` for one game's notes and owned blueprints) |
+| History (only if they said yes) | `%LOCALAPPDATA%\tycho\history` |
 | Logs | `%LOCALAPPDATA%\tycho\logs\tycho.jsonl` (everything), `actions.jsonl` (every key pressed) |
 | Speech model and graphics card libraries | `%LOCALAPPDATA%\tycho\models`, `%LOCALAPPDATA%\tycho\cuda` |
 | API keys | Windows Credential Manager, under "tycho" |
 
 - **To uninstall,** use Windows Settings, Apps, Tycho. That keeps the settings, keys and speech model. `tycho key delete <name>` removes a key, and `tycho gpu remove` the graphics card libraries.
-- **To install from source instead** (for development), follow the README's "From source" steps; every command becomes `uv run tycho ...`.
+- **To install from source instead** (for development), follow the player's guide's "Install from source" steps (`docs/current/players-guide.md`); every command becomes `uv run tycho ...`.
