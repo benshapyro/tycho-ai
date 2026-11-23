@@ -24,8 +24,9 @@ weapons (damage, rate of fire, DPS, magazine, range), armor (damage reduction), 
 ship weapons (damage, DPS, range, ammo) and ship components (shields, quantum \
 drives, power plants, coolers: size, grade, class, key stats), where to buy them \
 in the game, and how to craft them (ingredients, time, how the blueprint is \
-unlocked). Use it for any fact about a particular item, even when you think you \
-know; pass up to three names to compare. Don't use it for ships (ship_lookup) or \
+unlocked; for which missions give the blueprint, use blueprint_lookup). Use it \
+for any fact about a particular item, even when you think you know; pass up to \
+three names to compare. Don't use it for ships (ship_lookup) or \
 commodities (commodity_prices), or for general questions like "what's the best \
 shield" without names."""
 

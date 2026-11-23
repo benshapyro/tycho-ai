@@ -1,6 +1,13 @@
 """The look-ups' time limits, fitted to timings on Ben's PC (#150)."""
 
-from tycho.games.star_citizen import item_lookup, items, mining, refining, trade_lookup
+from tycho.games.star_citizen import (
+    blueprints,
+    item_lookup,
+    items,
+    mining,
+    refining,
+    trade_lookup,
+)
 from tycho.runtime.asking import LOOKING_SECONDS
 
 
@@ -14,6 +21,7 @@ def test_no_look_up_can_take_most_of_the_extra_time_it_gets() -> None:
         "trade": trade_lookup.SECONDS,
         "items": item_lookup.SECONDS,
         "mining": mining.SECONDS,
+        "blueprints": blueprints.SECONDS,
         "refining": refining.SECONDS,
     }
     assert all(seconds <= LOOKING_SECONDS - 2.0 for seconds in limits.values()), limits
@@ -21,6 +29,10 @@ def test_no_look_up_can_take_most_of_the_extra_time_it_gets() -> None:
 
 def test_an_item_and_its_recipe_both_fit_in_the_item_look_up() -> None:
     assert items.FIND_SECONDS + items.QUERY_SECONDS <= item_lookup.SECONDS
+
+
+def test_a_blueprints_pools_are_cut_off_before_its_look_up_ends() -> None:
+    assert blueprints.POOL_SECONDS < blueprints.SECONDS
 
 
 def test_a_stations_terminals_are_cut_off_before_the_trade_look_up_ends() -> None:

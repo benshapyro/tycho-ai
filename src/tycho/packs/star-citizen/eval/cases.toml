@@ -1061,6 +1061,38 @@ tools = ["item_lookup"]
 max_calls = 3
 tag = "items"
 
+# Blueprints and missions, both ways (#596): from the game files, so a wrong mission
+# name would be a guess. The pool gives one of several, so "one of" is said.
+[[case]]
+heard = "where do I get the omnisky three blueprint"
+mode = "lookup"
+expect = ["reply"]
+mentions = [["Tactical Strike Group"], ["InterSec"]]
+tools = ["blueprint_lookup"]
+max_calls = 2
+no_errors = true
+tag = "blueprints"
+
+[[case]]
+heard = "what blueprints can I get from vaughn"
+mode = "lookup"
+expect = ["reply"]
+mentions = [["Killshot", "Deadrig", "Badami", "Overlord", "Piecemeal"]]
+tools = ["blueprint_lookup"]
+max_calls = 2
+no_errors = true
+tag = "blueprints"
+
+[[case]]
+heard = "which mission gives the killshot rifle blueprint"
+mode = "lookup"
+expect = ["reply"]
+mentions = [["Vaughn", "Challenging Contract", "All Things Come"]]
+tools = ["blueprint_lookup"]
+max_calls = 2
+no_errors = true
+tag = "blueprints"
+
 # The player's fleet (ADR 15): said by voice, kept by update_fleet, and read from
 # each request's header. "fleet" and "flying" set it up; the rest check it after.
 [[case]]

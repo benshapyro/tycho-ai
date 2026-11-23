@@ -89,6 +89,7 @@ from tycho.brain.traces import TraceFile
 from tycho.brain_choice import anthropic_key, openrouter_key
 from tycho.commands import Command, CommandMatcher, resolve
 from tycho.commands.keys import own_keys
+from tycho.games.star_citizen.blueprints import BlueprintLookup
 from tycho.games.star_citizen.checks import find_install
 from tycho.games.star_citizen.data import ensure
 from tycho.games.star_citizen.fleet import Fleet, FleetUpdate, patch_line
@@ -1082,6 +1083,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
             ("ships", counted),
             ("fleet", _Counted(FleetUpdate(fleet, lambda: library), journal)),
             ("items", _Counted(ItemLookup(WikiApi()), journal)),
+            ("items", _Counted(BlueprintLookup(WikiApi()), journal)),
             ("mining", _Counted(MiningLookup(WikiApi()), journal)),
             *(("trade", _Counted(lookup, journal)) for lookup in trade_lookups(UexApi())),
             ("settings", settings_tool),
