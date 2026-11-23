@@ -203,10 +203,12 @@ def _fleet(workshop: Workshop) -> Built:
 
 
 def _items(_: Workshop) -> Built:
+    from tycho.games.star_citizen.blueprints import BlueprintLookup
     from tycho.games.star_citizen.item_lookup import ItemLookup
     from tycho.games.star_citizen.wiki import WikiApi
 
-    return Built((ItemLookup(WikiApi()),))
+    wiki = WikiApi()
+    return Built((ItemLookup(wiki), BlueprintLookup(wiki)))
 
 
 def _mining(_: Workshop) -> Built:

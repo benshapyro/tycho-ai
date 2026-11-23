@@ -159,6 +159,7 @@ def test_star_citizen_s_look_ups_keep_their_order() -> None:
         "ship_lookup",
         "update_fleet",
         "item_lookup",
+        "blueprint_lookup",  # with items (#596)
         "mining_lookup",
         "commodity_prices",
         "trade_routes",

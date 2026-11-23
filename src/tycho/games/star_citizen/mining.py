@@ -35,8 +35,9 @@ PAGE = 100
 """Locations asked for in one request; more than this and the answer says so."""
 KEEP_SECONDS = 3600.0
 """Mining data changes only with a patch: what was fetched is kept for an hour."""
-FORMS = ("{} (Raw)", "{} (Ore)", "{}")
-"""How the game names a mineable: ship ores are "(Raw)", most others "(Ore)"."""
+FORMS = ("{} (Raw)", "{} (Ore)", "{} (R)", "{}")
+"""How the game names a mineable: ship ores are "(Raw)", most others "(Ore)", and
+Hephaestanite "(R)" (4.10.3, #597)."""
 
 DESCRIPTION = """\
 Where to mine a resource in Star Citizen, from the current patch's game files: the \
@@ -200,7 +201,7 @@ class MiningLookup:
 def _key(name: str) -> str:
     """A name without the game's ore marks, for matching: "Raw Ice" and "Quantainium
     (Raw)" are "ice" and "quantainium"."""
-    for mark in ("(Raw)", "(Ore)"):
+    for mark in ("(Raw)", "(Ore)", "(R)"):
         name = name.replace(mark, "")
     words = [w for w in name.lower().split() if w not in {"raw", "ore"}]
     return " ".join(words)

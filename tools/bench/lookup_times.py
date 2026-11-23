@@ -20,6 +20,7 @@ import time
 from collections.abc import Mapping
 
 from tycho.brain.lookups import Lookup, run_lookup
+from tycho.games.star_citizen.blueprints import BlueprintLookup
 from tycho.games.star_citizen.item_lookup import ItemLookup
 from tycho.games.star_citizen.mining import MiningLookup
 from tycho.games.star_citizen.trade_lookup import trade_lookups
@@ -62,14 +63,24 @@ QUESTIONS: list[tuple[str, str, Mapping[str, object]]] = [
     ("where to buy a Cutlass", "ship_purchases", {"ship": "Cutlass Black"}),
     ("an item", "item_lookup", {"names": ["P4-AR"]}),
     ("where to mine hadanite", "mining_lookup", {"resource": "hadanite", "place": ""}),
+    (
+        "where to get a blueprint",
+        "blueprint_lookup",
+        {"blueprint": "Omnisky III", "mission": ""},
+    ),
 ]
 
 
 def fresh_lookups() -> tuple[dict[str, Lookup], list[WikiApi]]:
     """New look-ups, and the API clients they use, for the caller to close."""
-    clients = [WikiApi(), WikiApi(), UexApi()]
-    items, mining, uex = clients
-    lookups: list[Lookup] = [ItemLookup(items), MiningLookup(mining), *trade_lookups(uex)]
+    clients = [WikiApi(), WikiApi(), WikiApi(), UexApi()]
+    items, mining, blueprints, uex = clients
+    lookups: list[Lookup] = [
+        ItemLookup(items),
+        BlueprintLookup(blueprints),
+        MiningLookup(mining),
+        *trade_lookups(uex),
+    ]
     return {lookup.name: lookup for lookup in lookups}, clients
 
 

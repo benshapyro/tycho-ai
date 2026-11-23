@@ -106,6 +106,7 @@ ITEMS = [
 BLUEPRINTS = [
     {
         "output_name": "FS-9 LMG",
+        "link": "https://api.star-citizen.wiki/api/blueprints/fs-9-lmg",
         "craft_time_label": "4 minutes",
         "is_available_by_default": False,
         "unlocking_missions_count": 21,
@@ -116,6 +117,28 @@ BLUEPRINTS = [
         ],
     }
 ]
+
+
+def _group(name: str, material: str, labels: list[str], quality: int = 0) -> dict[str, Any]:
+    return {
+        "name": name,
+        "modifiers": [{"label": label} for label in labels],
+        "children": [{"name": material, "min_quality": quality}],
+    }
+
+
+DETAILS = {
+    # A recipe's own record adds what each material's quality changes (#597).
+    "/api/blueprints/fs-9-lmg": {
+        **BLUEPRINTS[0],
+        "requirement_groups": [
+            _group("Frame", "Lindinium", ["Recoil Kick"], quality=1),
+            _group("Barrel", "Iron", ["Impact Force", "Fire Rate"], quality=300),
+            _group("Barrel Two", "Iron", ["Fire Rate"]),
+            _group("Grip", "Dolivine", []),
+        ],
+    }
+}
 
 
 class FakeItemsWiki:
@@ -133,6 +156,7 @@ class FakeItemsWiki:
         self.slow = slow
         self.delay = delay
         self.offline = False
+        self.no_details = False
         self.search = FakeSearch()
         self.calls: list[dict[str, Any]] = []
 
@@ -152,4 +176,6 @@ class FakeItemsWiki:
         if path == "/api/blueprints":
             name = query.get("filter[output.name]")
             return {"data": [b for b in BLUEPRINTS if b["output_name"] == name]}
+        if path in DETAILS and not self.no_details:
+            return {"data": DETAILS[path]}
         raise WikiError(f"{path}: not found")

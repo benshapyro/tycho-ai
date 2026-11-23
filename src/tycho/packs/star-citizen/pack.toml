@@ -34,7 +34,7 @@ intro = "Tycho presses your own Star Citizen keybinds when you ask, tells you wh
 lookups = [
     "Ships, from the current patch's game files and the Star Citizen Wiki",
     "Trade prices and routes, where to refine an ore and where to buy a ship, live from UEX",
-    "Where to mine a resource, weapons, armor, components and crafting, from the Star Citizen Wiki",
+    "Where to mine a resource, weapons, armor, components, crafting and which missions give blueprints, from the Star Citizen Wiki",
     "Your own fleet, kept on your PC",
     "News, upcoming patches, and where things are, from RSI's sites and the web",
 ]

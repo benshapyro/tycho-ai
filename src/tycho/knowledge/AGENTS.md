@@ -1,13 +1,13 @@
 # Look-ups (ADR 15)
 
-What the brain can look up: ships, items and crafting, mining, trade prices and routes, refining, ships for aUEC, the player's fleet, and web search. Read the root AGENTS.md and `src/tycho/brain/AGENTS.md` first.
+What the brain can look up: ships, items and crafting, blueprints and the missions that give them, mining, trade prices and routes, refining, ships for aUEC, the player's fleet, and web search. Read the root AGENTS.md and `src/tycho/brain/AGENTS.md` first.
 
 This folder holds what any game uses: web search (`web.py`) and kept answers (`fresh.py`). Star Citizen's look-ups and their sources live with its code in `src/tycho/games/star_citizen/` (ADR 19); the rules here apply to them, and to any game's.
 
 ## Sources and their terms
 
 - **UEX** (`uex.py`, `trade*.py`, `refining.py`): an official API, 120 requests a minute, for personal and non-commercial use. Credit UEX in what's said: `credit = "UEX"` makes the brain add "From UEX." if Claude didn't.
-- **Star Citizen Wiki API** (`wiki.py`, `items*.py`, `mining.py`, ships): data from the game files. It requires credit and allows no commercial use.
+- **Star Citizen Wiki API** (`wiki.py`, `items*.py`, `blueprints.py`, `mining.py`, ships): data from the game files. It requires credit and allows no commercial use.
 - **Web search through OpenRouter** (`web_plugin.py`, ADR 15, #365): with an OpenRouter key, one Haiku request with OpenRouter's web plugin on Perplexity's search; the pack's sites only (`include_domains`) with `web_search_open` off. Measure changes with `tools/bench/search_compare.py`.
 - **Web search through Anthropic** (`web.py`, ADR 15), with only an Anthropic key: the game pack's sites first. With `web_search_open` (#354, on by default; off means the sites only), a search that finds no clear answer there (the first request starts its reply FOUND, PARTIAL or NONE) tries the open web and reads a page, told what the sites said; its own tag must be at least as good, or the sites' answer stands. Reddit's pages are never read (`NO_PAGE_READS`), only its snippets. Measure changes with `tools/bench/web_trial.py`.
 - **Never** scrape a site whose terms forbid it. Erkul blocks AI crawlers, and RSI's terms forbid bots (the maintainer decided against its status feed, #154).
