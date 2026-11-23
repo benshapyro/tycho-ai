@@ -131,6 +131,12 @@ class TileDisplay:
             self._changed = self._changed or shown  # a hidden kind redraws nothing
         return shown
 
+    def answering(self) -> bool:
+        if not self.on:
+            return False
+        with self._lock:
+            return self._board.answering()
+
     def ask(self, question: str, seconds: float) -> None:
         """The safety gate's question, with its countdown. Shown whatever the settings,
         while the Tile is on."""

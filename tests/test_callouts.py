@@ -294,6 +294,27 @@ def test_without_a_voice_a_callout_goes_to_the_tile() -> None:
     assert "Out of monitored space." in repr(display.shown[0])
 
 
+def test_without_a_voice_a_callout_never_pushes_an_answer_s_card_off() -> None:
+    """#550: with one card at a time, a notice 4 s after an answer shrank the answer
+    to a strip before it was read. The callout waits its turn: it isn't shown."""
+    from tycho.tile import Card, Row
+
+    async def scenario() -> FakeDisplay:
+        display = FakeDisplay()
+        r = rig(display=display)
+        await asyncio.sleep(0)
+        display.show(Card("list", title="Best places to sell", rows=(Row("Area18"),)))
+        r.session.call_out("Out of monitored space.")
+        display.board.clear()  # the answer was read and went
+        r.session.call_out("Back in monitored space.")
+        await r.session.close()
+        return display
+
+    display = run(scenario)
+    assert [card.kind for card in display.shown] == ["list", "notice"]
+    assert "Back in monitored space." in repr(display.shown[1])
+
+
 # --- The setting, by voice and in the pack ----------------------------------------------
 
 

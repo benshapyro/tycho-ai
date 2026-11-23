@@ -198,6 +198,21 @@ def test_one_at_a_time_a_new_card_replaces_the_last() -> None:
     assert [(s.card.title, s.strip) for s in board.view()] == [("B", False), ("A", True)]
 
 
+def test_an_answer_is_up_until_it_fades_or_gives_way() -> None:
+    """#550: what a callout's notice waits for. Strips, questions and notices don't count."""
+    clock = Clock()
+    board = Board(clock=clock)
+    assert not board.answering()
+    board.show(_card("A"))
+    assert board.answering()
+    board.show(notice("Out of monitored space."))  # A is a strip now
+    assert not board.answering()
+    board.clear()
+    board.show(_card("B"))
+    clock.now += lifetime(_card("B")) + 0.1
+    assert not board.answering()
+
+
 def test_a_card_that_gave_way_stays_a_while_as_a_strip_and_comes_back() -> None:
     """#491, Ben's pick: the newest card in full, the last two as strips to bring back."""
     clock = Clock()

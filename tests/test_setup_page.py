@@ -1105,6 +1105,62 @@ def test_a_kind_hidden_in_another_game_stays_hidden(
     setup.close()
 
 
+def test_the_speaking_up_switches_turn_kinds_on_and_quick_clicks_add_up(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#550 (from #546's review): each kind is a switch in Settings, under Voice, and a
+    second click before the first is saved builds on it, as the Tile's card switches do."""
+    settings.save(
+        Settings(
+            push_to_talk="mouse:0x06",
+            crash_reports=False,
+            look_at_screen=False,
+            keep_history=False,
+            game_root=None,
+        ),
+        path,
+    )
+    setup = Setup(browser, path, first_run=False)
+    page = setup.page
+    page.get_by_role("button", name="Settings", exact=True).click()
+    page.get_by_role("tab", name="Voice").click()
+    quantum = page.locator("[data-callout='quantum']")
+    expect(quantum).to_have_attribute("aria-checked", "false")
+    quantum.click()
+    page.locator("[data-callout='monitored_space']").click()  # at once, before a redraw
+    expect(page.locator("[data-callout='quantum']")).to_have_attribute("aria-checked", "true")
+    expect(page.locator("[data-callout='monitored_space']")).to_have_attribute(
+        "aria-checked", "true"
+    )
+    assert setup.saved().callouts == "quantum, monitored_space"
+    page.locator("[data-callout='quantum']").click()
+    expect(page.locator("[data-callout='quantum']")).to_have_attribute("aria-checked", "false")
+    assert setup.saved().callouts == "monitored_space"
+    setup.close()
+
+
+def test_a_game_with_no_callouts_says_so(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    settings.save(
+        Settings(
+            push_to_talk="mouse:0x06",
+            crash_reports=False,
+            look_at_screen=False,
+            keep_history=False,
+            game="wow-forever",
+        ),
+        path,
+    )
+    setup = Setup(browser, path, first_run=False)
+    page = setup.page
+    page.get_by_role("button", name="Settings", exact=True).click()
+    page.get_by_role("tab", name="Voice").click()
+    expect(page.get_by_text("This game has nothing to speak up about.")).to_be_visible()
+    expect(page.locator("[data-callout]")).to_have_count(0)
+    setup.close()
+
+
 def test_the_tile_page_picks_the_tiles_screen(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:

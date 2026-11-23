@@ -170,6 +170,12 @@ class Board:
     def clear(self) -> None:
         self._shown.clear()
 
+    def answering(self) -> bool:
+        """Whether a card the player asked for is up in full: not a strip, a question
+        or a notice. A notice now would shrink it before it's read (#550)."""
+        self._expire()
+        return any(not s.strip and s.card.kind not in NO_STRIP for s in self._shown)
+
     def drop(self, kind: Kind) -> None:
         """Take down every card of ``kind``: a confirm card once its question is answered."""
         self._shown = [s for s in self._shown if s.card.kind != kind]
