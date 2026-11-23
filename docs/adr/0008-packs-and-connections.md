@@ -96,7 +96,7 @@ Tycho starts with Star Citizen but may grow to other games, each with its own wo
 
 ## Amendment, 23 November 2026 (fourth): accepted for 1.0, with personas and connections left for later
 
-*Status: proposed. The maintainer chose the direction on 23 November 2026 (#613): accept what's built, and leave persona packs and connections for after 1.0. This text waits for the maintainer's OK.*
+*Status: accepted. The maintainer chose the direction and approved this text on 23 November 2026 (#613, #616): accept what's built, and leave persona packs and connections for after 1.0.*
 
 **Context.** Three amendments and ADR 18 have settled most of this record: the core stays fixed above everything, game packs are data folders that name built-in parts (ADR 18), the player layer is memory and owned blueprints, and the live state is what the game's log records (`tycho.situation`, ADR 14's amendments). Two parts were never built: persona packs and connections to outside services. 1.0 needs every record accepted or dropped.
 
