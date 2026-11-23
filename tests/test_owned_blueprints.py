@@ -341,3 +341,15 @@ def test_two_names_that_both_fit_exactly_ask_which(tmp_path: Path) -> None:
     answer = _ask(tool, "forget", "omnisky three cannon", "forget the omnisky three cannon")
     assert sorted(answer["which_one"]) == ["Omnisky 3 Cannon", "Omnisky III Cannon"]
     assert len(owned.listed()) == 2
+
+
+@pytest.mark.parametrize("reply", ["don't remove the killshot rifle", "keep the killshot rifle"])
+def test_a_reply_to_which_one_that_keeps_it_takes_nothing_off(tmp_path: Path, reply: str) -> None:
+    """#618 item 1: with no forget word needed after "which one?", a negated reply could
+    take the very blueprint the player meant to keep."""
+    game = _game(tmp_path, _got("Killshot Rifle", 1), _got("Killshot Pistol", 2))
+    owned = _owned(tmp_path, game)
+    tool = OwnedTool(owned, _known, clock=lambda: 100.0)
+    _ask(tool, "forget", "killshot", "forget the killshot blueprint")
+    assert _ask(tool, "forget", "killshot rifle", reply)["error"]
+    assert len(owned.listed()) == 2
