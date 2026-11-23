@@ -32,6 +32,10 @@ HEADER = """\
 # Cutlass Black", "I sold my Prospector"). You can edit this file too: one name
 # per line, as the game writes it.
 """
+IMPORTED = """
+# The ships your last hangar import added (tycho fleet import). Importing again
+# replaces these and keeps the ships above that you added yourself.
+"""
 
 DESCRIPTION = """\
 Update what Tycho knows about the player's ships. Call it when the player says \
@@ -49,7 +53,13 @@ class Fleet:
     """The ships the player owns (kept in a file) and the one they're flying (not kept)."""
 
     def __init__(
-        self, path: Path, ships: Sequence[str] = (), flying: str = "", problem: str = ""
+        self,
+        path: Path,
+        ships: Sequence[str] = (),
+        flying: str = "",
+        problem: str = "",
+        *,
+        imported: Sequence[str] = (),
     ) -> None:
         self.path = path
         self.ships = list(ships)
@@ -57,6 +67,10 @@ class Fleet:
         # Set when the file is there but unreadable: saving would replace the player's
         # hand-written list with whatever was said this session, so ``save`` refuses.
         self.problem = problem
+        self.imported = [name for name in imported if name in self.ships]
+        """The entries of ``ships`` the last hangar import added (#556): the next
+        import replaces these and leaves the rest, which the player added."""
+        self._stamp = _stamp(path)
 
     @classmethod
     def load(cls, path: Path) -> Fleet:
@@ -76,24 +90,42 @@ class Fleet:
             )
             log.warning("Starting without your fleet: %s", problem)
             return cls(path, problem=problem)
-        ships = data.get("ships", [])
-        names = [str(s) for s in cast(list[object], ships)] if isinstance(ships, list) else []
-        return cls(path, names[:MAX_SHIPS])
+        names = _strings(data.get("ships"))[:MAX_SHIPS]
+        return cls(path, names, imported=_strings(data.get("imported")))
+
+    def refresh(self) -> None:
+        """Read the file again if something else changed it since (an import from the
+        command line while Tycho runs), so the next save doesn't undo that change."""
+        if self.problem or (stamp := _stamp(self.path)) == self._stamp:
+            return
+        fresh = Fleet.load(self.path)
+        if fresh.problem:  # being written right now, or broken: keep what's in memory
+            return
+        self.ships, self.imported, self._stamp = fresh.ships, fresh.imported, stamp
+
+    def remove(self, entry: str) -> None:
+        """Take ``entry`` out of the fleet, and out of the last import's list."""
+        self.ships.remove(entry)
+        if entry in self.imported:
+            self.imported.remove(entry)
 
     def save(self) -> None:
         """Write the fleet, swapping the new file in so a crash never loses it."""
         if self.problem:
             raise FleetFileError(self.problem)
-        lines = [HEADER, "ships = ["]
-        lines += [f"    {json.dumps(name, ensure_ascii=False)}," for name in self.ships]
-        lines.append("]\n")
+        lines = [HEADER, "ships = [", *_listed(self.ships), "]"]
+        if imported := [name for name in self.imported if name in self.ships]:
+            lines += [IMPORTED, "imported = [", *_listed(imported), "]"]
+        lines.append("")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         partial = self.path.with_suffix(".partial")
         partial.write_text("\n".join(lines), "utf-8")
         os.replace(partial, self.path)
+        self._stamp = _stamp(self.path)
 
     def describe(self, library: ShipLibrary | None) -> str:
         """The fleet as one line for each request's header; empty if Tycho knows nothing."""
+        self.refresh()
         if not self.ships and not self.flying:
             return ""
         parts: list[str] = []
@@ -158,6 +190,7 @@ class FleetUpdate:
 
     def _change(self, library: ShipLibrary, arguments: Mapping[str, object]) -> LookupResult:
         fleet = self._fleet
+        fleet.refresh()
         changed: dict[str, list[str]] = {"added": [], "removed": []}
         problems: list[dict[str, object]] = []
 
@@ -165,15 +198,15 @@ class FleetUpdate:
             ship = _match(library, asked, problems)
             if ship is None or len(fleet.ships) >= MAX_SHIPS:
                 continue
-            if _owned(library, fleet.ships, ship) is None:
+            if owned(library, fleet.ships, ship) is None:
                 fleet.ships.append(ship.name)
                 changed["added"].append(ship.name)
         for asked in _names(arguments.get("remove")):
             ship = _match(library, asked, problems)
             if ship is None:
                 continue
-            if (entry := _owned(library, fleet.ships, ship)) is not None:
-                fleet.ships.remove(entry)
+            if (entry := owned(library, fleet.ships, ship)) is not None:
+                fleet.remove(entry)
                 changed["removed"].append(entry)
             else:
                 problems.append({"asked": asked, "note": f"{ship.name} isn't in the fleet"})
@@ -201,7 +234,24 @@ class FleetUpdate:
         return LookupResult(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
 
 
-def _owned(library: ShipLibrary, ships: Sequence[str], ship: Ship) -> str | None:
+def _strings(value: object) -> list[str]:
+    """A TOML list of names as strings; anything else is no names."""
+    return [str(v) for v in cast(list[object], value)] if isinstance(value, list) else []
+
+
+def _listed(names: Sequence[str]) -> list[str]:
+    return [f"    {json.dumps(name, ensure_ascii=False)}," for name in names]
+
+
+def _stamp(path: Path) -> int | None:
+    """When ``path`` last changed (None if it isn't there), to notice another writer."""
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return None
+
+
+def owned(library: ShipLibrary, ships: Sequence[str], ship: Ship) -> str | None:
     """The fleet's entry for ``ship``, by what each name means rather than how it's
     written: a hand-edited "Prospector" is the data's "MISC Prospector"."""
     for entry in ships:

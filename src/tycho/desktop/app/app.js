@@ -507,7 +507,9 @@
     else if (tab === "Updates") body = updatesView();
     else {
       const group = data.groups.find((g) => g.name === tab);
-      const rows = `<div class="rows">${group.rows.map(row).join("")}</div>`;
+      // The game's own import of the player's hangar, in its own words (#556).
+      const hangar = tab === "Game and controls" && data.hangar ? hangarRow(data.hangar) : "";
+      const rows = `<div class="rows">${group.rows.map(row).join("")}${hangar}</div>`;
       body = tab === ADVANCED ? `<p class="note" style="margin:0 0 10px">Most people never need these.</p>${rows}` : rows;
     }
     page.innerHTML = `<h1>Settings</h1><p class="lede">Changes apply at once and are saved to settings.toml. Most can also be said to Tycho; each says how.</p>${tabs}${body}`;
@@ -515,6 +517,26 @@
     bindSettings();
     if (tab === "Keys") bindKeys();
     if (tab === "Updates") bindUpdates();
+  }
+  // Importing the player's hangar (#556): pick the export, see what changes, then save.
+  const hangarRow = (h) => `<div class="set"><div><b>${esc(h.label)}</b><p>${esc(h.hint)}</p><div id="hangarPlan" aria-live="polite"></div></div><div class="ctl"><span class="setup"><button class="btn frame" type="button" id="hangarChoose">Import…</button><span class="err" id="hangarErr"></span></span></div></div>`;
+  async function chooseHangar() {
+    const b = $("#hangarChoose"), plan = $("#hangarPlan"), err = $("#hangarErr");
+    err.textContent = ""; plan.innerHTML = "";
+    b.disabled = true; b.textContent = "Reading…";
+    const r = await api.choose_hangar_file();
+    b.disabled = false; b.textContent = "Import…";
+    if (r.cancelled) return;
+    if (!r.ok) { err.textContent = r.problem; return; }
+    const buttons = r.changes ? `<span class="setup"><button class="btn primary" type="button" id="hangarSave">Save</button><button class="btn frame" type="button" id="hangarCancel">Cancel</button></span>` : "";
+    plan.innerHTML = `<ul class="tips">${r.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>${buttons}`;
+    $("#hangarCancel")?.addEventListener("click", () => { plan.innerHTML = ""; });
+    $("#hangarSave")?.addEventListener("click", async () => {
+      const s = await api.save_hangar();
+      if (!s.ok) { err.textContent = s.problem; return; }
+      plan.innerHTML = "";
+      toast(s.done);
+    });
   }
   // The Tile's own place: its settings beside a preview drawn by the Tile itself.
   const TILE = "The Tile";
@@ -579,6 +601,7 @@
     page.querySelectorAll("[data-text]").forEach((i) => i.addEventListener("change", () => change(i.dataset.text, i.value, `${label(i.dataset.text)}: ${i.value || "none"}`)));
     $("#setCapture")?.addEventListener("click", () => capture($("#setCapture"), $("#setPtt")));
     $("#setFolder")?.addEventListener("click", chooseFolder);
+    $("#hangarChoose")?.addEventListener("click", chooseHangar);
     bindMic();
   }
 
