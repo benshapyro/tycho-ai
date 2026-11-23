@@ -59,15 +59,22 @@ class Watch:
         self.clock = Clock()
         self.said: list[str] = []
         self.busy = False
+        self.goes_out = True
+        """What ``say`` answers: False as when an answer's card is up (#595)."""
         self._number = 0
         self.callouts = Callouts(
             self.log,
             OFFERED,
             on,
             busy=lambda: self.busy,
-            say=self.said.append,
+            say=self._say,
             clock=self.clock,
         )
+
+    def _say(self, line: str) -> bool:
+        if self.goes_out:
+            self.said.append(line)
+        return self.goes_out
 
     def logged(self, kind: str, name: str = "") -> None:
         self._number += 1
@@ -459,3 +466,32 @@ def test_serve_watches_beside_the_session_and_stops_with_it(
     asyncio.run(serve(Session(), None, callouts=watching))  # pyright: ignore[reportArgumentType]
     assert watching.started
     assert watching.cancelled
+
+
+def test_a_callout_that_couldn_t_go_out_doesn_t_hold_back_the_next() -> None:
+    """#595 item 4: a callout dropped over an answer's card still counted as said, so the
+    next one waited 30 s."""
+    watch = started("quantum")
+    watch.goes_out = False
+    watch.logged("arrived")
+    assert watch.after(READ_SECONDS) == []
+    watch.goes_out = True
+    watch.logged("arrived")
+    assert watch.after(READ_SECONDS) == ["Jump complete."]
+
+
+def test_the_session_says_whether_a_callout_went_out() -> None:
+    from tycho.tile import Card, Row
+
+    async def scenario() -> list[bool]:
+        display = FakeDisplay()
+        r = rig(display=display)
+        await asyncio.sleep(0)
+        display.show(Card("list", title="Best places to sell", rows=(Row("Area18"),)))
+        went = [r.session.call_out("Out of monitored space.")]
+        display.board.clear()
+        went.append(r.session.call_out("Back in monitored space."))
+        await r.session.close()
+        return went
+
+    assert run(scenario) == [False, True]

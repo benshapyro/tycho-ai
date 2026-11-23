@@ -284,3 +284,60 @@ def test_every_reader_of_one_list_shares_its_lock(
     reader.join(5)
     deleter.join(5)
     assert [o.name for o in page.listed()] == ["Killshot Rifle"]
+
+
+def test_the_answer_to_which_one_takes_that_one_off(tmp_path: Path) -> None:
+    """#610 item 1: "the Killshot Rifle", in reply to "which one?", has no forget word,
+    so it was refused and the player had to say "forget the ... blueprint" again."""
+    game = _game(tmp_path, _got("Killshot Rifle", 1), _got("Killshot Pistol", 2))
+    owned = _owned(tmp_path, game)
+    now = [100.0]
+    tool = OwnedTool(owned, _known, clock=lambda: now[0])
+    assert "which_one" in _ask(tool, "forget", "killshot", "forget the killshot blueprint")
+    assert _ask(tool, "forget", "killshot rifle", "the killshot rifle")["removed"] == (
+        "Killshot Rifle"
+    )
+    assert [o.name for o in owned.listed()] == ["Killshot Pistol"]
+    # Only right after asking: a later "the killshot pistol" takes nothing off.
+    assert _ask(tool, "forget", "killshot pistol", "the killshot pistol")["error"]
+    assert [o.name for o in owned.listed()] == ["Killshot Pistol"]
+
+
+def test_the_answer_to_which_one_counts_only_for_a_while_and_one_it_offered(
+    tmp_path: Path,
+) -> None:
+    game = _game(tmp_path, _got("Killshot Rifle", 1), _got("Killshot Pistol", 2))
+    game_log = _got("Omnisky III Cannon", 3)
+    (game / "Game.log").write_text((game / "Game.log").read_text("utf-8") + game_log, "utf-8")
+    owned = _owned(tmp_path, game)
+    now = [100.0]
+    tool = OwnedTool(owned, _known, clock=lambda: now[0])
+    _ask(tool, "forget", "killshot", "forget the killshot blueprint")
+    assert _ask(tool, "forget", "omnisky iii", "the omnisky iii")["error"]  # not offered
+    _ask(tool, "forget", "killshot", "forget the killshot blueprint")
+    now[0] += 61
+    assert _ask(tool, "forget", "killshot rifle", "the killshot rifle")["error"]  # too late
+    assert len(owned.listed()) == 3
+
+
+def test_the_pronoun_i_isn_t_a_numeral(tmp_path: Path) -> None:
+    """#610 item 2: "I" in what the player said counted as naming "Pulse I"."""
+    game = _game(tmp_path, _got("Pulse I Laser", 1), _got("Pulse II Laser", 2))
+    owned = _owned(tmp_path, game)
+    tool = OwnedTool(owned, _known)
+    said = "I want to forget the pulse laser blueprint"
+    assert _ask(tool, "forget", "pulse i laser", said)["error"]
+    assert len(owned.listed()) == 2
+    assert _ask(tool, "forget", "pulse i laser", "forget the pulse i laser")["removed"] == (
+        "Pulse I Laser"
+    )
+
+
+def test_two_names_that_both_fit_exactly_ask_which(tmp_path: Path) -> None:
+    """#610 item 3: the path with two exact matches had no test."""
+    game = _game(tmp_path, _got("Omnisky III Cannon", 1), _got("Omnisky 3 Cannon", 2))
+    owned = _owned(tmp_path, game)
+    tool = OwnedTool(owned, _known)
+    answer = _ask(tool, "forget", "omnisky three cannon", "forget the omnisky three cannon")
+    assert sorted(answer["which_one"]) == ["Omnisky 3 Cannon", "Omnisky III Cannon"]
+    assert len(owned.listed()) == 2

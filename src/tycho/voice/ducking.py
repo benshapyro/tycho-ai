@@ -130,7 +130,8 @@ class Ducker:
         if level is None:
             return
         try:
-            if not self._volume.get():
+            now = self._volume.get()
+            if not now:
                 return  # the game isn't running: the next line tries again
             if not self._volume.set(level):
                 self._stale = level  # not these sliders: kept for when they're back
@@ -138,6 +139,7 @@ class Ducker:
         except Exception as e:
             self._failure(e)
             return
+        self._stale = _missing(level, now)
         self._put_back(level)
 
     async def close(self) -> None:
@@ -199,6 +201,8 @@ class Ducker:
                 return
             original = self._original
             if await self._fade(now, original, UP_SECONDS, until=lambda: self._lines > 0):
+                # A slider that went while Tycho spoke waits on disk for its level (#595).
+                self._stale = {**self._stale, **_missing(original, now)}
                 self._forget()
 
     def _unmoved(self, now: Levels) -> bool:
@@ -244,12 +248,13 @@ class Ducker:
         level = self._load()
         if level is None:
             return
-        if not await self._get():
+        now = await self._get()
+        if not now:
             return  # not running: try again at the next line or start
         if not await self._set(level):
             self._stale = level  # none of these sliders now: kept on disk (#593)
             return
-        self._stale = {}
+        self._stale = _missing(level, now)  # some sliders back, the rest kept (#595)
         self._put_back(level)
 
     def _put_back(self, levels: Levels) -> None:
@@ -319,6 +324,11 @@ class Ducker:
             return
         with contextlib.suppress(OSError):
             self._saved.unlink(missing_ok=True)
+
+
+def _missing(levels: Levels, now: Levels) -> Levels:
+    """The saved levels for sliders the game doesn't have now: they can't go back yet."""
+    return {n: v for n, v in levels.items() if n != ALL and n not in now}
 
 
 def _a_level(value: object) -> bool:

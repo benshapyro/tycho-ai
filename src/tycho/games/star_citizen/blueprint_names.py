@@ -50,11 +50,22 @@ _AS_DIGIT = {
     form: digit for word, (digit, roman) in NUMBERS.items() for form in (word, digit, roman)
 }
 _ROMAN = {digit: roman for digit, roman in NUMBERS.values()}
+_LONE = {roman for _, roman in NUMBERS.values() if len(roman) == 1}
 
 
-def as_digits(text: str) -> str:
-    """``text``'s words with every number as digits: "Omnisky Three" is "omnisky 3"."""
-    return " ".join(_AS_DIGIT.get(w, w) for w in normalize(text))
+def as_digits(text: str, *, after: str | None = None) -> str:
+    """``text``'s words with every number as digits: "Omnisky Three" is "omnisky 3".
+    With ``after`` (a name), a one-letter Roman numeral ("i", "v", "x") counts only
+    right after one of the name's words, so the pronoun "I" stays a word (#610)."""
+    said = normalize(text)
+    if after is None:
+        return " ".join(_AS_DIGIT.get(w, w) for w in said)
+    named = set(normalize(after))
+    out: list[str] = []
+    for i, w in enumerate(said):
+        alone = w in _LONE and (i == 0 or said[i - 1] not in named)
+        out.append(w if alone else _AS_DIGIT.get(w, w))
+    return " ".join(out)
 
 
 def spellings(words: list[str]) -> list[list[str]]:
