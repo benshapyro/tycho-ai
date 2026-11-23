@@ -131,6 +131,7 @@ def test_a_game_fact_the_player_states_is_saved_and_noted_aloud(said: str, note:
         ("I play with my grandparents", "Plays with grandparents", "this game"),
         ("I'm from Germany", "From Germany", "this game"),
         ("I'm 34", "34", "this game"),
+        ("I'm a 34 year old pilot", "34 year old pilot", "this game"),  # #593
         ("I work as a nurse so I play late", "Works as a nurse", "this game"),
         ("I'm a teacher so I play late", "Teacher", "this game"),
         ("I like short answers", "Likes short answers", "every game"),  # every game: ask

@@ -21,6 +21,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - Tycho offers "Want me to take a look?" only when your screen could show the answer. For something only a menu shows, like a loadout, it says which screen to open first. ([#566](https://github.com/benshapyro/tycho-ai/issues/566))
 
 ### Fixed
+- With no voice, speaking up no longer pushes an answer off the Tile: while an answer's card is still up in full, Tycho stays quiet rather than shrinking it to a strip before you've read it. ([#550](https://github.com/benshapyro/tycho-ai/issues/550))
 - `crash.txt` in Tycho's logs folder now starts with a note saying Tycho is running and that a Windows exception written there may have been handled, so a handled one no longer reads like a crash. ([#582](https://github.com/benshapyro/tycho-ai/issues/582))
 - Right after a web search or a card, a follow-up question no longer gets Tycho saying it didn't search, and searching the same thing again: it now remembers what it looked up and showed for half a minute, as it does what it said. ([#564](https://github.com/benshapyro/tycho-ai/issues/564))
 - "Show me the last tile" brings back the last answer's card when no older card is waiting as a strip, instead of saying there's nothing there. ([#565](https://github.com/benshapyro/tycho-ai/issues/565))

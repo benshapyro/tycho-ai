@@ -51,3 +51,6 @@ class FakeDisplay:
     def clear(self) -> None:
         self.calls.append("clear")
         self.board.clear()
+
+    def answering(self) -> bool:
+        return self.on and self.board.answering()

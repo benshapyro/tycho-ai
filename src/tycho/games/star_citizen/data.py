@@ -101,6 +101,16 @@ def save(
     path.parent.mkdir(parents=True, exist_ok=True)
     # Its own name, so a hangar import and a starting session never share one (#574).
     partial = path.with_name(f"{path.stem}.{uuid.uuid4().hex[:8]}.partial")
+    try:
+        _write(partial, ships, version, as_of, concepts=concepts)
+        os.replace(partial, path)
+    finally:
+        partial.unlink(missing_ok=True)  # left only if writing or the swap failed (#593)
+
+
+def _write(
+    partial: Path, ships: Iterable[Ship], version: str, as_of: str, *, concepts: bool
+) -> None:
     with closing(sqlite3.connect(partial)) as db, db:
         db.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         db.execute(
@@ -124,7 +134,6 @@ def save(
                 for s in ships
             ],
         )
-    os.replace(partial, path)
 
 
 def load(path: Path, *, stale: bool = False) -> ShipLibrary:

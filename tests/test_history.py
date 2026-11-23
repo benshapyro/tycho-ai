@@ -302,3 +302,18 @@ def test_a_deleted_session_doesn_t_come_back_while_tycho_runs(all_of_it: bool) -
     history.close()
     assert first not in store.kept
     assert [e.said for e in store.entries(history.session)] == ["gear down"]
+
+
+def test_an_exchange_still_waiting_to_be_written_doesn_t_bring_a_deleted_session_back() -> None:
+    """#593: the delete came between keeping an exchange and writing it."""
+    import threading
+
+    store = FakeHistory()
+    history = History(store, on=True, now=lambda: NOW)
+    held = threading.Event()
+    history._writer.submit(held.wait)  # pyright: ignore[reportPrivateUsage]
+    history.record(Result(1, "replied", text="where is Hurston", say="In Stanton."))
+    history.delete(history.session)
+    held.set()
+    history.close()
+    assert store.kept == {}

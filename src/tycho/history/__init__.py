@@ -230,6 +230,8 @@ class History:
     def _append(self, session: str, entry: Entry) -> None:
         try:
             with self.lock:
+                if session != self.session:
+                    return  # deleted after this was said: it stays deleted (#593)
                 self.store.append(session, entry)
         except OSError as e:  # a full disk mustn't stop the loop
             log.warning("Couldn't keep the history: %s", e)

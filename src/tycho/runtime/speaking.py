@@ -77,13 +77,17 @@ class Telling:
 
     def call_out(self, line: str) -> None:
         """Speaking up (#4), on the loop: said aloud; with no voice, a notice on the Tile
-        if it's on, else nowhere (ADR 14's amendment)."""
+        if it's on, else nowhere (ADR 14's amendment). Not over an answer's card still
+        showing in full, which the notice would push off before it's read (#550)."""
         voice = self._voice
         if voice.closed:
             return
         if voice.speaker is not None:
             voice.start(voice.speaker, line, lambda: None)
         elif self._display is not None:
+            if self._display.answering():
+                log.info("Callout not shown: an answer's card is still up")
+                return
             self._display.show(notice(line))
 
     def _tell(self, said: str) -> None:

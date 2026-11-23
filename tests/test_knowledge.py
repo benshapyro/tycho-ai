@@ -230,6 +230,20 @@ def test_the_local_copy_round_trips(tmp_path: Path) -> None:
     assert not list(tmp_path.glob("*.partial"))
 
 
+def test_a_copy_that_couldn_t_be_swapped_in_leaves_no_partial_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#593: a locked file on Windows (or a full disk) left a .partial for good."""
+
+    def locked(_src: object, _dst: object) -> None:
+        raise PermissionError("the file is in use")
+
+    monkeypatch.setattr(store.os, "replace", locked)
+    with pytest.raises(PermissionError):
+        save(tmp_path / "ships.sqlite", LIBRARY.ships, LIBRARY.version, LIBRARY.as_of)
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_it_downloads_once_per_patch(tmp_path: Path) -> None:
     wiki = FakeWiki(FLEET)
     first = asyncio.run(ensure(wiki, tmp_path, _today))
