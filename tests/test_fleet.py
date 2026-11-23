@@ -174,7 +174,7 @@ def test_the_tool_schema_suits_strict_tool_use(tmp_path: Path) -> None:
 def test_each_request_names_the_games_patch() -> None:
     """#59: the brain judged what's current by what it remembered."""
     library = ShipLibrary(LIBRARY.ships, version="4.10.3-LIVE.13220821", as_of="2026-11-23")
-    assert patch_line(library) == "[Game patch now: 4.10.3, from the Star Citizen Wiki]"
+    assert patch_line(library) == "[Game patch: 4.10.3]"
     stale = ShipLibrary(LIBRARY.ships, version="4.10.2-LIVE.1", as_of="2026-11-01", stale=True)
     assert "4.10.2 when last checked" in patch_line(stale)
     assert patch_line(None) == ""

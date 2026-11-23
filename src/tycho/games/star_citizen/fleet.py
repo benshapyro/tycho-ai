@@ -143,7 +143,7 @@ def patch_line(library: ShipLibrary | None) -> str:
         return ""
     if library.stale:
         return f"[Game patch: {library.patch} when last checked; today's couldn't be checked]"
-    return f"[Game patch now: {library.patch}, from the Star Citizen Wiki]"
+    return f"[Game patch: {library.patch}]"
 
 
 class FleetUpdate:
