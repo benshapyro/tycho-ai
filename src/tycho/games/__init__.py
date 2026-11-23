@@ -33,6 +33,7 @@ __all__ = [
     "GameKeys",
     "find_install",
     "fleet_findings",
+    "fleet_ships",
     "game_findings",
     "game_root",
     "hangar_hint",
@@ -85,6 +86,17 @@ def fleet_findings(pack: GamePack) -> Iterator[Finding]:
     from tycho.games.star_citizen import checks
 
     yield from checks.fleet_findings(pack.id)
+
+
+def fleet_ships(pack: GamePack) -> list[str] | None:
+    """The ships the player told Tycho or imported, for the Memory page to show; None
+    if the pack keeps no fleet."""
+    if "fleet" not in pack.parts.lookups:
+        return None
+    from tycho import paths
+    from tycho.games.star_citizen.fleet import Fleet
+
+    return list(Fleet.load(paths.fleet_file(pack.id)).ships)
 
 
 def hangar_hint(pack: GamePack) -> dict[str, str] | None:

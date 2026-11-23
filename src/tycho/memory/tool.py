@@ -42,7 +42,7 @@ DESCRIPTION = (
     '"What the player asked you to remember" block. "save" only when the player has just '
     'said "remember ..." (or "keep in mind", "make a note"), or said yes to your offer to '
     "remember something; never on your own. Write the note as one short sentence about the "
-    'player, in their words ("Trades out of Area18", "Likes short answers"). scope: "this '
+    'player, in their words ("Likes short answers", "Plays in the evenings"). scope: "this '
     'game" for how they play this game, "every game" for how they like answers and what\'s '
     "true everywhere. You may offer once when the player tells you something lasting about "
     'themselves, with the word remember ("Want me to remember that?"), and save only on '

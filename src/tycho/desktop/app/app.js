@@ -786,6 +786,44 @@
     }));
   }
 
+  /* ---------- memory (ADR 8, #483) ---------- */
+  async function memoryView() {
+    const d = await api.memory();
+    const when = (iso) => {
+      if (!iso) return "";
+      const t = new Date(`${iso}T12:00:00`);
+      return t.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+    };
+    const scopeCard = (scope, title) => {
+      const mine = d.notes.filter((n) => n.scope === scope);
+      const rows = mine.map((n) => `<li class="memrow"><span>${esc(n.text)}${n.unsafe ? ` <span class="chip warn" title="Tycho never uses a note about pressing or confirming">Not used</span>` : ""}</span>
+        <span class="dim num">${esc(when(n.saved))}</span>
+        <button class="link" type="button" data-forget="${esc(scope)}" data-note="${esc(n.text)}" aria-label="Delete ${esc(n.text)}">Delete</button></li>`).join("");
+      return `<div class="card frame" data-scope="${esc(scope)}"><h3>${esc(title)}</h3>
+        ${mine.length ? `<ul class="memlist">${rows}</ul>` : `<p class="dim">Nothing yet. Say “remember …” while you play.</p>`}
+        <p class="note">${mine.length} of ${d.most}. Kept in <span class="num">${esc(d.files[scope])}</span>, which you can edit.</p></div>`;
+    };
+    const fleet = d.fleet === null ? "" : `<p><b>${esc(d.fleet_label)}:</b> ${d.fleet.length ? d.fleet.map(esc).join(", ") : `<span class="dim">none yet</span>`}</p>`;
+    page.innerHTML = `<h1>Memory</h1>
+      <p class="lede">What Tycho remembers about you. Say “remember …” to add a note, “forget that …” to remove one, or “what do you remember about me?”. Tycho keeps a note only when you ask, and never one about pressing keys or confirming. The notes go to the brain with each request.</p>
+      ${d.on ? "" : `<p class="warn-line" id="memoryOff">Memory is off: Tycho keeps these notes but doesn't use them. <button class="link" type="button" id="memoryOn">Turn memory on</button></p>`}
+      ${d.problems.map((p) => `<p class="err">${esc(p)}</p>`).join("")}
+      <div class="stack">${scopeCard("every game", "Every game")}${scopeCard("this game", `In ${d.game_name}`)}
+      <div class="card frame" id="alsoKnown"><h3>Also known</h3>
+        <p><b>What Tycho calls you:</b> ${d.call_me ? esc(d.call_me) : `<span class="dim">nothing</span>`}</p>${fleet}
+        <p class="note">These have their own places: what Tycho calls you is in Settings, under Voice${d.fleet === null ? "" : `, and ${esc(d.fleet_label.toLowerCase())} in Settings, under Game and controls`}.</p></div></div>`;
+    $("#memoryOn")?.addEventListener("click", async () => {
+      const r = await api.set("memory", true);
+      toast(r.ok ? "Memory is on." : r.problem);
+      render();
+    });
+    page.querySelectorAll("[data-forget]").forEach((b) => b.addEventListener("click", async () => {
+      const r = await api.forget_note(b.dataset.forget, b.dataset.note);
+      toast(r.ok ? "Deleted. Tycho won't use it again." : r.problem);
+      render();
+    }));
+  }
+
   /* ---------- shell ---------- */
   async function render() {
     // Left the question without answering: setup is as usual from here (#442).
@@ -807,6 +845,7 @@
       else if (view === "setup") await setupView();
       else if (view === "pack") await packView();
       else if (view === "commands") await commandsView();
+      else if (view === "memory") await memoryView();
       else await settingsView(shared);
     } catch (e) {
       page.innerHTML = `<h1>Something went wrong</h1><p class="lede">${esc(e && e.message ? e.message : e)}</p>`;

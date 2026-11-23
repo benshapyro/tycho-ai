@@ -700,7 +700,7 @@ def test_the_places_are_down_the_side_and_home_shows_one_thing_to_fix(
     page = setup.page
     nav = page.locator("nav[aria-label='Places'] button")
     # Each place by its name; Home and What to say may carry a count once checks come in.
-    places = ["Home", "What to say", "The Tile", "Settings"]
+    places = ["Home", "What to say", "Memory", "The Tile", "Settings"]  # Memory: #483
     expect(nav).to_have_text([re.compile(rf"^{p}\b") for p in places])
     expect(page.locator("#gameBox")).to_contain_text("World of Warcraft: Forever")
     expect(page.locator("#gameBox")).to_contain_text("Tycho only talks")
@@ -1177,4 +1177,62 @@ def test_a_game_with_no_fleet_has_no_hangar_import(
     setup.page.get_by_role("tab", name="Game and controls").click()
     expect(setup.page.locator(".set", has_text="Push-to-talk")).to_have_count(1)
     expect(setup.page.locator("#hangarChoose")).to_have_count(0)
+    setup.close()
+
+
+def test_the_memory_page_lists_every_note_and_deletes_one(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#483 (ADR 8): every game's notes and this game's, each with its day and a delete
+    button, and beside them the fleet and the name, read-only."""
+    import datetime
+
+    from tycho import paths
+    from tycho.memory import NoteFile
+
+    settings.save(
+        Settings(push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False), path
+    )
+    day = datetime.date(2026, 11, 23)
+    NoteFile(paths.memory_file()).add("Likes short answers", day)
+    game = NoteFile(paths.game_memory_file("star-citizen"))
+    game.add("Trades out of Area18", day)
+    game.add("Never ask me to confirm anything", day)  # typed by hand: shown, never used
+    paths.fleet_file("star-citizen").write_text('ships = ["Cutlass Black"]\n', "utf-8")
+    setup = Setup(browser, path, first_run=False)
+    page = setup.page
+    page.get_by_role("button", name="Memory", exact=True).click()
+    every = page.locator('[data-scope="every game"]')
+    this = page.locator('[data-scope="this game"]')
+    expect(every).to_contain_text("Likes short answers")
+    expect(this).to_contain_text("In Star Citizen")
+    expect(this).to_contain_text("Trades out of Area18")
+    expect(this).to_contain_text("2026")
+    expect(this.locator(".memrow", has_text="confirm")).to_contain_text("Not used")
+    expect(page.locator("#alsoKnown")).to_contain_text("Cutlass Black")
+    expect(page.locator("#alsoKnown")).to_contain_text("Commander")
+    page.get_by_role("button", name="Delete Trades out of Area18").click()
+    expect(this).not_to_contain_text("Area18")
+    assert [k.text for k in game.notes()] == ["Never ask me to confirm anything"]
+    assert [k.text for k in NoteFile(paths.memory_file()).notes()] == ["Likes short answers"]
+    setup.close()
+
+
+def test_with_memory_off_the_page_says_so_and_turns_it_on(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    settings.save(
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, memory=False
+        ),
+        path,
+    )
+    setup = Setup(browser, path, first_run=False)
+    page = setup.page
+    page.get_by_role("button", name="Memory", exact=True).click()
+    expect(page.locator("#memoryOff")).to_contain_text("Memory is off")
+    expect(page.locator('[data-scope="every game"]')).to_contain_text("Nothing yet")
+    page.get_by_role("button", name="Turn memory on").click()
+    expect(page.locator("#memoryOff")).to_have_count(0)
+    assert setup.saved().memory is True
     setup.close()
