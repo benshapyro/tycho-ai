@@ -20,7 +20,7 @@ Some "power user" automation requests will be declined by design.
 
 ## Amendment, 23 November 2026: typing a place name into the star map
 
-*Status: proposed. The maintainer agreed to the direction on 23 November 2026 and asked for route plotting in 1.0 ([#588](https://github.com/benshapyro/tycho-ai/issues/588)); this text waits for his OK.*
+*Status: accepted. The maintainer approved this text on 23 November 2026 (#591), after agreeing to the direction and asking for route plotting in 1.0 ([#588](https://github.com/benshapyro/tycho-ai/issues/588)).*
 
 **Context.** Players want to say "plot a route to Port Tressler" and have it done. Other voice tools already do this; HCS VoicePacks, which CIG licenses, sell it. Until now Tycho only pressed the player's own keybinds. Most of plotting a route is keybinds too: the star map has its own keys (`mapui_action_planroute`, R by default), and Game.log writes "Quantum route plotted to X" with the place's name. The one new thing is typing the place's name into the star map's search box. Typing letters anywhere else would press flight keys, so it needs rules of its own.
 

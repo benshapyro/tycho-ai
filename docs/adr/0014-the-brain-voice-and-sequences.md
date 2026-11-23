@@ -155,7 +155,7 @@ Claude was asked for one tool a reply (`disable_parallel_tool_use`). In the play
 
 ## Amendment, 23 November 2026: a local check before a press
 
-*Status: proposed. The maintainer agreed to the direction on 23 November 2026 ([#588](https://github.com/benshapyro/tycho-ai/issues/588)); this text waits for his OK.*
+*Status: accepted. The maintainer approved this text on 23 November 2026 (#591), after agreeing to the direction and asking for route plotting in 1.0 ([#588](https://github.com/benshapyro/tycho-ai/issues/588)).*
 
 **Context.** "Looking at the game window when asked" (above) said a look is never for pressing, and left "checking before pressing" for its own amendment. Plotting a route (ADR 3's amendment of the same date) types a place name into the star map's search box, and typing it into the cockpit instead would press a dozen flight keys. The safe way is to confirm, from the screen, that the map is open and the box is ready before typing.
 
