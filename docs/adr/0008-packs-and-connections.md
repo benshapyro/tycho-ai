@@ -74,3 +74,22 @@ Tycho starts with Star Citizen but may grow to other games, each with its own wo
 **Still not decided.** Writing notes from past conversations (history, #484), and sharing notes between PCs.
 
 **Consequences.** New eval cases: a stated game fact is saved and noted aloud, a personal fact isn't saved unasked, a fact from a look-up isn't saved, and "forget that" right after a save removes it. The bar stays zero wrong presses.
+
+## Amendment, 23 November 2026 (third): the blueprints you own, from the game's log
+
+*Status: accepted. The maintainer chose the direction and approved this text on 23 November 2026 (#598, #606).*
+
+**Context.** In Star Citizen, a crafting blueprint is something the player owns for good once a mission gives it. Game.log records each one with the HUD's "Received Blueprint: <item>" line (#598). Players want to ask "do I have the Killshot blueprint?" or "which blueprints have I got?" in any session, not only the session where they got it. The second amendment rules out saving notes from the game's log. That rule is about notes, which are free text sent with every request. A list of owned blueprints is a different kind of thing: one item name per entry, checked against a fixed shape.
+
+**Decision.** Tycho keeps a list of the blueprints the player owns, on their PC, beside the notes and the fleet.
+
+- **Only from the game's own blueprint line, or the player.** An entry is added when Game.log's "Received Blueprint" line names an item that passes the item-name check (letters, digits and a few marks, at most 40 characters, the same check as the callout). An item the log names only by text key is added once the game's own text gives its name. The player can also add one ("I've got the Killshot Rifle blueprint"), because blueprints bought or earned before Tycho ran are otherwise missing. Nothing else in the log adds anything, and look-ups, web pages and Tycho's replies never do.
+- **Earlier logs, read once.** On the first start after this ships, Tycho reads the game's saved logs (`logbackups`) once for that same line, so blueprints from before are listed. It keeps only the item names and dates, nothing else from those logs.
+- **Used when asked, not sent with every request.** The blueprint look-up answers "do I have it?" and "which do I have?" from the list, and marks the blueprints it lists that the player already owns. The list isn't added to every request, so it doesn't grow the request or reach the brain unasked.
+- **Seen and removed.** The list is a plain file, `packs\star-citizen\blueprints.toml`. The Memory page shows it with a delete button on each entry, and "forget the Killshot blueprint" removes one by voice. It holds each blueprint once, at most about 1,000.
+- **Under the `memory` setting.** With memory off, nothing is added and the list isn't used. Where it goes is the same as notes: to the brain's provider only inside a look-up's answer, and never in crash reports or usage counts (ADR 4).
+- **Never above the core.** An entry is an item's name, never an instruction. The check runs both when an entry is saved and when it is read.
+
+**Not decided here.** Lists of other things the log records, and sharing the list between PCs.
+
+**Consequences.** A blueprint store with a fake, the log reader feeding it, the one-time read of saved logs, and the look-up's "owned" answers. Tests cover the name check on save and on read, an item named by key, the size limit, memory turned off, and "forget". Brain eval cases cover "do I have the X blueprint?" and "which blueprints have I got?". The bar stays zero wrong presses. The README's "What leaves your PC" row for memory notes also names owned blueprints.
