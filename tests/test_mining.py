@@ -8,7 +8,15 @@ from typing import Any
 from tycho.games.star_citizen.mining import MiningLookup
 from tycho.games.star_citizen.wiki import WikiError
 
-NAMES = ["Quantainium (Raw)", "Lindinium (Ore)", "Raw Ice", "Hadanite", "Gold"]
+NAMES = [
+    "Quantainium (Raw)",
+    "Lindinium (Ore)",
+    "Raw Ice",
+    "Hadanite",
+    "Gold",
+    "Hephaestanite",
+    "Hephaestanite (R)",
+]
 
 
 def _location(slug: str, name: str, kind: str, parent: str, system: str) -> dict[str, Any]:
@@ -28,12 +36,14 @@ WHERE = {
         _location("pyro-belt", "Akiro Cluster", "Asteroid", "Pyro", "Pyro"),
     ],
     "Lindinium (Ore)": [_location("glaciem", "Glaciem Ring", "Asteroid", "Nyx", "Nyx")],
+    "Hephaestanite (R)": [_location("cellin", "Cellin", "Moon", "Crusader", "Stanton")],
 }
 CHANCES = {
     "aberdeen": (0.1, 0.01),
     "lyria": (0.2, 0.15),
     "pyro-belt": (0.1, 0.5),
     "glaciem": (0.1, 0.1),
+    "cellin": (0.2, 0.5),
 }
 
 
@@ -198,3 +208,13 @@ def test_a_location_without_a_slug_doesnt_shift_the_chances() -> None:
     result = _run(MiningLookup(_NoSlug()), resource="quantainium")
     chances = {p["name"]: p.get("chance_percent") for p in result["places"]}
     assert chances == {"Akiro Cluster": 5.0, "Lyria": 3.0}
+
+
+def test_hephaestanite_is_found_by_its_own_raw_mark() -> None:
+    # The game names it "Hephaestanite (R)", and plain "Hephaestanite" (the refined
+    # one) is in no location: a recipe's "Hephaestanite" was "mined nowhere" (#597).
+    lookup = MiningLookup(FakeMiningWiki())
+    asyncio.run(lookup.prepare())
+    result = _run(lookup, resource="hephaestanite")
+    assert result["resource"] == "Hephaestanite (R)"
+    assert result["places"][0]["name"] == "Cellin"

@@ -10,7 +10,7 @@ import pytest
 
 from tests.fakes.fake_items import FakeItemsWiki, item
 from tests.fakes.fake_wiki import search_answer
-from tycho.games.star_citizen import items
+from tycho.games.star_citizen import crafting, items
 from tycho.games.star_citizen.item_lookup import ItemLookup
 from tycho.games.star_citizen.items import (
     Found,
@@ -143,8 +143,23 @@ def test_an_fps_weapon_with_where_to_buy_and_how_to_craft() -> None:
             "craft_time": "4 minutes",
             "known_from_start": False,
             "unlocked_by_missions": 21,
+            "quality_improves": {
+                "Lindinium": ["Recoil Kick"],
+                "Iron": ["Impact Force", "Fire Rate"],
+            },
+            "min_quality": {"Iron": 300},
+            "materials_note": crafting.MATERIALS_NOTE,
         },
     }
+
+
+def test_without_the_recipes_own_record_the_list_s_record_will_do() -> None:
+    wiki = FakeItemsWiki()
+    wiki.no_details = True
+    record = _item("FS-9 LMG")
+    crafting = facts(record, asyncio.run(Items(wiki).blueprint(record)))["crafting"]
+    assert crafting["ingredients"] == ["Lindinium 0.06 SCU", "Iron 0.03 SCU", "Dolivine x1"]  # type: ignore[index]
+    assert "quality_improves" not in crafting  # type: ignore[operator]
 
 
 def test_ship_components_and_armor() -> None:

@@ -1093,6 +1093,28 @@ max_calls = 2
 no_errors = true
 tag = "blueprints"
 
+# One answer for "how do I make this?" (#597): the recipe, then where to mine or buy
+# its materials, looked up together in the second step.
+[[case]]
+heard = "how do I make a P4-AR"
+mode = "lookup"
+expect = ["reply"]
+mentions = [["Aluminum"], ["Iron", "Hephaestanite"]]
+tools = ["item_lookup", "mining_lookup"]
+max_calls = 3
+no_errors = true
+tag = "blueprints"
+
+[[case]]
+heard = "what do I need to craft the omnisky three and where do I get it"
+mode = "lookup"
+expect = ["reply"]
+mentions = [["Agricium", "Hadanite", "Dolivine"]]
+tools = ["item_lookup", "mining_lookup"]
+max_calls = 3
+no_errors = true
+tag = "blueprints"
+
 # The player's fleet (ADR 15): said by voice, kept by update_fleet, and read from
 # each request's header. "fleet" and "flying" set it up; the rest check it after.
 [[case]]

@@ -22,6 +22,7 @@ from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
+from tycho.games.star_citizen.crafting import recipe
 from tycho.games.star_citizen.wiki import ITEM_KINDS, VEHICLES, Hit, WikiError, WikiSource, search
 from tycho.knowledge.fresh import Fresh
 from tycho.text import name_score, normalize
@@ -35,6 +36,8 @@ FRESH_SECONDS = 600.0
 PER_QUERY = 20
 QUERY_SECONDS = 2.0
 """Each query's limit: a spelling, the search or a recipe that takes longer is left out."""
+DETAIL_SECONDS_MIN = 0.2
+"""A recipe's own record is asked for only with at least this much of its time left."""
 FIND_SECONDS = 2.5
 """A name's whole finding, fetching an item the search rescued included, so the
 recipe still has its QUERY_SECONDS inside item_lookup's 5 s."""
@@ -213,13 +216,25 @@ class Items:
         """How to craft ``item``, if it can be crafted."""
         if not item.get("is_craftable"):
             return None
+        started = self._clock()
         data = await self._in_time(
             self._get("/api/blueprints", {"filter[output.name]": str(item["name"])})
         )
         if data is None:
             return None
         rows = cast(list[Mapping[str, Any]], data.get("data") or [])
-        return next((r for r in rows if r.get("output_name") == item["name"]), None)
+        found = next((r for r in rows if r.get("output_name") == item["name"]), None)
+        # Its own record also says what each material's quality changes (#597), in
+        # what's left of the recipe's time; without it, the list's record will do.
+        link = str(found.get("link") or "") if found else ""
+        left = QUERY_SECONDS - (self._clock() - started)
+        if found and "/api/" in link and left > DETAIL_SECONDS_MIN:
+            path = link[link.index("/api/") :]
+            detail = await self._in_time(self._get(path, {}), left)
+            record = cast(Mapping[str, Any], _dig(detail, "data") or {})
+            if record.get("output_name") == item["name"]:
+                return record
+        return found
 
     async def _rescued(
         self,
@@ -496,7 +511,7 @@ def facts(item: Mapping[str, Any], blueprint: Mapping[str, Any] | None = None) -
     out["buy_in_game"] = _shops(_dig(item, "uex_prices", "purchase"))
     out["craftable"] = bool(item.get("is_craftable"))
     if blueprint:
-        out["crafting"] = _crafting(blueprint)
+        out["crafting"] = recipe(blueprint)
     return {k: v for k, v in out.items() if v not in (None, "", [], {}, "UNDEFINED")}
 
 
@@ -525,21 +540,6 @@ def _armor(armor: Any) -> dict[str, object]:
             if isinstance(multiplier, int | float) and kind != "impact":
                 reduction[kind] = round((1 - multiplier) * 100)
     return {"armor_type": _dig(armor, "armor_type"), "damage_reduction_pct": reduction}
-
-
-def _crafting(blueprint: Mapping[str, Any]) -> dict[str, object]:
-    needs: list[str] = []
-    for part in cast(list[Any], blueprint.get("ingredients") or []):
-        name, scu, count = _dig(part, "name"), _dig(part, "quantity_scu"), _dig(part, "quantity")
-        amount = f"{scu:g} SCU" if isinstance(scu, int | float) else f"x{count}" if count else ""
-        needs.append(f"{name} {amount}".strip())
-    out: dict[str, object] = {
-        "ingredients": needs,
-        "craft_time": blueprint.get("craft_time_label"),
-        "known_from_start": bool(blueprint.get("is_available_by_default")),
-        "unlocked_by_missions": blueprint.get("unlocking_missions_count"),
-    }
-    return {k: v for k, v in out.items() if v not in (None, "", [])}
 
 
 def _shops(rows: Any) -> list[dict[str, object]]:
