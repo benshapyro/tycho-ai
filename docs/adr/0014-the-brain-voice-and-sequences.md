@@ -152,3 +152,23 @@ Claude was asked for one tool a reply (`disable_parallel_tool_use`). In the play
 - A history store with a fake, the search look-up, and a History page in the app. Tests cover off by default, the 30-day deletion, delete on request, and a found action that is never pressed.
 - History cases join the brain eval, including "do yesterday's route again", which must describe and not press.
 - The README's "What leaves your PC" table gains a row: "Parts of your past conversations, only when you ask about them, with history on".
+
+## Amendment, 23 November 2026: a local check before a press
+
+*Status: accepted. The maintainer approved this text on 23 November 2026 (#591), after agreeing to the direction and asking for route plotting in 1.0 ([#588](https://github.com/benshapyro/tycho-ai/issues/588)).*
+
+**Context.** "Looking at the game window when asked" (above) said a look is never for pressing, and left "checking before pressing" for its own amendment. Plotting a route (ADR 3's amendment of the same date) types a place name into the star map's search box, and typing it into the cockpit instead would press a dozen flight keys. The safe way is to confirm, from the screen, that the map is open and the box is ready before typing.
+
+**Decision.** A *check* is different from a look. Tycho may take one frame of the game window to confirm a press is safe, on these terms:
+
+- **Read on the PC, never sent.** The frame is read by Windows' built-in text recognition on the player's PC. It never goes to the brain, Anthropic, OpenRouter or anyone else, is never written to disk, and is dropped as soon as it's read. Logs, traces and the action log record only the outcome ("map ready" or "not ready"), never the frame or its text.
+- **Only in a flow a built-in pack declares**, at the step the pack names, looking only for what the pack names (for the star map: its search box). The game window only, through the Windows Graphics Capture API, as before.
+- **It can stop a press, never start one.** A check never decides what to press. If it can't confirm, nothing more is pressed. Its only other use is locating the box for ADR 3's one fallback click.
+- **Doesn't need `look_at_screen`.** That setting is about pictures leaving the PC; a check never does. A player who turned looking off can still plot a route. The README's "What stays on your PC" says so in plain words. No camera sound, since nothing is sent; the done and not-done sounds still play.
+- **Fixed end.** At most a few frames over 3 seconds for one request.
+
+**Not decided here.** Checking a toggle's state before pressing it (shields, gear, doors) and confirming a sequence worked afterwards still need their own amendment.
+
+**Consequences.**
+- A check boundary (a Protocol with a fake, ADR 4) beside the look's capture boundary, sharing the capture code. Tests: a failed check presses nothing, nothing leaves the PC, the frame isn't kept.
+- Text recognition must work at every resolution and UI scale the PC test covers, in the game's language (English).
