@@ -171,10 +171,16 @@ class Board:
         self._shown.clear()
 
     def answering(self) -> bool:
-        """Whether a card the player asked for is up in full: not a strip, a question
-        or a notice. A notice now would shrink it before it's read (#550)."""
+        """Whether a notice now would shrink an answer before it's read (#550): one card
+        at a time, and a card the player asked for is up in full, not pinned (a pinned
+        one stays as a pinned strip, and may be up for the whole trip), not a strip, a
+        question or a notice. With two at once, a notice goes beside it."""
         self._expire()
-        return any(not s.strip and s.card.kind not in NO_STRIP for s in self._shown)
+        if self.at_once > 1:
+            return False
+        return any(
+            not s.strip and not s.pinned and s.card.kind not in NO_STRIP for s in self._shown
+        )
 
     def drop(self, kind: Kind) -> None:
         """Take down every card of ``kind``: a confirm card once its question is answered."""
