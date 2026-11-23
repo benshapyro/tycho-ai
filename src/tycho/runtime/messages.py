@@ -78,6 +78,8 @@ class Result:
     would_press: tuple[str, ...] = ()
     """Setup's Try it (ADR 17): each key Tycho would have pressed, as the player knows
     it ("Landing System (N)"). Nothing was sent: ``pressed`` stays empty."""
+    tried: bool = False
+    """Said during setup's Try it (ADR 17), whatever it was: not part of play (#587)."""
     timings: dict[str, float] = field(default_factory=dict[str, float])
     total_ms: float = 0.0
     keydown_ms: float | None = None

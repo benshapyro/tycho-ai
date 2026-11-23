@@ -528,3 +528,35 @@ def test_cards_a_game_doesnt_use_arent_offered() -> None:
     kinds = card["function"]["parameters"]["properties"]["kind"]["enum"]
     assert "list" in kinds
     assert "ship" not in kinds
+
+
+def test_nothing_is_pressed_after_a_search_of_past_conversations() -> None:
+    """ADR 14's amendment (#484), as for Claude (#587): old talk is never permission to
+    press, even when the model picks the press, in the same reply or the next."""
+    from typing import cast
+
+    from tests.fakes.fake_history import FakeHistory
+    from tycho.brain.rounds import NO_PRESS_AFTER_RECALL
+    from tycho.history import Entry, History
+    from tycho.history.tool import HistoryLookup
+
+    now = datetime.datetime(2026, 11, 23, 20, 0).astimezone()
+    then = now - datetime.timedelta(days=1)
+    landed = Entry(then, "land us", "Gear down.", ("v_toggle_landing_system",))
+    store = FakeHistory({f"{then:%Y-%m-%d_%H-%M-%S}": [landed]})
+    past = cast(FakeLookup, HistoryLookup(History(store, on=True, now=lambda: now)))
+    search = {"words": "landing", "day": "yesterday"}
+    request = BrainRequest("do what you did when we landed yesterday", KEYBINDS)
+    later = FakeChat(
+        [*tool_call("history", search), *finished()],
+        tool_call("run_actions", GEAR, use_id="call_2"),
+    )
+    assert asyncio.run(_brain(later, past).decide(request)) == Reply(NO_PRESS_AFTER_RECALL)
+    both = FakeChat(
+        [
+            *tool_call("history", search),
+            *tool_call("run_actions", GEAR, use_id="call_2", index=1),
+            *finished(),
+        ]
+    )
+    assert asyncio.run(_brain(both, past).decide(request)) == Reply(NO_PRESS_AFTER_RECALL)

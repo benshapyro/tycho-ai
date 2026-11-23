@@ -734,6 +734,7 @@ def test_during_setups_try_it_nothing_is_sent_and_tycho_says_what_it_would_press
     assert tried.detail == "Try it: nothing was sent to the game"
     assert asked.status == "asking"
     assert r.actions.entries[0]["pressed"] == []
+    assert (tried.tried, asked.tried) == (True, True)  # so the history keeps neither (#587)
 
 
 def test_a_question_asked_during_try_it_cant_be_confirmed_for_real_after_it() -> None:

@@ -246,3 +246,59 @@ def test_the_page_deletes_what_s_over_30_days_old_before_listing(tmp_path: Path)
     assert page["on"] is None  # never asked
     assert page["sessions"] == []
     assert kept(on=False).store.sessions() == []
+
+
+# --- Review follow-ups (#587) -----------------------------------------------------------
+
+
+def test_a_day_is_found_in_a_session_that_started_days_before() -> None:
+    """Tycho left running from Thursday to Sunday: "yesterday" on Sunday is Saturday."""
+    thursday = NOW - datetime.timedelta(days=3)
+    store = FakeHistory({session_id(thursday): [Entry(thursday, "hello"), _route()]})
+    history = History(store, on=True, now=lambda: NOW)
+    assert [f.entry.tycho for f in history.search("route", YESTERDAY.date())] == [ROUTE]
+
+
+def test_a_long_session_keeps_its_recent_exchanges() -> None:
+    started = NOW - datetime.timedelta(days=KEEP_DAYS + 3)
+    store = FakeHistory({session_id(started): [Entry(started, "hello"), _route()]})
+    assert History(store, on=False, now=lambda: NOW).prune() == 0
+    assert len(store.sessions()) == 1
+
+
+def test_what_s_said_during_try_it_isn_t_kept(tmp_path: Path) -> None:
+    history = History(HistoryFolder(tmp_path), on=True, now=lambda: NOW)
+    history.record(Result(1, "replied", text="where is Hurston", say="In Stanton.", tried=True))
+    history.close()
+    assert list(tmp_path.glob("*.jsonl")) == []
+
+
+def test_a_time_edited_by_hand_without_a_timezone_still_searches(tmp_path: Path) -> None:
+    store = HistoryFolder(tmp_path)
+    store.append(session_id(YESTERDAY), _route())
+    store.append(session_id(YESTERDAY), _route(YESTERDAY + datetime.timedelta(minutes=1)))
+    (file,) = tmp_path.glob("*.jsonl")
+    first, second = file.read_text("utf-8").splitlines()
+    line = json.loads(first)
+    line["at"] = YESTERDAY.replace(tzinfo=None).isoformat()
+    file.write_text(json.dumps(line) + "\n" + second + "\n", "utf-8")
+    history = History(store, on=True, now=lambda: NOW)
+    assert [f.entry.tycho for f in history.search("route", YESTERDAY.date())] == [ROUTE] * 2
+
+
+@pytest.mark.parametrize("all_of_it", [False, True])
+def test_a_deleted_session_doesn_t_come_back_while_tycho_runs(all_of_it: bool) -> None:
+    later = iter([NOW, NOW + datetime.timedelta(minutes=5)])
+    store = FakeHistory()
+    history = History(store, on=True, now=lambda: next(later))
+    history.record(Result(1, "replied", text="where is Hurston", say="In Stanton."))
+    history._writer.submit(lambda: None).result()  # pyright: ignore[reportPrivateUsage]
+    first = history.session
+    if all_of_it:
+        history.delete_all()
+    else:
+        history.delete(first)
+    history.record(Result(2, "replied", text="gear down", say="Gear down."))
+    history.close()
+    assert first not in store.kept
+    assert [e.said for e in store.entries(history.session)] == ["gear down"]
