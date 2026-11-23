@@ -170,6 +170,64 @@ def test_a_real_crash_after_a_handled_error_is_still_a_crash(tmp_path: Path) -> 
     assert "access violation" in found.read_text(encoding="utf-8")
 
 
+def test_the_live_file_says_what_it_is(tmp_path: Path) -> None:
+    # #582: a handled 0x8001010d read mid-run was taken for a crash again.
+    crashes.watch(tmp_path)
+    try:
+        text = (tmp_path / crashes.LIVE).read_text(encoding="utf-8")
+        assert text.startswith("Tycho is running.")
+        assert "0x8001010d" in text
+        assert "removed when Tycho stops" in text
+    finally:
+        crashes.stop()
+
+
+def test_a_note_alone_or_with_handled_errors_isnt_a_crash(tmp_path: Path) -> None:
+    (tmp_path / crashes.LIVE).write_text(crashes.NOTE, encoding="utf-8")  # killed
+    assert crashes.watch(tmp_path) is None
+    crashes.stop()
+    (tmp_path / crashes.LIVE).write_text(crashes.NOTE + HANDLED, encoding="utf-8")
+    assert crashes.watch(tmp_path) is None
+    crashes.stop()
+    assert crashes.past(tmp_path) == []
+
+
+def test_the_note_doesnt_hide_a_real_crash(tmp_path: Path) -> None:
+    died = _tycho(CRASH, tmp_path)
+    assert died.returncode != 0
+    found = crashes.watch(tmp_path)
+    crashes.stop()
+    assert found is not None
+    text = found.read_text(encoding="utf-8")
+    assert "Segmentation fault" in text or "Windows fatal exception" in text
+    assert crashes.NOTE_START not in text  # kept without it: Tycho isn't running
+
+
+def test_a_kept_crash_keeps_its_time(tmp_path: Path) -> None:
+    live = tmp_path / crashes.LIVE
+    live.write_text(crashes.NOTE + "Fatal Python error: Segmentation fault\n")
+    at = time.mktime((2026, 11, 20, 21, 3, 0, 0, 0, -1))
+    os.utime(live, (at, at))
+    found = crashes.watch(tmp_path)
+    crashes.stop()
+    assert found is not None
+    assert found.name == "crash-2026-11-20-210300.txt"
+    assert found.stat().st_mtime == at
+    assert found.read_text() == "Fatal Python error: Segmentation fault\n"
+
+
+def test_an_older_note_s_wording_is_still_the_note(tmp_path: Path) -> None:
+    # Killed by an update's installer: the next version reads the last one's note.
+    older = "Tycho is running. Some other words, from an older Tycho.\n\n"
+    (tmp_path / crashes.LIVE).write_text(older + HANDLED, encoding="utf-8")
+    assert crashes.watch(tmp_path) is None
+    crashes.stop()
+    (tmp_path / crashes.LIVE).write_text(older, encoding="utf-8")
+    assert crashes.watch(tmp_path) is None
+    crashes.stop()
+    assert crashes.past(tmp_path) == []
+
+
 def test_only_handled_reads_each_record() -> None:
     assert crashes.only_handled(HANDLED)
     assert not crashes.only_handled("Fatal Python error: Segmentation fault\n")
