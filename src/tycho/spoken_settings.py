@@ -64,8 +64,9 @@ _STEPS = {
 
 DESCRIPTION = """\
 Read or change Tycho's own settings, when the player asks about or for a change to \
-how Tycho works: its voice (George, Sarah, Lily or Brian) and sound volumes, how \
-long they have to say "confirm", \
+how Tycho works: its voice (George, Sarah, Lily or Brian) and sound volumes, turning \
+the game down while Tycho speaks (duck_game: "stop turning the game down"; duck_level: \
+how loud the game is then), how long they have to say "confirm", \
 web search, keeping transcripts, update checks, crash reports, looking at the game window \
 (look_at_screen: "stop looking at my screen"), game channel, speech recognition device, \
 and callouts: the kinds of game event Tycho tells the player about unasked \

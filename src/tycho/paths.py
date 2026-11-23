@@ -74,6 +74,12 @@ def voice_dir() -> Path:
     return data_dir() / "voice"
 
 
+def ducked_file() -> Path:
+    """The game's own volume while Tycho has it turned down (#570), so a start after a
+    crash mid-line can put it back."""
+    return data_dir() / "ducked.json"
+
+
 def logs_dir() -> Path:
     return data_dir() / "logs"
 

@@ -29,6 +29,8 @@ GROUPS: dict[str, tuple[str, ...]] = {
         "voice",
         "voice_volume",
         "feedback_volume",
+        "duck_game",
+        "duck_level",
         "call_me",
         "call_me_says",
         "call_me_how_often",
@@ -317,13 +319,16 @@ def callout_kinds(game: str) -> list[dict[str, str]]:
 
 def _not_for(game: str) -> frozenset[str]:
     """The settings that mean nothing in the chosen game, so its Settings leave them out:
-    a game whose pack reads nothing from its folder has no folder to choose, and one
-    with no window to look at has no looking (#31)."""
+    a game whose pack reads nothing from its folder has no folder to choose, one with no
+    window to look at has no looking (#31), and one with no program has no sound to
+    turn down (#570)."""
     try:
         pack = built_in(game)
     except PackError:  # tycho check and Status say why; show everything
         return frozenset()
     hidden = FOLDER_SETTINGS if pack.parts.install is None else frozenset[str]()
+    if pack.window is None:  # no game program to turn down (#570)
+        hidden |= {"duck_game", "duck_level"}
     return hidden if pack.look else hidden | {"look_at_screen"}  # it can't look (#31)
 
 

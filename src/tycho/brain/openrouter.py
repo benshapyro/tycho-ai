@@ -341,7 +341,7 @@ class OpenRouterBrain:
         try:
             async with self._client.stream(self._body(messages)) as stream:
                 async for chunk in stream:
-                    round_.streaming()
+                    round_.streaming(answering="choices" in chunk or "usage" in chunk)
                     for call in message.read(chunk):
                         if (
                             decided := await self._tool_call(round_, call, message, started)

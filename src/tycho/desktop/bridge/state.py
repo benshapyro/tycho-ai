@@ -130,6 +130,8 @@ def setting_label(name: str) -> str:
         "callouts": "Speaking up",
         "confirm_seconds": "Time to say confirm",
         "feedback_volume": "Sound volume",
+        "duck_game": "Turn the game down while Tycho speaks",
+        "duck_level": "Game volume while Tycho speaks",
         "game": "Game",
         "game_root": "Game folder",
         "push_to_talk": "Push-to-talk",

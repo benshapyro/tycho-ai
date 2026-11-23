@@ -172,7 +172,12 @@ class ClaudeBrain:
         if clash := ACTS & self._lookups.keys():
             raise ValueError(f"a look-up can't be named {', '.join(sorted(clash))}")
         self._tools = _tools(self._sequences, lookups, keys=self._keys)
-        self._show_card = cast(ToolParam, {**show_card(pack.tile.cards), "strict": True})
+        card = show_card(pack.tile.cards)  # its keys in the order the cache has (#576)
+        name, described, schema = card["name"], card["description"], card["input_schema"]
+        self._show_card = cast(
+            ToolParam,
+            {"name": name, "description": described, "strict": True, "input_schema": schema},
+        )
         """Offered only while the Tile is on, so Claude never says "on the Tile" without
         one; only the kinds this game's Settings can hide (#528)."""
         self._reference = reference

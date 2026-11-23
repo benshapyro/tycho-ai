@@ -110,10 +110,15 @@ def foreground_executable() -> str:
 
 def executable_of(window: int) -> str:
     """The file name of the program that owns ``window``, or "" if unknown."""
-    user32, kernel32 = win32.user32(), win32.kernel32()
     pid = wintypes.DWORD()
-    user32.GetWindowThreadProcessId(window, ctypes.byref(pid))
-    process = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
+    win32.user32().GetWindowThreadProcessId(window, ctypes.byref(pid))
+    return executable_of_process(pid.value)
+
+
+def executable_of_process(pid: int) -> str:
+    """The file name of process ``pid``'s program, or "" if unknown."""
+    kernel32 = win32.kernel32()
+    process = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
     if not process:
         return ""
     try:

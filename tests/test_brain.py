@@ -1623,3 +1623,12 @@ def test_claude_isnt_offered_cards_its_game_doesnt_use() -> None:
     asyncio.run(brain.decide(BrainRequest("where to level", KEYBINDS)))
     card = next(t for t in client.requests[0]["tools"] if t["name"] == "show_card")
     assert "fleet" not in card["input_schema"]["properties"]["kind"]["enum"]
+
+
+def test_claudes_card_tool_keeps_its_keys_in_the_cached_order() -> None:
+    """#576: the cache is the tools as sent, keys in order: strict before the schema."""
+    client = _Client([], _final("Fine."))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), cards=lambda: True, pack=SC)
+    asyncio.run(brain.decide(BrainRequest("hi", KEYBINDS)))
+    card = next(t for t in client.requests[0]["tools"] if t["name"] == "show_card")
+    assert list(card) == ["name", "description", "strict", "input_schema"]
