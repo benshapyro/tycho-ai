@@ -676,7 +676,10 @@ def test_bind_second_adds_a_stick_button_and_remove_second_takes_it_off(
         ignored.append(ignore)
         return stick
 
-    monkeypatch.setattr(start_run, "input_sources", lambda *bindings: [])
+    def no_sources(*bindings: Binding | None) -> list[object]:
+        return []
+
+    monkeypatch.setattr(start_run, "input_sources", no_sources)
     monkeypatch.setattr(monitor, "capture_binding", capture)
     assert cli.main(["bind", "--second"]) == 0
     assert Binding.parse("mouse:0x06") in ignored[0]
