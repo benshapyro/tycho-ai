@@ -291,3 +291,42 @@ def test_going_back_and_forward_a_card_by_voice() -> None:
     assert tile_word(display, "again", ("", None)) == ""
     assert tile_word(display, "forward", ("", None)) == ""
     assert display.calls[-2:] == ["again", "forward"]
+
+
+def test_the_last_card_comes_back_when_none_gave_way() -> None:
+    """#565: "show me the last tile" 20 s after a card went up, with no strips, said
+    "nothing on the Tile for that", and the retry searched again."""
+    from tests.fakes.fake_display import FakeDisplay
+    from tycho.runtime.tiling import tile_word
+    from tycho.tile import Card, Row
+
+    display = FakeDisplay()
+    card = Card("list", title="Galaxy loadout", rows=(Row("Laser", value="S3"),))
+    assert tile_word(display, "again", ("Two more on the Tile.", card)) == ""
+    assert display.calls == ["again", "show list pinned"]
+    assert display.shown == [card]
+    # Words alone aren't a card to bring back: that's "show me that".
+    assert tile_word(FakeDisplay(), "again", ("RSI.", None)) == "nothing on the Tile for that"
+
+
+def test_a_follow_up_remembers_what_the_brain_searched_and_showed() -> None:
+    """#564: told only what Tycho said, the brain denied searching, then searched the
+    same thing twice more."""
+    from tycho.tile import Card
+
+    conversation = Conversation(lambda: 0.0)
+    replied = Result(
+        1,
+        "replied",
+        text="best galaxy loadout",
+        by_brain=True,
+        say="Two on the Tile.",
+        card=Card("list", title="Galaxy loadout"),
+        looked_up=('searched the web for "Galaxy loadout"',),
+    )
+    conversation.heard(replied)
+    (exchange,) = conversation.follow_ups()
+    assert exchange.outcome == (
+        'searched the web for "Galaxy loadout"; showed a card on the Tile: Galaxy loadout; '
+        "said: Two on the Tile."
+    )

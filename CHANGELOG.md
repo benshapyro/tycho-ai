@@ -11,7 +11,15 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ### Added
 - Tycho can fill in your ships from your hangar: export your hangar on ccugame.app, then in Settings, under Game and controls, choose Import next to "Your ships" and pick `ships.csv` or `fleetview.json`. Tycho shows what it will add, and any names it couldn't match, before it saves. Importing again later swaps in the new list and keeps the ships you told Tycho about yourself. Only the ship names are kept: never your account, pledge numbers or what you paid, and nothing leaves your PC. Agents can run `tycho fleet import <file>`. ([#556](https://github.com/benshapyro/tycho-ai/issues/556))
 
+### Changed
+- "Shut all the doors" (and "shut all doors", "shut doors") now closes the doors at once, without waiting on the brain. ([#567](https://github.com/benshapyro/tycho-ai/issues/567))
+- Tycho now knows the game's current patch with every question, so it judges what's current by that rather than by what it remembers. Its web searches leave patch numbers out unless you said one, so they don't find an old patch's pages. ([#59](https://github.com/benshapyro/tycho-ai/issues/59), [#568](https://github.com/benshapyro/tycho-ai/issues/568))
+- Tycho offers "Want me to take a look?" only when your screen could show the answer. For something only a menu shows, like a loadout, it says which screen to open first. ([#566](https://github.com/benshapyro/tycho-ai/issues/566))
+
 ### Fixed
+- Right after a web search or a card, a follow-up question no longer gets Tycho saying it didn't search, and searching the same thing again: it now remembers what it looked up and showed for half a minute, as it does what it said. ([#564](https://github.com/benshapyro/tycho-ai/issues/564))
+- "Show me the last tile" brings back the last answer's card when no older card is waiting as a strip, instead of saying there's nothing there. ([#565](https://github.com/benshapyro/tycho-ai/issues/565))
+- Tycho no longer promises to change how it answers from now on ("I'll skip the Tile mentions"), which it couldn't keep for more than half a minute. ([#568](https://github.com/benshapyro/tycho-ai/issues/568))
 - In World of Warcraft: Forever, the brain no longer shows ship, fleet or loadout cards, which Settings had no switch to hide. Every card it can show now has a switch in Settings, under The Tile. ([#528](https://github.com/benshapyro/tycho-ai/issues/528))
 
 ## [0.10.0] - 2026-11-23

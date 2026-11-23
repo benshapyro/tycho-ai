@@ -88,7 +88,7 @@ from tycho.commands import Command, CommandMatcher, resolve
 from tycho.commands.keys import own_keys
 from tycho.games.star_citizen.checks import find_install
 from tycho.games.star_citizen.data import ensure
-from tycho.games.star_citizen.fleet import Fleet, FleetUpdate
+from tycho.games.star_citizen.fleet import Fleet, FleetUpdate, patch_line
 from tycho.games.star_citizen.item_lookup import ItemLookup
 from tycho.games.star_citizen.mining import MiningLookup
 from tycho.games.star_citizen.ship_lookup import ShipLookup
@@ -995,12 +995,13 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
         ],
     )
 
-    # As tycho run does: the fleet, then what to call the player (#15), by the pack's
-    # default (#349): no player has chosen a name here.
+    # As tycho run does: the game's patch (#59), the fleet, then what to call the player
+    # (#15), by the pack's default (#349): no player has chosen a name here.
     address = Address.for_pack(pack).header()
 
     def about() -> str:
-        return "\n".join(p for p in (fleet.describe(library), address) if p)
+        lines = (patch_line(library), fleet.describe(library), address)
+        return "\n".join(p for p in lines if p)
 
     def cards() -> bool:
         return not args.no_tile

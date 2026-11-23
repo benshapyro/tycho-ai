@@ -33,7 +33,14 @@ from tycho.brain.decisions import (
     UnboundAction,
     parse_tool_call,
 )
-from tycho.brain.lookups import LOOKUP_SECONDS, Lookup, LookupResult, failure, run_lookup
+from tycho.brain.lookups import (
+    LOOKUP_SECONDS,
+    Lookup,
+    LookupResult,
+    failure,
+    looked_up,
+    run_lookup,
+)
 from tycho.brain.traces import Look, Trace, TraceFile
 from tycho.text import clip_spoken
 
@@ -152,6 +159,9 @@ class Turn:
     picture: int = 0
     """The size of the game window's picture sent with the request (#31): only that is
     traced."""
+    looked_up: list[str] = field(default_factory=list[str])
+    """What the request looked up, in a few words each ("searched the web for ..."), so
+    the follow-ups remember it (#564)."""
     answering: Callable[[], None] | None = None
     """Called as each call's stream starts: the provider has read its cache by then, even
     if the request later times out or is cut off (#540)."""
@@ -249,6 +259,9 @@ class Round:
                 # not to end in an act (#176).
                 turn.looking()
                 self._checking = True
+            web = bool(getattr(chosen, "from_the_web", False))
+            if web or not getattr(chosen, "instant", False):  # not a fleet or settings note
+                turn.looked_up.append(looked_up(name, arguments, web=web))
             seconds = float(getattr(chosen, "seconds", LOOKUP_SECONDS))
             lookup = run_lookup(chosen, arguments, seconds)
             turn.sources[use_id] = str(getattr(chosen, "credit", ""))
@@ -336,13 +349,13 @@ class Round:
 async def traced(traces: TraceFile | None, turn: Turn, deciding: Awaitable[Decision]) -> Decision:
     """The request's decision, with its trace line written once it ends, however it
     ends (#282). Without ``traces`` (players, unless ``TYCHO_TRACE`` is on), only the
-    decision."""
+    decision. A reply carries what the request looked up (#564)."""
     trace = turn.trace
     if traces is None or trace is None:
-        return await deciding
+        return noted(await deciding, turn)
     trace.picture = turn.picture
     try:
-        decided = await deciding
+        decided = noted(await deciding, turn)
     except BaseException as e:
         trace.failed(e)
         traces.write(trace)
@@ -354,6 +367,13 @@ async def traced(traces: TraceFile | None, turn: Turn, deciding: Awaitable[Decis
         stopped = "cut off at the output limit"
     trace.ended(decided, stopped)
     traces.write(trace)
+    return decided
+
+
+def noted(decided: Decision, turn: Turn) -> Decision:
+    """A reply with what its request looked up, for the follow-ups (#564)."""
+    if isinstance(decided, Reply) and turn.looked_up:
+        return dataclasses.replace(decided, looked_up=tuple(turn.looked_up))
     return decided
 
 
