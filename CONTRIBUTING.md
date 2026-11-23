@@ -61,7 +61,7 @@ CI also measures test coverage of `src/tycho` (`uv run pytest --cov`) and fails 
 
 ## Tests CI can't run
 
-These adapters talk to Windows or the hardware directly, so only the self-test or a person checks them, and coverage counts them as missed: `input/windows.py` (SendInput and the focus check; the self-test), `ptt/windows.py` (button polling; the self-test), `ptt/joystick.py` (SDL joysticks), `audio/microphone.py` (the microphone), `feedback.py`'s `SoundDevicePlayer` and `voice/playback.py` (the speakers), `tile/window.py` (the Tile's window; `tools/spike/tile/`), and `desktop/tray.py` and `desktop/window.py` (the tray icon and the app window). Keep them thin: logic belongs in the tested code they call.
+These adapters talk to Windows or the hardware directly, so only the self-test or a person checks them, and coverage counts them as missed: `input/windows.py` (SendInput and the focus check; the self-test), `ptt/windows.py` (button polling; the self-test), `ptt/joystick.py` (SDL joysticks), `audio/microphone.py` (the microphone), `feedback.py`'s `SoundDevicePlayer` and `voice/playback.py` (the speakers), `tile/window.py` (the Tile's window; `tools/spike/tile/`), `eyes/windows.py` (capturing the game window), `voice/mixer.py` (the game's slider in the Windows volume mixer), and `desktop/tray.py` and `desktop/window.py` (the tray icon and the app window). Keep them thin: logic belongs in the tested code they call.
 
 Before a release, the maintainer runs these on a Windows PC with the game installed and nobody using it:
 - `uv run pytest -m replay -s`: the recorded test set, through the real speech model.
