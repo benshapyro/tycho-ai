@@ -1,0 +1,109 @@
+# Tycho settings. Edit by hand, by voice, or in the settings screen.
+
+# Settings file format version.
+version = 1
+
+# The button you hold while talking to Tycho, e.g. mouse:0x06 for a mouse side button. Set it by pressing the button in setup.
+push_to_talk = "mouse:0x06"
+
+# Microphone name or number. Empty means the Windows default.
+microphone = "Headset Microphone (USB Audio)"
+
+# The game Tycho helps with: its commands, keybinds, look-ups and what the brain knows. Changes apply when Tycho restarts.
+game = "wow-forever"
+
+# The Star Citizen folder that contains LIVE. Empty means Tycho finds it from the RSI Launcher, the default folder, or common folders on each drive.
+game_root = "D:\\Games\\RSI\\StarCitizen"
+
+# Which version of the game you play: LIVE, PTU, EPTU, TECH-PREVIEW or HOTFIX. Tycho reads that version's keybinds.
+game_channel = "HOTFIX"
+
+# Where speech recognition runs. Auto uses the graphics card when it has room, otherwise the processor.
+transcription_device = "cpu"
+
+# Volume of Tycho's done and not-done sounds.
+feedback_volume = 0.5
+
+# Volume of Tycho's voice. Zero turns it off.
+voice_volume = 0.5
+
+# Tycho's ElevenLabs voice: George, Sarah, Lily, Brian, or a voice ID from your ElevenLabs account. A voice you designed works only with your own key. If your key can't use it, Tycho speaks as George and says so.
+voice = "Sarah"
+
+# The ElevenLabs model for the voice. The voice's own is Flash v2.5 for George (quickest) and v4 Turbo for the rest. Both cost the same.
+voice_model = "flash"
+
+# How long you have to say "confirm" after Tycho asks, in seconds.
+confirm_seconds = 8.5
+
+# Let Tycho press keys for you, through its safety gate. Off makes Tycho an advisor: it answers, looks things up and shows cards, and presses nothing. Games whose rules forbid it are always off. Changes apply when Tycho restarts.
+key_actions = false
+
+# Keep a local record of what you said. Off by default.
+keep_transcripts = true
+
+# Let Tycho search Star Citizen sites for news, upcoming patches and new ships. Each search costs about 1 cent of your Anthropic credit.
+web_search = false
+
+# When the Star Citizen sites have no clear answer, let web search look on any website (guides, forums, Reddit's search results) and read a page, for where things are and how to do things. Answers from players' posts say so. That search takes longer (about 11 s, at most 25 s) and costs about 3 cents. Off: the Star Citizen sites only.
+web_search_open = false
+
+# Who runs Tycho's brain, for anything the built-in phrasings don't cover: anthropic (Claude direct, with your Anthropic key) or openrouter (the same Claude through OpenRouter, with your OpenRouter key). Web search needs an Anthropic key either way.
+brain_provider = "openrouter"
+
+# The brain's model. Only models that passed Tycho's safety test (no wrong key presses) can be picked.
+brain_model = "Claude Haiku 5.5"
+
+# How long Tycho waits for the brain before saying it couldn't answer, in seconds. Look-ups and web searches get longer.
+brain_seconds = 9.5
+
+# What Tycho calls you: a name, nickname, callsign or rank. Empty means nothing. Say "call me Ace".
+call_me = "Ace"
+
+# How Tycho's voice should say it, if it gets it wrong: e.g. Zile for Xyl. Empty means as written.
+call_me_says = "Ay-ss"
+
+# How often Tycho uses it: sparingly (greetings, warnings and confirmations of big actions) or often.
+call_me_how_often = "often"
+
+# Show the Tile (on) or hide it (off): the small panel over the game, for answers better read than heard. Off, Tycho says everything out loud.
+tile = false
+
+# How big the Tile's text is. The Tile grows with it.
+tile_size = "extra large"
+
+# Which corner of the screen the Tile sits in.
+tile_corner = "bottom left"
+
+# How far in from the side the Tile sits, as a share of the screen's width, to clear a ship's own display.
+tile_nudge_in = 0.2
+
+# How far from the top (or bottom) edge the Tile sits, as a share of the screen's height.
+tile_nudge_down = 0.3
+
+# The Tile's highlight colour: the ship's own (from the one you said you're flying), Tycho's, or one you pick. Warnings keep their own colours.
+tile_colour = "pink"
+
+# How see-through the Tile's background is. Text never fades.
+tile_see_through = 0.3
+
+# A solid background and brighter text and lines.
+tile_high_contrast = true
+
+# One card at a time (a kept card shrinks to a strip), or two.
+tile_cards_at_once = "two"
+
+# How long cards stay before they fade.
+tile_cards_stay = "longer"
+
+# A small light on the Tile while you talk and while Tycho thinks.
+tile_talk_light = false
+
+# Quiet mode: only questions waiting on you, warnings and notices show.
+tile_quiet = true
+
+# Kinds of card not to show while the Tile is on, separated by commas (to hide the whole Tile, turn tile off): list, route, recipe, ship, fleet, steps, headlines, warning, notice, long. Tycho still says them. Questions waiting on you always show.
+tile_hidden_cards = ""
+
+# When Tycho starts, and when its window opens, ask GitHub whether a newer version is out, and say so. Tycho never updates itself.
+check_for_updates = false

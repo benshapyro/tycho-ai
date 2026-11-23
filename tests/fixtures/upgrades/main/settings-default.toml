@@ -1,0 +1,121 @@
+# Tycho settings. Edit by hand, by voice, or in the settings screen.
+
+# Settings file format version.
+version = 1
+
+# push_to_talk = (not set). The button you hold while talking to Tycho, e.g. mouse:0x06 for a mouse side button. Set it by pressing the button in setup.
+# microphone = (not set). Microphone name or number. Empty means the Windows default.
+# The game Tycho helps with: its commands, keybinds, look-ups and what the brain knows. Changes apply when Tycho restarts.
+game = "star-citizen"
+
+# game_root = (not set). For Star Citizen: the folder that contains LIVE. Empty means Tycho finds it from the RSI Launcher, the default folder, or common folders on each drive.
+# For Star Citizen: which version of the game you play: LIVE, PTU, EPTU, TECH-PREVIEW or HOTFIX. Tycho reads that version's keybinds.
+game_channel = "LIVE"
+
+# Where speech recognition runs. Auto uses the processor, so the game keeps the graphics card; the graphics card is faster but shares it with the game.
+transcription_device = "auto"
+
+# Volume of Tycho's done and not-done sounds.
+feedback_volume = 0.5
+
+# Volume of Tycho's voice. Zero turns it off.
+voice_volume = 0.8
+
+# Turn the game's sound down while Tycho speaks so you hear it over engines and combat. Only the game: other programs, like Discord, are left alone.
+duck_game = true
+
+# How loud the game is while Tycho speaks, as a share of where you left it.
+duck_level = 0.3
+
+# Tycho's ElevenLabs voice: George, Sarah, Lily, Brian, or a voice ID from your ElevenLabs account. A voice you designed works only with your own key. If your key can't use it, Tycho speaks as George and says so.
+voice = "George"
+
+# The ElevenLabs model for the voice. The voice's own is Flash v2.5 for George (quickest) and v4 Turbo for the rest. Both cost the same.
+voice_model = "the voice's own"
+
+# How long you have to say "confirm" after Tycho asks, in seconds.
+confirm_seconds = 5.0
+
+# Let Tycho press keys for you, through its safety gate. Off makes Tycho an advisor: it answers, looks things up and shows cards, and presses nothing. Games whose rules forbid it are always off. Changes apply when Tycho restarts.
+key_actions = true
+
+# Keep a local record of what you said. Off by default.
+keep_transcripts = false
+
+# Let Tycho search the web for news, where things are and how to do things, in games that have web search. With an OpenRouter key, about half a cent a search through it; otherwise 1 to 3 cents of your Anthropic credit.
+web_search = true
+
+# Let web search look on any website (guides, forums, Reddit's search results), not only the game's own sites, for where things are and how to do things. Answers from players' posts say so. With only an Anthropic key, it tries the game's sites first and takes longer (about 10 s). Off: the game's own sites only.
+web_search_open = true
+
+# Who runs Tycho's brain, for anything the built-in phrasings don't cover: anthropic (Claude direct, with your Anthropic key) or openrouter (the same Claude through OpenRouter, with your OpenRouter key). Web search needs an Anthropic key either way.
+brain_provider = "anthropic"
+
+# The brain's model. Only models that passed Tycho's safety test (no wrong key presses) can be picked.
+brain_model = "Claude Haiku 5.5"
+
+# How long Tycho waits for the brain before saying it couldn't answer, in seconds. Look-ups and web searches get longer.
+brain_seconds = 8.0
+
+# What Tycho calls you: a name, nickname, callsign or rank. Empty means nothing. Say "call me Ace".
+call_me = "Commander"
+
+# How Tycho's voice should say it, if it gets it wrong: e.g. Zile for Xyl. Empty means as written.
+call_me_says = ""
+
+# How often Tycho uses it: sparingly (greetings, warnings and confirmations of big actions) or often.
+call_me_how_often = "sparingly"
+
+# Show the Tile (on) or hide it (off): the small panel over the game, for answers better read than heard. Off, Tycho says everything out loud.
+tile = true
+
+# How big the Tile's text is. The Tile grows with it.
+tile_size = "medium"
+
+# Which screen the Tile shows on: game, for the screen the game is on, or a screen as Windows names it, such as \\.\DISPLAY2 (pick it on the window's Tile page). If that screen isn't plugged in, the Tile follows the game.
+tile_screen = "game"
+
+# Which corner of the screen the Tile sits in.
+tile_corner = "top right"
+
+# How far in from the side the Tile sits, as a share of the screen's width, to clear the game's own displays.
+tile_nudge_in = 0.0
+
+# How far from the top (or bottom) edge the Tile sits, as a share of the screen's height.
+tile_nudge_down = 0.0
+
+# The Tile's highlight colour: game (the game's own, or in a game where Tycho knows what you're in, its colour), Tycho's, or one you pick. Warnings keep their own colours.
+tile_colour = "game"
+
+# How see-through the Tile's background is. Text never fades.
+tile_see_through = 0.2
+
+# A solid background and brighter text and lines.
+tile_high_contrast = false
+
+# One card at a time (the last two shrink to strips to bring back), or two.
+tile_cards_at_once = "one"
+
+# How long cards stay before they fade.
+tile_cards_stay = "normal"
+
+# A small light on the Tile while you talk and while Tycho thinks.
+tile_talk_light = true
+
+# Quiet mode: only questions waiting on you, warnings and notices show.
+tile_quiet = false
+
+# Kinds of card not to show while the Tile is on, separated by commas (to hide the whole Tile, turn tile off), such as list, steps, warning, notice or long. Tycho still says them. Questions waiting on you always show.
+tile_hidden_cards = ""
+
+# Kinds of game event Tycho tells you about without being asked, separated by commas: only ones the game's log records, in a short fixed line, at most one every 30 seconds, never while you or Tycho are talking. Empty means none. Say "stop the callouts" to turn them all off.
+callouts = ""
+
+# crash_reports = (not set). Send a crash report when Tycho crashes: where in Tycho's code it broke, and the Tycho and Windows versions. Never what was said, keys, names or your files. Empty means not asked yet, and nothing is sent.
+# look_at_screen = (not set). Let Tycho look at your game window when you ask it to ("take a look"): one picture of the game window, sent to the brain with your question and never saved. A camera sound plays each time. Empty means not asked yet, and it's off.
+# Short notes about you, sent to the brain with each request: facts you mention about how you play, and what you ask it to remember. Off: nothing new is kept, and notes stay on your PC, unused. See them on the Memory page.
+memory = true
+
+# keep_history = (not set). Keep a history of what you and Tycho said, on this PC only, so you can ask about it later ("what was yesterday's route?"). Kept 30 days; see, search and delete it on the History page. Empty means not asked yet, and it's off.
+# When Tycho starts, and when its window opens, ask GitHub whether a newer version is out, and say so. Tycho never updates itself.
+check_for_updates = true

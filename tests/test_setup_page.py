@@ -1003,6 +1003,45 @@ def test_after_a_first_run_try_it_is_real_and_sends_nothing(
     setup.close()
 
 
+def test_try_it_is_one_click_from_home(browser: Browser, path: Path, vault: dict[str, str]) -> None:
+    """#603: Try it was only setup's last step (Home > Run setup again > Next through
+    every step), so the maintainer couldn't find it. Home's Last said has a button."""
+    settings.save(
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
+    )
+    setup = Setup(browser, path, first_run=False, listening=True)
+    page = setup.page
+    expect(page.locator("#homeState h1")).to_have_text("Listening")
+    page.get_by_role("button", name="Try it", exact=True).click()
+    setup.at("Try it")
+    expect(page.locator("#tryCard")).to_contain_text(
+        "Nothing reaches the game while this step is open"
+    )
+    assert setup.trying == [True]
+    page.locator("nav [data-view='status']").click()
+    expect(page.locator("#homeState")).to_be_visible()
+    assert setup.trying == [True, False]
+    setup.close()
+
+
+def test_home_has_no_try_it_while_tycho_isnt_running(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    settings.save(
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
+    )
+    setup = Setup(browser, path, first_run=False)
+    expect(setup.page.locator("#homeState h1")).to_have_text("Ready")
+    expect(setup.page.locator("#tryIt")).to_have_count(0)
+    setup.close()
+
+
 def test_try_it_ends_when_the_player_goes_back_a_step(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:

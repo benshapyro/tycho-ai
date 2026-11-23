@@ -1,0 +1,387 @@
+# My own phrases for Tycho.
+
+[[phrases]]
+command = "landing_gear"
+say = ["my phrase ax"]
+
+[[phrases]]
+command = "landing_gear_down"
+say = ["my phrase bx"]
+
+[[phrases]]
+command = "landing_gear_up"
+say = ["my phrase cx"]
+
+[[phrases]]
+command = "request_landing"
+say = ["my phrase dx"]
+
+[[phrases]]
+command = "request_departure"
+say = ["my phrase ex"]
+
+[[phrases]]
+command = "doors_open"
+say = ["my phrase fx"]
+
+[[phrases]]
+command = "doors_close"
+say = ["my phrase gx"]
+
+[[phrases]]
+command = "doors_lock"
+say = ["my phrase hx"]
+
+[[phrases]]
+command = "doors_unlock"
+say = ["my phrase ix"]
+
+[[phrases]]
+command = "lights"
+say = ["my phrase jx"]
+
+[[phrases]]
+command = "lights_on"
+say = ["my phrase kx"]
+
+[[phrases]]
+command = "lights_off"
+say = ["my phrase lx"]
+
+[[phrases]]
+command = "flight_ready"
+say = ["my phrase mx"]
+
+[[phrases]]
+command = "power_on"
+say = ["my phrase nx"]
+
+[[phrases]]
+command = "power_off"
+say = ["my phrase ox"]
+
+[[phrases]]
+command = "engines_on"
+say = ["my phrase px"]
+
+[[phrases]]
+command = "engines_off"
+say = ["my phrase qx"]
+
+[[phrases]]
+command = "shields_on"
+say = ["my phrase rx"]
+
+[[phrases]]
+command = "shields_off"
+say = ["my phrase sx"]
+
+[[phrases]]
+command = "weapons_on"
+say = ["my phrase tx"]
+
+[[phrases]]
+command = "weapons_off"
+say = ["my phrase ux"]
+
+[[phrases]]
+command = "power_to_engines"
+say = ["my phrase vx"]
+
+[[phrases]]
+command = "power_to_shields"
+say = ["my phrase wx"]
+
+[[phrases]]
+command = "power_to_weapons"
+say = ["my phrase xx"]
+
+[[phrases]]
+command = "max_power_engines"
+say = ["my phrase yx"]
+
+[[phrases]]
+command = "max_power_shields"
+say = ["my phrase zx"]
+
+[[phrases]]
+command = "max_power_weapons"
+say = ["my phrase aax"]
+
+[[phrases]]
+command = "balance_power"
+say = ["my phrase abx"]
+
+[[phrases]]
+command = "shields_front"
+say = ["my phrase acx"]
+
+[[phrases]]
+command = "shields_back"
+say = ["my phrase adx"]
+
+[[phrases]]
+command = "shields_left"
+say = ["my phrase aex"]
+
+[[phrases]]
+command = "shields_right"
+say = ["my phrase afx"]
+
+[[phrases]]
+command = "shields_reset"
+say = ["my phrase agx"]
+
+[[phrases]]
+command = "nav_mode"
+say = ["my phrase ahx"]
+
+[[phrases]]
+command = "scm_mode"
+say = ["my phrase aix"]
+
+[[phrases]]
+command = "quantum_mode"
+say = ["my phrase ajx"]
+
+[[phrases]]
+command = "quantum_engage"
+say = ["my phrase akx"]
+
+[[phrases]]
+command = "target_nearest_hostile"
+say = ["my phrase alx"]
+
+[[phrases]]
+command = "target_next_hostile"
+say = ["my phrase amx"]
+
+[[phrases]]
+command = "target_unlock"
+say = ["my phrase anx"]
+
+[[phrases]]
+command = "target_attacker"
+say = ["my phrase aox"]
+
+[[phrases]]
+command = "decoys"
+say = ["my phrase apx"]
+
+[[phrases]]
+command = "noise"
+say = ["my phrase aqx"]
+
+[[phrases]]
+command = "gimbals_toggle"
+say = ["my phrase arx"]
+
+[[phrases]]
+command = "gimbals_lock"
+say = ["my phrase asx"]
+
+[[phrases]]
+command = "gimbals_unlock"
+say = ["my phrase atx"]
+
+[[phrases]]
+command = "aim_mode"
+say = ["my phrase aux"]
+
+[[phrases]]
+command = "exit_seat"
+say = ["my phrase avx"]
+
+[[phrases]]
+command = "remote_turret_1"
+say = ["my phrase awx"]
+
+[[phrases]]
+command = "remote_turret_2"
+say = ["my phrase axx"]
+
+[[phrases]]
+command = "remote_turret_3"
+say = ["my phrase ayx"]
+
+[[phrases]]
+command = "remote_turret_exit"
+say = ["my phrase azx"]
+
+[[phrases]]
+command = "eject"
+say = ["my phrase bax"]
+
+[[phrases]]
+command = "mobiglas"
+say = ["my phrase bbx"]
+
+[[phrases]]
+command = "map"
+say = ["my phrase bcx"]
+
+[[phrases]]
+command = "autoland"
+say = ["my phrase bdx"]
+
+[[phrases]]
+command = "request_docking"
+say = ["my phrase bex"]
+
+[[phrases]]
+command = "request_cargo_loading"
+say = ["my phrase bfx"]
+
+[[phrases]]
+command = "hail"
+say = ["my phrase bgx"]
+
+[[phrases]]
+command = "ping"
+say = ["my phrase bhx"]
+
+[[phrases]]
+command = "less_power_engines"
+say = ["my phrase bix"]
+
+[[phrases]]
+command = "less_power_shields"
+say = ["my phrase bjx"]
+
+[[phrases]]
+command = "less_power_weapons"
+say = ["my phrase bkx"]
+
+[[phrases]]
+command = "min_power_engines"
+say = ["my phrase blx"]
+
+[[phrases]]
+command = "min_power_shields"
+say = ["my phrase bmx"]
+
+[[phrases]]
+command = "min_power_weapons"
+say = ["my phrase bnx"]
+
+[[phrases]]
+command = "shields_top"
+say = ["my phrase box"]
+
+[[phrases]]
+command = "shields_bottom"
+say = ["my phrase bpx"]
+
+[[phrases]]
+command = "cruise_on"
+say = ["my phrase bqx"]
+
+[[phrases]]
+command = "cruise_off"
+say = ["my phrase brx"]
+
+[[phrases]]
+command = "throttle_max"
+say = ["my phrase bsx"]
+
+[[phrases]]
+command = "throttle_min"
+say = ["my phrase btx"]
+
+[[phrases]]
+command = "decoupled_on"
+say = ["my phrase bux"]
+
+[[phrases]]
+command = "decoupled_off"
+say = ["my phrase bvx"]
+
+[[phrases]]
+command = "vtol_on"
+say = ["my phrase bwx"]
+
+[[phrases]]
+command = "vtol_off"
+say = ["my phrase bxx"]
+
+[[phrases]]
+command = "gravity_compensation_on"
+say = ["my phrase byx"]
+
+[[phrases]]
+command = "gravity_compensation_off"
+say = ["my phrase bzx"]
+
+[[phrases]]
+command = "proximity_assist_on"
+say = ["my phrase cax"]
+
+[[phrases]]
+command = "proximity_assist_off"
+say = ["my phrase cbx"]
+
+[[phrases]]
+command = "night_vision_on"
+say = ["my phrase ccx"]
+
+[[phrases]]
+command = "night_vision_off"
+say = ["my phrase cdx"]
+
+[[phrases]]
+command = "flight_mode"
+say = ["my phrase cex"]
+
+[[phrases]]
+command = "mining_mode"
+say = ["my phrase cfx"]
+
+[[phrases]]
+command = "salvage_mode"
+say = ["my phrase cgx"]
+
+[[phrases]]
+command = "scan_mode"
+say = ["my phrase chx"]
+
+[[phrases]]
+command = "missile_mode"
+say = ["my phrase cix"]
+
+[[phrases]]
+command = "guns_mode"
+say = ["my phrase cjx"]
+
+[[phrases]]
+command = "option_1"
+say = ["my phrase ckx"]
+
+[[phrases]]
+command = "option_2"
+say = ["my phrase clx"]
+
+[[phrases]]
+command = "option_3"
+say = ["my phrase cmx"]
+
+[[phrases]]
+command = "option_4"
+say = ["my phrase cnx"]
+
+[[phrases]]
+command = "option_5"
+say = ["my phrase cox"]
+
+[[command]]
+id = "my_space_mode"
+say = ["my space mode"]
+actions = ["v_master_mode_set_scm"]
+
+[[sequence]]
+id = "my_startup"
+say = ["my startup"]
+steps = [
+    "landing_gear",
+    { command = "landing_gear_down", wait = 1.0 },
+    "my_space_mode",
+]
