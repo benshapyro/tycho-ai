@@ -1,16 +1,17 @@
 """The ``tycho`` commands other than ``run``: ``check``, ``actions``, ``model``, ``gpu``,
-``sounds`` and ``credits``. Out of ``app.py`` (#398)."""
+``sounds``, ``credits`` and ``fleet``. Out of ``app.py`` (#398)."""
 
 import logging
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from tycho import __version__, doctor, paths
 from tycho.commands import CommandFileError, CommandMatcher
 from tycho.doctor import diagnose
 from tycho.findings import TYCHO
-from tycho.games import find_install, load_keys
+from tycho.games import find_install, import_hangar, load_keys
 from tycho.packs import GameDataError, built_in
 from tycho.settings import Settings
 from tycho.start.assemble import download_progress
@@ -38,6 +39,39 @@ def credits_command() -> int:
             "Imperium group of companies. Data: the Star Citizen Wiki API, UEX Corp and "
             "starcitizen.tools. Speech: NVIDIA's Parakeet TDT 0.6B v2 (CC-BY-4.0)."
         )
+    return 0
+
+
+def fleet_import_command(
+    current: Settings, file: Path, *, yes: bool, ask: Callable[[str], str] = input
+) -> int:
+    """``tycho fleet import``: the ships in a hangar export (ccugame.app's ships.csv or a
+    fleetview.json) into the player's fleet, after showing what changes (#556)."""
+    pack = built_in(current.game)
+    print("Matching the names against the game's data...")
+    try:
+        prepared = import_hangar(pack, file)
+    except (ValueError, OSError, GameDataError) as e:
+        print(e, file=sys.stderr)
+        return 2
+    for line in prepared.lines:
+        print(line)
+    if not prepared.changes:
+        return 0
+    if not yes:
+        try:
+            answer = ask("Save this to your fleet? (y/N) ").strip().lower()
+        except EOFError:
+            answer = ""
+        if answer not in ("y", "yes"):
+            print("Nothing changed.")
+            return 1
+    try:
+        prepared.save()
+    except OSError as e:
+        print(f"Couldn't save your fleet: {e}", file=sys.stderr)
+        return 2
+    print(prepared.done)
     return 0
 
 

@@ -181,6 +181,7 @@ def app_window(
         key_check=ProviderKeyCheck(),
         ship_accent=ship_accent,
         choose_folder=lambda: window.choose_folder(),
+        choose_file=lambda: window.choose_file(),
         finish=finish,
         first_run=first_run,
         restart=restart,
