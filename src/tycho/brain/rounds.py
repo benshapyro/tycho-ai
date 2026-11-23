@@ -125,7 +125,13 @@ def tool_specs(
                         "items": {"type": "string"},
                         "description": "Action names from the list, e.g. v_flightready.",
                     },
-                    "say": {"type": "string", "description": "A short spoken line."},
+                    "say": {
+                        "type": "string",
+                        "description": (  # what a toggle did can't be seen (#545)
+                            'A short spoken line. For a toggle ("Open/Close Doors"), say you'
+                            " toggled it, never which way: you can't see it."
+                        ),
+                    },
                 },
                 "required": ["actions", "say"],
                 "additionalProperties": False,

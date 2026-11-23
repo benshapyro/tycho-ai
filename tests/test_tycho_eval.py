@@ -197,6 +197,11 @@ KNOWN = {
     "no_errors",
     "max_words",
     "key_for",
+    "never_say",
+    "unbound",
+    "picture",
+    "may_look",
+    "offers_look",
 }
 
 
@@ -1089,6 +1094,70 @@ def test_a_reply_with_another_game_s_words_fails() -> None:
     assert e.grade(fine, {"expect": ["reply"]}, set(), keys_off=True, never_say=never) == "pass"
     # Without the list, the old verdict stands.
     assert e.grade(leaked, {"expect": ["reply"]}, set(), keys_off=True) == "pass"
+
+
+def test_a_case_s_own_never_say_fails_its_line() -> None:
+    # #545: with only the doors' toggle, the line mustn't say they're open.
+    e = _eval()
+    rule = {
+        "expect": ["actions"],
+        "must": [["v_lights_on"], ["v_toggle_all_doors"]],
+        "never_say": [r"\bopen(s|ed|ing)?\b(?!/)"],
+    }
+    valid = {"v_lights_on", "v_toggle_all_doors"}
+    actions = ["v_lights_on", "v_toggle_all_doors"]
+    claimed = _outcome(kind="actions", actions=actions, say="Lights on, doors open.")
+    verdict = e.grade(claimed, rule, valid)
+    assert verdict.startswith("said 'open', which this case rules out")
+    fine = _outcome(kind="actions", actions=actions, say="Lights on, Open/Close Doors toggled.")
+    assert e.grade(fine, rule, valid) == "pass"
+
+
+def test_a_case_can_unbind_actions() -> None:
+    from tycho.keybinds import Action, Keybinds, KeyInput
+
+    e = _eval()
+    door = Action("v_open_all_doors", "spaceship_general", "Open All Doors", (KeyInput("o"),))
+    toggle = Action("v_toggle_all_doors", "spaceship_general", "", (KeyInput("p"),))
+    keybinds = Keybinds([door, toggle])
+    assert e.without(keybinds, []) is keybinds
+    left = e.without(keybinds, ["v_open_all_doors"])
+    assert not left.get("v_open_all_doors").bound  # pyright: ignore[reportOptionalMemberAccess]
+    assert left.get("v_toggle_all_doors").bound  # pyright: ignore[reportOptionalMemberAccess]
+    assert keybinds.get("v_open_all_doors").bound  # pyright: ignore[reportOptionalMemberAccess]
+    with pytest.raises(SystemExit, match="v_open_all_door"):
+        e.without(keybinds, ["v_open_all_door"])  # misspelt: it would unbind nothing
+
+
+def test_a_case_grades_the_offer_to_look() -> None:
+    # #548: the offer is the exact words a "yes" answers, and only where it should be.
+    e = _eval()
+    offer = _outcome(say="I can't see it from here. Want me to take a look?")
+    wants = {"expect": ["reply"], "offers_look": True}
+    assert e.grade(offer, wants, set()) == "pass"
+    near = _outcome(say="I can't see it. Should I take a look?")
+    assert e.grade(near, wants, set()) == "didn't offer to look"
+    never = {"expect": ["reply"], "offers_look": False}
+    assert e.grade(offer, never, set()).startswith("offered to look")
+    assert e.grade(near, never, set()) == "pass"
+    assert e.grade(offer, {"expect": ["reply"]}, set()) == "pass"  # not graded unless asked
+
+
+def test_every_picture_a_case_names_is_drawn() -> None:
+    e = _eval()
+    data = tomllib.loads(
+        (ROOT / "src" / "tycho" / "packs" / "star-citizen" / "eval" / "cases.toml").read_text(
+            "utf-8"
+        )
+    )
+    names = {c["picture"] for c in data["case"] if "picture" in c}
+    assert names
+    for name in names:
+        seen = e.picture(name)
+        assert max(seen.width, seen.height) <= 1568  # shrunk, as a real look is
+        assert seen.media_type == "image/jpeg"
+    with pytest.raises(SystemExit, match="no picture called"):
+        e.picture("planett")
 
 
 def test_cases_that_must_search_are_left_out_without_web_search() -> None:

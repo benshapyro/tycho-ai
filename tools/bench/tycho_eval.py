@@ -65,7 +65,7 @@ import time
 import tomllib
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -73,12 +73,14 @@ import anthropic
 import httpx2
 import traces as trace_reader  # pyright: ignore[reportMissingImports]
 from brain_report import GLOBAL_NEVER  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
+from pictures import picture  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
 
 from tycho import credentials, logs, paths, safety, settings
 from tycho.address import Address
 from tycho.brain import BrainError, BrainRequest, Exchange, Reply, providers
 from tycho.brain.briefing import instructions_hash
 from tycho.brain.claude import MODEL, ClaudeBrain
+from tycho.brain.looking import LOOK_OFFER
 from tycho.brain.lookups import Lookup, LookupResult
 from tycho.brain.openrouter import SORTS, OpenRouterBrain, Prices, route
 from tycho.brain.rounds import NO_PRESS_AFTER_SEARCH
@@ -307,7 +309,8 @@ def grade(
     cases file's words from another game ("quantum" in World of Warcraft), which fail
     any case whose spoken line says one (#349). ``say_words``: the cases file's limit on
     the line spoken with a press, which is "a few words" (docs/voice-and-tone.md, #363);
-    0 is no limit. A case's own ``max_words`` limits its reply the same way."""
+    0 is no limit. A case's own ``max_words`` limits its reply the same way, and its
+    own ``never_say`` fails a line that says one of its words (#545)."""
     never = (set(GLOBAL_NEVER) | set(rule.get("never", []))) - set(rule.get("allow", []))
     if outcome.kind == "error":
         return "error"
@@ -354,8 +357,14 @@ def grade(
         return f"narrated its reply: {outcome.say!r}"
     if found := next((p.search(said) for p in never_say if p.search(said)), None):
         return f"said {found.group(0)!r}, from another game: {outcome.say!r}"
+    for pattern in rule.get("never_say", []):  # the case's own (#545)
+        if found := re.search(pattern, said, re.IGNORECASE):
+            return f"said {found.group(0)!r}, which this case rules out: {outcome.say!r}"
     if long := too_long(outcome, rule, say_words):
         return long
+    if (offers := rule.get("offers_look")) is not None and offers != _offers(said):
+        # Exactly the words the player's "yes" answers (#548), and only where it should.
+        return "didn't offer to look" if offers else f"offered to look: {outcome.say!r}"
     if keys_off and outcome.kind == "reply" and CLAIMED.search(said.strip()):
         return f"claimed a press with keys off: {outcome.say!r}"
     if outcome.kind == "reply" and rule.get("answer") and DODGE.search(said):
@@ -544,8 +553,17 @@ async def run_case(
         # As the session does (#386): with key actions off, a built-in phrase reaches
         # the brain with the player's own keys for it.
         keys = own_keys(routed.matched, keybinds) if routed.matched else ""
+        seen = picture(rule["picture"]) if "picture" in rule else None  # #548
         decision = await brain.decide(
-            BrainRequest(corrected.for_brain, keybinds, tuple(recent), keys, waiting=searching)
+            BrainRequest(
+                corrected.for_brain,
+                keybinds,
+                tuple(recent),
+                keys,
+                waiting=searching,
+                picture=seen,
+                may_look=bool(rule.get("may_look", seen is not None)),
+            )
         )
     except BrainError as e:
         outcome.kind, outcome.notes = "error", [str(e)]
@@ -739,6 +757,24 @@ def _inputs(entry: dict[str, Any]) -> list[list[str]]:
             raise TypeError("each input must be a list of strings")
         checked.append([str(p) for p in parts])
     return checked
+
+
+def _offers(said: str) -> bool:
+    """The line ends with the brain's offer to look, word for word (``LOOK_OFFER``)."""
+    return said.rstrip().endswith(LOOK_OFFER)
+
+
+def without(keybinds: Keybinds, names: Sequence[str]) -> Keybinds:
+    """``keybinds`` with no key on these actions: a case's ``unbound``, for what Tycho
+    does when the player hasn't bound one ("open the doors" with only the toggle, #545).
+    """
+    if not names:
+        return keybinds
+    gone = set(names)
+    if missing := gone - {a.name for a in keybinds}:  # a misspelt name would unbind nothing
+        raise SystemExit(f"unbound names no action in these keybinds: {sorted(missing)}")
+    actions = (replace(a, inputs=()) if a.name in gone else a for a in keybinds)
+    return Keybinds(actions, keybinds.modes)
 
 
 def load_keybinds(path: Path) -> tuple[Keybinds, str, str]:
@@ -1054,11 +1090,12 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
                 await settings_tool.inner.run({"action": "set", "changes": changes})
                 start = settings.load(settings_file)
             traces.case = rule["heard"]
+            binds = without(keybinds, rule.get("unbound", []))
             outcome = await run_case(
                 rule,
                 lexicon,
                 brain,
-                keybinds,
+                binds,
                 counted,
                 journal,
                 costs,
@@ -1069,7 +1106,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
             outcome.verdict = grade(
                 outcome,
                 rule,
-                valid,
+                valid - set(rule.get("unbound", [])),
                 keys_off=bool(pack.safety.keys_off),
                 never_say=never_say,
                 say_words=say_words,
