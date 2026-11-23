@@ -200,6 +200,8 @@ class History:
         self.now = now
         self.session = ""
         """This play session's id, once something was kept; empty before."""
+        self._used: set[str] = set()
+        """Every session id this run started, deleted or not."""
         self._writer = ThreadPoolExecutor(1, thread_name_prefix="tycho-history")
         self.lock = threading.Lock()
 
@@ -224,8 +226,18 @@ class History:
             tuple(result.pressed),
         )
         if not self.session:
-            self.session = session_id(entry.at)
+            self.session = self._new_session(entry.at)
         self._writer.submit(self._append, self.session, entry)
+
+    def _new_session(self, at: datetime.datetime) -> str:
+        """A session id this run hasn't used: one deleted a moment ago in the same second
+        mustn't come back (#595). Ids go to the second, so a later second it is."""
+        session = session_id(at)
+        while session in self._used:
+            at += datetime.timedelta(seconds=1)
+            session = session_id(at)
+        self._used.add(session)
+        return session
 
     def _append(self, session: str, entry: Entry) -> None:
         try:

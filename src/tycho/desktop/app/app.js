@@ -46,7 +46,9 @@
     homeLine = { stuck, button: live.button };
     page.innerHTML = `<div class="state frame" id="homeState"><div class="light"></div><div><h1></h1><p></p></div></div>
       ${fix}
-      ${live.listening == null ? "" : `<h2 class="label">Last said</h2><div id="recent">${recentList(live.exchanges)}</div>`}
+      ${live.listening == null ? "" : `<div class="bar" style="margin-top:0"><h2 class="label">Last said</h2><button class="btn frame" type="button" id="tryIt">Try it</button></div>
+        <p class="note">Try it: say something and see what Tycho would do, with nothing sent to the game.</p>
+        <div id="recent">${recentList(live.exchanges)}</div>`}
       <h2 class="label">Checks</h2>
       <div class="bar" style="margin-top:0"><button class="link" type="button" id="showChecks" aria-expanded="${allChecks}">${allChecks ? "Hide the checks" : `Show all ${findings.length} checks`}</button>
         <span class="keyrow"><button class="btn frame" type="button" id="redo">Run setup again</button>${first ? "" : `<button class="btn frame" type="button" id="again">Check again</button>`}</span></div>
@@ -57,6 +59,8 @@
     $("#again").addEventListener("click", status);
     $("#showChecks").addEventListener("click", () => { allChecks = !allChecks; status(); });
     $("#redo").addEventListener("click", () => { view = "setup"; step = 0; render(); });
+    // Setup's own Try it step, a click from Home (#603): before, it was only at setup's end.
+    $("#tryIt")?.addEventListener("click", () => { view = "setup"; step = STEPS.indexOf("Try it"); render(); });
   }
 
   // What the player said and what Tycho did, newest first: from memory, never saved.

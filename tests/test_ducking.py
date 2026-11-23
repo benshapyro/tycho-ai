@@ -513,3 +513,60 @@ def test_a_mixer_that_reads_but_can_t_set_warns_once(
     with caplog.at_level("WARNING"):
         asyncio.run(go())
     assert sum("access denied" in r.getMessage() for r in caplog.records) == 1
+
+
+def test_a_crash_with_only_some_sliders_back_keeps_the_rest(tmp_path: Path) -> None:
+    """#595 items 1 and 5: the game came back with only the headset, so the speakers'
+    saved level was forgotten once the headset was put back."""
+    (tmp_path / "ducked.json").write_text('{"levels": {"speakers": 0.9, "headset": 0.6}}', "utf-8")
+    volume = FakeGameVolume(sliders={"headset": 0.18})
+    ducker = _ducker(volume, tmp_path)
+    ducker.recover()
+    assert volume.sliders == {"headset": 0.6}
+    noted = json.loads((tmp_path / "ducked.json").read_text("utf-8"))
+    assert noted == {"levels": {"speakers": 0.9}}
+    volume.sliders["speakers"] = 0.27  # back on the speakers, still lowered
+
+    async def go() -> None:
+        await Ducking(FakeSpeaker(seconds=0.15), ducker).speak("Hi.")
+        await _settle()
+
+    asyncio.run(go())
+    assert volume.sliders == {"speakers": pytest.approx(0.9), "headset": pytest.approx(0.6)}
+    assert not (tmp_path / "ducked.json").exists()
+
+
+def test_a_saved_level_with_only_some_sliders_back_keeps_the_rest_at_a_line(
+    tmp_path: Path,
+) -> None:
+    """#595 item 1, on a line rather than at start."""
+    (tmp_path / "ducked.json").write_text('{"levels": {"speakers": 0.9, "headset": 0.6}}', "utf-8")
+    volume = FakeGameVolume(sliders={"headset": 0.18})
+
+    async def go() -> None:
+        await Ducking(FakeSpeaker(seconds=0.15), _ducker(volume, tmp_path)).speak("Hi.")
+        await _settle()
+
+    asyncio.run(go())
+    assert volume.sliders == {"headset": pytest.approx(0.6)}
+    noted = json.loads((tmp_path / "ducked.json").read_text("utf-8"))
+    assert noted == {"levels": {"speakers": 0.9}}
+
+
+def test_a_slider_that_goes_while_tycho_speaks_keeps_its_level(tmp_path: Path) -> None:
+    """#595: a sound device unplugged mid-line lost its saved level."""
+    volume = FakeGameVolume(sliders={"speakers": 0.9, "headset": 0.6})
+
+    class Unplugging(FakeSpeaker):
+        async def speak(self, text: str, *, keep: bool = False) -> None:
+            await _settle()
+            del volume.sliders["speakers"]
+
+    async def go() -> None:
+        await Ducking(Unplugging(), _ducker(volume, tmp_path)).speak("Hi.")
+        await _settle()
+
+    asyncio.run(go())
+    assert volume.sliders == {"headset": pytest.approx(0.6)}
+    noted = json.loads((tmp_path / "ducked.json").read_text("utf-8"))
+    assert noted == {"levels": {"speakers": pytest.approx(0.9)}}

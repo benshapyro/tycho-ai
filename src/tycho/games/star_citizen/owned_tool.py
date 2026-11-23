@@ -10,6 +10,8 @@ they said. While ``memory`` is off, it does nothing and says so.
 
 import asyncio
 import json
+import re
+import time
 from collections.abc import Awaitable, Callable, Mapping
 
 from tycho.brain.heard import heard
@@ -21,6 +23,8 @@ from tycho.memory.tool import FORGET, from_said
 
 SHOWN = 60
 """The most names one answer lists; the count is always whole."""
+ANSWER_SECONDS = 60.0
+"""How long after asking "which one?" a reply naming one of them takes it off (#610)."""
 ACTIONS = ("list", "check", "add", "forget")
 DESCRIPTION = """\
 The crafting blueprints the player owns in Star Citizen, kept on their PC from the \
@@ -40,11 +44,21 @@ class OwnedTool:
     instant = True
     """It answers at once, so Tycho doesn't say "Checking." first."""
 
-    def __init__(self, owned: OwnedBlueprints, known: Callable[[], Awaitable[list[str]]]) -> None:
+    def __init__(
+        self,
+        owned: OwnedBlueprints,
+        known: Callable[[], Awaitable[list[str]]],
+        *,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         """``known``: every blueprint a mission gives in this patch (the blueprint
         look-up's), to name one the player adds as the game does."""
         self._owned = owned
         self._known = known
+        self._clock = clock
+        self._offered: tuple[list[str], float] | None = None
+        """The names "which one?" just offered, and when: the player's reply ("the
+        Killshot Rifle") takes one off without saying "forget" again (#610)."""
 
     @property
     def name(self) -> str:
@@ -122,29 +136,49 @@ class OwnedTool:
         return _result({"not_saved": name, "why": outcome.replace("_", " ")})
 
     async def _forget(self, said: str, owned: list[Owned]) -> LookupResult:
-        now = heard()
-        if now is None or not FORGET.search(now.said):
+        now, offered, self._offered = heard(), self._offered, None
+        if now is None:
             return failure("take a blueprint off only when the player asks to")
         if not _their_words(said, now.said):  # #608: the one they named, not another
             return failure("take off only a blueprint the player named, in their words")
         ranked = naming.ranked(said, {o.name: o for o in owned})
+        exact = [n for n in ranked if naming.score(said, n) >= 1.0]
+        # Without a forget word, only a reply naming one that "which one?" offered,
+        # and never "don't remove that one" (#618).
+        asked = FORGET.search(now.said) or (
+            self._answers(offered, exact) and not KEEP.search(now.said)
+        )
+        if not asked:
+            return failure("take a blueprint off only when the player asks to")
         if not ranked:
             return _result({"asked": said, "not_found": "no such blueprint in the list"})
-        exact = [n for n in ranked if naming.score(said, n) >= 1.0]
         if len(exact) != 1 and len(ranked) > 1:
+            self._offered = (ranked[:4], self._clock())
             return _result({"asked": said, "which_one": ranked[:4], "ask": _WHICH})
         name = exact[0] if exact else ranked[0]
         removed = await asyncio.to_thread(self._owned.remove, name)
         return _result({"removed" if removed else "not_found": name})
 
+    def _answers(self, offered: tuple[list[str], float] | None, exact: list[str]) -> bool:
+        """Whether this is the reply to "which one?": it names exactly one it offered."""
+        if offered is None or self._clock() - offered[1] > ANSWER_SECONDS:
+            return False
+        return len(exact) == 1 and exact[0] in offered[0]
+
+
+KEEP = re.compile(r"\b(?:don'?t|do not|never|not|keep)\b", re.I)
+"""A reply to "which one?" that may keep one rather than take it off ("don't remove the
+rifle", "keep the pistol"): refused, so the player says "forget the ..." (#618)."""
 
 _WHICH = "more than one in the list fits: ask the player which to take off, and take none yet"
 
 
 def _their_words(blueprint: str, said: str) -> bool:
     """``blueprint`` is in the player's words, with numbers said any way ("three", "3",
-    "III"): ``from_said`` on both with numbers as digits."""
-    return from_said(naming.as_digits(blueprint), naming.as_digits(said))
+    "III"): ``from_said`` on both with numbers as digits. A lone "I", "V" or "X" the
+    player said is a numeral only right after a word of the name: "I want..." isn't
+    "Pulse I" (#610)."""
+    return from_said(naming.as_digits(blueprint), naming.as_digits(said, after=blueprint))
 
 
 def _check(said: str, owned: list[Owned]) -> dict[str, object]:

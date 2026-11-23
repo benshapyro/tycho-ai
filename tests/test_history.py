@@ -317,3 +317,25 @@ def test_an_exchange_still_waiting_to_be_written_doesn_t_bring_a_deleted_session
     held.set()
     history.close()
     assert store.kept == {}
+
+
+@pytest.mark.parametrize("all_of_it", [False, True])
+def test_a_session_deleted_in_the_same_second_as_the_next_exchange_stays_deleted(
+    all_of_it: bool,
+) -> None:
+    """#595 item 2: ids go to the second, so an exchange in the same second as the delete
+    started a session under the deleted one's id."""
+    store = FakeHistory()
+    history = History(store, on=True, now=lambda: NOW)
+    history.record(Result(1, "replied", text="where is Hurston", say="In Stanton."))
+    history._writer.submit(lambda: None).result()  # pyright: ignore[reportPrivateUsage]
+    first = history.session
+    if all_of_it:
+        history.delete_all()
+    else:
+        history.delete(first)
+    history.record(Result(2, "replied", text="gear down", say="Gear down."))
+    history.close()
+    assert history.session != first
+    assert first not in store.kept
+    assert [e.said for e in store.entries(history.session)] == ["gear down"]
