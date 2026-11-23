@@ -77,7 +77,7 @@ Tycho starts with Star Citizen but may grow to other games, each with its own wo
 
 ## Amendment, 23 November 2026 (third): the blueprints you own, from the game's log
 
-*Status: proposed. The maintainer chose the direction on 23 November 2026 (#598). This text waits for the maintainer's approval.*
+*Status: accepted. The maintainer chose the direction and approved this text on 23 November 2026 (#598, #606).*
 
 **Context.** In Star Citizen, a crafting blueprint is something the player owns for good once a mission gives it. Game.log records each one with the HUD's "Received Blueprint: <item>" line (#598). Players want to ask "do I have the Killshot blueprint?" or "which blueprints have I got?" in any session, not only the session where they got it. The second amendment rules out saving notes from the game's log. That rule is about notes, which are free text sent with every request. A list of owned blueprints is a different kind of thing: one item name per entry, checked against a fixed shape.
 
