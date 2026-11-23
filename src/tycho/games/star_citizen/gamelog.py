@@ -22,6 +22,7 @@ and says on its own.
 
 import threading
 from collections import deque
+from collections.abc import Callable
 from pathlib import Path
 
 from tycho.games.star_citizen import loglines
@@ -45,8 +46,11 @@ _CHUNK = 1 << 20
 class GameLog:
     """Satisfies ``runtime.ports.GameState``. Reads Game.log incrementally on each call."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, names: Callable[[str], str] | None = None) -> None:
+        """``names``: the game's text for a key such as "item_name_x" ("" if none), for
+        blueprints the log names only by key (#598)."""
         self.path = path
+        self._names = names
         self._lock = threading.Lock()
         self._offset = 0
         self._header = b""
@@ -122,6 +126,8 @@ class GameLog:
         line = loglines.read(raw)
         if line is None:
             return
+        if line.key and self._names is not None:
+            line = loglines.named_blueprint(line, self._names(line.key))
         self._number += 1
         logged = Logged(line.kind, line.said, loglines.when(raw), self._number, line.name)
         if line.set_route is True:

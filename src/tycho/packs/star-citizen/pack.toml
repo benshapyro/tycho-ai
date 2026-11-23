@@ -77,8 +77,8 @@ continuous = '''v_(pitch|yaw|roll)_\w+|v_strafe_(up|down|left|right|forward|back
 # Speaking up (#4, ADR 14's amendment of 22 Nov 2026): what Tycho may say without being
 # asked, each kind only if the player turns it on. Each follows things Game.log records
 # (the kinds in games/star_citizen/loglines.py), with a short fixed line; {name} is the
-# one short name the log gave, cleaned. Missions aren't here: the 22 Nov survey found no
-# mission lines in the log yet.
+# one short name the log gave, cleaned. Blueprints (#598) are the only mission news the
+# log has shown so far (23 Nov 2026).
 [callouts.quantum]
 name = "Quantum jump ended"
 lines = { arrived = "Quantum jump complete." }
@@ -96,6 +96,11 @@ example = "Now in UEE jurisdiction."
 [callouts.armistice]
 name = "Armistice zones"
 lines = { armistice = "Entering an armistice zone. No combat here." }
+
+[callouts.blueprints]
+name = "Blueprints received"
+lines = { blueprint = "New blueprint: {name}.", blueprint_unnamed = "New blueprint received." }
+example = "New blueprint: Monde Helmet Hiro."
 
 [callouts.private_property]
 name = "Private property"

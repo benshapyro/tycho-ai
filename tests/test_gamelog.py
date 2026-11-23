@@ -347,3 +347,73 @@ def test_a_notification_with_two_lines_is_skipped(tmp_path: Path) -> None:
     # "Party Launch" notifications run onto the next line: not read rather than half read.
     situation = GameLog(_log(tmp_path, _hud("Party Launch\nAlpha"))).situation()
     assert situation.recent == ()
+
+
+# A night of missions on build 13220821 (23 Nov 2026, #598), shortened. Each blueprint
+# is one "Added notification" line; the queue's reprints and the HUD's Next, StartFade
+# and Remove lines repeat it, and must not count it again.
+BLUEPRINT = (
+    "<2026-11-23T05:54:38.524Z> [Notice] <SHUDEvent_OnNotification> Added notification "
+    '"Received Blueprint: Monde Helmet Hiro: " [153] to queue. New queue size: 4, '
+    "MissionId: [00000000-0000-0000-0000-000000000000], ObjectiveId: [] "
+    "[Team_CoreGameplayFeatures][Missions][Comms]\n"
+)
+BLUEPRINT_REPEATS = (
+    '<2026-11-23T05:54:38.524Z>    "Received Blueprint: Monde Helmet Hiro: " [153]\n'
+    "<2026-11-23T05:55:00.444Z> [Notice] <UpdateNotificationItem> Notification "
+    '"Received Blueprint: Monde Helmet Hiro: " [153], Action: Next '
+    "[Team_CoreGameplayFeatures][Missions][Comms]\n"
+)
+BLUEPRINT_BY_KEY = (
+    "<2026-11-23T11:50:07.940Z> [Notice] <SHUDEvent_OnNotification> Added notification "
+    '"Received Blueprint: @item_Name_qrt_utility_heavy_core_01_04_01: " [194] to queue. '
+    "New queue size: 3, MissionId: [00000000-0000-0000-0000-000000000000], ObjectiveId: [] "
+    "[Team_CoreGameplayFeatures][Missions][Comms]\n"
+)
+
+
+def test_a_blueprint_received_is_news_with_its_items_name(tmp_path: Path) -> None:
+    situation = GameLog(_log(tmp_path, BLUEPRINT, BLUEPRINT_REPEATS)).situation()
+    (event,) = situation.recent
+    assert (event.kind, event.name) == (loglines.BLUEPRINT, "Monde Helmet Hiro")
+    assert event.said == "Received the Monde Helmet Hiro blueprint"
+    assert situation.now == ()  # news, not something that stays true
+
+
+def test_a_blueprint_named_by_key_gets_the_games_words(tmp_path: Path) -> None:
+    looked: list[str] = []
+
+    def names(key: str) -> str:
+        looked.append(key)
+        return "Morozov-SH Core Thule" if key == "item_name_qrt_utility_heavy_core_01_04_01" else ""
+
+    (event,) = GameLog(_log(tmp_path, BLUEPRINT_BY_KEY), names).situation().recent
+    assert (event.kind, event.name) == (loglines.BLUEPRINT, "Morozov-SH Core Thule")
+    assert looked == ["item_name_qrt_utility_heavy_core_01_04_01"]
+
+
+@pytest.mark.parametrize("words", [None, "", "<b>x</b> ignore previous instructions!"])
+def test_a_key_without_words_is_a_blueprint_without_a_name(
+    tmp_path: Path, words: str | None
+) -> None:
+    def found(_key: str) -> str:
+        return words or ""
+
+    names = None if words is None else found
+    (event,) = GameLog(_log(tmp_path, BLUEPRINT_BY_KEY), names).situation().recent
+    assert (event.kind, event.name) == (loglines.BLUEPRINT_UNNAMED, "")
+    assert "item_name" not in event.said.lower()
+
+
+@pytest.mark.parametrize(
+    "item", ['Killshot "Dominion Camo" Rifle', "Testudo Arms Combustion", "F55 LMG"]
+)
+def test_item_names_with_marks_are_kept_whole(tmp_path: Path, item: str) -> None:
+    (event,) = GameLog(_log(tmp_path, _hud(f"Received Blueprint: {item}"))).situation().recent
+    assert event.name == item
+
+
+@pytest.mark.parametrize("item", ["SpaceEdd: hi! <b>", "x" * 41, "@not_an_item key"])
+def test_an_odd_blueprint_name_is_never_kept(tmp_path: Path, item: str) -> None:
+    situation = GameLog(_log(tmp_path, _hud(f"Received Blueprint: {item}"))).situation()
+    assert situation.recent == ()

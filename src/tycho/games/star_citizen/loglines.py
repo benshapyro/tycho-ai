@@ -20,6 +20,11 @@ space, jurisdictions, armistice zones, private property), and joining a game ser
 It has nothing about power, shields, fuel, gear, lights, the ship's modes, crimes, or
 taking the controls; no mission lines appeared either (the session ran none). Those
 need a look at the screen (#31) or a later survey.
+
+A later look (23 Nov 2026, a night of missions on the same build) found the HUD's
+"Received Blueprint: <item>" notification, logged about a second after the contract's
+"Contract Complete" one (#598). It doesn't name the mission, and some items come as the
+game's text key ("@item_Name_..."), which the reader turns into words if it can.
 """
 
 import re
@@ -50,6 +55,11 @@ PRIVATE_PROPERTY = "private_property"
 """The HUD said "Entering Private Property" (an event)."""
 LEFT_PRIVATE_PROPERTY = "left_private_property"
 """The HUD said "Leaving Private Property" (an event)."""
+BLUEPRINT = "blueprint"
+"""The HUD said a blueprint was received (an event); ``name`` is the item's."""
+BLUEPRINT_UNNAMED = "blueprint_unnamed"
+"""A blueprint was received, but the log gave only the item's text key (``key``), and
+it couldn't be turned into words (an event)."""
 JOINED = "joined"
 """Joined a game server (an event): a fresh start in the universe, so what was known
 about the route and the surroundings is gone."""
@@ -74,7 +84,11 @@ class Line:
     ship: str = ""
     """The player's own ship, from a control-token line."""
     name: str = ""
-    """One short name the line carries (a jurisdiction's), for a callout's line (#4)."""
+    """One short name the line carries (a jurisdiction's, a blueprint's item), for a
+    callout's line (#4)."""
+    key: str = ""
+    """The game's text key for ``name``, when the log gave a key instead of words
+    (``BLUEPRINT_UNNAMED``): the reader looks it up in the game's own text."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +109,11 @@ _JURISDICTION = re.compile(r"^Entered ([A-Za-z][A-Za-z&' ]{0,30}) Jurisdiction$"
 """A jurisdiction's name is a place's or a faction's ("UEE", "Rough & Ready", "People's
 Alliance"): letters, "&" and apostrophes, at most four words. A callout says it (#4)."""
 _SHIP_NUMBER = re.compile(r"_\d+$")
+_BLUEPRINT = re.compile(r"^Received Blueprint: (.+)$")
+ITEM_NAME = re.compile(r"""[A-Za-z0-9][A-Za-z0-9 "'.&()/+-]{0,39}""")
+"""An item's name as a callout may say it ("Killshot "Dominion Camo" Rifle", "Monde
+Helmet Hiro"): letters, digits and a few marks, at most 40, the longest a callout says."""
+_ITEM_KEY = re.compile(r"@(item_name_?[A-Za-z0-9_]{1,80})", re.IGNORECASE)
 
 
 def clean(text: str) -> str:
@@ -172,9 +191,28 @@ def _notification(line: str) -> Line | None:
         if kind == LEFT_MONITORED:
             return Line(LEFT_MONITORED, said, clears=(MONITORED,))
         return Line(kind, said)
+    if match := _BLUEPRINT.match(said):
+        return _blueprint(match.group(1).strip())
     if (match := _JURISDICTION.match(said)) and len(match.group(1).split()) <= 4:
         return Line(JURISDICTION, said, keep=True, name=match.group(1))
     return None
+
+
+def _blueprint(item: str) -> Line | None:
+    if key := _ITEM_KEY.fullmatch(item):
+        return Line(BLUEPRINT_UNNAMED, "Received a blueprint", key=key.group(1).lower())
+    if ITEM_NAME.fullmatch(item):
+        return Line(BLUEPRINT, f"Received the {item} blueprint", name=item)
+    return None  # not an item's name: never said
+
+
+def named_blueprint(line: Line, name: str) -> Line:
+    """``line`` (``BLUEPRINT_UNNAMED``) with its item's ``name`` from the game's text,
+    or unchanged if the name isn't one a callout may say."""
+    name = clean(name)
+    if not ITEM_NAME.fullmatch(name):
+        return line
+    return Line(BLUEPRINT, f"Received the {name} blueprint", name=name)
 
 
 def _joined(line: str) -> Line | None:
