@@ -1115,6 +1115,60 @@ max_calls = 3
 no_errors = true
 tag = "blueprints"
 
+# The blueprints the player owns (#598, ADR 8's third amendment): kept from the log and
+# the player's words, read when asked. "owned" sets the list up.
+[[case]]
+heard = "do I have the omnisky three blueprint"
+mode = "lookup"
+expect = ["reply"]
+owned = ["Omnisky III Cannon", "Monde Helmet Hiro"]
+mentions = [["yes", "you do", "you have", "you've got", "in your list"]]
+tools = ["owned_blueprints"]
+max_calls = 2
+no_errors = true
+tag = "blueprints"
+
+[[case]]
+heard = "which blueprints have I got"
+mode = "lookup"
+expect = ["reply"]
+owned = ["Omnisky III Cannon", "Monde Helmet Hiro", "Killshot Rifle"]
+mentions = [["3", "three"]]
+tools = ["owned_blueprints"]
+max_calls = 2
+no_errors = true
+tag = "blueprints"
+
+[[case]]
+heard = "I've got the killshot rifle blueprint"
+mode = "chat"
+expect = ["reply"]
+owned = ["Monde Helmet Hiro"]
+owned_has = ["Killshot Rifle", "Monde Helmet Hiro"]
+max_calls = 3
+tag = "blueprints"
+
+[[case]]
+heard = "forget the monde helmet hiro blueprint"
+mode = "chat"
+expect = ["reply"]
+owned = ["Monde Helmet Hiro", "Killshot Rifle"]
+owned_has = ["Killshot Rifle"]
+owned_lacks = ["Monde Helmet Hiro"]
+max_calls = 2
+tag = "blueprints"
+
+[[case]]
+heard = "where can I get the omnisky 3 blueprint"
+mode = "lookup"
+expect = ["reply"]
+owned = ["Omnisky III Cannon"]
+mentions = [["already have", "already own", "already got", "you have", "you own", "you've got"]]
+tools = ["blueprint_lookup"]
+max_calls = 3
+no_errors = true
+tag = "blueprints"
+
 # The player's fleet (ADR 15): said by voice, kept by update_fleet, and read from
 # each request's header. "fleet" and "flying" set it up; the rest check it after.
 [[case]]

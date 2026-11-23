@@ -22,6 +22,7 @@ from typing import Any, cast
 
 from tycho.brain.lookups import LookupResult, failure
 from tycho.games.star_citizen import blueprint_names as naming
+from tycho.games.star_citizen.owned import OwnedBlueprints, mark
 from tycho.games.star_citizen.wiki import WikiError, WikiSource
 
 log = logging.getLogger(__name__)
@@ -54,7 +55,8 @@ Pass blueprint (the item it makes, as the player said it: "Omnisky III", "P4-AR"
 for "where do I get the X blueprint", or mission (a mission title or a giver: \
 "Vaughn", "Headhunters") for "what blueprints does X give"; leave the other empty. \
 For a blueprint's ingredients use item_lookup. Missions don't say exactly where \
-they're offered: don't guess a place beyond the system. In the answer, credit the \
+they're offered: don't guess a place beyond the system. you_own_it or you_own: the \
+player already has those blueprints, so say so. In the answer, credit the \
 Star Citizen Wiki once, in a few words. A result with not_found: say briefly what \
 wasn't found."""
 
@@ -106,8 +108,12 @@ class _Index:
 class BlueprintLookup:
     seconds = SECONDS
 
-    def __init__(self, source: WikiSource, clock: Any = time.monotonic) -> None:
+    def __init__(
+        self, source: WikiSource, clock: Any = time.monotonic, owned: OwnedBlueprints | None = None
+    ) -> None:
+        """``owned``: the player's blueprints (#598), to say which they already have."""
         self._source = source
+        self._owned = owned
         self._clock = clock
         self._index: _Index | None = None
         self._loaded_at = 0.0
@@ -152,6 +158,10 @@ class BlueprintLookup:
         except WikiError as e:
             log.warning("Blueprint missions didn't load: %s", e)
 
+    async def blueprint_names(self) -> list[str]:
+        """Every blueprint a mission gives in this patch. Raises ``WikiError``."""
+        return list((await self._missions()).by_blueprint)
+
     async def close(self) -> None:
         if self._loading is not None and not self._loading.done():
             self._loading.cancel()
@@ -170,6 +180,8 @@ class BlueprintLookup:
             body = await self._blueprint(index, blueprint)
         else:
             body = await self._mission(index, mission)
+        if self._owned is not None:
+            body = mark(body, await asyncio.to_thread(self._owned.listed))  # no log read
         return self._result({"game_version": index.patch, **body})
 
     async def _blueprint(self, index: _Index, said: str) -> dict[str, object]:

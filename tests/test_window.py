@@ -411,6 +411,7 @@ def test_nothing_private_is_offered_to_the_page() -> None:
             "commands",
             "delete_history",
             "finish_setup",
+            "forget_blueprint",
             "forget_note",
             "history",
             "history_session",

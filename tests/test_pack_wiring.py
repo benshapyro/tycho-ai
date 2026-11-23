@@ -160,6 +160,7 @@ def test_star_citizen_s_look_ups_keep_their_order() -> None:
         "update_fleet",
         "item_lookup",
         "blueprint_lookup",  # with items (#596)
+        "owned_blueprints",  # and the ones the player owns (#598)
         "mining_lookup",
         "commodity_prices",
         "trade_routes",

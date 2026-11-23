@@ -54,6 +54,12 @@ def memory_file() -> Path:
     return config_dir() / "memory.toml"
 
 
+def blueprints_file(pack: str) -> Path:
+    """The blueprints the player owns in one game (ADR 8's third amendment, #598): under
+    ``packs`` beside that game's notes."""
+    return config_dir() / "packs" / pack / "blueprints.toml"
+
+
 def game_memory_file(pack: str) -> Path:
     """The notes for one game. Under ``packs`` for every game, Star Citizen too, so it
     never shares a name with the every-game file."""

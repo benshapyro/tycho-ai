@@ -819,12 +819,20 @@
         ${mine.length ? `<ul class="memlist">${rows}</ul>` : `<p class="dim">Nothing yet. Say “remember …” while you play.</p>`}
         <p class="note">${mine.length} of ${d.most}. Kept in <span class="num">${esc(d.files[scope])}</span>, which you can edit.</p></div>`;
     };
+    const bp = d.blueprints;
+    const bpCard = !bp ? "" : `<div class="card frame" id="ownedBlueprints"><h3>Blueprints you own</h3>
+        ${bp.problem ? `<p class="err">${esc(bp.problem)}</p>` : ""}
+        ${bp.list.length ? `<ul class="memlist">${bp.list.map((b) => `<li class="memrow"><span>${esc(b.name)}${b.from === "you" ? ` <span class="dim">(you said)</span>` : ""}</span>
+          <span class="dim num">${esc(when(b.got))}</span>
+          <button class="link" type="button" data-blueprint="${esc(b.name)}" aria-label="Delete ${esc(b.name)}">Delete</button></li>`).join("")}</ul>`
+          : `<p class="dim">None yet. Tycho adds each blueprint the game's log says you received, and reads your older logs once when it starts.</p>`}
+        <p class="note">${bp.list.length} kept. Ask “do I have the … blueprint?” or say “I've got the … blueprint”. Kept in <span class="num">${esc(bp.file)}</span>, which you can edit; one you delete isn't added back from the log.</p></div>`;
     const fleet = d.fleet === null ? "" : `<p><b>${esc(d.fleet_label)}:</b> ${d.fleet.length ? d.fleet.map(esc).join(", ") : `<span class="dim">none yet</span>`}</p>`;
     page.innerHTML = `<h1>Memory</h1>
       <p class="lede">What Tycho remembers about you. Say “remember …” to add a note, “forget that …” to remove one, or “what do you remember about me?”. Tycho keeps a note only when you ask, and never one about pressing keys or confirming. The notes go to the brain with each request.</p>
       ${d.on ? "" : `<p class="warn-line" id="memoryOff">Memory is off: Tycho keeps these notes but doesn't use them. <button class="link" type="button" id="memoryOn">Turn memory on</button></p>`}
       ${d.problems.map((p) => `<p class="err">${esc(p)}</p>`).join("")}
-      <div class="stack">${scopeCard("every game", "Every game")}${scopeCard("this game", `In ${d.game_name}`)}
+      <div class="stack">${scopeCard("every game", "Every game")}${scopeCard("this game", `In ${d.game_name}`)}${bpCard}
       <div class="card frame" id="alsoKnown"><h3>Also known</h3>
         <p><b>What Tycho calls you:</b> ${d.call_me ? esc(d.call_me) : `<span class="dim">nothing</span>`}</p>${fleet}
         <p class="note">These have their own places: what Tycho calls you is in Settings, under Voice${d.fleet === null ? "" : `, and ${esc(d.fleet_label.toLowerCase())} in Settings, under Game and controls`}.</p></div></div>`;
@@ -836,6 +844,11 @@
     page.querySelectorAll("[data-forget]").forEach((b) => b.addEventListener("click", async () => {
       const r = await api.forget_note(b.dataset.forget, b.dataset.note);
       toast(r.ok ? "Deleted. Tycho won't use it again." : r.problem);
+      render();
+    }));
+    page.querySelectorAll("[data-blueprint]").forEach((b) => b.addEventListener("click", async () => {
+      const r = await api.forget_blueprint(b.dataset.blueprint);
+      toast(r.ok ? "Taken off your blueprints." : r.problem);
       render();
     }));
   }

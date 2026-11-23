@@ -95,6 +95,8 @@ from tycho.games.star_citizen.data import ensure
 from tycho.games.star_citizen.fleet import Fleet, FleetUpdate, patch_line
 from tycho.games.star_citizen.item_lookup import ItemLookup
 from tycho.games.star_citizen.mining import MiningLookup
+from tycho.games.star_citizen.owned import OwnedBlueprints
+from tycho.games.star_citizen.owned_tool import OwnedTool
 from tycho.games.star_citizen.ship_lookup import ShipLookup
 from tycho.games.star_citizen.store import KeybindStore
 from tycho.games.star_citizen.trade_lookup import trade_lookups
@@ -475,6 +477,25 @@ def set_notes(memory: Memory, rule: dict[str, Any]) -> None:
         store.path.unlink(missing_ok=True)
         for note in rule.get(key, []):
             store.add(note, memory.today())
+
+
+def set_owned(owned: OwnedBlueprints, rule: dict[str, Any]) -> None:
+    """A case's owned blueprints before it runs ("owned"): each case starts from them alone."""
+    owned.path.unlink(missing_ok=True)
+    for name in rule.get("owned", []):
+        owned.add(name)
+
+
+def grade_owned(owned: OwnedBlueprints, rule: dict[str, Any]) -> str:
+    """What a case says the owned blueprints are afterwards: "owned_has", "owned_lacks"."""
+    now = [o.name.lower() for o in owned.listed()]
+    for name in rule.get("owned_has", []):
+        if name.lower() not in now:
+            return f"owned blueprints lack {name!r} ({now})"
+    for name in rule.get("owned_lacks", []):
+        if name.lower() in now:
+            return f"owned blueprints still have {name!r}"
+    return "pass"
 
 
 def set_history(history: History, rule: dict[str, Any]) -> None:
@@ -1077,13 +1098,17 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     memory = Memory(NoteFile(scratch / "memory.toml"), NoteFile(scratch / "game-memory.toml"))
     # And past conversations (ADR 14, #484): scratch sessions, set by each case ("history").
     history = History(HistoryFolder(scratch / "history"))
+    # And owned blueprints (#598): a scratch list, set by each case ("owned"); no game log.
+    owned = OwnedBlueprints(scratch / "blueprints.toml", lambda: None)
+    blueprints = BlueprintLookup(WikiApi(), owned=owned)
     lookups = pack_lookups(
         wanted,
         [
             ("ships", counted),
             ("fleet", _Counted(FleetUpdate(fleet, lambda: library), journal)),
             ("items", _Counted(ItemLookup(WikiApi()), journal)),
-            ("items", _Counted(BlueprintLookup(WikiApi()), journal)),
+            ("items", _Counted(blueprints, journal)),
+            ("items", _Counted(OwnedTool(owned, blueprints.blueprint_names), journal)),
             ("mining", _Counted(MiningLookup(WikiApi()), journal)),
             *(("trade", _Counted(lookup, journal)) for lookup in trade_lookups(UexApi())),
             ("settings", settings_tool),
@@ -1146,6 +1171,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
             fleet.ships, fleet.flying = list(rule.get("fleet", [])), str(rule.get("flying", ""))
             set_notes(memory, rule)
             set_history(history, rule)
+            set_owned(owned, rule)
             start = settings.Settings.model_validate(rule.get("settings", {}))
             settings.save(start, settings_file)
             settings_tool.inner = SettingsTool(settings_file, live=LIVE)
@@ -1181,6 +1207,8 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
                 outcome.verdict = grade_settings(settings_file, start, rule)
             if outcome.verdict == "pass":
                 outcome.verdict = grade_memory(memory, rule)
+            if outcome.verdict == "pass":
+                outcome.verdict = grade_owned(owned, rule)
             outcomes.append(outcome)
             _print(outcome)
     finally:
