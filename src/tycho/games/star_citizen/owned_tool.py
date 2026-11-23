@@ -10,6 +10,7 @@ they said. While ``memory`` is off, it does nothing and says so.
 
 import asyncio
 import json
+import re
 import time
 from collections.abc import Awaitable, Callable, Mapping
 
@@ -21,9 +22,9 @@ from tycho.games.star_citizen.wiki import WikiError
 from tycho.memory.tool import FORGET, from_said
 
 SHOWN = 60
+"""The most names one answer lists; the count is always whole."""
 ANSWER_SECONDS = 60.0
 """How long after asking "which one?" a reply naming one of them takes it off (#610)."""
-"""The most names one answer lists; the count is always whole."""
 ACTIONS = ("list", "check", "add", "forget")
 DESCRIPTION = """\
 The crafting blueprints the player owns in Star Citizen, kept on their PC from the \
@@ -142,8 +143,12 @@ class OwnedTool:
             return failure("take off only a blueprint the player named, in their words")
         ranked = naming.ranked(said, {o.name: o for o in owned})
         exact = [n for n in ranked if naming.score(said, n) >= 1.0]
-        # Without a forget word, only a reply naming one that "which one?" offered.
-        if not FORGET.search(now.said) and not self._answers(offered, exact):
+        # Without a forget word, only a reply naming one that "which one?" offered,
+        # and never "don't remove that one" (#618).
+        asked = FORGET.search(now.said) or (
+            self._answers(offered, exact) and not KEEP.search(now.said)
+        )
+        if not asked:
             return failure("take a blueprint off only when the player asks to")
         if not ranked:
             return _result({"asked": said, "not_found": "no such blueprint in the list"})
@@ -160,6 +165,10 @@ class OwnedTool:
             return False
         return len(exact) == 1 and exact[0] in offered[0]
 
+
+KEEP = re.compile(r"\b(?:don'?t|do not|never|not|keep)\b", re.I)
+"""A reply to "which one?" that may keep one rather than take it off ("don't remove the
+rifle", "keep the pistol"): refused, so the player says "forget the ..." (#618)."""
 
 _WHICH = "more than one in the list fits: ask the player which to take off, and take none yet"
 

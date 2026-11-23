@@ -116,6 +116,15 @@ def test_a_game_fact_the_player_states_is_saved_and_noted_aloud(said: str, note:
     assert "say" not in _run(memory, "remember I like short answers", note="Likes short answers")
 
 
+def test_years_into_the_game_is_a_game_fact_not_an_age() -> None:
+    """#618 item 2: "I'm 3 years into the game" was read as the player's age."""
+    from tycho.memory.tool import PERSONAL
+
+    assert not PERSONAL.search("I'm 3 years into the game")
+    assert not PERSONAL.search("I'm 10 yrs in")
+    assert PERSONAL.search("I'm 34 yrs old")
+
+
 @pytest.mark.parametrize(
     ("said", "note", "scope"),
     [
