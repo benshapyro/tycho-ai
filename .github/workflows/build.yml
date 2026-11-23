@@ -77,6 +77,7 @@ jobs:
           Write-Output "capture child: exit $LASTEXITCODE, $look"
           if ($LASTEXITCODE -ne 3) { throw "the capture child didn't answer 'no picture'" }
           if ($look -match "ModuleNotFoundError|ImportError|No module") { throw "a WinRT module is missing" }
+          $global:LASTEXITCODE = 0  # exit 3 was the answer wanted; the step passes
 
       - name: Third-party notices, and nothing GPL or non-commercial
         run: uv run --no-sync python tools/notices.py dist/tycho
