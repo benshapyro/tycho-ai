@@ -170,6 +170,39 @@ def test_a_real_crash_after_a_handled_error_is_still_a_crash(tmp_path: Path) -> 
     assert "access violation" in found.read_text(encoding="utf-8")
 
 
+def test_the_live_file_says_what_it_is(tmp_path: Path) -> None:
+    # #582: a handled 0x8001010d read mid-run was taken for a crash again.
+    crashes.watch(tmp_path)
+    try:
+        text = (tmp_path / crashes.LIVE).read_text(encoding="utf-8")
+        assert text.startswith("Tycho is running.")
+        assert "0x8001010d" in text
+        assert "removed when Tycho stops" in text
+    finally:
+        crashes.stop()
+
+
+def test_a_note_alone_or_with_handled_errors_isnt_a_crash(tmp_path: Path) -> None:
+    (tmp_path / crashes.LIVE).write_text(crashes.NOTE, encoding="utf-8")  # killed
+    assert crashes.watch(tmp_path) is None
+    crashes.stop()
+    (tmp_path / crashes.LIVE).write_text(crashes.NOTE + HANDLED, encoding="utf-8")
+    assert crashes.watch(tmp_path) is None
+    crashes.stop()
+    assert crashes.past(tmp_path) == []
+
+
+def test_the_note_doesnt_hide_a_real_crash(tmp_path: Path) -> None:
+    died = _tycho(CRASH, tmp_path)
+    assert died.returncode != 0
+    found = crashes.watch(tmp_path)
+    crashes.stop()
+    assert found is not None
+    text = found.read_text(encoding="utf-8")
+    assert text.startswith(crashes.NOTE)  # the crash comes after it, not over it
+    assert "Segmentation fault" in text or "Windows fatal exception" in text
+
+
 def test_only_handled_reads_each_record() -> None:
     assert crashes.only_handled(HANDLED)
     assert not crashes.only_handled("Fatal Python error: Segmentation fault\n")

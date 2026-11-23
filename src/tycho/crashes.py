@@ -37,6 +37,14 @@ RECENT_SECONDS = 3 * 24 * 3600.0
 """How long ``tycho check`` and the window's status keep saying Tycho crashed."""
 STOPPED = "Tycho stopped unexpectedly last time. What it was doing is in {file}."
 
+NOTE = (
+    "Tycho is running. A native crash is written below. So are some Windows exceptions "
+    "that Windows or .NET then handles, such as code 0x8001010d: Tycho goes on after "
+    "those, and this file is removed when Tycho stops.\n\n"
+)
+"""The live file's first lines (#582): a "Windows fatal exception" written here while
+Tycho goes on isn't a crash, and anyone reading the file mid-run should know that."""
+
 HANDLED = frozenset({"code 0x8001010d"})
 """Windows exceptions ``faulthandler`` writes that Windows or .NET then handles (#474).
 0x8001010d: a COM call refused during an input-synchronous call, which the app
@@ -62,6 +70,8 @@ def watch(folder: Path | None = None) -> Path | None:
         try:
             folder.mkdir(parents=True, exist_ok=True)
             _file = live.open("w", encoding="utf-8")
+            _file.write(NOTE)
+            _file.flush()  # faulthandler writes after it, straight to the file
         except OSError as e:
             log.warning("Couldn't open %s, so a crash wouldn't be recorded: %s", live, e)
             return found
@@ -95,16 +105,17 @@ def only_handled(record: str) -> bool:
 
 def _keep(live: Path) -> Path | None:
     """The last run's file, if it's there: kept under a dated name if anything was
-    written to it, and removed if not (Tycho was ended from outside, or the PC lost
-    power: nothing to read)."""
+    written to it after ``NOTE``, and removed if not (Tycho was ended from outside, or
+    the PC lost power: nothing to read)."""
     try:
         if not live.exists():
             return None
         stat = live.stat()
-        if stat.st_size == 0:
+        record = live.read_text(encoding="utf-8", errors="replace").removeprefix(NOTE)
+        if not record.strip():
             live.unlink()
             return None
-        if only_handled(live.read_text(encoding="utf-8", errors="replace")):
+        if only_handled(record):
             log.info("The last run's %s held only handled Windows exceptions", live.name)
             live.unlink()
             return None
