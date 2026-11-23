@@ -60,7 +60,7 @@ Tycho starts with Star Citizen but may grow to other games, each with its own wo
 
 ## Amendment, 23 November 2026 (second): Tycho notes game facts as you say them
 
-*Status: proposed. Needs the maintainer's OK on this text; the maintainer chose the direction on 23 November 2026.*
+*Status: accepted. The maintainer chose the direction and approved this text on 23 November 2026 (#589).*
 
 **Context.** In the first version, Tycho saved a note only after "remember that..." or a yes to its offer. The maintainer found that too much friction to be useful: players state facts about how they play in passing ("I'm in my Cutlass", "heading home to Area18") and won't stop to say "remember".
 
