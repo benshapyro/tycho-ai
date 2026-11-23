@@ -329,9 +329,9 @@ class Settings(BaseModel):
     )
     memory: bool = Field(
         default=True,
-        description='Let Tycho keep notes you ask it to remember ("remember I like short '
-        'answers"), sent to the brain with each request. Nothing is kept unless you ask. Off: '
-        "the notes stay on your PC, unused. See them on the Memory page.",
+        description="Short notes about you, sent to the brain with each request: facts you "
+        "mention about how you play, and what you ask it to remember. Off: nothing new is "
+        "kept, and notes stay on your PC, unused. See them on the Memory page.",
         json_schema_extra=_rule("lower_only", "now", how=FILE_OR_APP),
     )
     keep_history: bool | None = Field(

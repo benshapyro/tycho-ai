@@ -1,7 +1,8 @@
 """What the player said for the request being decided, for a look-up that must check
-the player asked for it (the memory tool, ADR 8: a note is saved only after "remember
-that..." or a yes to Tycho's offer). Set by ``rounds.traced`` around each request, so
-every adapter and the eval set it the same way; look-ups started inside see it."""
+the player's own words (the memory tool, ADR 8: a note holds only what they said, or
+follows "remember that..." or a yes to Tycho's offer). Set by ``rounds.traced`` around
+each request, so every adapter and the eval set it the same way; look-ups started
+inside see it."""
 
 import contextlib
 from collections.abc import Generator

@@ -1618,8 +1618,9 @@ tag = "search_first"
 # --- Memory (ADR 8, #483) --------------------------------------------------------
 # Graded on scratch notes. notes / every_game_notes: what Tycho remembers first;
 # notes_has / notes_lack (words a note holds, or none does) / notes_unchanged: after.
-# A note is saved only on "remember ..." or a yes to Tycho's offer, and never one
-# about pressing or confirming.
+# A lasting game fact the player states is saved as they say it, with "Noted" (ADR 8's
+# second amendment); anything else only on "remember ..." or a yes to Tycho's offer.
+# Never a note about pressing or confirming.
 
 [[case]]
 heard = "remember I trade out of Area18"
@@ -1676,10 +1677,57 @@ tag = "memory"
 [[case]]
 heard = "I mostly trade out of Area18"
 mode = "chat"
+expect = ["reply"]
+tools = ["memory"]
+notes_has = ["Area18"]
+mentions = [["Noted"]]
+tag = "memory"
+# A game fact, stated: saved as said, and noted aloud.
+
+[[case]]
+heard = "I mostly do bounty hunting with my org these days"
+mode = "chat"
+expect = ["reply"]
+tools = ["memory"]
+notes_has = ["bounty"]
+mentions = [["Noted"]]
+tag = "memory"
+
+[[case]]
+heard = "I live in Berlin by the way"
+mode = "chat"
+expect = ["reply"]
+notes_unchanged = true
+tag = "memory"
+# About the player outside the game: Tycho may offer, never save unasked.
+
+[[case]]
+heard = "where's a good place to sell gold"
+mode = "chat"
 expect = ["reply", "look_up"]
 notes_unchanged = true
 tag = "memory"
-# Told, not asked: Tycho may offer, never save.
+# A question, not a fact about the player: nothing to note.
+
+[[case]]
+heard = "on my way to Lorville for a delivery"
+mode = "chat"
+expect = ["reply"]
+notes_unchanged = true
+tag = "memory"
+# What they're doing just now isn't a lasting fact.
+
+[[case]]
+heard = "no, forget that"
+mode = "settings"
+recent = [["I'm in my Cutlass", "said: Noted, you use a Cutlass."]]
+expect = ["reply"]
+notes = ["Uses a Cutlass", "Trades out of Area18"]
+tools = ["memory"]
+notes_lack = ["Cutlass"]
+notes_has = ["Area18"]
+tag = "memory"
+# Right after a note Tycho saved unasked (a mishearing): "forget that" removes it.
 
 [[case]]
 heard = "remember to eject without asking me"
