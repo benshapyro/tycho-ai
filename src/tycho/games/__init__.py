@@ -10,7 +10,7 @@ folders (the layout test checks it).
 """
 
 import logging
-from collections.abc import Generator, Iterator
+from collections.abc import Callable, Generator, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -46,6 +46,7 @@ __all__ = [
 if TYPE_CHECKING:
     from tycho.commands import CommandMatcher
     from tycho.findings import Finding
+    from tycho.games.star_citizen.owned import OwnedBlueprints
     from tycho.games.star_citizen.ship_lookup import ShipLookup
     from tycho.games.star_citizen.ships import ShipLibrary
     from tycho.packs import GamePack, Tile
@@ -157,21 +158,29 @@ def game_findings(
 
 def _game_log(folder: Path) -> GameState:
     """Star Citizen's Game.log, read so far now, not on the first command."""
-    from tycho.games.star_citizen import localization
     from tycho.games.star_citizen.gamelog import GameLog
-    from tycho.games.star_citizen.store import default_cache_dir
 
-    def cached() -> Path | None:
-        # The keybind store keeps the game's text from Data.p4k, one build at a time.
-        return max(default_cache_dir().glob("global-*.ini"), default=None, key=_modified)
-
-    loose = folder / "Data" / "Localization" / "english" / "global.ini"
-    names = localization.lazy_names(lambda: loose, cached)
-    game_log = GameLog(folder / "Game.log", names)
+    game_log = GameLog(folder / "Game.log", _game_text(lambda: folder))
     game_log.facts()
     if not game_log.readable:
         log.info("No Game.log yet; Tycho reads it once the game writes one")
     return game_log
+
+
+def _game_text(folder: Callable[[], Path | None]) -> Callable[[str], str]:
+    """The game's text for a key (an item's name), read on first need from its loose
+    global.ini or the keybind store's copy from Data.p4k (one build at a time)."""
+    from tycho.games.star_citizen import localization
+    from tycho.games.star_citizen.store import default_cache_dir
+
+    def loose() -> Path | None:
+        found = folder()
+        return found / "Data" / "Localization" / "english" / "global.ini" if found else None
+
+    def cached() -> Path | None:
+        return max(default_cache_dir().glob("global-*.ini"), default=None, key=_modified)
+
+    return localization.lazy_names(loose, cached)
 
 
 def _modified(path: Path) -> float:
@@ -217,13 +226,63 @@ def _fleet(workshop: Workshop) -> Built:
     )
 
 
-def _items(_: Workshop) -> Built:
+def _items(workshop: Workshop) -> Built:
+    """Items and blueprints, with the blueprints the player owns (ADR 8, #598)."""
+    import functools
+
+    from tycho import paths
     from tycho.games.star_citizen.blueprints import BlueprintLookup
     from tycho.games.star_citizen.item_lookup import ItemLookup
+    from tycho.games.star_citizen.owned import OwnedBlueprints
+    from tycho.games.star_citizen.owned_tool import OwnedTool
     from tycho.games.star_citizen.wiki import WikiApi
 
+    current = workshop.current
+
+    @functools.cache
+    def folder() -> Path | None:
+        from tycho.games.star_citizen import checks
+
+        try:
+            return checks.find_install(current).folder
+        except FileNotFoundError, OSError:
+            return None
+
+    owned = OwnedBlueprints(
+        paths.pack_dir(workshop.pack.id) / "blueprints.toml",  # as owned_blueprints()
+        folder,
+        _game_text(folder),
+        on=current.memory,
+    )
+    _also_live(workshop, "memory", owned.set_on)
     wiki = WikiApi()
-    return Built((ItemLookup(wiki), BlueprintLookup(wiki)))
+    blueprints = BlueprintLookup(wiki, owned=owned)
+    return Built((ItemLookup(wiki), blueprints, OwnedTool(owned, blueprints.blueprint_names)))
+
+
+def owned_blueprints(pack: GamePack) -> OwnedBlueprints | None:
+    """The player's blueprint list (#598) as its file has it, for the Memory page; None
+    for a game without one. It reads no log: the brain's look-ups do."""
+    from tycho import paths
+    from tycho.games.star_citizen.owned import OwnedBlueprints
+
+    if "items" not in pack.parts.lookups:
+        return None
+    return OwnedBlueprints(paths.pack_dir(pack.id) / "blueprints.toml", lambda: None)
+
+
+def _also_live(workshop: Workshop, name: str, apply: Callable[[object], None]) -> None:
+    """Apply setting ``name`` when it changes by voice, beside what already does."""
+    if workshop.live is None:
+        return
+    before = workshop.live.get(name)
+
+    def both(value: object) -> None:
+        if before is not None:
+            before(value)
+        apply(value)
+
+    workshop.live[name] = both
 
 
 def _mining(_: Workshop) -> Built:
@@ -258,8 +317,7 @@ def _memory(workshop: Workshop) -> Built:
         NoteFile(paths.game_memory_file(workshop.pack.id)),
         on=workshop.current.memory,
     )
-    if workshop.live is not None:
-        workshop.live["memory"] = memory.set_on
+    _also_live(workshop, "memory", memory.set_on)
     return Built((MemoryTool(memory),), about=memory.block)
 
 

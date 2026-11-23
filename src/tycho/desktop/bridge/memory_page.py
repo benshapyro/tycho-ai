@@ -1,6 +1,8 @@
 """The Memory page (ADR 8, #483): every note Tycho keeps, for every game and for the
 chosen game, with a way to delete each, and beside them what else Tycho knows about
-the player (their ships and what to call them), read-only: those keep their own places."""
+the player (their ships and what to call them), read-only: those keep their own places.
+For Star Citizen, also the blueprints the player owns (ADR 8's third amendment, #598),
+each with a way to take it off."""
 
 import logging
 
@@ -47,6 +49,7 @@ class MemoryPage(State):
             "fleet": ships,
             "fleet_label": (games.hangar_hint(pack) or {}).get("label", ""),
             "call_me": called(current),
+            "blueprints": _blueprints(pack),
         }
 
     def forget_note(self, scope: object, text: object) -> dict[str, object]:
@@ -64,6 +67,37 @@ class MemoryPage(State):
             return {"ok": False, "problem": "That note was already gone."}
         log.info("Memory: a note deleted on the Memory page (%s)", scope)
         return {"ok": True}
+
+    def forget_blueprint(self, name: object) -> dict[str, object]:
+        """Take one blueprint off the list, by its name exactly as listed."""
+        owned = games.owned_blueprints(_pack(settings.load(self._path).game))
+        if owned is None or not isinstance(name, str):
+            return {"ok": False, "problem": "That blueprint isn't one Tycho keeps."}
+        try:
+            removed = owned.remove(name)
+        except OSError as e:
+            return {"ok": False, "problem": f"Couldn't change the list: {e}"}
+        if not removed:
+            return {"ok": False, "problem": "That blueprint was already gone."}
+        log.info("Memory: a blueprint taken off on the Memory page")
+        return {"ok": True}
+
+
+def _blueprints(pack: GamePack) -> dict[str, object] | None:
+    """The blueprints the player owns, as the list's file has them, or None for a game
+    without them. Shown whatever ``memory`` says, like the notes."""
+    owned = games.owned_blueprints(pack)
+    if owned is None:
+        return None
+    listed = owned.listed()
+    return {
+        "file": str(owned.path),
+        "problem": owned.problem,
+        "list": [
+            {"name": o.name, "got": o.got.isoformat() if o.got else "", "from": o.source}
+            for o in listed
+        ],
+    }
 
 
 def _pack(game: str) -> GamePack:

@@ -1439,3 +1439,38 @@ def test_with_history_off_the_page_says_so_and_turns_it_on(
     expect(page.locator("#historyOff")).to_have_count(0)
     assert setup.saved().keep_history is True
     setup.close()
+
+
+def test_the_memory_page_lists_owned_blueprints_and_takes_one_off(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#598 (ADR 8's third amendment): the blueprints the player owns, each with its day
+    and a delete button; one taken off isn't added back from the log."""
+    from tycho import paths
+
+    settings.save(
+        Settings(
+            push_to_talk="mouse:0x06", crash_reports=False, look_at_screen=False, keep_history=False
+        ),
+        path,
+    )
+    listed = paths.pack_dir("star-citizen") / "blueprints.toml"
+    listed.parent.mkdir(parents=True, exist_ok=True)
+    listed.write_text(
+        '[[blueprint]]\nname = "Monde Helmet Hiro"\ngot = 2026-11-22\nfrom = "log"\n'
+        '[[blueprint]]\nname = "Killshot Rifle"\nfrom = "you"\n',
+        "utf-8",
+    )
+    setup = Setup(browser, path, first_run=False)
+    page = setup.page
+    page.get_by_role("button", name="Memory", exact=True).click()
+    card = page.locator("#ownedBlueprints")
+    expect(card).to_contain_text("Monde Helmet Hiro")
+    expect(card).to_contain_text("2026")
+    expect(card.locator(".memrow", has_text="Killshot")).to_contain_text("you said")
+    page.get_by_role("button", name="Delete Monde Helmet Hiro").click()
+    expect(card).not_to_contain_text("Monde Helmet")
+    text = listed.read_text("utf-8")
+    assert "Killshot Rifle" in text
+    assert 'taken_off = ["Monde Helmet Hiro"]' in text
+    setup.close()

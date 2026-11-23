@@ -9,6 +9,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ## [Unreleased]
 
 ### Added
+- Tycho keeps a list of the Star Citizen blueprints you own, on your PC. It reads your older game logs once, then adds each new blueprint a mission gives you. Ask "do I have the Omnisky III blueprint?" or "which blueprints have I got?". Blueprint answers also say when you already own one. Add one yourself with "I've got the Killshot Rifle blueprint". See and delete them on the Memory page, or say "forget the ... blueprint". With memory off, nothing is kept or used. (#598)
 - Tycho can tell you when a mission gives you a blueprint ("New blueprint: Monde Helmet Hiro."). Turn on "Blueprints received" under speaking up, or say "tell me about blueprints". (#598)
 - Ask Tycho where a crafting blueprint comes from, or what a mission gives: "where do I get the Omnisky III blueprint?" names the mission, who gives it, the system and the standing you need, and says it's one of several the mission picks from ("one of 10"). "What blueprints can I get from Vaughn?" lists them. It's from the current patch's game files, through the Star Citizen Wiki. ([#596](https://github.com/benshapyro/tycho-ai/issues/596))
 - "How do I make a P4-AR?" now gets the whole answer: the recipe, then where to mine each material, looked up together. Recipes also say what each material's quality improves ("better Iron hits harder and fires faster") and any minimum quality. ([#597](https://github.com/benshapyro/tycho-ai/issues/597))
