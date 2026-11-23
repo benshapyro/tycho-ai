@@ -1,6 +1,6 @@
 # 8. Packs and connections
 
-Date: 2026-10-30 · Status: proposed. Pending: the author's sign-off. The player layer is accepted as memory (amendment below, 23 November 2026). The game-pack layer is settled by [ADR 18](0018-game-packs.md) (accepted 12 November 2026): data folders that name built-in parts by id.
+Date: 2026-10-30 · Status: accepted 23 November 2026 (fourth amendment below), with persona packs and connections left for after 1.0. The player layer is accepted as memory (amendments below, 23 November 2026). The game-pack layer is settled by [ADR 18](0018-game-packs.md) (accepted 12 November 2026): data folders that name built-in parts by id.
 
 ## Context
 
@@ -36,7 +36,7 @@ Tycho starts with Star Citizen but may grow to other games, each with its own wo
 
 ## Amendment, 23 November 2026: the player layer becomes memory
 
-*Status: accepted. The maintainer approved this text on 23 November 2026 (#569), after agreeing to the direction in the 0.11 plan ([#483](https://github.com/benshapyro/tycho-ai/issues/483)). Only the player layer is decided here; the rest of this ADR stays proposed.*
+*Status: accepted. The maintainer approved this text on 23 November 2026 (#569), after agreeing to the direction in the 0.11 plan ([#483](https://github.com/benshapyro/tycho-ai/issues/483)). Only the player layer was decided here; the fourth amendment accepts the rest.*
 
 **Context.** Each request starts almost fresh: follow-ups last 30 seconds (ADR 14). The player's fleet (`fleet.toml`, ADR 15) and what to call them (`call_me`) are early, narrow kinds of the player layer above. Players want Tycho to remember lasting facts about them, without repeating them: "I mostly trade out of Area18", "keep answers short".
 
@@ -93,3 +93,17 @@ Tycho starts with Star Citizen but may grow to other games, each with its own wo
 **Not decided here.** Lists of other things the log records, and sharing the list between PCs.
 
 **Consequences.** A blueprint store with a fake, the log reader feeding it, the one-time read of saved logs, and the look-up's "owned" answers. Tests cover the name check on save and on read, an item named by key, the size limit, memory turned off, and "forget". Brain eval cases cover "do I have the X blueprint?" and "which blueprints have I got?". The bar stays zero wrong presses. The README's "What leaves your PC" row for memory notes also names owned blueprints.
+
+## Amendment, 23 November 2026 (fourth): accepted for 1.0, with personas and connections left for later
+
+*Status: accepted. The maintainer chose the direction and approved this text on 23 November 2026 (#613, #616): accept what's built, and leave persona packs and connections for after 1.0.*
+
+**Context.** Three amendments and ADR 18 have settled most of this record: the core stays fixed above everything, game packs are data folders that name built-in parts (ADR 18), the player layer is memory and owned blueprints, and the live state is what the game's log records (`tycho.situation`, ADR 14's amendments). Two parts were never built: persona packs and connections to outside services. 1.0 needs every record accepted or dropped.
+
+**Decision.** This record is **accepted**, as follows.
+
+- **Accepted as built:** the order of layers (core, game pack, player layer, live state), nothing below the core can loosen safety, and packs are data, never code.
+- **Persona packs: not part of 1.0.** Today the voice (ADR 9), what Tycho calls the player (`call_me`) and the sounds are settings, not a pack. A swappable persona pack, and sound treatment with filter presets (#16), need their own amendment before they're built.
+- **Connections (MCP): not part of 1.0.** No connection is built, and none ships in 1.0. The rules above (off until the player turns it on, its own permissions, anything that speaks for the player asks first) stay as the starting point. A first connection, such as an org's Discord (#17), needs its own amendment before it's built, settling what it can see and send.
+
+**Consequences.** The ADR index lists ADR 8 as accepted. architecture.md stops calling personas packs. #16 and #17 stay open for after 1.0.
