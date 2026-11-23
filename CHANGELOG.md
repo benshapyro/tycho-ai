@@ -8,6 +8,8 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-23
+
 ### Added
 - Tycho can look at the game window when you ask: say "take a look" (or "what am I looking at?"), or say "yes" when Tycho asks "Want me to take a look?". It's off until you say yes, in setup's privacy step or in Settings, and players who set Tycho up before are asked once. Only the game's own window is captured, you hear a camera click each time, and the picture goes to the brain with your question and nowhere else: it's never saved or logged. Saying "stop looking at my screen" turns it off, and a look never presses a key. ([#31](https://github.com/benshapyro/tycho-ai/issues/31))
 - With one card at a time, the card that gives way now stays as a thin strip for a minute, and so does the one before it. Say "go back a card" or "last card" to bring one back, and "next card" to go forward again. "Hide the tile" and "keep the tile there" also work now. ([#491](https://github.com/benshapyro/tycho-ai/issues/491))
@@ -204,7 +206,8 @@ The first release with an installer, as a preview. Earlier versions weren't rele
 - A fleet Tycho remembers, and speech recognition on your PC.
 - A check for a newer version when Tycho starts (it never updates itself).
 
-[Unreleased]: https://github.com/benshapyro/tycho-ai/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/benshapyro/tycho-ai/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.10.0
 [0.9.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.9.0
 [0.8.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.8.0
 [0.7.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.7.0

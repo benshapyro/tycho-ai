@@ -111,6 +111,8 @@ Without an ElevenLabs key, Tycho's replies are shown in its window and it plays 
 - **Asks before anything you can't undo,** and when a request is vague ("faster") it asks instead of guessing. What you say to your squad on the same button ("break right") presses nothing.
 - **The Tile:** a small see-through panel over the game for what's better read than heard: prices, routes, specs, recipes, steps.
 - **Advisor mode:** turn key actions off and Tycho only answers and advises. **World of Warcraft: Forever** always works this way: ask about classes, dungeons, professions and more.
+- **Looks at the game window when you ask,** if you turned it on: "take a look". Only the game's own window, with a camera click each time, and the picture is never saved.
+- **Speaks up when you want it to,** about a few things the game's log records, such as a quantum jump ending or entering an armistice zone. Off until you pick which.
 - **Settings by voice,** with "undo". By voice a safeguard can only get stricter, never looser.
 - **Its own window and tray icon:** guided setup, whether Tycho is ready and listening, everything you can say, and every setting.
 - **A log of every key it pressed,** and crash reports only if you say yes.
@@ -170,9 +172,7 @@ These are plans, not promises. Each links its issue.
 
 - **Your fleet and logs in Tycho's window** ([#12](https://github.com/benshapyro/tycho-ai/issues/12)).
 - **Learns from misses and fixes itself** ([#51](https://github.com/benshapyro/tycho-ai/issues/51)): offers to add phrases you rephrased, and repairs keybinds after a patch, always with your OK.
-- **Reads the game's log** ([#30](https://github.com/benshapyro/tycho-ai/issues/30)): knows which ship you're in and where you are, without being told.
-- **Looks at your screen when you ask** ([#31](https://github.com/benshapyro/tycho-ai/issues/31)): it captures only the game window and keeps nothing.
-- **Callouts** ([#4](https://github.com/benshapyro/tycho-ai/issues/4)) and an **optional wake word** ([#3](https://github.com/benshapyro/tycho-ai/issues/3)).
+- **An optional wake word** ([#3](https://github.com/benshapyro/tycho-ai/issues/3)).
 
 ## Principles
 
