@@ -83,6 +83,7 @@ ADR 8's layer 1 holds. In `safety.py`, **the rules stay core**: the order of che
 | `not_danger` | Harmless actions the backstop words would catch ("fire_mode") | **Built-in packs only** |
 | `mode_guards`, `state_guards`, `accepted_risks` | Setup actions and game facts that switch a control context off, so a key it shares with a dangerous action is safe to press | **Built-in packs only** |
 | `facts` | The facts the pack's game-state part can report, with the sentence the gate says when one is missing | Any pack |
+| `toggles` | Words in an action's name or label that mean it flips or cycles a state ("toggle", "swap"). When Tycho reaches an action only through one, it says it sent it and can't see which way it went, instead of claiming a result ([#29](https://github.com/benshapyro/tycho-ai/issues/29), added 23 November 2026) | Any pack. It only makes Tycho claim less |
 
 The lists that loosen a check (the last two "built-in only" rows) are trusted only from packs that ship inside Tycho, reviewed in a pull request like any code. Until there's a feature for sharing packs (ADR 8's open trust questions), every pack ships inside Tycho anyway; the rule is written now so sharing can't quietly change it. A pack that says "eject without asking", by leaving eject out of `confirm` or putting it in `not_danger` from outside, is refused and reported, and a test proves it.
 
