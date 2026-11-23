@@ -84,7 +84,7 @@ The last full run of the brain eval recorded in the repository's issues:
 
 In the maintainer's own play (31 October to 8 November), the model was asked a median of 3.4 times an hour, which comes to well under a cent an hour ([#192](https://github.com/benshapyro/tycho-ai/issues/192)).
 
-Older numbers still quoted in the decision records come from smaller runs: 97% on 82 typed cases (30 October, [ADR 6](../adr/0006-cloud-brain-local-ears.md)), and 29 of 30 recorded phrases transcribed exactly ([ADR 2](../adr/0002-cascaded-voice-pipeline.md)). The Star Citizen eval has 195 cases today, and World of Warcraft: Forever has 30 of its own.
+Older numbers still quoted in the decision records come from smaller runs: 97% on 82 typed cases (30 October, [ADR 6](../adr/0006-cloud-brain-local-ears.md)), and 29 of 30 recorded phrases transcribed exactly ([ADR 2](../adr/0002-cascaded-voice-pipeline.md)). The Star Citizen eval has 248 cases today, and World of Warcraft: Forever has 34 of its own.
 
 ## Limits of the evidence
 
@@ -94,7 +94,7 @@ Older numbers still quoted in the decision records come from smaller runs: 97% o
 - **Results aren't in the repository.** Result files stay on the maintainer's PC with the recordings. The numbers above are copied from issue comments, so they can't be reproduced from a fresh clone without the maintainer's keybinds file and a paid run (about 5 cents).
 - **The frame-rate cost of running beside the game is unmeasured.** Speech recognition moved to the processor in 0.8 after it caused graphics crashes on the card ([#188](https://github.com/benshapyro/tycho-ai/issues/188)).
 - **Few players.** Tycho is pre-alpha and has been played mostly by its maintainer.
-- **Not built yet:** screen vision, the full state tracker, and learning from misses. [The architecture page](../architecture.md) says which parts are planned.
+- **Not built yet:** the full state tracker, looking without being asked, and learning from misses. [The architecture page](../architecture.md) says which parts are planned.
 
 ## How the work is split
 
@@ -120,7 +120,7 @@ flowchart LR
 
 What keeps that honest:
 
-- **Every change is a pull request** that must pass CI on Windows and an automated review by a second Claude session ([the workflow](../../.github/workflows/claude-code-review.yml)). Only blocking findings are fixed in the pull request. The rest become issues labelled [`from-review`](https://github.com/benshapyro/tycho-ai/issues?q=label%3Afrom-review), more than 120 so far, cleared before each release.
+- **Every change is a pull request** that must pass CI on Windows and an automated review by a second Claude session ([the workflow](../../.github/workflows/claude-code-review.yml)). Only blocking findings are fixed in the pull request. The rest become issues labelled [`from-review`](https://github.com/benshapyro/tycho-ai/issues?q=label%3Afrom-review), 170 so far, cleared before each release.
 - **Rules that matter are tests, not prose.** Tests read the source and fail on a module over 500 lines, a game's word in game-neutral code, a DLL loaded outside one module, or a changed briefing. Agents start every session with no memory, so a rule that isn't checked drifts.
 - **The docs are the agents' memory.** That is why there are 19 decision records for a small project: each one is what a new session reads instead of asking the maintainer again.
 - **Sessions hand over in writing** ([`docs/handovers/`](../handovers/)), including what went wrong. The first note records that status summaries had missed a release blocker, and the fix: check GitHub before repeating a summary.

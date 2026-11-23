@@ -17,7 +17,7 @@ Hold a button and say what you want, the way you'd say it to a crewmate. Tycho p
 | **What you need** | A Windows PC and a microphone. Star Citizen or World of Warcraft: Forever. |
 | **What it costs** | Tycho is free and open source. The built-in commands need no account. Understanding anything said differently, and answering questions, uses your own Claude key: usually a few cents an evening. A spoken voice uses your own ElevenLabs key. Details in [Keys and costs](#keys-and-costs). |
 | **Is it allowed?** | In Star Citizen, Tycho only presses keys through your own keybinds, and only when you ask. It never reads the game's memory or changes the game. Voice tools that work this way have been used for years, and we have found no report of a ban for one. But CIG has not reviewed or approved Tycho, and its terms forbid "macro" software in general, so nobody can promise there is no risk ([how Tycho stays within the rules](docs/adr/0003-staying-within-cig-rules.md)). In World of Warcraft: Forever, Tycho presses no keys at all: it only answers and advises, as Blizzard's rules require. |
-| **How finished is it?** | Pre-alpha (0.8). It works, but it's early and has been played mostly by its maintainer: expect rough edges and changes between versions. |
+| **How finished is it?** | Pre-alpha (0.10). It works, but it's early and has been played mostly by its maintainer: expect rough edges and changes between versions. |
 | **Your privacy** | Your voice never leaves your PC. Only text goes out, to the services you gave a key for. Nothing about how you use Tycho is tracked. [The full list](#what-leaves-your-pc). |
 
 ## Why Tycho
@@ -77,6 +77,7 @@ With a Claude key, say it your own way, and ask questions:
 - "Where's the best place to sell quantanium?"
 - "Best trade route from Lorville with 96 SCU?"
 - "I own a Cutlass Black." Then: "Which of my ships is best for mining?"
+- "Remember I trade out of Area18." "Where do I get the Omnisky III blueprint?"
 - "Make the Tile bigger." "Turn your voice down a bit." "Say that again."
 
 Anything you can't undo asks first ("Eject? Say confirm."). Say "confirm" within 5 seconds, or anything else to drop it.
@@ -106,7 +107,10 @@ Without an ElevenLabs key, Tycho's replies are shown in its window and it plays 
 - **Almost 90 built-in commands** that run instantly on your PC, through your own keybinds. Add your own phrases and sequences. Ask which key does something ("what's my strafe key?") and it names yours.
 - **Claude for anything said differently,** for multi-step requests ("flight ready and request landing"), and for questions. It takes about 1.3 seconds.
 - **Answers from live data:** ships from the current patch's game files; trade prices, routes, refining and where to buy a ship from UEX; mining, weapons, armor, components and crafting from the Star Citizen Wiki; news and upcoming patches from RSI's sites; and "where is" and "how do I" from the web, with community answers marked as such.
-- **Knows your fleet,** so "which of my ships is best for mining?" is about your ships.
+- **Knows your fleet,** so "which of my ships is best for mining?" is about your ships. Tell it what you own, or import your hangar from a [ccugame.app](https://ccugame.app) export (Settings, Game and controls).
+- **Remembers you,** if you let it (on unless you turn it off): facts you mention about how you play ("I'm in my Cutlass"), and what you ask it to remember ("remember I like short answers"). "Forget that" removes one. The notes are plain files on your PC, shown on the Memory page.
+- **Knows your blueprints** in Star Citizen: it keeps the list of crafting blueprints the game's log says you received, and answers "do I have the Killshot blueprint?", "where do I get the Omnisky III blueprint?" (which mission, who gives it) and "how do I make a P4-AR?" (the recipe, then where to mine each material).
+- **Keeps a history, only if you say yes:** what you and Tycho said, on your PC for 30 days, so you can ask "what was yesterday's route?". Setup asks once; it's off unless you say yes. See, search and delete it on the History page.
 - **Spoken replies** in a voice you choose, with the game turned down while Tycho speaks, and sounds that tell you whether the keys went in.
 - **Asks before anything you can't undo,** and when a request is vague ("faster") it asks instead of guessing. What you say to your squad on the same button ("break right") presses nothing.
 - **The Tile:** a small see-through panel over the game for what's better read than heard: prices, routes, specs, recipes, steps.
@@ -115,10 +119,10 @@ Without an ElevenLabs key, Tycho's replies are shown in its window and it plays 
 - **Reads the game's log** on your PC, so it knows your ship, the zone you're in and whether you've plotted a quantum route. Speaking up comes from it, and the safeguards use a plotted route to know you're in the pilot seat.
 - **Speaks up when you want it to,** about a few things the game's log records, such as a quantum jump ending or entering an armistice zone. Off until you pick which.
 - **Settings by voice,** with "undo". By voice a safeguard can only get stricter, never looser.
-- **Its own window and tray icon:** guided setup, whether Tycho is ready and listening, everything you can say, and every setting.
+- **Its own window and tray icon:** guided setup, whether Tycho is ready and listening, everything you can say, your notes and history, and every setting.
 - **A log of every key it pressed,** and crash reports only if you say yes.
 
-Each of these is explained in the [player's guide](docs/current/players-guide.md). What changed in each version is in the [changelog](CHANGELOG.md).
+Each of these is explained in the [player's guide](docs/current/players-guide.md). What changed in each version is in the [changelog](CHANGELOG.md). This page follows the newest code: memory, history, blueprints, the hangar import and turning the game down while Tycho speaks come in the next release after 0.10 (the changelog's **Unreleased** list).
 
 ## What leaves your PC
 
@@ -142,7 +146,7 @@ The full list:
 | OpenRouter and Perplexity (web search, with an OpenRouter key) | A short search query Claude writes from your question. OpenRouter passes it to Perplexity's search and the results to Claude on Anthropic, and asks both to keep nothing | Questions about news, upcoming patches, events and new ships, and where something is or how to do something when Tycho's look-ups don't cover it; off with `web_search = false`. Any website; `web_search_open = false` keeps it to the Star Citizen sites. Whenever you've stored an OpenRouter key, whichever runs the brain |
 | Anthropic (web search, with only an Anthropic key) | The same search query | The same questions. The Star Citizen sites first; when they have no clear answer, any website, and Anthropic reads up to two of the pages it finds (never Reddit's pages, only its search snippets); `web_search_open = false` keeps it to the Star Citizen sites |
 | UEX Corp | Which commodity or trading place you asked about | Trade questions |
-| Star Citizen Wiki API | The item names you ask about | Weapon, armor, component and crafting questions |
+| Star Citizen Wiki API | The item, blueprint or mission giver names you ask about | Weapon, armor, component, crafting and blueprint questions |
 | GitHub | Nothing about you: Tycho asks whether a newer version is out | When Tycho starts and when its window opens, off with `check_for_updates = false`; and when you press **Check for updates** |
 | Hugging Face | Nothing about you: Tycho downloads its speech model | Once, the first time Tycho starts |
 | Sentry (crash reports) | Only if you said yes: the kind of error and where in Tycho's own code it happened, Tycho's version, the Windows version, the game and the brain provider. Never what you or Tycho said, your keys, your name, your files or folders, or anything that identifies you or your PC | The next time Tycho starts after a crash. Saying no deletes any report still waiting |
@@ -174,7 +178,8 @@ Your agent does this by running commands on your PC: the same installer and chec
 
 These are plans, not promises. Each links its issue.
 
-- **Your fleet and logs in Tycho's window** ([#12](https://github.com/benshapyro/tycho-ai/issues/12)).
+- **Plot a quantum route by voice** ([#588](https://github.com/benshapyro/tycho-ai/issues/588)): "set a route to Port Tressler" types the place into the star map for you.
+- **Switch to the right game on its own,** from the game that's running ([#481](https://github.com/benshapyro/tycho-ai/issues/481)).
 - **Learns from misses and fixes itself** ([#51](https://github.com/benshapyro/tycho-ai/issues/51)): offers to add phrases you rephrased, and repairs keybinds after a patch, always with your OK.
 - **An optional wake word** ([#3](https://github.com/benshapyro/tycho-ai/issues/3)).
 

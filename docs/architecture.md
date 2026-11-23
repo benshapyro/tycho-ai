@@ -2,11 +2,11 @@
 
 Status: living document. Decisions are recorded in [adr/](adr) (index in [adr/README.md](adr/README.md)), and this page summarises them. Anything still unproven is marked **(to measure)**.
 
-**Where it stands (0.8, November 2026).** Built: push-to-talk, local speech recognition, the fast path, the brain (Claude, direct or through OpenRouter), the safety gate with spoken confirmation, the action log, the ElevenLabs voice, look-ups (game files, UEX, the Star Citizen Wiki, web search), the player's fleet, settings by voice, the Tile ([ADR 16](adr/0016-the-tile.md)), the app window and tray ([ADR 17](adr/0017-the-app.md)), game packs with World of Warcraft: Forever as an advisor-only pack ([ADR 18](adr/0018-game-packs.md)), and opt-in crash reports ([ADR 4](adr/0004-built-for-every-player.md)). A `Game.log` reader is built (a plotted quantum route, leaving the pilot seat, the HUD's notifications, joining a server), for the safety gate's guards; what else it knows is ready for the brain and for speaking up (0.10). Not built yet: screen vision, the full state tracker (stage 2 below), a wake word, and a local voice. Sections 4.3 and 4.4 describe that planned design.
+**Where it stands (main after 0.10, 23 November 2026).** Built: push-to-talk, local speech recognition, the fast path, the brain (Claude, direct or through OpenRouter), the safety gate with spoken confirmation, the action log, the ElevenLabs voice, look-ups (game files, UEX, the Star Citizen Wiki, web search), the player's fleet (with a hangar import from ccugame.app), memory notes and the blueprints the player owns ([ADR 8](adr/0008-packs-and-connections.md)'s amendments), a history of past conversations when the player says yes ([ADR 14](adr/0014-the-brain-voice-and-sequences.md)), settings by voice, turning the game down while Tycho speaks, the Tile ([ADR 16](adr/0016-the-tile.md)), the app window and tray ([ADR 17](adr/0017-the-app.md)), game packs with World of Warcraft: Forever as an advisor-only pack ([ADR 18](adr/0018-game-packs.md)), and opt-in crash reports ([ADR 4](adr/0004-built-for-every-player.md)). A `Game.log` reader is built (a plotted quantum route, leaving the pilot seat, the HUD's notifications, joining a server), for the safety gate's guards; what else it knows goes to the brain and to speaking up (0.10). Looking at the game window when the player asks is built (0.10, section 4.4). Not built yet: the full state tracker (stage 2 below), looking without being asked, plotting a route by voice (#588), a wake word, and a local voice. Section 4.3 describes that planned design.
 
 ## 1. What Tycho is
 
-Tycho is a voice co-pilot for Star Citizen. You talk to it the way you'd talk to a crewmate. It works out what you mean, presses the right keys through your own keybinds, answers questions from live game data, and (planned) looks at your screen when you let it.
+Tycho is a voice co-pilot for Star Citizen. You talk to it the way you'd talk to a crewmate. It works out what you mean, presses the right keys through your own keybinds, answers questions from live game data, and looks at the game window when you ask it to.
 
 Existing tools in this space, for Star Citizen and other games, share the same failures. Tycho is designed around fixing them. Points 2 to 5 are built; point 1 is mostly planned:
 
@@ -20,7 +20,7 @@ Existing tools in this space, for Star Citizen and other games, share the same f
 
 **Goals**
 - Run ship, vehicle and on-foot actions by natural speech, including multi-step sequences.
-- See the game window when the user allows it, and use what it sees both to answer and to decide. (Planned.)
+- See the game window when the user allows it, and use what it sees both to answer and to decide. (Answering is built, when the player asks; deciding from it is planned.)
 - Track game state (ship, seat, power, location, current task), with how sure it is of each fact. (Planned.)
 - Answer game-knowledge questions from live sources: UEX Corp, the Star Citizen Wiki API, and starcitizen.tools.
 - Have a voice and persona worth listening to for hours, configurable by the user.
@@ -47,7 +47,7 @@ Tycho is an AI product, not traditional software with a chatbot added. In practi
 - **Setup is a conversation.** First run finds your mics and controllers, has you say something to check your level, and has you press your push-to-talk button. The settings screen shows the result.
 - **Ask or click, same result.** Every setting can be changed by voice or in the GUI, and both edit the same settings. See [ADR 5](adr/0005-settings-one-schema-three-ways-in.md).
 - **It explains itself.** When something is wrong, such as a silent mic, a missing keybind or a service that's down, Tycho says what and why in plain words, instead of just failing.
-- **It learns where you can see it** (planned, [#51](https://github.com/benshapyro/tycho-ai/issues/51); the player's fleet works this way today). Ship names, places and shorthand it picks up are listed where you can review, edit and delete them. Nothing is learned in secret.
+- **It learns where you can see it.** Memory notes, the fleet and owned blueprints work this way today: each is on the Memory page and in a plain file, to review, edit and delete. Learning from misses is planned ([#51](https://github.com/benshapyro/tycho-ai/issues/51)). Nothing is learned in secret.
 - **Quality is measured.** Speech, understanding and actions are scored against recorded speech on every change. See section 6.
 
 ## 3. Constraints
@@ -86,13 +86,14 @@ Tycho is an AI product, not traditional software with a chatbot added. In practi
 | Safety gate | The single checkpoint every action passes through (see 4.7) |
 | Knowledge | Game data lookups: UEX Corp, the Wiki API, starcitizen.tools |
 | Voice | Streaming text to speech (ElevenLabs; a local fallback voice is not built), plus pre-rendered short replies ([ADR 9](adr/0009-voice.md)). As built ([ADR 14](adr/0014-the-brain-voice-and-sequences.md)): ElevenLabs v4 Turbo as raw PCM, played as it arrives; only the brain speaks, never over what the game announces, and push-to-talk stops it |
-| Memory | User preferences, fleet and habits, in a local file the user can edit |
-| App window and tray | Setup, Home, What to say, the Tile's page and Settings, in a pywebview window loaded from memory, with no local server ([ADR 17](adr/0017-the-app.md)) |
+| Memory | The player's notes (every game and this game), fleet and owned blueprints, in local files the player can edit, shown on the Memory page ([ADR 8](adr/0008-packs-and-connections.md)) |
+| History | Past conversations, only if the player says yes: one file per play session on the PC, kept 30 days, searched only when asked ([ADR 14](adr/0014-the-brain-voice-and-sequences.md)) |
+| App window and tray | Setup, Home, What to say, Memory, History, the Tile's page and Settings, in a pywebview window loaded from memory, with no local server ([ADR 17](adr/0017-the-app.md)) |
 | The Tile | A see-through panel over the game for cards that are better read than heard ([ADR 16](adr/0016-the-tile.md)) |
 | Game packs | Each game's data: commands, safety lists, briefing, terms and which built-in parts it uses ([ADR 18](adr/0018-game-packs.md)) |
 | Crash reports | Only if the player says yes: an allowlisted report sent to Sentry at the next start ([ADR 4](adr/0004-built-for-every-player.md)) |
 
-Every outside service (transcription, models, voice) sits behind a small typed interface, so it can be swapped without touching the rest. Every hardware boundary (audio, input, capture, joystick) sits behind one too, so it can be tested with fakes. The measured choices are in [ADR 2](adr/0002-cascaded-voice-pipeline.md) (Outcome), [ADR 6](adr/0006-cloud-brain-local-ears.md) and [ADR 9](adr/0009-voice.md). What Tycho knows is assembled in layers, from fixed safety rules to game and persona packs ([ADR 8](adr/0008-packs-and-connections.md)).
+Every outside service (transcription, models, voice) sits behind a small typed interface, so it can be swapped without touching the rest. Every hardware boundary (audio, input, capture, joystick) sits behind one too, so it can be tested with fakes. The measured choices are in [ADR 2](adr/0002-cascaded-voice-pipeline.md) (Outcome), [ADR 6](adr/0006-cloud-brain-local-ears.md) and [ADR 9](adr/0009-voice.md). What Tycho knows is assembled in layers, from fixed safety rules to the game pack, the player's notes and the live state ([ADR 8](adr/0008-packs-and-connections.md)).
 
 ### 4.3 Knowing the state of the game
 
@@ -109,9 +110,7 @@ Rules:
 
 ### 4.4 Screen vision and permission
 
-*Planned (stage 2); not built.*
-
-The first version is decided in [ADR 14's amendment](adr/0014-the-brain-voice-and-sequences.md) (22 November 2026): only the per-request trigger, off by default; the standing permission waits for its own decision.
+*The per-request trigger is built (0.10); the standing permission is planned (stage 2) and waits for its own decision.* The first version is decided in [ADR 14's amendment](adr/0014-the-brain-voice-and-sequences.md) (22 November 2026): only the per-request trigger, off by default. As built: "take a look" (or yes to "Want me to take a look?") captures the game window once, in a short-lived child process, with a camera click; the picture goes in that one request and is never saved or logged, and nothing is pressed after a look.
 
 - **Per-request trigger:** a word the user chooses ("look", say) captures the game window together with what was said, and sends both to the brain.
 - **Standing permission (off by default):** a setting that lets Tycho capture whenever the state tracker needs to confirm something.
@@ -158,7 +157,7 @@ The persona is configurable: name, voice, tone and how chatty it is. It keeps re
 
 **How Tycho addresses the player** is a setting too. The default is "Commander". Players can set a name, nickname, callsign or rank, or choose to be called nothing, by voice ("call me Ace"), in the settings screen, or in the file. A pronunciation hint covers names text-to-speech would get wrong. Setup can suggest the player's in-game handle but never uses it without asking. Tycho uses the form of address sparingly, in greetings, warnings and confirmations of big actions, not in every sentence.
 
-The default draws on the lore. In Star Citizen's universe, humanity distrusts AI after Janus, the AI core blamed for the loss of the *Artemis*. Tycho's default persona knows this. It's careful, a little defensive about not being Janus, and always reads back what it's about to do. Its character is calm, precise and dryly witty, in the spirit of Jarvis; that comes mostly from how lines are written, and the default voice is chosen in [ADR 9](adr/0009-voice.md). Personas are packs ([ADR 8](adr/0008-packs-and-connections.md)).
+The default draws on the lore. In Star Citizen's universe, humanity distrusts AI after Janus, the AI core blamed for the loss of the *Artemis*. Tycho's default persona knows this. It's careful, a little defensive about not being Janus, and always reads back what it's about to do. Its character is calm, precise and dryly witty, in the spirit of Jarvis; that comes mostly from how lines are written, and the default voice is chosen in [ADR 9](adr/0009-voice.md). Swappable persona packs are a later idea, not built ([ADR 8](adr/0008-packs-and-connections.md)); today the voice and what Tycho calls the player are settings.
 
 ## 5. Delivery stages
 
