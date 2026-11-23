@@ -15,15 +15,14 @@ left out if they're slow.
 import asyncio
 import json
 import logging
-import re
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, cast
 
 from tycho.brain.lookups import LookupResult, failure
+from tycho.games.star_citizen import blueprint_names as naming
 from tycho.games.star_citizen.wiki import WikiError, WikiSource
-from tycho.text import name_score, normalize
 
 log = logging.getLogger(__name__)
 
@@ -38,11 +37,11 @@ PAGE = 200
 MAX_PAGES = 10
 KEEP_SECONDS = 6 * 3600.0
 """Missions change only with a patch: what was loaded is kept for six hours."""
-MATCH = 0.8
-"""The lowest ``name_score`` that counts as the name said (0.9 is a near miss)."""
 SHOWN_MISSIONS = 6
 SHOWN_BLUEPRINTS = 12
 ALSO = 3
+MAX_POOL_RECORDS = 4
+"""A title's variants whose records are read for its pools, at most."""
 NO_STANDING = frozenset({"", "neutral"})
 
 DESCRIPTION = """\
@@ -80,6 +79,9 @@ class _Mission:
     """The API paths of its variants' own records, which hold the pools."""
     record_for: dict[str, str] = field(default_factory=lambda: dict[str, str]())
     """The first variant's record that gives each blueprint: variants' pools differ."""
+    pool_records: list[str] = field(default_factory=lambda: list[str]())
+    """One record for each different set of blueprints its variants give, so a title's
+    pools cover them all."""
 
     def said(self) -> dict[str, object]:
         out: dict[str, object] = {"title": self.title, "giver": self.giver}
@@ -171,13 +173,13 @@ class BlueprintLookup:
         return self._result({"game_version": index.patch, **body})
 
     async def _blueprint(self, index: _Index, said: str) -> dict[str, object]:
-        ranked = _ranked(said, index.by_blueprint)
+        ranked = naming.ranked(said, index.by_blueprint)
         if not ranked:
             return {
                 "asked": said,
                 "not_found": "no mission in this patch gives a blueprint by that name; "
                 "it may be known from the start or come from an event (item_lookup says)",
-                "closest": _closest(said, index.by_blueprint),
+                "closest": naming.closest(said, index.by_blueprint),
             }
         name = ranked[0]
         missions = sorted(index.by_blueprint[name], key=lambda m: m.standing_rep)
@@ -197,6 +199,24 @@ class BlueprintLookup:
         }
         if len(ranked) > 1:
             out["also_matches"] = ranked[1 : 1 + ALSO]
+        return out
+
+    async def _title_pools(self, missions: Sequence[_Mission]) -> list[list[_Pool]]:
+        """Each mission's pools across its variants (#600): one record for each set of
+        blueprints they give, the same pool listed once. A mission any of whose records
+        didn't load has none, so its full list is said instead."""
+        paths = [p for m in missions for p in m.pool_records[:MAX_POOL_RECORDS]]
+        loaded = dict(zip(paths, await self._pools_of(paths), strict=True))
+        out: list[list[_Pool]] = []
+        for m in missions:
+            pools: list[_Pool] = []
+            complete = bool(m.pool_records)
+            for path in m.pool_records[:MAX_POOL_RECORDS]:
+                complete = complete and bool(loaded.get(path))
+                pools.extend(p for p in loaded.get(path, []) if p not in pools)
+            given = {n for _, names in pools for n in names}
+            complete = complete and set(m.blueprints) <= given
+            out.append(pools if complete else [])
         return out
 
     async def _pools_of(self, paths: Sequence[str]) -> list[list[_Pool]]:
@@ -248,13 +268,16 @@ class BlueprintLookup:
         except WikiError:
             self._loading = None
             raise
+        if index is not self._index:
+            self._kept_pools.clear()  # pools follow the missions they came with (#600)
         self._index, self._loaded_at = index, self._clock()
         return index
 
     async def _load(self) -> _Index:
         first = await self._page(1)
-        meta = cast(dict[str, Any], first.get("meta") or {})
-        last = min(int(meta.get("last_page") or 1), MAX_PAGES)
+        meta = first.get("meta")
+        pages = cast(dict[str, Any], meta).get("last_page") if isinstance(meta, dict) else 1
+        last = min(pages if isinstance(pages, int) and pages > 0 else 1, MAX_PAGES)
         rest = await asyncio.gather(*(self._page(n) for n in range(2, last + 1)))
         records = [
             cast(dict[str, Any], r)
@@ -262,7 +285,10 @@ class BlueprintLookup:
             for r in cast(list[Any], page.get("data") or [])
             if isinstance(r, dict)
         ]
-        return _indexed(records)
+        try:
+            return _indexed(records)
+        except (AttributeError, TypeError, ValueError) as e:
+            raise WikiError(f"/api/missions: unexpected shape ({e})") from e
 
     async def _page(self, number: int) -> dict[str, Any]:
         params: dict[str, str | int] = {
@@ -282,17 +308,17 @@ class BlueprintLookup:
         for m in index.missions:
             givers.setdefault(m.giver, []).append(m)
             titles.setdefault(m.title, []).append(m)
-        giver_ranked = _ranked(said, givers)
-        title_ranked = _ranked(said, titles)
-        giver_fit = _score(said, giver_ranked[0]) if giver_ranked else 0.0
-        title_fit = _score(said, title_ranked[0]) if title_ranked else 0.0
+        giver_ranked = naming.ranked(said, givers)
+        title_ranked = naming.ranked(said, titles)
+        giver_fit = naming.score(said, giver_ranked[0]) if giver_ranked else 0.0
+        title_fit = naming.score(said, title_ranked[0]) if title_ranked else 0.0
         if not giver_ranked and not title_ranked:
             return {
                 "asked": said,
                 "not_found": (
                     "no mission or mission giver by that name gives blueprints in this patch"
                 ),
-                "closest": _closest(said, {**givers, **titles}),
+                "closest": naming.closest(said, {**givers, **titles}),
             }
         if giver_ranked and giver_fit >= title_fit:
             giver = giver_ranked[0]
@@ -311,11 +337,7 @@ class BlueprintLookup:
         out: dict[str, object] = {"mission": title}
         givers_said: list[dict[str, object]] = []
         shown = missions[:ALSO]
-        for m, pools in zip(
-            shown,
-            await self._pools_of([m.records[0] if m.records else "" for m in shown]),
-            strict=True,
-        ):
+        for m, pools in zip(shown, await self._title_pools(shown), strict=True):
             entry = m.said()
             entry.pop("title", None)
             entry["blueprint_count"] = len(m.blueprints)
@@ -343,8 +365,10 @@ class BlueprintLookup:
 
 
 def _indexed(records: Sequence[Mapping[str, Any]]) -> _Index:
-    """The missions grouped by title and giver, and the blueprints they give."""
-    groups: dict[tuple[str, str], _Mission] = {}
+    """The missions grouped by title and giver, and the blueprints they give. A
+    blueprint's missions take their facts only from the variants that give it: one
+    variant can be illegal, or need standing, when another doesn't."""
+    variants: dict[tuple[str, str], list[_Mission]] = {}
     patch = ""
     for r in records:
         title = str(r.get("title") or "").strip()
@@ -352,60 +376,66 @@ def _indexed(records: Sequence[Mapping[str, Any]]) -> _Index:
         if not title:
             continue
         patch = patch or str(r.get("game_version") or "")
-        m = groups.setdefault((title, giver), _Mission(title=title, giver=giver))
-        for system in cast(list[Any], r.get("star_systems") or []):
-            name = _system(system)
-            if name and name not in m.systems:
-                m.systems.append(name)
-        standing = cast(dict[str, Any], r.get("min_standing") or {})
-        rep = standing.get("min_reputation")
-        rep_value = float(rep) if isinstance(rep, int | float) else 0.0
-        if rep_value < m.standing_rep:
-            m.standing_rep = rep_value
-            m.standing = str(standing.get("name") or r.get("min_standing_name") or "")
-        path = _path(str(r.get("link") or ""))
-        if path:
-            m.records.append(path)
-        m.chain = m.chain or bool(r.get("has_prerequisites"))
-        m.illegal = m.illegal or bool(r.get("illegal"))
-        for bp in cast(list[Any], r.get("blueprints") or []):
-            if not isinstance(bp, dict):
-                continue
-            b = cast(dict[str, Any], bp)
-            name = str(b.get("name") or "").strip()
-            if not name:
-                continue
+        variants.setdefault((title, giver), []).append(_variant(r, title, giver))
+    missions: list[_Mission] = []
+    by_blueprint: dict[str, list[_Mission]] = {}
+    for group in variants.values():
+        missions.append(_merged(group))
+        names = dict.fromkeys(b for v in group for b in v.blueprints)
+        for name in names:
+            giving = [v for v in group if name in v.blueprints]
+            by_blueprint.setdefault(name, []).append(_merged(giving))
+    return _Index(missions, by_blueprint, patch)
+
+
+def _variant(r: Mapping[str, Any], title: str, giver: str) -> _Mission:
+    """One mission record."""
+    m = _Mission(title=title, giver=giver)
+    for system in cast(list[Any], r.get("star_systems") or []):
+        name = _system(system)
+        if name and name not in m.systems:
+            m.systems.append(name)
+    standing = r.get("min_standing")
+    standing = cast(dict[str, Any], standing) if isinstance(standing, dict) else {}
+    rep = standing.get("min_reputation")
+    m.standing_rep = float(rep) if isinstance(rep, int | float) else 0.0
+    m.standing = str(standing.get("name") or r.get("min_standing_name") or "")
+    if path := _path(str(r.get("link") or "")):
+        m.records.append(path)
+    m.chain = bool(r.get("has_prerequisites"))
+    m.illegal = bool(r.get("illegal"))
+    for bp in cast(list[Any], r.get("blueprints") or []):
+        if not isinstance(bp, dict):
+            continue
+        name = str(cast(dict[str, Any], bp).get("name") or "").strip()
+        if name and name not in m.blueprints:
+            m.blueprints.append(name)
+    return m
+
+
+def _merged(variants: Sequence[_Mission]) -> _Mission:
+    """Variants of one mission as one: every system and blueprint, the lowest standing,
+    and a chain or illegal if any variant is."""
+    m = _Mission(title=variants[0].title, giver=variants[0].giver)
+    seen_sets: set[tuple[str, ...]] = set()
+    for v in variants:
+        m.systems.extend(s for s in v.systems if s not in m.systems)
+        if v.standing_rep < m.standing_rep:
+            m.standing_rep, m.standing = v.standing_rep, v.standing
+        m.chain = m.chain or v.chain
+        m.illegal = m.illegal or v.illegal
+        m.records.extend(v.records)
+        path = v.records[0] if v.records else ""
+        for name in v.blueprints:
             if name not in m.blueprints:
                 m.blueprints.append(name)
             if path:
                 m.record_for.setdefault(name, path)
-    by_blueprint: dict[str, list[_Mission]] = {}
-    for m in groups.values():
-        for name in m.blueprints:
-            by_blueprint.setdefault(name, []).append(m)
-    return _Index(list(groups.values()), by_blueprint, patch)
-
-
-def _words(name: str) -> list[str]:
-    """A name's words for matching, without the game's placeholders ("[Location]")."""
-    return normalize(re.sub(r"\[[^\]]*\]", " ", name))
-
-
-def _score(said: str, name: str) -> float:
-    words = _words(said)
-    return name_score(words, _words(name)) if words else 0.0
-
-
-def _ranked(said: str, names: Mapping[str, object]) -> list[str]:
-    """The names that fit what was said, best first."""
-    scored = [(s, n) for n in names if (s := _score(said, n)) >= MATCH]
-    scored.sort(key=lambda p: (-p[0], len(p[1])))
-    return [n for _, n in scored]
-
-
-def _closest(said: str, names: Mapping[str, object]) -> list[str]:
-    scored = sorted(names, key=lambda n: -_score(said, n))
-    return scored[:ALSO]
+        key = tuple(sorted(v.blueprints))
+        if path and key not in seen_sets:
+            seen_sets.add(key)
+            m.pool_records.append(path)
+    return m
 
 
 def _listed(names: Sequence[str]) -> dict[str, object]:

@@ -156,7 +156,8 @@ def test_the_pool_comes_from_the_variant_that_gives_the_blueprint() -> None:
     (mission,) = result["missions"]
     assert (mission["pool_chance_percent"], mission["pool_size"]) == (25, 1)
     assert mission["standing_needed"] == "Jr. Contractor"
-    assert mission["illegal"] is True
+    # Its facts are that variant's: the other variant is illegal, this one isn't (#600).
+    assert "illegal" not in mission
 
 
 def test_the_plain_name_beats_its_variants_which_are_named_too() -> None:
@@ -259,3 +260,44 @@ def test_slow_pools_are_left_out_rather_than_waited_for(monkeypatch: pytest.Monk
     (mission,) = result["missions"]
     assert mission["title"] == "Tactical Strike Group Needed"
     assert "pool_size" not in mission
+
+
+@pytest.mark.parametrize("said", ["omnisky three", "Omnisky 3", "omnisky iii"])
+def test_a_spoken_number_matches_a_roman_numeral(said: str) -> None:
+    # "omnisky three" was a miss, so the brain had to retry with "III" (#600).
+    result = _run(BlueprintLookup(FakeMissionWiki()), blueprint=said)
+    assert result["blueprint"] == "Omnisky III Cannon"
+
+
+def test_a_title_s_pools_cover_every_variant() -> None:
+    # Only the first variant's pools were read, which left the Deadrig out (#600).
+    result = _run(BlueprintLookup(FakeMissionWiki()), mission="a challenging contract")
+    (giver,) = result["from"]
+    given = [name for pool in giver["pools"] for name in pool["blueprints"]]
+    assert sorted(given) == sorted(KILLSHOT)
+    assert giver["blueprint_count"] == 3
+
+
+def test_pools_are_read_again_when_the_missions_are() -> None:
+    wiki = FakeMissionWiki()
+    now = [0.0]
+    lookup = BlueprintLookup(wiki, clock=lambda: now[0])
+    _run(lookup, blueprint="omnisky iii")
+    now[0] = blueprints.KEEP_SECONDS + 1
+    _run(lookup, blueprint="omnisky iii")
+    records = [path for path, _ in wiki.calls if path.startswith("/api/missions/")]
+    assert records == ["/api/missions/tsg", "/api/missions/tsg"]
+
+
+def test_missions_in_an_unexpected_shape_are_the_source_failing() -> None:
+    class Odd(FakeMissionWiki):
+        async def get(self, path: str, params: Mapping[str, str | int] | None = None) -> Any:
+            return {"data": [{"title": "X", "star_systems": 5}], "meta": 1}
+
+    lookup = BlueprintLookup(Odd())
+
+    async def go() -> bool:
+        await lookup.prepare()  # quiet, not a crash at every warm-up
+        return (await lookup.run({"blueprint": "x", "mission": ""})).is_error
+
+    assert asyncio.run(go())
