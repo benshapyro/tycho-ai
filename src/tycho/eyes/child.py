@@ -91,6 +91,10 @@ def main(argv: Sequence[str], frame: Callable[[int], Image.Image] | None = None)
     from tycho.eyes import shrink
 
     faulthandler.enable()  # a crash's stack goes to stderr, for the parent's log
+    if sys.platform == "win32":
+        from tycho import win32
+
+        win32.no_crash_box()  # no "stopped working" box over the game
     try:
         window = int(argv[0])
         if frame is None:

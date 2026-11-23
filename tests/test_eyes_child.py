@@ -21,6 +21,7 @@ def _ran(code: int, out: bytes = b"", err: bytes = b"") -> Any:
     def run(args: list[str], **options: Any) -> subprocess.CompletedProcess[bytes]:
         assert options["capture_output"]
         assert options["timeout"] == child.SECONDS
+        assert "creationflags" in options  # no console window flashing over the game
         return subprocess.CompletedProcess(args, code, out, err)
 
     return run
@@ -73,6 +74,9 @@ def _child(argv: list[str], frame: Any, monkeypatch: pytest.MonkeyPatch) -> tupl
     monkeypatch.setattr(sys, "stdout", SimpleNamespace(buffer=out, flush=lambda: None))
     monkeypatch.setattr(sys, "stderr", err)
     monkeypatch.setattr(child.faulthandler, "enable", lambda: None)
+    from tycho import win32
+
+    monkeypatch.setattr(win32, "no_crash_box", lambda: None)  # not the test run's own
     return child.main(argv, frame=frame), out.getvalue(), err.getvalue()
 
 
