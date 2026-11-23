@@ -295,6 +295,11 @@ def test_each_bundled_face_is_loaded_once_for_the_character_checks(
         ("1 to 4", None),
         ("Large", None),
         ("", None),
+        ("-1,200", (-1200.0, "")),
+        ("\u22123.5 aUEC", (-3.5, "auec")),
+        ("$1,200", (1200.0, "")),
+        ("Nov 20", (20.0, "nov")),
+        ("S3", (3.0, "s")),
     ],
 )
 def test_a_value_is_a_number_only_when_it_has_one(value: str, found: Any) -> None:
@@ -308,6 +313,12 @@ def test_bars_need_numbers_in_one_unit_that_differ() -> None:
     assert bar_lengths(["3,048", "Large"]) is None
     assert bar_lengths(["3,048", "3,012"]) is None  # too close to say anything
     assert bar_lengths(["3,048"]) is None
+
+
+def test_no_bars_for_a_loss_or_for_dates() -> None:
+    """#527: "-1,200" isn't a bar as long as "1,200", and days of the month aren't bars."""
+    assert bar_lengths(["1,200", "-1,200", "300"]) is None
+    assert bar_lengths(["Nov 20", "Oct 3"]) is None
 
 
 def _bar_pixels(rows: tuple[Row, ...]) -> int:
@@ -350,3 +361,15 @@ def test_a_loadout_names_each_slot_once_for_the_rows_that_share_it() -> None:
     dim = CORE.dim
     assert _near(_tile(two), dim, 30) == pytest.approx(_near(_tile(one), dim, 30), rel=0.25)
     assert _near(_tile(again), dim, 30) > _near(_tile(two), dim, 30)
+
+
+def test_only_a_kept_strip_has_the_pinned_marker() -> None:
+    """#543: a strip that fades after a minute doesn't look like one that stays."""
+    from tycho.tile.draw import strip_image
+
+    card = Card("list", title="Best places to sell")
+    fading, kept = strip_image(card, Look()), strip_image(card, Look(), kept=True)
+    right = (fading.width - 40, 0, fading.width, fading.height)
+    assert fading.crop(right).tobytes() != kept.crop(right).tobytes()
+    left = (0, 0, fading.width - 40, fading.height)
+    assert fading.crop(left).tobytes() == kept.crop(left).tobytes()

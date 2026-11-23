@@ -27,7 +27,11 @@ def _reply(content: str, finish: str = "stop", urls: tuple[str, ...] = ()) -> di
 
 
 def _search(
-    reply: dict[str, Any] | None = None, *, status: int = 200, open_web: bool = True
+    reply: dict[str, Any] | None = None,
+    *,
+    status: int = 200,
+    open_web: bool = True,
+    fallback: Any = None,
 ) -> tuple[PluginSearch, list[dict[str, Any]], list[httpx2.Request]]:
     bodies: list[dict[str, Any]] = []
     requests: list[httpx2.Request] = []
@@ -47,6 +51,7 @@ def _search(
         open_web=open_web,
         today=lambda: datetime.date(2026, 11, 22),
         client=client,
+        fallback=fallback,
     )
     return search, bodies, requests
 
@@ -140,3 +145,60 @@ def test_no_query_asks_for_one_without_a_request() -> None:
     search, bodies, _ = _search(_reply("x"))
     assert _run(search, "  ").is_error
     assert bodies == []
+
+
+def test_a_bare_link_at_a_sentence_end_leaves_a_whole_sentence() -> None:
+    """#551: the full stop after a link stays, and a "see" or "at" before it goes."""
+    assert spoken_plainly("It's at Levski, see https://x.example/a.") == "It's at Levski."
+    assert spoken_plainly("Docks at https://x.example/a. Then pay.") == "Docks. Then pay."
+    assert spoken_plainly("Prices: https://uex.example/?q=1, and more.") == "Prices, and more."
+
+
+class _Anthropic:
+    """Stands in for Anthropic's search behind a refused OpenRouter key."""
+
+    seconds = 18.0
+
+    def __init__(self) -> None:
+        self.asked: list[Any] = []
+        self.closed = False
+
+    async def run(self, arguments: Any) -> Any:
+        from tycho.brain.lookups import LookupResult
+
+        self.asked.append(arguments)
+        return LookupResult('{"answer": "From Anthropic."}')
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+@pytest.mark.parametrize("status", [401, 402, 403])
+def test_a_refused_openrouter_key_searches_with_the_anthropic_key_from_then_on(
+    status: int,
+) -> None:
+    """#551: an old OpenRouter key, revoked or out of credit, mustn't stop a player whose
+    Anthropic key works from searching."""
+    anthropic = _Anthropic()
+    search, bodies, _ = _search({"error": {"message": "no"}}, status=status, fallback=anthropic)
+    assert search.seconds < anthropic.seconds
+
+    async def twice() -> list[Any]:
+        found = [await search.run({"query": q}) for q in ("one", "two")]
+        await search.close()
+        return found
+
+    first, second = asyncio.run(twice())
+    assert not first.is_error
+    assert not second.is_error
+    assert len(anthropic.asked) == 2
+    assert len(bodies) == 1  # OpenRouter isn't asked again
+    assert search.seconds == anthropic.seconds
+    assert anthropic.closed
+
+
+def test_a_server_error_isnt_a_refused_key() -> None:
+    anthropic = _Anthropic()
+    search, _, _ = _search({"error": {"message": "down"}}, status=500, fallback=anthropic)
+    assert _run(search).is_error
+    assert anthropic.asked == []

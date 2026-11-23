@@ -14,7 +14,7 @@ import contextlib
 import ctypes
 import logging
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import BrokenExecutor, ThreadPoolExecutor
 from ctypes import wintypes
 from typing import TYPE_CHECKING
 
@@ -39,13 +39,19 @@ class WindowsCamera:
 
     def __init__(self, executable: str) -> None:
         self.executable = executable
-        self._worker = ThreadPoolExecutor(1, "tycho-eyes", initializer=_multi_threaded)
+        self._worker = _worker()
 
     def take(self) -> Picture:
         window = game_window(self.executable)
         if window is None:
             raise CaptureError(f"no {self.executable} window is open (or it's minimised)")
-        return shrink(self._worker.submit(_frame, window).result())
+        try:
+            frame = self._worker.submit(_frame, window).result()
+        except BrokenExecutor as e:  # its initializer failed: the next look gets a new one (#552)
+            self._worker.shutdown(wait=False, cancel_futures=True)
+            self._worker = _worker()
+            raise CaptureError(f"the capture thread stopped ({e})") from e
+        return shrink(frame)
 
     def close(self) -> None:
         self._worker.shutdown(wait=False, cancel_futures=True)
@@ -68,6 +74,10 @@ def game_window(executable: str) -> int | None:
 
     user32.EnumWindows(win32.WNDENUMPROC(each), 0)
     return max(found)[1] if found else None
+
+
+def _worker() -> ThreadPoolExecutor:
+    return ThreadPoolExecutor(1, "tycho-eyes", initializer=_multi_threaded)
 
 
 def _multi_threaded() -> None:

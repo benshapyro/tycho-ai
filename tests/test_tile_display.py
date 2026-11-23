@@ -101,6 +101,25 @@ def test_a_still_card_isnt_drawn_again_but_a_fading_one_is() -> None:
     _image(display.frame(SCREEN))  # its timer bar moves
 
 
+def test_strips_alone_arent_drawn_again_until_one_goes() -> None:
+    """#542: a strip has no timer bar, so with only strips up nothing is redrawn; when
+    it fades, the window hides."""
+    display, clock = _display()
+    display.show(Card("list", title="A", rows=(Row("Area 18", value="12"),)))
+    display.show(Card("list", title="B", rows=(Row("Lorville", value="9"),)))
+    _image(display.frame(SCREEN))
+    board = display._board  # pyright: ignore[reportPrivateUsage]
+    (card,) = [s for s in board.view() if not s.strip]
+    assert card.until is not None
+    clock.now = card.until + 0.1  # B's card has gone; A's strip is still up
+    assert [s.strip for s in board.view()] == [True]
+    _image(display.frame(SCREEN))  # drawn once without B
+    assert display.frame(SCREEN) is SAME
+    assert display.frame(SCREEN) is SAME
+    clock.now += 120  # the strip fades
+    assert display.frame(SCREEN) is None
+
+
 def test_cards_fade_away_and_the_window_hides() -> None:
     display, clock = _display()
     display.show(SELL)

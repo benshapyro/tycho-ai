@@ -21,7 +21,7 @@ from typing import Any, cast
 
 import httpx2
 
-from tycho.brain.lookups import LookupResult, failure
+from tycho.brain.lookups import Lookup, LookupResult, failure
 from tycho.knowledge import web
 
 log = logging.getLogger(__name__)
@@ -35,6 +35,8 @@ ENGINE = "perplexity"
 the fewest wrong answers; Firecrawl is refused under zero data retention."""
 RESULTS = 5
 SECONDS = 8.0
+REFUSED = frozenset({401, 402, 403})
+"""OpenRouter's answers when the key itself can't be used: revoked, or out of credit."""
 """How long the search may take: 1.5 s typical, 4.1 s at the slowest in #365."""
 SEARCH_PROMPT = (
     "Web search results for the player's question follow. Answer from them as your brief "
@@ -44,7 +46,12 @@ SEARCH_PROMPT = (
 is noise."""
 
 _LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
-_URL = re.compile(r"\(?https?://\S+\)?")
+_URL = re.compile(r"\(?https?://\S+?\)?(?=[.,;:!?]*(?:\s|$))")
+"""A bare link, without the full stop or comma after it (#551)."""
+_LEFT_BEHIND = re.compile(
+    r"(?:[^\S\n]*,?[^\S\n]*\b(?:see|at)\b)?[^\S\n]*\x00(?=[.,;:!?]|$)", re.IGNORECASE | re.MULTILINE
+)
+"""Where a link ended a sentence, with the "see" or "at" that led into it (#551)."""
 _MARKS = re.compile(r"\*\*|__|`|^#+\s*", re.MULTILINE)
 
 
@@ -54,7 +61,6 @@ class PluginSearch:
 
     from_the_web = True
     """Its results can't be checked: nothing may be pressed after it (ADR 15)."""
-    seconds = SECONDS
 
     def __init__(
         self,
@@ -66,11 +72,15 @@ class PluginSearch:
         today: Callable[[], datetime.date] = datetime.date.today,
         log_queries: bool = False,
         client: httpx2.AsyncClient | None = None,
+        fallback: Lookup | None = None,
     ) -> None:
         """``sites``: the game pack's, the only ones searched when ``open_web`` is off
         (``web_search_open = false``). ``game``: the pack's name, added to the query so the
         search finds that game's pages. ``log_queries``: put the query in the log file,
-        only with ``keep_transcripts``."""
+        only with ``keep_transcripts``. ``fallback``: Anthropic's search, when there's an
+        Anthropic key, used from the first time OpenRouter refuses the key (#551)."""
+        self._fallback = fallback
+        self._refused = False
         self._sites = tuple(sites)
         self._game = game
         self._open = open_web
@@ -97,11 +107,19 @@ class PluginSearch:
     def input_schema(self) -> Mapping[str, object]:
         return web.SCHEMA
 
+    @property
+    def seconds(self) -> float:
+        if self._refused and self._fallback is not None:
+            return float(getattr(self._fallback, "seconds", SECONDS))
+        return SECONDS
+
     async def prepare(self) -> None:
         return None
 
     async def close(self) -> None:
         await self._http.aclose()
+        if (close := getattr(self._fallback, "close", None)) is not None:
+            await close()
 
     def body(self, query: str) -> dict[str, object]:
         """The request: Haiku on Anthropic only, never a host that keeps data (#488), with
@@ -132,6 +150,8 @@ class PluginSearch:
         query = str(arguments.get("query") or "").strip()
         if not query:
             return failure("pass query: a short search query")
+        if self._refused and self._fallback is not None:
+            return await self._fallback.run(arguments)
         started = time.perf_counter()
         try:
             response = await self._http.post(
@@ -140,6 +160,14 @@ class PluginSearch:
         except httpx2.HTTPError as e:
             log.warning("Web search failed: %s", type(e).__name__)
             return failure(f"the web search failed ({type(e).__name__}); answer without it")
+        if response.status_code in REFUSED and self._fallback is not None:
+            # A revoked key, or one out of credit: search with the Anthropic key from now on.
+            log.warning(
+                "OpenRouter refused the key for web search (%d): using Anthropic's search",
+                response.status_code,
+            )
+            self._refused = True
+            return await self._fallback.run(arguments)
         if response.status_code != 200:
             log.warning("Web search failed: OpenRouter returned %d", response.status_code)
             return failure("the web search failed; answer without it")
@@ -173,7 +201,9 @@ class PluginSearch:
 def spoken_plainly(text: str, finish_reason: object = None) -> str:
     """The answer as it will be read aloud: no markdown links, bare links or marks, which
     the model sometimes writes despite its brief, in whole sentences if it was cut off."""
-    text = _URL.sub("", _LINK.sub(r"\1", text))
+    text = _URL.sub("\x00", _LINK.sub(r"\1", text))
+    text = _LEFT_BEHIND.sub("", text).replace("\x00", "")
+    text = re.sub(r"[,;:](?=[.,;:!?])", "", text)  # "Levski,." where a link was
     text = _MARKS.sub("", text)
     return web.spoken(text, cut=finish_reason == "length")
 

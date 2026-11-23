@@ -15,7 +15,7 @@ import time
 from collections.abc import Callable
 
 from tycho.settings import Settings
-from tycho.tile.board import Board
+from tycho.tile.board import Board, Shown
 from tycho.tile.cards import ALL_KINDS, Card, Kind, confirm, notice
 from tycho.tile.design import PICKS, TEXT_SIZES, TYCHO_ACCENT, game_accent
 from tycho.tile.draw import Light, Look, draw
@@ -62,6 +62,7 @@ class TileDisplay:
         self._accent = TYCHO_ACCENT
         self._accent_at = -ACCENT_SECONDS
         self._last: tuple[int, int, int, int] | None = None
+        self._view: tuple[Shown, ...] = ()
         self._screen: Screen | None = None
         """The screen the last frame was for: a new one redraws."""
         self._stopped = False
@@ -192,7 +193,10 @@ class TileDisplay:
             if not view and light is None:
                 self._last = None
                 return None
-            moving = light is not None or any(s.until is not None for s in view)
+            # Strips have no timer bar: one that's still up draws nothing new (#542).
+            moving = light is not None or any(s.until is not None and not s.strip for s in view)
+            if view != self._view:  # a strip came or went
+                self._view, self._changed = view, True
             accent = self._accent_now(now)
             look = self._look(screen, accent)
             if screen != self._screen:  # a chosen screen plugged in or out (#468 review)

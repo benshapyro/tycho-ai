@@ -45,7 +45,7 @@ Each would mean a second key for every player and a new set of terms, for no gai
 
 ## The #361 timing questions
 
-- **How long the open-web search takes:** median 10.1 s, 9 in 10 within 12.7 s, slowest 14.9 s here, and 16.4 s in #372's run. The search's own limit is now 18 s (it was 25 s), and the brain gets 23 s from the search's start (it was 27 s), so it always has 5 s to answer after the slowest search allowed. Before, a search that ran to its limit left the brain 2 s.
+- **How long the open-web search takes:** median 10.1 s, 9 in 10 within 12.7 s, slowest 14.9 s here, and 16.4 s in #372's run. The search's own limit is now 18 s (it was 25 s), and the brain gets 23 s from the search's start (it was 27 s), so it has 5 s to answer after the slowest search allowed when the search starts within 5 s of the question (the whole request is capped at 28 s, so a later start leaves less). Before, a search that ran to its limit left the brain 2 s.
 - **Searches per question:** at most 3 (one on the game's sites, two on the open web), in 2 requests. No search paused and went on, so the continued request never ran and nothing went over. No change needed.
 - **Web fetch on Haiku without a beta header:** it worked (two pages read) through OpenRouter. Not checked on Anthropic's own API from the cloud, because no Anthropic key was available there; players have had it on since 13 November with no reported error.
 

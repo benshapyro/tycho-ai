@@ -38,7 +38,9 @@ OPEN_SEARCH_SECONDS = 23.0
 OPEN_SEARCH_LIMIT = 28.0
 """With ``web_search_open`` (#354, on by default): two searches and page reads take longer,
 up to the search's own ``knowledge.web.OPEN_SECONDS`` (18 s), so the brain gets more time
-once it starts: the search's limit and 5 s to answer from it (#361, #365). It was 27 s
+once it starts: the search's limit and 5 s to answer from it (#361, #365), as long as the
+search starts within 5 s of the question. One that starts later gets less, because
+``OPEN_SEARCH_LIMIT`` caps the whole request: 10 s less the start (#538). It was 27 s
 against a 25 s search, which left 2 s."""
 LOOKING_LIMIT = 15.0
 """However many look-ups, an answer comes or fails this long after the request."""

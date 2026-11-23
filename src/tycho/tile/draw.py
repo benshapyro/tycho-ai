@@ -405,8 +405,8 @@ def card_image(card: Card, look: Look) -> Image.Image:
 
 
 @functools.lru_cache(maxsize=8)
-def strip_image(card: Card, look: Look) -> Image.Image:
-    """A pinned card that gave way to a newer one: its title, to bring back."""
+def strip_image(card: Card, look: Look, kept: bool = False) -> Image.Image:
+    """A card that gave way to a newer one: its title, to bring back."""
     u = look.scale * SS
     w, h = round(WIDTH * u), round(34 * u)
     out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
@@ -429,16 +429,16 @@ def strip_image(card: Card, look: Look) -> Image.Image:
         (card.title or card.label or card.kind).upper(), f, w - round(70 * u), 0.08 * f.size
     )
     pen.caps((round(34 * u), round(8 * u)), title, f, rgba(CORE.dim), 0.08)
-    # The pinned marker, drawn: none of the bundled fonts has a ▸.
-    tip_x, mid_y, half = w - round(16 * u), round(17 * u), round(4.5 * u)
-    d.polygon(
-        [
-            (tip_x - round(8 * u), mid_y - half),
-            (tip_x, mid_y),
-            (tip_x - round(8 * u), mid_y + half),
-        ],
-        fill=rgba(look.accent),
-    )
+    if kept:  # only a pinned strip stays, so only it has the marker (#543); no font has a ▸
+        tip_x, mid_y, half = w - round(16 * u), round(17 * u), round(4.5 * u)
+        d.polygon(
+            [
+                (tip_x - round(8 * u), mid_y - half),
+                (tip_x, mid_y),
+                (tip_x - round(8 * u), mid_y + half),
+            ],
+            fill=rgba(look.accent),
+        )
     return out.resize((round(w / SS), round(h / SS)), Image.Resampling.LANCZOS)
 
 
@@ -521,7 +521,7 @@ def draw(
     parts: list[Image.Image] = []
     for shown in view:
         if shown.strip:
-            parts.append(strip_image(shown.card, look))
+            parts.append(strip_image(shown.card, look, shown.pinned))
             continue
         image = card_image(shown.card, look).copy()
         card = shown.card

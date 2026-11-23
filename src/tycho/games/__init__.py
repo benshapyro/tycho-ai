@@ -167,6 +167,21 @@ def _web(workshop: Workshop) -> Built:
     if not current.web_search:
         log.info("Web search: off (web_search is false)")
         return Built()
+    import anthropic
+
+    from tycho.knowledge.web import WebSearch
+
+    search_key = workshop.search_key()
+    anthropic_search = (
+        None
+        if search_key is None
+        else WebSearch(
+            anthropic.AsyncAnthropic(api_key=search_key, max_retries=0),
+            log_queries=current.keep_transcripts,
+            sites=workshop.pack.web_sites,
+            fallback=current.web_search_open,
+        )
+    )
     if (openrouter := workshop.openrouter_key()) is not None:
         from tycho.knowledge.web_plugin import ENGINE, PluginSearch
 
@@ -179,27 +194,14 @@ def _web(workshop: Workshop) -> Built:
                     game=workshop.pack.name,
                     open_web=current.web_search_open,
                     log_queries=current.keep_transcripts,
+                    fallback=anthropic_search,  # if OpenRouter refuses the key (#551)
                 ),
             )
         )
-    import anthropic
-
-    from tycho.knowledge.web import WebSearch
-
-    search_key = workshop.search_key()
-    if search_key is None:  # a brain runs on one of the two keys, so never in play
+    if anthropic_search is None:  # a brain runs on one of the two keys, so never in play
         log.info("Web search: no key to search with")
         return Built()
-    return Built(
-        (
-            WebSearch(
-                anthropic.AsyncAnthropic(api_key=search_key, max_retries=0),
-                log_queries=current.keep_transcripts,
-                sites=workshop.pack.web_sites,
-                fallback=current.web_search_open,
-            ),
-        )
-    )
+    return Built((anthropic_search,))
 
 
 def ship_accent(flying: str, library: ShipLibrary | None, tile: Tile) -> str | None:
