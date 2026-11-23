@@ -1,0 +1,10 @@
+# Your ships, for Tycho. Tycho adds and removes them when you tell it ("I own a
+# Cutlass Black", "I sold my Prospector"). You can edit this file too: one name
+# per line, as the game writes it.
+
+ships = [
+    "Cutlass Black",
+    "MISC Prospector",
+    "Drake Corsair",
+    "Anvil Carrack",
+]

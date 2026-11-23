@@ -23,6 +23,8 @@ uv version <version> --no-sync      # updates pyproject.toml and uv.lock
 
 In the same PR, move everything under **Unreleased** in `CHANGELOG.md` to a new `## [<version>] - <YYYY-MM-DD>` section, leave **Unreleased** empty, and update the compare links at the bottom.
 
+Also in the same PR, keep this version's player files for the upgrade tests (#612): `uv run python tools/upgrades/make_fixtures.py --this <version>` writes them with the code being released. `tests/test_upgrades.py` fails without them, since every version in the changelog needs its folder.
+
 Commit (`chore(release): <version>`), push, open a PR, wait for CI and the Claude review, and merge when the maintainer says so.
 
 ## 3. Take the installer CI built from main

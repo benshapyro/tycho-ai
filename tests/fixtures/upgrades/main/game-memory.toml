@@ -1,0 +1,6 @@
+# Notes Tycho keeps about you (ADR 8). One sentence each, at most 50, each
+# with the day it was saved. They go to the brain with each request. Edit or
+# delete them here, say "forget that ...", or use the Memory page in Tycho's window.
+[[note]]
+text = "My home base is Area18"
+saved = 2026-11-23

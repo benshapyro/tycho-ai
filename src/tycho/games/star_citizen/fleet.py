@@ -84,14 +84,21 @@ class Fleet:
         except FileNotFoundError:
             return cls(path)
         except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
-            problem = (
-                f"{path} can't be read ({e}), so Tycho won't change it. "
-                "Fix that, or delete the file to start a new fleet."
-            )
-            log.warning("Starting without your fleet: %s", problem)
-            return cls(path, problem=problem)
-        names = _strings(data.get("ships"))[:MAX_SHIPS]
-        return cls(path, names, imported=_strings(data.get("imported")))
+            return cls._unreadable(path, str(e))
+        # Not a list: read as no ships, the next save would write over them (#612).
+        if wrong := [k for k in ("ships", "imported") if not isinstance(data.get(k, []), list)]:
+            return cls._unreadable(path, f"{wrong[0]} isn't a list of names in [ ]")
+        # Every ship, even past MAX_SHIPS in a hand-written list: a save keeps them all.
+        return cls(path, _strings(data.get("ships")), imported=_strings(data.get("imported")))
+
+    @classmethod
+    def _unreadable(cls, path: Path, why: str) -> Fleet:
+        problem = (
+            f"{path} can't be read ({why}), so Tycho won't change it. "
+            "Fix that, or delete the file to start a new fleet."
+        )
+        log.warning("Starting without your fleet: %s", problem)
+        return cls(path, problem=problem)
 
     def refresh(self) -> None:
         """Read the file again if something else changed it since (an import from the
@@ -130,7 +137,8 @@ class Fleet:
             return ""
         parts: list[str] = []
         if self.ships:
-            parts.append("The player's ships: " + "; ".join(_brief(n, library) for n in self.ships))
+            ships = self.ships[:MAX_SHIPS]  # the header's limit; the file keeps the rest
+            parts.append("The player's ships: " + "; ".join(_brief(n, library) for n in ships))
         if self.flying:
             parts.append(f"Flying now: {_brief(self.flying, library)}")
         return "[" + ". ".join(parts) + "]"

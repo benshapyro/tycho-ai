@@ -24,6 +24,7 @@ import tomllib
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from tycho.games.star_citizen import loglines
 from tycho.settings_toml import write_atomic
@@ -94,6 +95,16 @@ _LOCKS: dict[Path, threading.Lock] = {}
 _LOCKS_LOCK = threading.Lock()
 
 
+def _check_shape(data: dict[str, object]) -> None:
+    """A hand edit in the wrong shape is a problem, not an empty list: read as empty,
+    the next blueprint added would write over the player's own (#612)."""
+    entries = data.get("blueprint", [])
+    if not isinstance(entries, list) or not all(isinstance(e, dict) for e in entries):
+        raise ValueError('each blueprint is a [[blueprint]] with name = "..."')
+    if not isinstance(data.get("taken_off", []), list):
+        raise ValueError("taken_off is a list of names in [ ]")
+
+
 def _lock_for(path: Path) -> threading.Lock:
     """One lock per list file, however many ``OwnedBlueprints`` read it: the Memory
     page makes its own, and a log read beside its delete wrote the delete away (#608)."""
@@ -142,17 +153,15 @@ class OwnedBlueprints:
             return [], 0.0, []
         try:
             data = tomllib.loads(self.path.read_text("utf-8-sig"))
-        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+            _check_shape(data)
+        except (OSError, UnicodeDecodeError, ValueError) as e:  # TOMLDecodeError too
             self.problem = f"Couldn't read {self.path.name}: {e}"
             log.warning("%s", self.problem)
             raise OSError(self.problem) from e
         self.problem = ""
         out: list[Owned] = []
         seen: set[str] = set()
-        entries = data.get("blueprint", [])
-        for entry in entries if isinstance(entries, list) else []:
-            if not isinstance(entry, dict):
-                continue
+        for entry in cast(list[dict[str, object]], data.get("blueprint", [])):
             name = item(entry.get("name"))
             if not name or name.casefold() in seen:
                 continue
@@ -167,8 +176,7 @@ class OwnedBlueprints:
                 )
             )
         scanned = data.get("scanned_logs", 0.0)
-        taken = data.get("taken_off", [])
-        taken_off = [n for t in (taken if isinstance(taken, list) else []) if (n := item(t))]
+        taken_off = [n for t in cast(list[object], data.get("taken_off", [])) if (n := item(t))]
         when = float(scanned) if isinstance(scanned, int | float) else 0.0
         return out[:MOST], when, taken_off[:MOST]
 
