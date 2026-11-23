@@ -1614,3 +1614,51 @@ recent = [["where do I pay my fines on Levski", "said: The fines terminals are o
 expect = ["look_up"]
 tools = ["web_search"]
 tag = "search_first"
+
+# --- Looking at the game (#31, #548) -------------------------------------------
+# picture: one drawn by tools/bench/pictures.py, sent as a look is. may_look: looking
+# is on (it is whenever there's a picture). offers_look: the reply must end with exactly
+# "Want me to take a look?" (true), or never offer (false).
+
+[[case]]
+heard = "take a look, what am I looking at?"
+mode = "chat"
+picture = "planet"
+expect = ["reply"]
+mentions = [["Hurston", "planet"]]
+offers_look = false
+tag = "look"
+
+[[case]]
+heard = "take a look, how much fuel have I got?"
+mode = "chat"
+picture = "planet"
+expect = ["reply"]
+mentions = [["23"]]
+offers_look = false
+tag = "look"
+
+[[case]]
+heard = "what's that ship right in front of me?"
+mode = "chat"
+may_look = true
+expect = ["reply"]
+offers_look = true
+tag = "look"
+
+[[case]]
+heard = "which planet is Lorville on?"
+mode = "chat"
+may_look = true
+expect = ["reply"]
+mentions = [["Hurston"]]
+offers_look = false
+tag = "look"
+
+[[case]]
+heard = "what kind of ship is that one right in front of me?"
+mode = "chat"
+may_look = false
+expect = ["reply"]
+offers_look = false
+tag = "look"

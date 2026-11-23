@@ -199,6 +199,9 @@ KNOWN = {
     "key_for",
     "never_say",
     "unbound",
+    "picture",
+    "may_look",
+    "offers_look",
 }
 
 
@@ -1124,6 +1127,37 @@ def test_a_case_can_unbind_actions() -> None:
     assert keybinds.get("v_open_all_doors").bound  # pyright: ignore[reportOptionalMemberAccess]
     with pytest.raises(SystemExit, match="v_open_all_door"):
         e.without(keybinds, ["v_open_all_door"])  # misspelt: it would unbind nothing
+
+
+def test_a_case_grades_the_offer_to_look() -> None:
+    # #548: the offer is the exact words a "yes" answers, and only where it should be.
+    e = _eval()
+    offer = _outcome(say="I can't see it from here. Want me to take a look?")
+    wants = {"expect": ["reply"], "offers_look": True}
+    assert e.grade(offer, wants, set()) == "pass"
+    near = _outcome(say="I can't see it. Should I take a look?")
+    assert e.grade(near, wants, set()) == "didn't offer to look"
+    never = {"expect": ["reply"], "offers_look": False}
+    assert e.grade(offer, never, set()).startswith("offered to look")
+    assert e.grade(near, never, set()) == "pass"
+    assert e.grade(offer, {"expect": ["reply"]}, set()) == "pass"  # not graded unless asked
+
+
+def test_every_picture_a_case_names_is_drawn() -> None:
+    e = _eval()
+    data = tomllib.loads(
+        (ROOT / "src" / "tycho" / "packs" / "star-citizen" / "eval" / "cases.toml").read_text(
+            "utf-8"
+        )
+    )
+    names = {c["picture"] for c in data["case"] if "picture" in c}
+    assert names
+    for name in names:
+        seen = e.picture(name)
+        assert max(seen.width, seen.height) <= 1568  # shrunk, as a real look is
+        assert seen.media_type == "image/jpeg"
+    with pytest.raises(SystemExit, match="no picture called"):
+        e.picture("planett")
 
 
 def test_cases_that_must_search_are_left_out_without_web_search() -> None:
