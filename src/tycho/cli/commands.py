@@ -1,6 +1,7 @@
 """The ``tycho`` commands other than ``run``: ``check``, ``actions``, ``model``, ``gpu``,
 ``sounds``, ``credits`` and ``fleet``. Out of ``app.py`` (#398)."""
 
+import io
 import logging
 import sys
 import time
@@ -48,6 +49,10 @@ def fleet_import_command(
     """``tycho fleet import``: the ships in a hangar export (ccugame.app's ships.csv or a
     fleetview.json) into the player's fleet, after showing what changes (#556)."""
     pack = built_in(current.game)
+    # A name outside the console's code page mustn't crash a piped run (#574).
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(errors="replace")
     print("Matching the names against the game's data...")
     try:
         prepared = import_hangar(pack, file)

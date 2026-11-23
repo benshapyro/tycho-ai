@@ -1677,6 +1677,8 @@ def test_claude_isnt_offered_cards_its_game_doesnt_use() -> None:
     asyncio.run(brain.decide(BrainRequest("where to level", KEYBINDS)))
     card = next(t for t in client.requests[0]["tools"] if t["name"] == "show_card")
     assert "fleet" not in card["input_schema"]["properties"]["kind"]["enum"]
+    # Nor told about them anywhere in the description (#576).
+    assert not {"ship", "specs", "loadout"} & set(re.findall(r"[a-z]+", card["description"]))
 
 
 def test_claudes_card_tool_keeps_its_keys_in_the_cached_order() -> None:

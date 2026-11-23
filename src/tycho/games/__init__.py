@@ -126,8 +126,17 @@ def import_hangar(pack: GamePack, file: Path) -> HangarImport:
 
     if "fleet" not in pack.parts.lookups:
         raise ValueError(f"Tycho keeps no list of your ships in {pack.name}.")
+
+    async def loaded() -> ShipLibrary:
+        wiki, uex = WikiApi(), UexApi()
+        try:
+            return await ensure(wiki, paths.knowledge_dir(), concepts=uex)
+        finally:  # no unclosed-connection noise after asyncio.run (#574)
+            await wiki.aclose()
+            await uex.aclose()
+
     try:
-        library = asyncio.run(ensure(WikiApi(), paths.knowledge_dir(), concepts=UexApi()))
+        library = asyncio.run(loaded())
     except ShipDataError as e:
         raise GameDataError(f"the game's data couldn't be loaded to match the names: {e}") from e
     return prepare(paths.fleet_file(pack.id), file, library)

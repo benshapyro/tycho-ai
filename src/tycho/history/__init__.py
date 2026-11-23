@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 KEEP_DAYS = 30
-"""How long a session's history is kept, from the day it started."""
+"""How long a session's history is kept, from the day of its last exchange."""
 SAID_CHARS = 300
 """The most of what the player said that's kept."""
 TYCHO_CHARS = 1200
@@ -87,6 +87,8 @@ class Entry:
             at = datetime.datetime.fromisoformat(str(kept.get("at")))
         except ValueError:
             return None
+        if at.tzinfo is None:  # a hand edit without a timezone: this PC's (#587)
+            at = at.astimezone()
         did = kept.get("did", [])
         names = (
             tuple(clean(d, 80) for d in cast(list[object], did)) if isinstance(did, list) else ()
@@ -209,7 +211,7 @@ class History:
     def record(self, result: Result) -> None:
         """Keep one exchange, if history is on and something was said. Written on a
         thread of its own: the talking loop never waits for the disk."""
-        if not self.on or result.would_press:  # setup's Try it: nothing happened in play
+        if not self.on or result.tried or result.would_press:  # setup's Try it: not play
             return
         at = self.now()
         shown = exchange(result, at.timestamp())
@@ -237,13 +239,18 @@ class History:
         self._writer.shutdown(wait=True)
 
     def prune(self) -> int:
-        """Delete every session that started more than ``KEEP_DAYS`` days ago, whether
-        history is on or not. Returns how many went."""
+        """Delete every session whose last exchange is more than ``KEEP_DAYS`` days old,
+        whether history is on or not: one Tycho ran through for days keeps its recent
+        exchanges (#587). Returns how many went."""
         oldest = self.now().date() - datetime.timedelta(days=KEEP_DAYS)
         gone = 0
         with self.lock:
             for played in self.store.sessions():
-                if played.started.date() < oldest and self.store.delete(played.id):
+                if played.started.date() >= oldest:
+                    continue
+                entries = self.store.entries(played.id)
+                last = max((e.at for e in entries), default=played.started)
+                if last.astimezone().date() < oldest and self.store.delete(played.id):
                     gone += 1
         if gone:
             log.info("History: deleted %d session(s) over %d days old", gone, KEEP_DAYS)
@@ -251,10 +258,13 @@ class History:
 
     def delete(self, session: str) -> bool:
         with self.lock:
+            if session == self.session:
+                self.session = ""  # what's said next starts a new session (#587)
             return self.store.delete(session)
 
     def delete_all(self) -> int:
         with self.lock:
+            self.session = ""
             return sum(self.store.delete(p.id) for p in self.store.sessions())
 
     def search(
@@ -265,8 +275,8 @@ class History:
         wanted = _stems(normalize(words)) - _COMMON
         scored: list[tuple[int, datetime.datetime, Found]] = []
         for played in self.store.sessions():
-            if day is not None and played.started.date() not in (day - _DAY, day):
-                continue  # a session past midnight still holds the day's last exchanges
+            if day is not None and played.started.date() > day:
+                continue  # started after that day; one that started before may run into it
             for entry in self.store.entries(played.id):
                 if day is not None and entry.at.astimezone().date() != day:
                     continue
@@ -275,9 +285,6 @@ class History:
                     scored.append((score, entry.at, Found(played.id, entry)))
         scored.sort(key=lambda s: (s[0], s[1]), reverse=True)
         return sorted((s[2] for s in scored[:most]), key=lambda f: f.entry.at)
-
-
-_DAY = datetime.timedelta(days=1)
 
 
 def _stems(words: list[str]) -> set[str]:

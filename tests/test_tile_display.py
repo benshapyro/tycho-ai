@@ -241,3 +241,14 @@ def test_tychos_own_colour_is_the_games_where_it_names_one() -> None:
     assert picked._accent_now(clock.now) == PICKS["green"]  # pyright: ignore[reportPrivateUsage]
     sc, clock = _display(game="star-citizen", tile_colour="tycho")
     assert sc._accent_now(clock.now) == TYCHO_ACCENT  # pyright: ignore[reportPrivateUsage]
+
+
+def test_a_card_this_game_doesnt_offer_never_shows() -> None:
+    """#576: an OpenRouter model isn't held to the tool's list of kinds, so it could show
+    a ship card in WoW: Forever, which has no switch in its Settings to hide it."""
+    ship = Card("ship", title="Gladius", rows=(Row("Speed", value="1,150 m/s"),))
+    wow, _ = _display(game="wow-forever")
+    assert not wow.show(ship)
+    assert wow.show(SELL)
+    star_citizen, _ = _display(game="star-citizen")
+    assert star_citizen.show(ship)

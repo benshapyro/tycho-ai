@@ -91,6 +91,9 @@ class Prepared:
     plan: HangarPlan
     lines: list[str]
     """What it would do, in plain lines."""
+    library: ShipLibrary | None = None
+    names: list[str] = field(default_factory=list[str])
+    """The file's ship names, to plan again at ``save``."""
 
     @property
     def changes(self) -> bool:
@@ -104,7 +107,14 @@ class Prepared:
         )
 
     def save(self) -> None:
-        """Save it. ``OSError`` if the fleet file can't be written."""
+        """Save it, planned again against the fleet as it is now: a ship said by voice
+        while the plan was on screen stays (#574). ``OSError`` if the fleet file can't be
+        read or written."""
+        if self.library is not None:
+            self.fleet.refresh()
+            if self.fleet.problem:
+                raise FleetFileError(self.fleet.problem)
+            self.plan = plan(self.fleet, self.library, self.names)
         apply(self.fleet, self.plan)
 
 
@@ -115,8 +125,9 @@ def prepare(fleet_file: Path, file: Path, library: ShipLibrary) -> Prepared:
     fleet = Fleet.load(fleet_file)
     if fleet.problem:
         raise FleetFileError(fleet.problem)
-    chosen = plan(fleet, library, read_export(file))
-    return Prepared(fleet, chosen, summary(chosen, file.name))
+    names = read_export(file)
+    chosen = plan(fleet, library, names)
+    return Prepared(fleet, chosen, summary(chosen, file.name), library, names)
 
 
 def read_export(path: Path) -> list[str]:

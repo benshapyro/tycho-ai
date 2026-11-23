@@ -2,7 +2,8 @@
 
 Engine noise and combat drowned Tycho out. While a line plays, the game's own volume in
 Windows' mixer (the same per-app slider a player can move by hand: ADR 3, nothing in the
-game) goes down to ``duck_level`` of where the player left it, then fades back up.
+game) goes down to ``duck_level`` of where the player left it, then fades back up. A game
+can have several sliders (one per sound device, say): each keeps its own level (#578).
 
 The rules, each tested against ``GameVolume``'s fake:
 
@@ -11,19 +12,19 @@ The rules, each tested against ``GameVolume``'s fake:
   when push-to-talk stops Tycho, on quit, and at the next start after a crash. Windows
   remembers an app's level after it closes, so a level that couldn't be put back (the
   game had closed) waits on disk for the next chance.
-- **The player's own change wins.** If the slider isn't where Tycho left it, the player
-  moved it: Tycho forgets the saved level and leaves theirs.
+- **The player's own change wins.** If a slider isn't where Tycho left it, the player
+  moved it: Tycho forgets that slider's saved level and leaves theirs.
 - **Fades,** so nothing clicks: ``DOWN_SECONDS`` down, ``UP_SECONDS`` back up. Lines
   close together (the filler, then the answer) keep it down for ``HOLD_SECONDS`` between.
 - **Never in the way.** The line never waits for the fade, and a mixer that fails is
-  logged once and left alone.
+  logged once (until it works again) and left alone.
 """
 
 import asyncio
 import contextlib
 import json
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from pathlib import Path
 from typing import Protocol
 
@@ -41,17 +42,28 @@ MOVED = 0.02
 """A slider further than this from where Tycho left it was moved by the player."""
 
 
+type Levels = dict[str, float]
+"""Each of the game's sliders in the mixer, by a name that stays the same while the game
+restarts, and its level from 0 to 1. ``ALL`` in levels to set means every slider."""
+
+ALL = "*"
+
+
 class GameVolume(Protocol):
-    """The game's own volume in Windows' mixer, from 0 to 1 (``voice/mixer.py`` on
-    Windows; a fake in tests). Both block briefly: call them off the event loop."""
+    """The game's own volume in Windows' mixer (``voice/mixer.py`` on Windows; a fake in
+    tests). Both block briefly: call them off the event loop."""
 
-    def get(self) -> float | None:
-        """The game's level now, or None if it has no sound (it isn't running)."""
+    def get(self) -> Levels:
+        """Each of the game's sliders now; empty if it has no sound (it isn't running)."""
         ...
 
-    def set(self, level: float) -> bool:
-        """Set the game's level. False if it has no sound to set."""
+    def set(self, levels: Mapping[str, float]) -> bool:
+        """Set the sliders named. False if the game has none of them to set."""
         ...
+
+
+def _scaled(levels: Levels, share: float) -> Levels:
+    return {name: level * share for name, level in levels.items()}
 
 
 class Ducker:
@@ -73,14 +85,14 @@ class Ducker:
         self._sleep = sleep
         self._lines = 0
         """Lines playing now."""
-        self._original: float | None = None
-        """The level the player left, while Tycho has the game lowered."""
-        self._left: float | None = None
-        """Where Tycho last put the slider."""
+        self._original: Levels | None = None
+        """The levels the player left, while Tycho has the game lowered."""
+        self._left: Levels | None = None
+        """Where Tycho last put the sliders."""
         self._lock = asyncio.Lock()
         """One fade at a time, in the order asked."""
-        self._lowering: asyncio.Task[None] | None = None
-        self._raising: asyncio.Task[None] | None = None
+        self._fades: set[asyncio.Task[None]] = set()
+        """Every fade not yet done, so quitting stops them all (#579)."""
         self._failed = False
         self._setting: asyncio.Future[bool] | None = None
         """The slider's last move, which may outlive a cancelled fade."""
@@ -100,7 +112,7 @@ class Ducker:
         """A line starts: lower the game, without waiting."""
         self._lines += 1  # a fade up stops at its next step and leaves the rest to this
         if self.on:
-            self._lowering = asyncio.get_running_loop().create_task(self._lower())
+            self._start(self._lower())
 
     def up(self, *, at_once: bool = False) -> None:
         """A line ended. ``at_once``: push-to-talk stopped it, so no holding down."""
@@ -115,20 +127,18 @@ class Ducker:
         if level is None:
             return
         try:
-            if self._volume.get() is None or not self._volume.set(level):
+            if not self._volume.get() or not self._volume.set(level):
                 return  # the game isn't running: the next line tries again
         except Exception as e:
             self._failure(e)
             return
-        log.info("Put the game's volume back to %d%%, as you left it", round(level * 100))
-        self._forget()
+        self._put_back(level)
 
     async def close(self) -> None:
         """Quitting: stop any fade and put the game back now."""
-        for task in (self._lowering, self._raising):
-            if task is not None and not task.done():
-                task.cancel()
-                await asyncio.gather(task, return_exceptions=True)
+        for task in list(self._fades):
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
         if self._setting is not None:  # a step a cancel left still moving the slider
             await asyncio.wait({self._setting})
         async with self._lock:
@@ -141,7 +151,12 @@ class Ducker:
             return
         # Never cancelled mid-fade (a step may be moving the slider): a line that starts
         # stops it between steps (#577's review).
-        self._raising = asyncio.get_running_loop().create_task(self._raise(delay))
+        self._start(self._raise(delay))
+
+    def _start(self, fade: Coroutine[object, object, None]) -> None:
+        task = asyncio.get_running_loop().create_task(fade)
+        self._fades.add(task)
+        task.add_done_callback(self._fades.discard)
 
     async def _lower(self) -> None:
         async with self._lock:
@@ -150,15 +165,15 @@ class Ducker:
             if self._original is None:
                 await self._put_back_saved()
                 now = await self._get()
-                if now is None or now <= 0.0:
+                if not now or max(now.values()) <= 0.0:
                     return
                 self._original = now
                 self._save(now)
             else:  # a line soon after the last: from wherever the fade up got to
                 now = await self._get()
-                if now is None or self._moved(now):
+                if not now or not self._unmoved(now):
                     return
-            await self._fade(now, self._original * self.level, DOWN_SECONDS)
+            await self._fade(now, _scaled(self._original, self.level), DOWN_SECONDS)
             if self._lines == 0:  # the line ended while this was getting the level
                 self._raise_soon(0.0)
 
@@ -172,29 +187,46 @@ class Ducker:
                 await self._put_back_saved()
                 return
             now = await self._get()
-            if now is None:
+            if not now:
                 return  # the game closed: the level waits on disk for the next chance
-            if self._moved(now):
+            if not self._unmoved(now):
                 return
-            if await self._fade(now, self._original, UP_SECONDS, until=lambda: self._lines > 0):
+            original = self._original
+            if await self._fade(now, original, UP_SECONDS, until=lambda: self._lines > 0):
                 self._forget()
 
-    def _moved(self, now: float) -> bool:
-        """Whether the player moved the slider: if so, their level wins."""
-        if self._left is None or abs(now - self._left) <= MOVED:
+    def _unmoved(self, now: Levels) -> bool:
+        """Leaves out each slider the player moved while Tycho spoke: their level wins.
+        Whether any slider is still Tycho's to put back."""
+        if self._original is None:
             return False
-        log.info("The game's volume was changed by hand while Tycho spoke: leaving it")
-        self._forget()
+        left = self._left or {}
+        moved = {n for n, level in left.items() if n in now and abs(now[n] - level) > MOVED}
+        if moved:
+            log.info("The game's volume was changed by hand while Tycho spoke: leaving it")
+            self._original = {n: v for n, v in self._original.items() if n not in moved}
+            self._left = {n: v for n, v in left.items() if n not in moved}
+            if not self._original:
+                self._forget()
+                return False
+            self._save(self._original)
         return True
 
     async def _fade(
-        self, start: float, end: float, seconds: float, until: Callable[[], bool] = lambda: False
+        self,
+        start: Mapping[str, float],
+        end: Levels,
+        seconds: float,
+        until: Callable[[], bool] = lambda: False,
     ) -> bool:
-        """Move the slider from ``start`` to ``end`` in steps. Whether it got there: it
-        stops early if the game goes, or between steps once ``until`` is true."""
+        """Move each slider in ``end`` from ``start`` to there in steps. Whether they got
+        there: it stops early if the game goes, or between steps once ``until`` is true."""
         steps = max(1, round(seconds / STEP_SECONDS))
         for step in range(1, steps + 1):
-            if until() or not await self._set(start + (end - start) * step / steps):
+            levels = {
+                n: start.get(n, v) + (v - start.get(n, v)) * step / steps for n, v in end.items()
+            }
+            if until() or not await self._set(levels):
                 return False
             if step < steps:
                 await self._sleep(seconds / steps)
@@ -206,33 +238,40 @@ class Ducker:
         level = self._load()
         if level is None:
             return
-        if await self._get() is None:
+        if not await self._get():
             return  # not running: try again at the next line or start
         await self._set(level)
-        log.info("Put the game's volume back to %d%%, as you left it", round(level * 100))
+        self._put_back(level)
+
+    def _put_back(self, levels: Levels) -> None:
+        loudest = max(levels.values())
+        log.info("Put the game's volume back to %d%%, as you left it", round(loudest * 100))
         self._forget()
 
-    async def _get(self) -> float | None:
+    async def _get(self) -> Levels:
         try:
-            return await asyncio.to_thread(self._volume.get)
+            now = await asyncio.to_thread(self._volume.get)
         except Exception as e:
             self._failure(e)
-            return None
+            return {}
+        self._failed = False  # it works again: a later, different failure is logged
+        return now
 
-    async def _set(self, level: float) -> bool:
+    async def _set(self, levels: Levels) -> bool:
         # Shielded: a cancel can't stop the thread moving the slider, so it mustn't stop
         # Tycho noting where the slider went either (#577's review).
-        self._setting = asyncio.ensure_future(asyncio.to_thread(self._volume.set, level))
+        self._setting = asyncio.ensure_future(asyncio.to_thread(self._volume.set, levels))
         try:
             done = await asyncio.shield(self._setting)
         except asyncio.CancelledError:
-            self._left = level
+            self._left = levels
             raise
         except Exception as e:
             self._failure(e)
             return False
+        self._failed = False
         if done:
-            self._left = level
+            self._left = levels
         return done
 
     def _failure(self, e: Exception) -> None:
@@ -240,31 +279,38 @@ class Ducker:
             self._failed = True
             log.warning("Couldn't change the game's volume: %s", e)
 
-    def _save(self, level: float) -> None:
+    def _save(self, levels: Levels) -> None:
         try:
             self._saved.parent.mkdir(parents=True, exist_ok=True)
-            self._saved.write_text(json.dumps({"level": level}), "utf-8")
+            self._saved.write_text(json.dumps({"levels": levels}), "utf-8")
         except OSError as e:
             log.warning("Couldn't note the game's volume: %s", e)
 
-    def _load(self) -> float | None:
+    def _load(self) -> Levels | None:
         try:
-            level = json.loads(self._saved.read_text("utf-8"))["level"]
+            noted = json.loads(self._saved.read_text("utf-8"))
+            # {"level": x} from a build before #578: one level for every slider.
+            levels = noted["levels"] if "levels" in noted else {ALL: noted["level"]}
+            levels = {str(n): v for n, v in levels.items()}
         except FileNotFoundError:
             return None
-        except (OSError, ValueError, KeyError, TypeError) as e:
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
             log.warning("Ignoring the noted game volume: %s", e)
             self._saved.unlink(missing_ok=True)
             return None
-        if not isinstance(level, int | float) or not 0.0 < level <= 1.0:
+        if not levels or not all(_a_level(v) for v in levels.values()) or not any(levels.values()):
             self._saved.unlink(missing_ok=True)
             return None
-        return float(level)
+        return {n: float(v) for n, v in levels.items()}
 
     def _forget(self) -> None:
         self._original = self._left = None
         with contextlib.suppress(OSError):
             self._saved.unlink(missing_ok=True)
+
+
+def _a_level(value: object) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool) and 0.0 <= value <= 1.0
 
 
 class Ducking:

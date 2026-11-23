@@ -321,7 +321,7 @@ class Session:
             result = await self._process(request, clip, trace, cancel, progress, trying)
         except asyncio.CancelledError:
             cancel.set()
-            self._report(progress.result(request, "cancelled", trace))
+            self._report(replace(progress.result(request, "cancelled", trace), tried=trying))
             raise
         except AudioError as e:
             log.error("The microphone stopped working: %s", e)
@@ -332,7 +332,7 @@ class Session:
             log.exception("Request %d failed", request)
             detail = f"{type(e).__name__}: {e}"
             result = progress.result(request, "failed", trace, detail=detail)
-        self._report(result)
+        self._report(result := replace(result, tried=trying))
         return result
 
     async def _process(

@@ -388,6 +388,8 @@ def _type_ole32(o: ctypes.WinDLL) -> None:
         ctypes.POINTER(GUID),
         ctypes.POINTER(P),
     ]
+    o.CoTaskMemFree.restype = None
+    o.CoTaskMemFree.argtypes = [P]
 
 
 _TYPERS: dict[str, Callable[[ctypes.WinDLL], None]] = {
