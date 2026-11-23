@@ -94,6 +94,9 @@ class Ducker:
         self._fades: set[asyncio.Task[None]] = set()
         """Every fade not yet done, so quitting stops them all (#579)."""
         self._failed = False
+        self._stale: Levels = {}
+        """Saved levels for sliders the game doesn't have now (it moved to another sound
+        device): kept on disk until they can go back (#593)."""
         self._setting: asyncio.Future[bool] | None = None
         """The slider's last move, which may outlive a cancelled fade."""
 
@@ -127,8 +130,11 @@ class Ducker:
         if level is None:
             return
         try:
-            if not self._volume.get() or not self._volume.set(level):
+            if not self._volume.get():
                 return  # the game isn't running: the next line tries again
+            if not self._volume.set(level):
+                self._stale = level  # not these sliders: kept for when they're back
+                return
         except Exception as e:
             self._failure(e)
             return
@@ -240,7 +246,10 @@ class Ducker:
             return
         if not await self._get():
             return  # not running: try again at the next line or start
-        await self._set(level)
+        if not await self._set(level):
+            self._stale = level  # none of these sliders now: kept on disk (#593)
+            return
+        self._stale = {}
         self._put_back(level)
 
     def _put_back(self, levels: Levels) -> None:
@@ -254,7 +263,6 @@ class Ducker:
         except Exception as e:
             self._failure(e)
             return {}
-        self._failed = False  # it works again: a later, different failure is logged
         return now
 
     async def _set(self, levels: Levels) -> bool:
@@ -269,7 +277,7 @@ class Ducker:
         except Exception as e:
             self._failure(e)
             return False
-        self._failed = False
+        self._failed = False  # it works again: a later, different failure is logged
         if done:
             self._left = levels
         return done
@@ -282,7 +290,8 @@ class Ducker:
     def _save(self, levels: Levels) -> None:
         try:
             self._saved.parent.mkdir(parents=True, exist_ok=True)
-            self._saved.write_text(json.dumps({"levels": levels}), "utf-8")
+            noted = {**self._stale, **levels}
+            self._saved.write_text(json.dumps({"levels": noted}), "utf-8")
         except OSError as e:
             log.warning("Couldn't note the game's volume: %s", e)
 
@@ -305,6 +314,9 @@ class Ducker:
 
     def _forget(self) -> None:
         self._original = self._left = None
+        if self._stale:
+            self._save({})  # what couldn't go back yet stays noted
+            return
         with contextlib.suppress(OSError):
             self._saved.unlink(missing_ok=True)
 

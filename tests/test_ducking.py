@@ -469,3 +469,47 @@ def test_quitting_stops_every_fade(tmp_path: Path) -> None:
 
     asyncio.run(go())
     assert volume.level == pytest.approx(1.0)
+
+
+def test_a_saved_level_for_sliders_the_game_doesn_t_have_now_is_kept(tmp_path: Path) -> None:
+    """#593: the game came back on another sound device, so none of the saved sliders
+    could be set; the saved level was forgotten and the old device stayed lowered."""
+    (tmp_path / "ducked.json").write_text('{"levels": {"speakers": 0.9}}', "utf-8")
+    volume = FakeGameVolume(sliders={"headset": 0.6})
+    ducker = _ducker(volume, tmp_path)
+    ducker.recover()
+
+    async def go() -> None:
+        await Ducking(FakeSpeaker(seconds=0.15), ducker).speak("Hi.")
+        await _settle()
+
+    asyncio.run(go())
+    assert volume.sliders == {"headset": pytest.approx(0.6)}
+    noted = json.loads((tmp_path / "ducked.json").read_text("utf-8"))
+    assert noted == {"levels": {"speakers": 0.9}}
+    volume.sliders["speakers"] = 0.27  # back on the speakers, still lowered
+    asyncio.run(go())
+    assert volume.sliders["speakers"] == pytest.approx(0.9)
+    assert not (tmp_path / "ducked.json").exists()
+
+
+def test_a_mixer_that_reads_but_can_t_set_warns_once(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """#593: a working read cleared the note of a failure, so a set that always failed
+    warned on every line."""
+
+    class ReadOnly(FakeGameVolume):
+        def set(self, levels: Mapping[str, float]) -> bool:
+            raise OSError("access denied")
+
+    ducking = Ducking(FakeSpeaker(), _ducker(ReadOnly(1.0), tmp_path))
+
+    async def go() -> None:
+        for _ in range(3):
+            await ducking.speak("Hi.")
+            await _settle()
+
+    with caplog.at_level("WARNING"):
+        asyncio.run(go())
+    assert sum("access denied" in r.getMessage() for r in caplog.records) == 1
