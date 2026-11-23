@@ -129,3 +129,26 @@ Claude was asked for one tool a reply (`disable_parallel_tool_use`). In the play
 - A small callout stage beside the session, fed by the log reader, with a fake log in tests: each rule above (off by default, the 30 s limit, the busy cases) gets a test.
 - Packs gain an optional `[callouts]` table: each kind's id, line and the log fact it follows. It is data, like the rest of a pack (ADR 18).
 - Nothing new leaves the PC beyond the spoken text that already goes to ElevenLabs.
+
+## Amendment, 23 November 2026: keeping and searching past conversations
+
+*Status: accepted. The maintainer approved this text on 23 November 2026 (#569), after agreeing to the direction in the 0.11 plan ([#484](https://github.com/benshapyro/tycho-ai/issues/484)).*
+
+**Context.** After 30 seconds, Tycho forgets what was said (follow-ups, above). Players ask about earlier talk: "what was that route you gave me yesterday?". Keeping conversations is new data on the PC, and searching them sends old words to the brain, so it belongs in this ADR's privacy list.
+
+**Decision.** Tycho may keep a history of conversations on the PC and search it when asked, if the player has turned it on. Going back into an old conversation and carrying on is not part of this step.
+
+- **Off by default, asked once at setup** *(maintainer, 23 November 2026)*. A `keep_history` setting, off until the player says yes. Setup's privacy step asks it next to crash reports and looking, in plain words, for example "Keep a history of what you and Tycho said, on this PC only, so you can ask about it later? Kept for 30 days." Yes and no are equal; skipping leaves it off. Players who set Tycho up before this ships are asked once, on the next start. By voice it only turns off (`lower_only`, ADR 5).
+- **What is kept.** One history per play session (from start to quit): what the player said, what Tycho said, and what it did (action names, not key presses), with times. No audio and no pictures. On the PC only, in Tycho's data folder.
+- **How long.** 30 days by default, then deleted. The player can delete one session or all of it from the app; turning history off deletes nothing until they choose to.
+- **Searching.** In the app, and by voice through a look-up the brain may call ("what did you tell me about Hurston yesterday?"). Only the matching parts, cut to a short limit, go with that one request.
+- **Old talk is never permission to press.** Nothing from the history goes into the follow-up window. "Do that again" still covers only the live 30 seconds; a found action is described, never re-run, and every press still goes through the safety gate.
+- **Untrusted.** What comes back from a search is treated like any look-up result: text to answer from, not instructions.
+- **Where it goes.** Search results go to the brain's provider with the question that asked for them. History is part of "anything the player or Tycho said" in ADR 4's never-sent list: never in crash reports or usage counts. It is separate from `keep_transcripts`, which stays a debugging log.
+
+**Not decided here.** Resuming a past conversation as a live thread, switching threads by voice, and Tycho summarising history into memory notes (ADR 8's amendment) each need their own amendment.
+
+**Consequences.**
+- A history store with a fake, the search look-up, and a History page in the app. Tests cover off by default, the 30-day deletion, delete on request, and a found action that is never pressed.
+- History cases join the brain eval, including "do yesterday's route again", which must describe and not press.
+- The README's "What leaves your PC" table gains a row: "Parts of your past conversations, only when you ask about them, with history on".
