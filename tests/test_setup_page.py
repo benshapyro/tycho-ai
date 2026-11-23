@@ -452,6 +452,29 @@ def test_a_skipped_step_is_not_ticked_and_next_stays_in_view(setup: Setup) -> No
     expect(page.get_by_role("button", name="Next", exact=True)).to_be_in_viewport()
 
 
+def test_a_second_push_to_talk_button_is_added_and_removed_in_setup(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    """#621: a stick button as well as the mouse one, offered once there's a first."""
+    setup = Setup(browser, path)
+    page = setup.page
+    setup.at("Game")
+    setup.next()
+    setup.next()
+    setup.at("Talk and listen")
+    expect(page.locator("#capture2")).to_have_count(0)  # a second needs a first
+    page.locator("#capture").click()
+    expect(page.get_by_role("button", name="Add a second button")).to_be_visible()
+    setup.pc.button = "joystick:vkb-l:3"
+    page.get_by_role("button", name="Add a second button").click()
+    expect(page.locator("#remove2")).to_be_visible()
+    assert settings.load(path).push_to_talk_2 == "joystick:vkb-l:3"
+    page.locator("#remove2").click()
+    expect(page.get_by_role("button", name="Add a second button")).to_be_visible()
+    assert settings.load(path).push_to_talk_2 is None
+    setup.close()
+
+
 def test_a_skipped_key_is_still_to_do_where_the_brain_is_all_there_is(
     browser: Browser, path: Path, vault: dict[str, str]
 ) -> None:
@@ -603,7 +626,7 @@ def test_a_game_tycho_only_advises_in_has_no_empty_pages(
     expect(page.locator("table")).to_have_count(0)
     page.get_by_role("button", name="Settings", exact=True).click()
     page.get_by_role("tab", name="Game and controls").click()
-    expect(page.locator(".set", has_text="Push-to-talk")).to_have_count(1)
+    expect(page.locator(".set", has_text=re.compile("^Push-to-talk"))).to_have_count(1)
     page.get_by_role("tab", name="Advanced").click()
     expect(page.locator(".set", has_text="Brain model")).to_have_count(1)
     expect(page.locator(".set", has_text="Game folder")).to_have_count(0)
@@ -1344,7 +1367,7 @@ def test_a_game_with_no_fleet_has_no_hangar_import(
     setup = Setup(browser, path, first_run=False)
     setup.page.get_by_role("button", name="Settings", exact=True).click()
     setup.page.get_by_role("tab", name="Game and controls").click()
-    expect(setup.page.locator(".set", has_text="Push-to-talk")).to_have_count(1)
+    expect(setup.page.locator(".set", has_text=re.compile("^Push-to-talk"))).to_have_count(1)
     expect(setup.page.locator("#hangarChoose")).to_have_count(0)
     setup.close()
 

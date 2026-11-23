@@ -26,15 +26,28 @@ class Edge(Enum):
 
 
 class PushToTalk:
-    """Turns polled button state into press and release edges for one binding."""
+    """Turns polled button state into press and release edges for one or more bindings:
+    holding any of them is holding push-to-talk (#621), so moving from the mouse button
+    to a stick button mid-sentence is one long press."""
 
-    def __init__(self, binding: Binding, sources: Sequence[InputSource]) -> None:
-        self.binding = binding
+    def __init__(
+        self, bindings: Binding | Sequence[Binding], sources: Sequence[InputSource]
+    ) -> None:
+        self.bindings = (bindings,) if isinstance(bindings, Binding) else tuple(bindings)
+        if not self.bindings:
+            raise ValueError("push-to-talk needs at least one button")
         self._sources = tuple(sources)
         self._held = False
 
+    @property
+    def binding(self) -> Binding:
+        """The first button."""
+        return self.bindings[0]
+
     def poll(self) -> Edge | None:
-        held = any(source.is_pressed(self.binding) for source in self._sources)
+        held = any(
+            source.is_pressed(binding) for binding in self.bindings for source in self._sources
+        )
         if held == self._held:
             return None
         self._held = held

@@ -1,3 +1,5 @@
+import pytest
+
 from tests.fakes.fake_input import FakeInputSource
 from tycho.ptt.binding import Binding, DeviceKind
 from tycho.ptt.monitor import Edge, PushToTalk, capture_binding
@@ -29,6 +31,24 @@ def test_ignores_other_buttons() -> None:
 def test_reads_whichever_source_owns_the_binding() -> None:
     keyboard_mouse, sticks = FakeInputSource(), FakeInputSource(STICK)
     assert PushToTalk(STICK, [keyboard_mouse, sticks]).poll() is Edge.PRESSED
+
+
+def test_either_of_two_buttons_holds_push_to_talk() -> None:
+    """#621: a mouse button and a stick button, held the same way."""
+    mouse, sticks = FakeInputSource(), FakeInputSource()
+    ptt = PushToTalk([SIDE, STICK], [mouse, sticks])
+    sticks.held.add(STICK)
+    assert ptt.poll() is Edge.PRESSED
+    mouse.held.add(SIDE)  # the other one too, then let go of the first: still one press
+    sticks.held.clear()
+    assert ptt.poll() is None
+    mouse.held.clear()
+    assert ptt.poll() is Edge.RELEASED
+
+
+def test_push_to_talk_needs_a_button() -> None:
+    with pytest.raises(ValueError, match="at least one button"):
+        PushToTalk([], [FakeInputSource()])
 
 
 class _Script:

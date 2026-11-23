@@ -277,7 +277,7 @@ async def run_tests(
 ) -> int:
     current = settings.Settings(push_to_talk=str(PTT), feedback_volume=0.15)
     print("Loading keybinds and the speech model (as tycho run does)...")
-    store = assemble.load_keybinds(current, PTT)
+    store = assemble.load_keybinds(current, [PTT])
     transcriber = assemble.load_transcriber(current)
     expected: dict[str, list[str]] = tomllib.loads(
         (ROOT / "tools" / "spike" / "expected.toml").read_text("utf-8")
@@ -288,7 +288,7 @@ async def run_tests(
     results: asyncio.Queue[Result] = asyncio.Queue()
     session = assemble.build_session(
         current,
-        PTT,
+        [PTT],
         store,
         transcriber,
         audio=mic,

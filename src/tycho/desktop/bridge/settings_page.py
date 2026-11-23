@@ -36,7 +36,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
         "call_me_how_often",
         "callouts",
     ),
-    "Game and controls": ("game", "push_to_talk", "microphone"),
+    "Game and controls": ("game", "push_to_talk", "push_to_talk_2", "microphone"),
     "Safety": ("key_actions", "confirm_seconds"),
     "Privacy": (
         "memory",
@@ -279,7 +279,7 @@ class SettingsPage(State):
 
 def _shown(name: str, value: object) -> object:
     """A value as the page shows it: push-to-talk by its name ("Mouse side (forward)")."""
-    if name == "push_to_talk" and isinstance(value, str) and value:
+    if name in ("push_to_talk", "push_to_talk_2") and isinstance(value, str) and value:
         from tycho.ptt.binding import Binding
         from tycho.ptt.devices import describe
 

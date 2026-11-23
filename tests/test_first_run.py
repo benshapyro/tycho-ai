@@ -121,6 +121,34 @@ def test_choosing_push_to_talk_saves_the_button_and_warns_of_a_clash(path: Path)
     assert settings.load(path).push_to_talk == "mouse:0x06"
 
 
+def test_a_second_push_to_talk_button_is_chosen_and_removed(path: Path) -> None:
+    """#621: a stick button as well as the mouse one; a second needs a first, and must be
+    another button. Remove goes back to one, and undo puts it back."""
+    pc = FakeSetupPC()
+    bridge = _bridge(path, pc)
+    assert bridge.capture_push_to_talk(True) == {
+        "ok": False,
+        "problem": "Choose your first push-to-talk button first.",
+    }
+    bridge.capture_push_to_talk()
+    assert bridge.capture_push_to_talk(True)["ok"] is False  # the same mouse button again
+    assert settings.load(path).push_to_talk_2 is None
+    pc.button = "joystick:vkb-l:3"
+    result = bridge.capture_push_to_talk(True)
+    assert result["ok"] is True
+    assert settings.load(path).push_to_talk == "mouse:0x06"
+    assert settings.load(path).push_to_talk_2 == "joystick:vkb-l:3"
+    assert bridge.setup_state()["push_to_talk_2"] == {
+        "set": True,
+        "name": "Mouse side (forward)",  # the stand-in names every button so
+        "conflicts": [],
+    }
+    assert bridge.remove_second_push_to_talk()["ok"] is True
+    assert settings.load(path).push_to_talk_2 is None
+    bridge.undo()
+    assert settings.load(path).push_to_talk_2 == "joystick:vkb-l:3"
+
+
 def test_no_button_pressed_changes_nothing(path: Path) -> None:
     pc = FakeSetupPC()
     pc.button = None

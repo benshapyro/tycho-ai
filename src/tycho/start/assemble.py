@@ -3,7 +3,7 @@ keybinds, the speech model, the commands. Out of ``app.py`` (#398)."""
 
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
 from tycho import paths
@@ -58,12 +58,13 @@ def game_pack(current: Settings) -> GamePack:
     return pack
 
 
-def load_keybinds(current: Settings, binding: Binding) -> GameKeys:
+def load_keybinds(current: Settings, bindings: Sequence[Binding]) -> GameKeys:
     install = find_install(current)
     store = load_keys(install)
     log.info("Keybinds: %d actions from %s", len(store.keybinds), install.folder)
-    for warning in conflict_warnings(binding, store):
-        log.warning("%s", warning)
+    for binding in bindings:
+        for warning in conflict_warnings(binding, store):
+            log.warning("%s", warning)
     return store
 
 
@@ -111,7 +112,7 @@ def load_commands(pack: GamePack) -> CommandMatcher:
 
 def build_session(
     current: Settings,
-    binding: Binding,
+    bindings: Sequence[Binding],
     store: GameKeys | None,
     transcriber: Transcriber,
     *,
@@ -144,7 +145,7 @@ def build_session(
     matcher = load_commands(pack)
     return Session(
         audio=audio,
-        push_to_talk=PushToTalk(binding, input_sources(binding)),
+        push_to_talk=PushToTalk(bindings, input_sources(*bindings)),
         transcriber=transcriber,
         lexicon=Lexicon.default(pack),
         matcher=matcher,

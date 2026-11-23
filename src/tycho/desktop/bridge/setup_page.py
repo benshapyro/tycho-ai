@@ -31,6 +31,7 @@ class SetupPage(SettingsPage, CommandsPage):
         current = settings.load(self._path)
         game = self._game(current)
         ptt = current.push_to_talk
+        ptt_2 = current.push_to_talk_2 if ptt else None  # a second counts only with a first
         pack = self._shipped_pack(current)
         keys = self.keys()
         todo = [
@@ -62,6 +63,11 @@ class SetupPage(SettingsPage, CommandsPage):
                 "set": ptt is not None,
                 "name": self._pc.name(ptt) if ptt else "",
                 "conflicts": self._conflicts(ptt, current) if ptt else [],
+            },
+            "push_to_talk_2": {  # held the same way, say a stick button too (#621)
+                "set": ptt_2 is not None,
+                "name": self._pc.name(ptt_2) if ptt_2 else "",
+                "conflicts": self._conflicts(ptt_2, current) if ptt_2 else [],
             },
             "microphone": {"setting": current.microphone or "", "devices": self._devices()},
             "keys": keys,
@@ -110,8 +116,13 @@ class SetupPage(SettingsPage, CommandsPage):
             result["game"] = dataclasses.asdict(self._game(current))
         return result
 
-    def capture_push_to_talk(self) -> dict[str, object]:
-        """Wait for the player to press the button they want, and save it."""
+    def capture_push_to_talk(self, second: object = False) -> dict[str, object]:
+        """Wait for the player to press the button they want, and save it. ``second``:
+        as the second push-to-talk button (#621), held the same way as the first."""
+        name = "push_to_talk_2" if second is True else "push_to_talk"
+        before = settings.load(self._path)
+        if name == "push_to_talk_2" and before.push_to_talk is None:
+            return {"ok": False, "problem": "Choose your first push-to-talk button first."}
         self._capture.set()  # one capture at a time: a new one replaces the last
         self._capture = cancel = threading.Event()
         try:
@@ -124,10 +135,19 @@ class SetupPage(SettingsPage, CommandsPage):
         if found is None:
             seconds = round(setup.CAPTURE_SECONDS)
             return {"ok": False, "problem": f"No button was pressed in {seconds} seconds."}
-        result, current = self._save_choice("push_to_talk", found)
+        other = before.push_to_talk if name == "push_to_talk_2" else before.push_to_talk_2
+        if found == other:
+            problem = "That's your other push-to-talk button already. Press a different one."
+            return {"ok": False, "problem": problem}
+        result, current = self._save_choice(name, found)
         if current is not None:
             result["name"] = self._pc.name(found)
             result["conflicts"] = self._conflicts(found, current)
+        return result
+
+    def remove_second_push_to_talk(self) -> dict[str, object]:
+        """Back to one push-to-talk button. Undo puts the second back."""
+        result, _ = self._save_choice("push_to_talk_2", None)
         return result
 
     def cancel_capture(self) -> dict[str, object]:

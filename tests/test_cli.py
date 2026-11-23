@@ -659,3 +659,32 @@ def test_check_reads_no_fleet_for_a_game_without_one(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(doctor, "fleet_findings", never)
     findings = list(doctor.checks(settings.Settings(game="wow-forever"), quick=True, ask=False))
     assert findings
+
+
+def test_bind_second_adds_a_stick_button_and_remove_second_takes_it_off(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """#621: `tycho bind --second` keeps the first button and doesn't take it as the second."""
+    from tycho.ptt import monitor
+
+    monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path))
+    settings.save(settings.Settings(push_to_talk="mouse:0x06"))
+    stick = Binding(DeviceKind.JOYSTICK, 2, "vkb-l")
+    ignored: list[frozenset[Binding]] = []
+
+    def capture(sources: object, *, ignore: frozenset[Binding], timeout: float) -> Binding:
+        ignored.append(ignore)
+        return stick
+
+    def no_sources(*bindings: Binding | None) -> list[object]:
+        return []
+
+    monkeypatch.setattr(start_run, "input_sources", no_sources)
+    monkeypatch.setattr(monitor, "capture_binding", capture)
+    assert cli.main(["bind", "--second"]) == 0
+    assert Binding.parse("mouse:0x06") in ignored[0]
+    assert settings.load().push_to_talk == "mouse:0x06"
+    assert settings.load().push_to_talk_2 == str(stick)
+    assert "second push-to-talk button is now joystick button 3" in capsys.readouterr().out
+    assert cli.main(["bind", "--remove-second"]) == 0
+    assert settings.load().push_to_talk_2 is None

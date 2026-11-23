@@ -22,9 +22,9 @@ from tycho.commands import CommandFileError, CommandMatcher
 from tycho.findings import TYCHO, Finding, key_finding
 from tycho.games import fleet_findings, game_findings
 from tycho.packs import YOU_TURNED_THEM_OFF, GameKeys, GamePack, PackError, as_run, built_in
-from tycho.ptt.binding import DeviceKind
+from tycho.ptt.binding import DeviceKind, every_binding
 from tycho.ptt.conflicts import conflict_warnings
-from tycho.ptt.devices import describe
+from tycho.ptt.devices import describe_all
 from tycho.settings import Settings
 from tycho.stt import (
     PARAKEET_V2,
@@ -125,7 +125,11 @@ def checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Finding
             "fail", "Push-to-talk", f"not chosen yet. Run: {TYCHO} bind", fix=f"{TYCHO} bind"
         )
     else:
-        yield Finding("ok", "Push-to-talk", describe(binding))
+        yield Finding(
+            "ok",
+            "Push-to-talk",
+            describe_all(every_binding(current.push_to_talk, current.push_to_talk_2)),
+        )
 
     if not quick:
         yield microphone_finding(current)
@@ -172,12 +176,13 @@ def checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Finding
     if pack.parts.keybinds is not None:
         store = yield from game_findings(current, matcher, ask=ask and sys.stdin.isatty())
 
-    if binding is not None and store is not None:
-        warnings = conflict_warnings(binding, store)
+    bindings = every_binding(current.push_to_talk, current.push_to_talk_2)
+    if bindings and store is not None:
+        warnings = [w for b in bindings for w in conflict_warnings(b, store)]
         if warnings:
             for warning in warnings:
                 yield Finding("warn", "Push-to-talk conflict", warning)
-        elif binding.kind is DeviceKind.JOYSTICK:
+        elif any(b.kind is DeviceKind.JOYSTICK for b in bindings):
             yield Finding("ok", "Push-to-talk conflict", "joystick buttons aren't checked yet")
         else:
             yield Finding("ok", "Push-to-talk conflict", "not bound to anything in game")

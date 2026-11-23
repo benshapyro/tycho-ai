@@ -9,6 +9,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ## [Unreleased]
 
 ### Added
+- You can have two push-to-talk buttons, say a mouse button and a button on your joystick, and hold whichever is closer. Add the second in setup (Talk and listen) or in Settings, under Game and controls, and remove it there too. In a terminal: `tycho bind --second` and `tycho bind --remove-second`. ([#621](https://github.com/benshapyro/tycho-ai/issues/621))
 - Tycho keeps a list of the Star Citizen blueprints you own, on your PC. It reads your older game logs once, then adds each new blueprint a mission gives you. Ask "do I have the Omnisky III blueprint?" or "which blueprints have I got?". Blueprint answers also say when you already own one. Add one yourself with "I've got the Killshot Rifle blueprint". See and delete them on the Memory page, or say "forget the ... blueprint". With memory off, nothing is kept or used. (#598)
 - Tycho can tell you when a mission gives you a blueprint ("New blueprint: Monde Helmet Hiro."). Turn on "Blueprints received" under speaking up, or say "tell me about blueprints". (#598)
 - Ask Tycho where a crafting blueprint comes from, or what a mission gives: "where do I get the Omnisky III blueprint?" names the mission, who gives it, the system and the standing you need, and says it's one of several the mission picks from ("one of 10"). "What blueprints can I get from Vaughn?" lists them. It's from the current patch's game files, through the Star Citizen Wiki. ([#596](https://github.com/benshapyro/tycho-ai/issues/596))

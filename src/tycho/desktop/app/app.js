@@ -216,7 +216,8 @@
         <div class="ptt"><span class="key num" id="pttName">${esc(s.push_to_talk.name || "None yet")}</span>
           <button class="btn primary frame" type="button" id="capture">${s.push_to_talk.set ? "Choose another button" : "Choose a button"}</button></div>
         ${s.push_to_talk.set ? "" : `<p class="note">Tycho can't start without one, but you can choose it later.</p>`}
-        ${s.push_to_talk.conflicts.map((c) => `<p class="warn-line">${esc(c)}</p>`).join("")}</div>`;
+        ${s.push_to_talk.conflicts.map((c) => `<p class="warn-line">${esc(c)}</p>`).join("")}
+        ${s.push_to_talk.set ? secondPtt(s.push_to_talk_2) : ""}</div>`;
       const mic = `<div class="card frame"><h3>Microphone</h3>
         ${micSelect(s.microphone)}
         <div class="keyrow"><button class="btn frame" type="button" id="micTest">Test: say something</button><span class="note" id="micMsg">It listens for a moment and tells you how you sound.</span></div></div>`;
@@ -398,6 +399,7 @@
     }));
     $("#folder")?.addEventListener("click", chooseFolder);
     $("#capture")?.addEventListener("click", () => capture($("#capture"), $("#pttName")));
+    bindSecondPtt();
     bindMic();
     if (STEPS[step] === "Keys") bindKeys();
   }
@@ -409,8 +411,22 @@
       render();
     }
   }
+  // A second push-to-talk button, held the same way: a mouse button and a stick button (#621).
+  const secondPtt = (p) => `<p class="note">A second button works too, say one on your joystick: hold either.</p>
+        <div class="ptt"><span class="key num" id="ptt2Name">${esc(p.name || "None")}</span>
+          <button class="btn frame" type="button" id="capture2">${p.set ? "Choose another" : "Add a second button"}</button>
+          ${p.set ? `<button class="btn frame" type="button" id="remove2">Remove</button>` : ""}</div>
+        ${p.conflicts.map((c) => `<p class="warn-line">${esc(c)}</p>`).join("")}`;
+  function bindSecondPtt() {
+    $("#capture2")?.addEventListener("click", () => capture($("#capture2"), $("#ptt2Name"), true));
+    $("#remove2")?.addEventListener("click", async () => {
+      const r = await api.remove_second_push_to_talk();
+      toast(r.ok ? `One push-to-talk button again.${r.applies === "restart" ? " Applies when Tycho restarts." : ""}` : r.problem, r.ok);
+      render();
+    });
+  }
   let capturing = false;
-  async function capture(button, nameEl) {
+  async function capture(button, nameEl, second = false) {
     // While it listens, the rest of the page waits: leaving would save the next key
     // pressed (Ctrl+V into a key box) as push-to-talk. Cancel stops it.
     capturing = true;
@@ -426,7 +442,7 @@
     button.after(cancel);
     let r;
     try {
-      r = await api.capture_push_to_talk();
+      r = await api.capture_push_to_talk(second);
     } catch (e) {
       r = { ok: false, problem: `Tycho couldn't listen for a button: ${e && e.message ? e.message : e}` };
     } finally {
@@ -437,7 +453,7 @@
     }
     if (r.cancelled) { render(); return; }
     if (!r.ok) { toast(r.problem); render(); return; }
-    toast(`Push-to-talk: ${r.name}.${r.conflicts.length ? " It also does something in the game." : ""}${r.applies === "restart" ? " Applies when Tycho restarts." : ""}`, true);
+    toast(`${second ? "Second push-to-talk" : "Push-to-talk"}: ${r.name}.${r.conflicts.length ? " It also does something in the game." : ""}${r.applies === "restart" ? " Applies when Tycho restarts." : ""}`, true);
     render();
   }
   function bindMic() {
@@ -501,6 +517,8 @@
       case "setup":
         if (r.name === "push_to_talk")
           return `<span class="setup"><span class="num" id="setPtt">${esc(v ?? "None yet")}</span><button class="btn frame" type="button" id="setCapture">Change</button></span>`;
+        if (r.name === "push_to_talk_2")
+          return `<span class="setup"><span class="num" id="ptt2Name">${esc(v ?? "None")}</span><button class="btn frame" type="button" id="capture2">${v ? "Change" : "Add"}</button>${v ? `<button class="btn frame" type="button" id="remove2">Remove</button>` : ""}</span>`;
         if (r.name === "microphone")
           return `<span class="setup" style="width:100%">${micSelect({ setting: v ?? "", devices: setupState?.microphone.devices || [] })}<button class="btn frame" type="button" id="micTest">Test</button><span class="note" id="micMsg"></span></span>`;
         return `<span class="setup"><span class="num">${esc(v ?? "found by itself")}</span><button class="btn frame" type="button" id="setFolder">Choose…</button><span class="err" id="folderErr"></span></span>`;
@@ -620,6 +638,7 @@
     page.querySelectorAll("[data-screen]").forEach((sel) => sel.addEventListener("change", () => change(sel.dataset.screen, sel.value, `The Tile's screen: ${sel.selectedOptions[0].textContent}`)));
     page.querySelectorAll("[data-text]").forEach((i) => i.addEventListener("change", () => change(i.dataset.text, i.value, `${label(i.dataset.text)}: ${i.value || "none"}`)));
     $("#setCapture")?.addEventListener("click", () => capture($("#setCapture"), $("#setPtt")));
+    bindSecondPtt();
     $("#setFolder")?.addEventListener("click", chooseFolder);
     $("#hangarChoose")?.addEventListener("click", chooseHangar);
     bindMic();
