@@ -107,11 +107,12 @@ Without an ElevenLabs key, Tycho's replies are shown in its window and it plays 
 - **Claude for anything said differently,** for multi-step requests ("flight ready and request landing"), and for questions. It takes about 1.3 seconds.
 - **Answers from live data:** ships from the current patch's game files; trade prices, routes, refining and where to buy a ship from UEX; mining, weapons, armor, components and crafting from the Star Citizen Wiki; news and upcoming patches from RSI's sites; and "where is" and "how do I" from the web, with community answers marked as such.
 - **Knows your fleet,** so "which of my ships is best for mining?" is about your ships.
-- **Spoken replies** in a voice you choose, and sounds that tell you whether the keys went in.
+- **Spoken replies** in a voice you choose, with the game turned down while Tycho speaks, and sounds that tell you whether the keys went in.
 - **Asks before anything you can't undo,** and when a request is vague ("faster") it asks instead of guessing. What you say to your squad on the same button ("break right") presses nothing.
 - **The Tile:** a small see-through panel over the game for what's better read than heard: prices, routes, specs, recipes, steps.
 - **Advisor mode:** turn key actions off and Tycho only answers and advises. **World of Warcraft: Forever** always works this way: ask about classes, dungeons, professions and more.
 - **Looks at the game window when you ask,** if you turned it on: "take a look". Only the game's own window, with a camera click each time, and the picture is never saved.
+- **Reads the game's log** on your PC, so it knows your ship, the zone you're in and whether you've plotted a quantum route. Speaking up comes from it, and the safeguards use a plotted route to know you're in the pilot seat.
 - **Speaks up when you want it to,** about a few things the game's log records, such as a quantum jump ending or entering an armistice zone. Off until you pick which.
 - **Settings by voice,** with "undo". By voice a safeguard can only get stricter, never looser.
 - **Its own window and tray icon:** guided setup, whether Tycho is ready and listening, everything you can say, and every setting.

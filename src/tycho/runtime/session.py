@@ -410,7 +410,7 @@ class Session:
             picked = await self._asker.ask(corrected.for_brain, keys, seen)
             trace.mark("brain")
             if isinstance(picked, Reply):
-                progress.say, progress.card = picked.text, picked.card
+                progress.answered(picked.text, picked.card, picked.looked_up)
                 return progress.result(request, "replied", trace, heard, text)
             if isinstance(picked, str) and routed.matched:
                 # Keys off and the brain failed (#384): the gate's refusal still says why.

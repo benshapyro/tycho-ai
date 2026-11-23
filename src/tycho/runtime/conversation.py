@@ -94,7 +94,12 @@ class Conversation:
         if result.commands == ("say_again",):  # the answer it repeats is already there
             return
         if result.status == "replied":
-            outcome = f"said: {result.say}"
+            # What it looked up and showed too (#564): told only what it said, the brain
+            # denied searching, and searched the same thing again.
+            did = [*result.looked_up]
+            if result.card is not None:
+                did.append(f"showed a card on the Tile: {result.card.title or result.card.kind}")
+            outcome = "; ".join([*did, f"said: {result.say}"])
         elif result.status == "asking":
             outcome = f"asked the player to confirm {', '.join(result.commands)}"
         elif result.would_press:

@@ -513,3 +513,18 @@ def test_only_claude_keeps_its_briefing_cached_for_an_hour() -> None:
     other = FakeChat(text("Hi."))
     asyncio.run(_brain(other, model="google/gemini-3.8-flash").decide(BrainRequest("hi", KEYBINDS)))
     assert other.requests[0]["messages"][0]["content"][0]["cache_control"] == {"type": "ephemeral"}
+
+
+def test_cards_a_game_doesnt_use_arent_offered() -> None:
+    """#528: WoW: Forever's Settings can't hide ship cards, so its brain isn't offered them."""
+    wow = built_in("wow-forever")
+    client = FakeChat(text("Hi."))
+    matcher = CommandMatcher.default(pack=wow)
+    brain = OpenRouterBrain(
+        matcher, model="anthropic/claude-haiku-5.5", client=client, cards=lambda: True, pack=wow
+    )
+    asyncio.run(brain.decide(BrainRequest("hi", KEYBINDS)))
+    card = next(t for t in client.requests[0]["tools"] if t["function"]["name"] == "show_card")
+    kinds = card["function"]["parameters"]["properties"]["kind"]["enum"]
+    assert "list" in kinds
+    assert "ship" not in kinds

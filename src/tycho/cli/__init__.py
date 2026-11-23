@@ -5,6 +5,7 @@ app import this (ADR 19).
 
 import argparse
 import sys
+from pathlib import Path
 
 from tycho import __version__, credentials, settings
 from tycho.cli.commands import (
@@ -12,6 +13,7 @@ from tycho.cli.commands import (
     check_command,
     check_json,
     credits_command,
+    fleet_import_command,
     gpu_command,
     model_command,
     sounds_command,
@@ -67,6 +69,12 @@ def build_parser() -> argparse.ArgumentParser:
         "gpu", help="download (or remove) what speech recognition needs to use an NVIDIA card"
     )
     gpu.add_argument("action", choices=["install", "status", "remove"])
+    fleet = commands.add_parser("fleet", help="import your hangar from a ccugame.app export")
+    fleet.add_argument("action", choices=["import"])
+    fleet.add_argument("file", type=Path, help="the export: its .csv of your hangar, or a .json")
+    fleet.add_argument(
+        "--yes", action="store_true", help="save without asking first (for scripts and agents)"
+    )
     key = commands.add_parser("key", help="store, check or remove an API key")
     key.add_argument("action", choices=["set", "check", "delete"])
     key.add_argument("name", choices=credentials.PRODUCT)
@@ -91,6 +99,8 @@ def _dispatch(args: argparse.Namespace, current: Settings) -> int:
             return credits_command()
         case "gpu":
             return gpu_command(args.action, current.transcription_device)
+        case "fleet":
+            return fleet_import_command(current, args.file, yes=args.yes)
         case "key":
             return credentials.main([args.action, args.name])
         case _:

@@ -56,7 +56,7 @@ from tycho.brain.traces import TraceFile, briefing_hash
 from tycho.commands import CommandMatcher
 from tycho.keybinds import Keybinds
 from tycho.packs import GamePack
-from tycho.tile.cards import TOOL_DESCRIPTION, TOOL_SCHEMA
+from tycho.tile.cards import show_card
 
 log = logging.getLogger(__name__)
 
@@ -279,7 +279,7 @@ class OpenRouterBrain:
 
     async def decide(self, request: BrainRequest) -> Decision:
         self._brief(request.keybinds)
-        turn = Turn.of(request)
+        turn = Turn.of(request, self._primer.used)
         if self._traces is not None:
             turn.trace = self._traces.start(
                 "openrouter", self._model, self._briefed, request.text, len(request.recent)
@@ -341,7 +341,7 @@ class OpenRouterBrain:
         try:
             async with self._client.stream(self._body(messages)) as stream:
                 async for chunk in stream:
-                    round_.streaming()
+                    round_.streaming(answering="choices" in chunk or "usage" in chunk)
                     for call in message.read(chunk):
                         if (
                             decided := await self._tool_call(round_, call, message, started)
@@ -390,7 +390,7 @@ class OpenRouterBrain:
         tools = self._tools
         if self._cards():
             acts = 2 if self._keys else 0  # after the acts, if offered
-            tools = [*tools[:acts], _function(_SHOW_CARD), *tools[acts:]]
+            tools = [*tools[:acts], _function(show_card(self._pack.tile.cards)), *tools[acts:]]
         body: dict[str, Any] = {
             "model": self._model,
             "messages": [self._system, *messages],
@@ -479,13 +479,6 @@ def route(hosts: Sequence[str] = (), sort: str | None = None) -> dict[str, objec
 def _served(host: str) -> str:
     """The end of a call's log line: who served it, for the eval to read (#267)."""
     return f" [host: {host}]" if host else ""
-
-
-_SHOW_CARD: dict[str, object] = {
-    "name": "show_card",
-    "description": TOOL_DESCRIPTION,
-    "input_schema": dict(TOOL_SCHEMA),
-}
 
 
 def _function(spec: Mapping[str, object]) -> dict[str, object]:

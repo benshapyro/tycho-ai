@@ -32,6 +32,7 @@ from tycho.voice.choice import load_speaker
 
 if TYPE_CHECKING:
     from tycho.runtime.instance import OpenRequests
+    from tycho.runtime.ports import Speaker
     from tycho.spoken_settings import Live
     from tycho.tile.display import TileDisplay
 
@@ -42,6 +43,25 @@ def _float(value: object) -> float:
     if not isinstance(value, int | float):
         raise TypeError(f"expected a number, not {value!r}")
     return float(value)
+
+
+def _ducking(speaker: Speaker, program: str, current: Settings, live: Live) -> Speaker:
+    """``speaker``, turning ``program``'s sound down while it speaks (#570), with a level
+    a crash left lowered put back first."""
+    from tycho import paths
+    from tycho.voice.ducking import Ducker, Ducking
+    from tycho.voice.mixer import WindowsGameVolume
+
+    ducker = Ducker(
+        WindowsGameVolume(program),
+        paths.ducked_file(),
+        on=current.duck_game,
+        level=current.duck_level,
+    )
+    ducker.recover()
+    live["duck_game"] = ducker.set_on
+    live["duck_level"] = ducker.set_level
+    return Ducking(speaker, ducker)
 
 
 WINDOWED = False
@@ -259,6 +279,8 @@ def _start(
     # What a setting changed by voice changes in the running session (#111). A name
     # missing here applies at the next start; the session is added once it's built.
     live: Live = {"feedback_volume": lambda v: feedback.set_volume(_float(v))}
+    if speaker is not None and pack.window and sys.platform == "win32":
+        speaker = _ducking(speaker, pack.window, current, live)  # the game down (#570)
     if isinstance(voice, ElevenLabsSpeaker):
         live["voice_volume"] = lambda v: voice.set_volume(_float(v))
     for name in ("call_me", "call_me_says", "call_me_how_often"):

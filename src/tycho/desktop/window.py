@@ -134,6 +134,17 @@ class AppWindow:
         chosen = window.create_file_dialog(webview.FileDialog.FOLDER)
         return str(chosen[0]) if chosen else None
 
+    def choose_file(self) -> str | None:
+        """Windows' own open-file dialog for a hangar export (#556); None if cancelled."""
+        with self._lock:
+            window = self._window
+        if window is None:
+            return None
+        webview: Any = importlib.import_module("webview")
+        kinds = ("Hangar exports (*.csv;*.json)", "All files (*.*)")
+        chosen = window.create_file_dialog(webview.FileDialog.OPEN, file_types=kinds)
+        return str(chosen[0]) if chosen else None
+
     def close(self) -> None:
         """Tycho is quitting: close the window, and never open another."""
         with self._lock:

@@ -14,7 +14,15 @@ from collections.abc import Generator, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from tycho.packs.parts import Built, GameDataError, GameFolder, GameKeys, Registry, Workshop
+from tycho.packs.parts import (
+    Built,
+    GameDataError,
+    GameFolder,
+    GameKeys,
+    HangarImport,
+    Registry,
+    Workshop,
+)
 
 __all__ = [
     "BUILT_IN",
@@ -26,6 +34,8 @@ __all__ = [
     "fleet_findings",
     "game_findings",
     "game_root",
+    "hangar_hint",
+    "import_hangar",
     "load_keys",
     "ship_accent",
 ]
@@ -76,6 +86,39 @@ def fleet_findings(pack: GamePack) -> Iterator[Finding]:
     yield from checks.fleet_findings(pack.id)
 
 
+def hangar_hint(pack: GamePack) -> dict[str, str] | None:
+    """What the Settings page says about importing a hangar (its ``label`` and
+    ``hint``); None if the pack keeps no fleet to import into."""
+    if "fleet" not in pack.parts.lookups:
+        return None
+    from tycho.games.star_citizen.hangar import HINT, LABEL
+
+    return {"label": LABEL, "hint": HINT}
+
+
+def import_hangar(pack: GamePack, file: Path) -> HangarImport:
+    """A hangar export (``ships.csv`` or ``fleetview.json``) read and matched against
+    the ship data, ready to save to the pack's fleet with the player's yes (#556).
+
+    ``ValueError`` if the pack keeps no fleet or the file isn't an export; ``OSError``
+    if the fleet file is broken; ``GameDataError`` if the ship data can't be had."""
+    import asyncio
+
+    from tycho import paths
+    from tycho.games.star_citizen.data import ShipDataError, ensure
+    from tycho.games.star_citizen.hangar import prepare
+    from tycho.games.star_citizen.uex import UexApi
+    from tycho.games.star_citizen.wiki import WikiApi
+
+    if "fleet" not in pack.parts.lookups:
+        raise ValueError(f"Tycho keeps no list of your ships in {pack.name}.")
+    try:
+        library = asyncio.run(ensure(WikiApi(), paths.knowledge_dir(), concepts=UexApi()))
+    except ShipDataError as e:
+        raise GameDataError(f"the game's data couldn't be loaded to match the names: {e}") from e
+    return prepare(paths.fleet_file(pack.id), file, library)
+
+
 def game_findings(
     current: Settings, matcher: CommandMatcher, *, ask: bool
 ) -> Generator[Finding, None, GameKeys | None]:
@@ -116,7 +159,10 @@ def _ship_lookup(workshop: Workshop) -> ShipLookup:
 
 
 def _ships(workshop: Workshop) -> Built:
-    return Built((_ship_lookup(workshop),))
+    from tycho.games.star_citizen.fleet import patch_line
+
+    ships = _ship_lookup(workshop)
+    return Built((ships,), about=lambda: patch_line(ships.library))
 
 
 def _fleet(workshop: Workshop) -> Built:

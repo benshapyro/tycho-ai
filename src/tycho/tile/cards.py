@@ -12,7 +12,7 @@ gate's own words), notices about Tycho itself, and the long-answer reader.
 """
 
 import re
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from typing import Literal, cast, get_args
 
@@ -291,3 +291,25 @@ if there are two | slot, the same for each row in it | size, like "S3").
 give it a key").
 Empty strings for what a kind doesn't use. Keep every field short: at most 6 rows \
 (8 steps or loadout rows) of a few words each; more isn't shown, and a long card can be cut off."""
+
+
+def offered(own: Collection[str]) -> tuple[Kind, ...]:
+    """The kinds Claude may show in a game: the ones every game has (``NAMES``), and the
+    game's own that its pack names (``tile.toml``'s ``[cards]``). The window's Settings
+    give a switch for the same kinds, so the player can hide any card Claude can show
+    (#528)."""
+    return tuple(k for k in BRAIN_KINDS if k in NAMES or k in own)
+
+
+def show_card(own: Collection[str]) -> dict[str, object]:
+    """The ``show_card`` tool for a game whose pack names ``own`` kinds: only the kinds
+    it ``offered``, in the list and in the description (#528). With every kind, it's
+    ``TOOL_DESCRIPTION`` and ``TOOL_SCHEMA`` as they are, so the cache doesn't change."""
+    kinds = offered(own)
+    left_out = tuple(f"- {k}:" for k in BRAIN_KINDS if k not in kinds)
+    lines = TOOL_DESCRIPTION.split("\n")
+    described = "\n".join(line for line in lines if not line.startswith(left_out or ("\0",)))
+    properties = cast(Mapping[str, object], TOOL_SCHEMA["properties"])
+    kind = {**cast(Mapping[str, object], properties["kind"]), "enum": list(kinds)}
+    schema = {**TOOL_SCHEMA, "properties": {**properties, "kind": kind}}
+    return {"name": "show_card", "description": described, "input_schema": schema}

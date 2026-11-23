@@ -16,7 +16,7 @@ import json
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, cast
 
 log = logging.getLogger(__name__)
 
@@ -85,3 +85,24 @@ async def run_lookup(
     except Exception as e:  # a broken look-up must never break the request
         log.exception("Look-up %s failed", lookup.name)
         return failure(f"the look-up failed ({type(e).__name__}); answer without it")
+
+
+LOOKED_UP_CHARS = 80
+"""The most of a look-up's words the follow-ups keep."""
+
+
+def looked_up(name: str, arguments: object, *, web: bool) -> str:
+    """A look-up in a few words, for the follow-ups (#564): a web search by its query,
+    any other by its name and what it was asked."""
+    asked: Mapping[str, object] = {}
+    if isinstance(arguments, dict):
+        asked = cast(Mapping[str, object], arguments)
+    if web:
+        query = str(asked.get("query", "")).strip()
+        return f'searched the web for "{query[:LOOKED_UP_CHARS]}"'
+    values: list[str] = []
+    for value in asked.values():  # ship_lookup and item_lookup take lists of names
+        items = cast(list[object], value) if isinstance(value, list) else [value]
+        values += [str(v).strip() for v in items if isinstance(v, str | int | float)]
+    words = ", ".join(v for v in values if v)
+    return f"looked up {name}" + (f" ({words[:LOOKED_UP_CHARS]})" if words else "")

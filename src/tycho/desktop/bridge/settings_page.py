@@ -4,6 +4,7 @@ as voice does, undo, and storing a key (which never comes back out)."""
 import logging
 import time
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any, cast
 
 from tycho import crash_reports, credentials, settings
@@ -16,7 +17,8 @@ from tycho.desktop.bridge.state import (
     setting_choices,
     setting_label,
 )
-from tycho.packs import PackError, built_in, installed
+from tycho.games import hangar_hint
+from tycho.packs import GameDataError, PackError, built_in, installed
 from tycho.settings import Settings, SettingsError
 from tycho.tile.design import TYCHO_ACCENT
 
@@ -27,6 +29,8 @@ GROUPS: dict[str, tuple[str, ...]] = {
         "voice",
         "voice_volume",
         "feedback_volume",
+        "duck_game",
+        "duck_level",
         "call_me",
         "call_me_says",
         "call_me_how_often",
@@ -87,7 +91,11 @@ class SettingsPage(State):
                 if row["name"] == "tile_screen":  # the screens plugged in now (#447)
                     row["kind"], row["screens"] = "screen", self._screens(current.tile_screen)
             groups.append({"name": group, "rows": rows})
-        return {"groups": groups, "can_undo": bool(self._undo)}
+        return {
+            "groups": groups,
+            "can_undo": bool(self._undo),
+            "hangar": hangar_hint(built_in(current.game)),
+        }
 
     def _row(self, name: str, value: object, prop: Mapping[str, Any]) -> dict[str, object]:
         field = Settings.model_fields[name]
@@ -204,6 +212,39 @@ class SettingsPage(State):
             "applies": applies,
         }
 
+    def choose_hangar_file(self) -> dict[str, object]:
+        """Pick a hangar export and see what importing it would change (#556). Nothing
+        is saved until ``save_hangar``."""
+        self._hangar = None
+        file = self._choose_file()
+        if not file:
+            return {"ok": False, "cancelled": True}
+        current = settings.load(self._path)
+        try:
+            prepared = self._import_hangar(built_in(current.game), Path(file))
+        except (ValueError, OSError, GameDataError) as e:
+            return {"ok": False, "problem": str(e)}
+        except Exception as e:  # a bad file mustn't leave the button doing nothing
+            log.exception("Couldn't read the hangar export")
+            return {"ok": False, "problem": f"Tycho couldn't read that file: {e}"}
+        if prepared.changes:
+            self._hangar = prepared
+        return {"ok": True, "lines": prepared.lines, "changes": prepared.changes}
+
+    def save_hangar(self) -> dict[str, object]:
+        """Save the hangar import the player was just shown."""
+        prepared, self._hangar = self._hangar, None
+        if prepared is None:
+            return {
+                "ok": False,
+                "problem": "Nothing is waiting to be saved. Choose the file again.",
+            }
+        try:
+            prepared.save()
+        except OSError as e:
+            return {"ok": False, "problem": f"Couldn't save your fleet: {e}"}
+        return {"ok": True, "done": prepared.done}
+
     def store_key(self, name: object, key: object) -> dict[str, object]:
         """Check a key with its provider, then store it in Windows Credential Manager."""
         if not isinstance(name, str) or name not in KEYS:
@@ -278,13 +319,16 @@ def callout_kinds(game: str) -> list[dict[str, str]]:
 
 def _not_for(game: str) -> frozenset[str]:
     """The settings that mean nothing in the chosen game, so its Settings leave them out:
-    a game whose pack reads nothing from its folder has no folder to choose, and one
-    with no window to look at has no looking (#31)."""
+    a game whose pack reads nothing from its folder has no folder to choose, one with no
+    window to look at has no looking (#31), and one with no program has no sound to
+    turn down (#570)."""
     try:
         pack = built_in(game)
     except PackError:  # tycho check and Status say why; show everything
         return frozenset()
     hidden = FOLDER_SETTINGS if pack.parts.install is None else frozenset[str]()
+    if pack.window is None:  # no game program to turn down (#570)
+        hidden |= {"duck_game", "duck_level"}
     return hidden if pack.look else hidden | {"look_at_screen"}  # it can't look (#31)
 
 
