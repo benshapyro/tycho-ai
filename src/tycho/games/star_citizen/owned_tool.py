@@ -19,7 +19,7 @@ from tycho.brain.lookups import LookupResult, failure
 from tycho.games.star_citizen import blueprint_names as naming
 from tycho.games.star_citizen.owned import Owned, OwnedBlueprints
 from tycho.games.star_citizen.wiki import WikiError
-from tycho.memory.tool import FORGET, from_said
+from tycho.memory.tool import asks_to_forget, from_said
 
 SHOWN = 60
 """The most names one answer lists; the count is always whole."""
@@ -145,7 +145,7 @@ class OwnedTool:
         exact = [n for n in ranked if naming.score(said, n) >= 1.0]
         # Without a forget word, only a reply naming one that "which one?" offered,
         # and never "don't remove that one" (#618).
-        asked = FORGET.search(now.said) or (
+        asked = asks_to_forget(now.said) or (
             self._answers(offered, exact) and not KEEP.search(now.said)
         )
         if not asked:

@@ -51,6 +51,25 @@ FORGET = re.compile(
     re.I,
 )
 """Words that ask Tycho to drop a note; "don't forget" asks it to keep one."""
+_KEEP_BEFORE = re.compile(r"\b(?:\w+n't|do not|never|not|keep)\b", re.I)
+_NEVER_MIND = re.compile(r"\bnever\s*mind\b", re.I)
+NEAR = 3
+"""How many words before a forget word may say "keep it": "never remove", "don't ever
+delete", "didn't say remove". Further back is the reason ("I don't fly it anymore so
+forget that"), not a keep (#625's review)."""
+
+
+def asks_to_forget(said: str) -> bool:
+    """Whether the player asks Tycho to drop something: a forget word without "never",
+    "don't", "not" or "keep" in the few words just before it (#625)."""
+    said = _NEVER_MIND.sub(" ", said.replace("\u2019", "'"))
+    for match in FORGET.finditer(said):
+        before = " ".join(said[: match.start()].split()[-NEAR:])
+        if not _KEEP_BEFORE.search(before):
+            return True
+    return False
+
+
 PERSONAL = re.compile(
     r"\b(?:my (?:real )?name|i'?m called|years old|birthday|i live|live in|lives in|"
     r"my (?:wife|husband|partner|girlfriend|boyfriend|kids?|children|son|daughter|mum|"
@@ -58,7 +77,8 @@ PERSONAL = re.compile(
     r"brothers?|sisters?|siblings?|friends?|cousins?|uncle|aunt|grand\w+|nan|age|"
     r"career|employer|office|school|uni|university|college|teacher|neighbou?rs?)|"
     r"i'?m from|i am from|i come from|i grew up|"
-    r"i'?m (?:\d{1,2}(?!\s*\w)|(?:an? )?\d{1,2}[- ]?(?:years?|yrs?)[- ]old)|"
+    r"i'?m (?:\d{1,2}(?!\s*\w)|(?:an? )?\d{1,2}[- ]?(?:years?|yrs?)(?:[- ]old| of age|"
+    r"(?=\s*(?:[.!?]?\s*$|,))))|"
     r"i work (?:as|at|in|for)|for a living|i'?m an? (?:nurse|teacher|doctor|student|"
     r"lawyer|accountant|programmer|developer|electrician|plumber|chef|cook|soldier)|"
     r"health|sick|medic\w*|diagnos\w*|disabilit\w*|adhd|autis\w*|depress\w*|anxiety|"
@@ -114,7 +134,7 @@ def asked_to_save(now: Heard | None) -> bool:
     to Tycho's offer just before."""
     if now is None:
         return False
-    if ASKED.search(now.said) and not FORGET.search(now.said):
+    if ASKED.search(now.said) and not asks_to_forget(now.said):
         return not QUESTION.search(now.said)
     words = normalize(now.said)
     offer = now.before.rpartition("said: ")[2] if "said: " in now.before else ""
@@ -152,7 +172,7 @@ def unasked_problem(note: str, scope: Scope, now: Heard | None) -> str:
 
 
 def asked_to_forget(now: Heard | None) -> bool:
-    return now is not None and bool(FORGET.search(now.said))
+    return now is not None and asks_to_forget(now.said)
 
 
 class MemoryTool:

@@ -353,3 +353,15 @@ def test_a_reply_to_which_one_that_keeps_it_takes_nothing_off(tmp_path: Path, re
     _ask(tool, "forget", "killshot", "forget the killshot blueprint")
     assert _ask(tool, "forget", "killshot rifle", reply)["error"]
     assert len(owned.listed()) == 2
+
+
+@pytest.mark.parametrize(
+    "said",
+    ["never remove the killshot rifle", "don't ever remove the killshot rifle blueprint"],
+)
+def test_a_negated_forget_takes_nothing_off(tmp_path: Path, said: str) -> None:
+    """#625 item 1: a negation not right before the forget word still took it off."""
+    owned = _owned(tmp_path, _game(tmp_path, _got("Killshot Rifle", 1)))
+    tool = OwnedTool(owned, _known)
+    assert _ask(tool, "forget", "killshot rifle", said)["error"]
+    assert len(owned.listed()) == 1

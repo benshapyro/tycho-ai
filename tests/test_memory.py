@@ -126,6 +126,41 @@ def test_years_into_the_game_is_a_game_fact_not_an_age() -> None:
 
 
 @pytest.mark.parametrize(
+    "said", ["I'm 34 years", "I'm 34 yrs.", "I'm 34 years of age", "I'm 34 years, and I play solo"]
+)
+def test_an_age_without_old_is_still_an_age(said: str) -> None:
+    """#625 item 2: "I'm 34 years" matched nothing once "old" was needed."""
+    from tycho.memory.tool import PERSONAL
+
+    assert PERSONAL.search(said)
+
+
+@pytest.mark.parametrize(
+    ("said", "forgets"),
+    [
+        ("forget that", True),
+        ("no, forget that", True),
+        ("never forget that I fly a Cutlass", False),
+        ("don't ever delete that note", False),
+        ("keep the Area18 note, remove the other one", True),
+        ("keep the Area18 note", False),
+        # #627's review: a reason with a negation before the forget word still forgets.
+        ("I don't fly the Cutlass anymore so forget that", True),
+        ("never mind, just delete it", True),
+        ("never mind just delete it", True),
+        ("I didn't say remove it", False),
+        ("you shouldn't delete that", False),
+        ("don\u2019t ever delete that note", False),
+    ],
+)
+def test_asking_to_forget_reads_a_negation_before_the_word(said: str, forgets: bool) -> None:
+    """#625 item 1: only "don't" right before the word was read as keeping."""
+    from tycho.memory.tool import asks_to_forget
+
+    assert asks_to_forget(said) is forgets
+
+
+@pytest.mark.parametrize(
     ("said", "note", "scope"),
     [
         ("I'm in my Cutlass", "Uses a Cutlass Black", "this game"),  # a word they didn't say
