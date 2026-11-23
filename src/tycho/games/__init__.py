@@ -157,13 +157,28 @@ def game_findings(
 
 def _game_log(folder: Path) -> GameState:
     """Star Citizen's Game.log, read so far now, not on the first command."""
+    from tycho.games.star_citizen import localization
     from tycho.games.star_citizen.gamelog import GameLog
+    from tycho.games.star_citizen.store import default_cache_dir
 
-    game_log = GameLog(folder / "Game.log")
+    def cached() -> Path | None:
+        # The keybind store keeps the game's text from Data.p4k, one build at a time.
+        return max(default_cache_dir().glob("global-*.ini"), default=None, key=_modified)
+
+    loose = folder / "Data" / "Localization" / "english" / "global.ini"
+    names = localization.lazy_names(lambda: loose, cached)
+    game_log = GameLog(folder / "Game.log", names)
     game_log.facts()
     if not game_log.readable:
         log.info("No Game.log yet; Tycho reads it once the game writes one")
     return game_log
+
+
+def _modified(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
 
 
 # --- Look-ups, in no particular order: the pack's order is the tools' order ----------
