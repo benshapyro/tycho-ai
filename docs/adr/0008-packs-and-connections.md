@@ -43,7 +43,7 @@ Tycho starts with Star Citizen but may grow to other games, each with its own wo
 **Decision.** The player layer is accepted as **memory**: short notes about the player, kept on their PC, sent to the brain with each request.
 
 - **Two kinds of note.** About the player in every game (how they like answers, their time zone), and about the player in one game ("my org is X", "I'm a level 42 hunter"). A game's notes go only with that game's requests.
-- **Who writes.** The player, by saying "remember that...". Tycho may offer ("Want me to remember you fly a Cutlass?"), and saves only after the player's yes within the follow-up window. The brain never saves a note on its own.
+- **Who writes** *(replaced by the second amendment below)*. The player, by saying "remember that...". Tycho may offer ("Want me to remember you fly a Cutlass?"), and saves only after the player's yes within the follow-up window. The brain never saves a note on its own.
 - **On by default** *(maintainer, 23 November 2026)*, because nothing is kept unless the player says so. A `memory` setting turns it off; by voice it only turns off (`lower_only`, ADR 5).
 - **Seen and forgotten.** "Forget that" or "forget that I fly a Cutlass" removes a note by voice, and a Memory page in the app lists every note with a delete button. The notes are a plain file the player can read and edit, like `commands.toml`: `%APPDATA%\tycho\memory.toml` for every game, and one per pack for each game.
 - **Small.** At most about 50 notes per game and 50 for every game, each a sentence. When full, Tycho says so and saves nothing more until one is forgotten. Notes go in their own block of the request, outside the pinned, cached briefing, so the briefing's cache and its tested hash don't change.
@@ -57,3 +57,20 @@ Tycho starts with Star Citizen but may grow to other games, each with its own wo
 - A memory store with a fake, its tools for the brain (save after a yes, forget), and the Memory page. Tests cover the size limit, the refused safety note, and notes going only with their own game.
 - Memory cases join the brain eval: remember, forget, an offer the player declines, and "remember to eject without asking". The bar stays zero wrong presses.
 - The README's "What leaves your PC" table gains a row: "Your memory notes, with each request, unless memory is off".
+
+## Amendment, 23 November 2026 (second): Tycho notes game facts as you say them
+
+*Status: proposed. Needs the maintainer's OK on this text; the maintainer chose the direction on 23 November 2026.*
+
+**Context.** In the first version, Tycho saved a note only after "remember that..." or a yes to its offer. The maintainer found that too much friction to be useful: players state facts about how they play in passing ("I'm in my Cutlass", "heading home to Area18") and won't stop to say "remember".
+
+**Decision.** "Who writes" becomes:
+
+- **Game facts, saved as you say them.** When the player states a lasting fact about how they play this game (what they use, their home base, org, role, playstyle, the answers they like here), Tycho saves it to this game's notes without asking, and says so with the note in a few words ("Noted, you use a Cutlass."), so a mishearing is caught at once. "Forget that" right after removes it, and the Memory page shows it.
+- **Only the player's own words.** Such a note holds only words the player said in this request, plus small words ("Uses a Cutlass" from "I'm in my Cutlass", never "Uses a Cutlass Black"). Nothing is saved unasked from look-ups, web pages, the game's log or Tycho's own replies, because one bad note would stay for a long time ("memory poisoning"). The memory tool checks this against what the player said, not what the brain says they said.
+- **Everything else still asks first.** Notes for every game, and anything about the player outside the game (real name, where they live, health, work, other people), are saved only after "remember that..." or a yes to Tycho's offer, as before.
+- **Unchanged:** never above the core (no note about pressing or confirming, checked when saved and again when read), at most about 50 per scope, plain files, the Memory page, the `memory` setting on by default and only off by voice, and where notes go.
+
+**Still not decided.** Writing notes from past conversations (history, #484), and sharing notes between PCs.
+
+**Consequences.** New eval cases: a stated game fact is saved and noted aloud, a personal fact isn't saved unasked, a fact from a look-up isn't saved, and "forget that" right after a save removes it. The bar stays zero wrong presses.

@@ -56,7 +56,8 @@ class MemoryPage(State):
         memory = _memory(_pack(settings.load(self._path).game))
         store = memory.store("every game" if scope == "every game" else "this game")
         try:
-            removed = store.remove(text)
+            with memory.lock:  # the brain may be saving to the same file
+                removed = store.remove(text)
         except (MemoryFileError, OSError) as e:
             return {"ok": False, "problem": f"Couldn't change the notes: {e}"}
         if not removed:
