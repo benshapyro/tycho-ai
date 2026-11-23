@@ -4,6 +4,7 @@ as voice does, undo, and storing a key (which never comes back out)."""
 import logging
 import time
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any, cast
 
 from tycho import crash_reports, credentials, settings
@@ -16,7 +17,8 @@ from tycho.desktop.bridge.state import (
     setting_choices,
     setting_label,
 )
-from tycho.packs import PackError, built_in, installed
+from tycho.games import hangar_hint
+from tycho.packs import GameDataError, PackError, built_in, installed
 from tycho.settings import Settings, SettingsError
 from tycho.tile.design import TYCHO_ACCENT
 
@@ -87,7 +89,11 @@ class SettingsPage(State):
                 if row["name"] == "tile_screen":  # the screens plugged in now (#447)
                     row["kind"], row["screens"] = "screen", self._screens(current.tile_screen)
             groups.append({"name": group, "rows": rows})
-        return {"groups": groups, "can_undo": bool(self._undo)}
+        return {
+            "groups": groups,
+            "can_undo": bool(self._undo),
+            "hangar": hangar_hint(built_in(current.game)),
+        }
 
     def _row(self, name: str, value: object, prop: Mapping[str, Any]) -> dict[str, object]:
         field = Settings.model_fields[name]
@@ -203,6 +209,39 @@ class SettingsPage(State):
             "value": value,
             "applies": applies,
         }
+
+    def choose_hangar_file(self) -> dict[str, object]:
+        """Pick a hangar export and see what importing it would change (#556). Nothing
+        is saved until ``save_hangar``."""
+        self._hangar = None
+        file = self._choose_file()
+        if not file:
+            return {"ok": False, "cancelled": True}
+        current = settings.load(self._path)
+        try:
+            prepared = self._import_hangar(built_in(current.game), Path(file))
+        except (ValueError, OSError, GameDataError) as e:
+            return {"ok": False, "problem": str(e)}
+        except Exception as e:  # a bad file mustn't leave the button doing nothing
+            log.exception("Couldn't read the hangar export")
+            return {"ok": False, "problem": f"Tycho couldn't read that file: {e}"}
+        if prepared.changes:
+            self._hangar = prepared
+        return {"ok": True, "lines": prepared.lines, "changes": prepared.changes}
+
+    def save_hangar(self) -> dict[str, object]:
+        """Save the hangar import the player was just shown."""
+        prepared, self._hangar = self._hangar, None
+        if prepared is None:
+            return {
+                "ok": False,
+                "problem": "Nothing is waiting to be saved. Choose the file again.",
+            }
+        try:
+            prepared.save()
+        except OSError as e:
+            return {"ok": False, "problem": f"Couldn't save your fleet: {e}"}
+        return {"ok": True, "done": prepared.done}
 
     def store_key(self, name: object, key: object) -> dict[str, object]:
         """Check a key with its provider, then store it in Windows Credential Manager."""

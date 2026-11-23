@@ -5,12 +5,15 @@ import threading
 import typing
 import webbrowser
 from collections.abc import Callable, Mapping, Sequence
+from pathlib import Path
 from typing import Any, cast
 
-from tycho import updates
+from tycho import games, updates
 from tycho.desktop import setup
 from tycho.desktop.commands import Commands
 from tycho.desktop.keys import KeyCheck
+from tycho.packs import GamePack
+from tycho.packs.parts import HangarImport
 from tycho.runtime.recent import Exchange
 from tycho.settings import Settings
 
@@ -45,6 +48,8 @@ class State:
         ship_accent: Callable[[], str | None] = lambda: None,
         pc: setup.SetupPC | None = None,
         choose_folder: Callable[[], str | None] = lambda: None,
+        choose_file: Callable[[], str | None] = lambda: None,
+        import_hangar: Callable[[GamePack, Path], HangarImport] = games.import_hangar,
         finish: Callable[[], None] = lambda: None,
         first_run: bool = False,
         commands: Commands | None = None,
@@ -60,6 +65,8 @@ class State:
         """``apply`` changes a setting in the running Tycho (the live callbacks);
         ``findings`` are the checks ``tycho check`` makes; ``key_check`` tries a key
         with its provider; ``ship_accent`` is the colour of the ship being flown.
+        ``choose_file`` is Windows' own open-file dialog, and ``import_hangar`` reads
+        a hangar export into a plan for the fleet (#556; stand-ins in tests).
         ``restart`` restarts the voice loop with the settings as saved (#295); False if
         nothing is running to restart. ``quit_tycho`` stops Tycho, as Quit on the tray
         does (#424); None while there's no running Tycho to stop (setup). ``commands``
@@ -79,6 +86,10 @@ class State:
         """Slow look-ups (the game, its keybinds, the devices), kept while their inputs
         stay the same: each Next or redraw shouldn't search the disk again."""
         self._choose_folder = choose_folder
+        self._choose_file = choose_file
+        self._import_hangar = import_hangar
+        self._hangar: HangarImport | None = None
+        """A hangar import shown to the player, waiting for Save (#556)."""
         self._finish = finish
         self._first_run = first_run
         self._given_commands = commands

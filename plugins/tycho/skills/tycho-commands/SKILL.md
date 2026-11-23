@@ -113,3 +113,5 @@ ships = [
     "MISC Prospector",
 ]
 ```
+
+To fill it from their whole hangar, have them export it on ccugame.app and run `tycho fleet import <file>` on the `ships.csv` or `fleetview.json` it gives. It shows what it will add and asks before saving (`--yes` skips the question once they've agreed). Importing again replaces only what the last import added, which it lists under `imported` in the same file.
