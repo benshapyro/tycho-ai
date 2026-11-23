@@ -253,12 +253,15 @@ def _listed(names: Sequence[str]) -> list[str]:
     return [f"    {json.dumps(name, ensure_ascii=False)}," for name in names]
 
 
-def _stamp(path: Path) -> int | None:
-    """When ``path`` last changed (None if it isn't there), to notice another writer."""
+def _stamp(path: Path) -> tuple[int, int, int] | None:
+    """When ``path`` last changed, its size and which file it is (None if it isn't
+    there), to notice another writer. Two saves in one Windows clock tick share a time,
+    but each save swaps in a new file (#574)."""
     try:
-        return path.stat().st_mtime_ns
+        stat = path.stat()
     except OSError:
         return None
+    return stat.st_mtime_ns, stat.st_size, stat.st_ino
 
 
 def owned(library: ShipLibrary, ships: Sequence[str], ship: Ship) -> str | None:

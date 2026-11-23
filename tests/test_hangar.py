@@ -149,7 +149,7 @@ def test_importing_again_replaces_the_last_import_and_keeps_the_players_own(
     first.save()
     assert Fleet.load(path).ships == ["400i", "Caterpillar", "Cutlass Black"]
 
-    # Sold the Cutlass, bought a C1; the voice-added 400i is gone from the file too.
+    # Sold the Cutlass, bought a C1; the voice-added 400i stays, as the player's own.
     second = prepare(path, _ships_csv(tmp_path, "Caterpillar", "C1 Spirit"), WITH_CONCEPTS)
     assert second.plan.gone == ["Cutlass Black"]
     assert second.plan.added == ["C1 Spirit"]
@@ -224,6 +224,37 @@ def test_a_running_tycho_sees_an_import_and_doesnt_undo_it(tmp_path: Path) -> No
     assert fleet.imported == ["Caterpillar"]
 
 
+def test_a_ship_said_while_the_plan_is_on_screen_is_kept_at_save(tmp_path: Path) -> None:
+    """#574: the plan was made when the file was chosen; saving it as it was dropped a
+    ship the player said by voice before pressing Save."""
+    path = tmp_path / "fleet.toml"
+    shown = prepare(path, _ships_csv(tmp_path, "Caterpillar"), WITH_CONCEPTS)
+    running = Fleet.load(path)
+    asyncio.run(
+        FleetUpdate(running, lambda: WITH_CONCEPTS).run(
+            {"add": ["C1 Spirit"], "remove": [], "flying": ""}
+        )
+    )
+    shown.save()
+    fleet = Fleet.load(path)
+    assert fleet.ships == ["C1 Spirit", "Caterpillar"]
+    assert fleet.imported == ["Caterpillar"]
+
+
+def test_two_saves_in_one_clock_tick_are_still_seen(tmp_path: Path) -> None:
+    """#574: Windows' clock moves every ~15.6 ms, so a time alone missed a second save."""
+    import os
+
+    path = tmp_path / "fleet.toml"
+    Fleet(path, ["400i"]).save()
+    running = Fleet.load(path)
+    when = path.stat().st_mtime_ns
+    Fleet(path, ["400i", "Caterpillar"]).save()
+    os.utime(path, ns=(when, when))  # the same tick
+    running.refresh()
+    assert running.ships == ["400i", "Caterpillar"]
+
+
 # --- tycho fleet import --------------------------------------------------------------------------
 
 
@@ -257,6 +288,22 @@ def test_the_command_shows_the_changes_and_saves_only_on_yes(
     assert not fleet_file.exists()
     assert commands.fleet_import_command(Settings(), export, yes=False, ask=lambda _: "y") == 0
     assert Fleet.load(fleet_file).ships == ["Caterpillar"]
+
+
+def test_a_piped_run_prints_a_name_outside_the_code_page(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#574: Windows pipes in cp1252, where an unmatched name like "Zorblatt 九" broke."""
+    import io
+    import sys
+
+    _patched(monkeypatch, tmp_path)
+    piped = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+    monkeypatch.setattr(sys, "stdout", piped)
+    export = _ships_csv(tmp_path, "Zorblatt 九")
+    assert commands.fleet_import_command(Settings(), export, yes=True) == 0
+    piped.flush()
+    assert b"Zorblatt ?" in cast(io.BytesIO, piped.buffer).getvalue()
 
 
 def test_the_command_says_why_a_file_cant_be_imported(

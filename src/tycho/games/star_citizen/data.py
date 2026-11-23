@@ -19,6 +19,7 @@ import logging
 import os
 import re
 import sqlite3
+import uuid
 from collections.abc import Callable, Iterable
 from contextlib import closing
 from pathlib import Path
@@ -98,8 +99,8 @@ def save(
     """Write the whole copy to a temporary file, then swap it in, so a crash
     halfway never leaves a broken copy behind."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    partial = path.with_suffix(".partial")
-    partial.unlink(missing_ok=True)
+    # Its own name, so a hangar import and a starting session never share one (#574).
+    partial = path.with_name(f"{path.stem}.{uuid.uuid4().hex[:8]}.partial")
     with closing(sqlite3.connect(partial)) as db, db:
         db.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         db.execute(
