@@ -1,6 +1,6 @@
 # 8. Packs and connections
 
-Date: 2026-10-30 · Status: proposed. Pending: the author's sign-off. The game-pack layer is settled by [ADR 18](0018-game-packs.md) (accepted 12 November 2026): data folders that name built-in parts by id.
+Date: 2026-10-30 · Status: proposed. Pending: the author's sign-off. The player layer is accepted as memory (amendment below, 23 November 2026). The game-pack layer is settled by [ADR 18](0018-game-packs.md) (accepted 12 November 2026): data folders that name built-in parts by id.
 
 ## Context
 
@@ -36,7 +36,7 @@ Tycho starts with Star Citizen but may grow to other games, each with its own wo
 
 ## Amendment, 23 November 2026: the player layer becomes memory
 
-*Status: proposed. The maintainer agreed the direction on 23 November 2026 (the 0.11 plan); this text waits for his OK before any code ([#483](https://github.com/benshapyro/tycho-ai/issues/483)). Only the player layer is decided here; the rest of this ADR stays proposed.*
+*Status: accepted. The maintainer approved this text on 23 November 2026 (#569), after agreeing to the direction in the 0.11 plan ([#483](https://github.com/benshapyro/tycho-ai/issues/483)). Only the player layer is decided here; the rest of this ADR stays proposed.*
 
 **Context.** Each request starts almost fresh: follow-ups last 30 seconds (ADR 14). The player's fleet (`fleet.toml`, ADR 15) and what to call them (`call_me`) are early, narrow kinds of the player layer above. Players want Tycho to remember lasting facts about them, without repeating them: "I mostly trade out of Area18", "keep answers short".
 

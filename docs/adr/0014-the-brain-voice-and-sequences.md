@@ -132,7 +132,7 @@ Claude was asked for one tool a reply (`disable_parallel_tool_use`). In the play
 
 ## Amendment, 23 November 2026: keeping and searching past conversations
 
-*Status: proposed. The maintainer agreed the direction on 23 November 2026 (the 0.11 plan); this text waits for his OK before any code ([#484](https://github.com/benshapyro/tycho-ai/issues/484)).*
+*Status: accepted. The maintainer approved this text on 23 November 2026 (#569), after agreeing to the direction in the 0.11 plan ([#484](https://github.com/benshapyro/tycho-ai/issues/484)).*
 
 **Context.** After 30 seconds, Tycho forgets what was said (follow-ups, above). Players ask about earlier talk: "what was that route you gave me yesterday?". Keeping conversations is new data on the PC, and searching them sends old words to the brain, so it belongs in this ADR's privacy list.
 
