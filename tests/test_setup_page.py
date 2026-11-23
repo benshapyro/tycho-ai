@@ -1454,7 +1454,7 @@ def test_the_memory_page_lists_owned_blueprints_and_takes_one_off(
         ),
         path,
     )
-    listed = paths.pack_dir("star-citizen") / "blueprints.toml"
+    listed = paths.blueprints_file("star-citizen")
     listed.parent.mkdir(parents=True, exist_ok=True)
     listed.write_text(
         '[[blueprint]]\nname = "Monde Helmet Hiro"\ngot = 2026-11-22\nfrom = "log"\n'

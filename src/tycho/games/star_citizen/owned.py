@@ -6,11 +6,12 @@ Tycho keeps a list: from that line in the current Game.log and, once, in the gam
 saved logs (``logbackups``), and from the player's own words ("I've got the Killshot
 Rifle blueprint"). Nothing else adds to it.
 
-The list is a plain file the player can read and edit, ``blueprints.toml`` beside the
-fleet. Each entry is an item's name that passes ``loglines.ITEM_NAME``, checked when
-saved and again when read: never free text, never an instruction. It's used only when
-asked (the ``owned_blueprints`` look-up, and the blueprint look-up's "you own it"),
-never sent with every request, and nothing is added or used while ``memory`` is off.
+The list is a plain file the player can read and edit, ``blueprints.toml`` beside that
+game's notes (``paths.blueprints_file``). Each entry is an item's name that passes
+``loglines.ITEM_NAME``, checked when saved and again when read: never free text,
+never an instruction. It's used only when asked (the ``owned_blueprints`` look-up,
+and the blueprint look-up's "you own it"), never sent with every request, and
+nothing is added or used while ``memory`` is off.
 """
 
 # The parsed file's values are loosely typed: each is checked as it's read.
@@ -238,21 +239,24 @@ class OwnedBlueprints:
         found.extend(received(folder / "Game.log", self._names))
         return found, newest
 
-    def add(self, name: str) -> bool:
-        """The player said they own ``name`` (an item's name). False if it's already
-        listed, isn't an item's name, or the list is full."""
-        name = item(name)
-        if not (self.on and name):
-            return False
+    def add(self, name: str) -> str:
+        """The player said they own ``name`` (an item's name): "added", "already_listed",
+        "not_an_item_name" (it fails the check), "full" or "off"."""
+        if not self.on:
+            return "off"
+        if not (name := item(name)):
+            return "not_an_item_name"
         with self.lock:
             owned, scanned, taken_off = self._read_all()
-            if any(o.name.casefold() == name.casefold() for o in owned) or len(owned) >= MOST:
-                return False
+            if any(o.name.casefold() == name.casefold() for o in owned):
+                return "already_listed"
+            if len(owned) >= MOST:
+                return "full"
             owned.append(Owned(name, self._today(), "you"))
             kept_off = [n for n in taken_off if n.casefold() != name.casefold()]
             self._write(owned, scanned, kept_off)
         log.info("Blueprints: one added by the player")
-        return True
+        return "added"
 
     def remove(self, name: str) -> bool:
         """Take ``name`` off the list (exactly as listed, any case)."""

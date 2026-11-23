@@ -116,8 +116,10 @@ class OwnedTool:
                 }
             )
         name = ranked[0]
-        added = await asyncio.to_thread(self._owned.add, name)
-        return _result({"added" if added else "already_listed": name})
+        outcome = await asyncio.to_thread(self._owned.add, name)
+        if outcome in ("added", "already_listed"):
+            return _result({outcome: name})
+        return _result({"not_saved": name, "why": outcome.replace("_", " ")})
 
     async def _forget(self, said: str, owned: list[Owned]) -> LookupResult:
         now = heard()

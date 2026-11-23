@@ -181,7 +181,7 @@ class BlueprintLookup:
         else:
             body = await self._mission(index, mission)
         if self._owned is not None:
-            body = mark(body, await asyncio.to_thread(self._owned.refresh))
+            body = mark(body, await asyncio.to_thread(self._owned.listed))  # no log read
         return self._result({"game_version": index.patch, **body})
 
     async def _blueprint(self, index: _Index, said: str) -> dict[str, object]:

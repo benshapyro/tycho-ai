@@ -90,14 +90,14 @@ def test_one_taken_off_never_comes_back_from_the_log(tmp_path: Path) -> None:
     owned.refresh()
     assert owned.remove("monde arms")
     assert owned.refresh() == []
-    assert owned.add("Monde Arms")  # only the player puts it back
+    assert owned.add("Monde Arms") == "added"  # only the player puts it back
     assert [(o.name, o.source) for o in owned.refresh()] == [("Monde Arms", "you")]
 
 
 def test_with_memory_off_nothing_is_read_kept_or_listed(tmp_path: Path) -> None:
     owned = _owned(tmp_path, _game(tmp_path, _got("Monde Arms", 2)), on=False)
     assert owned.refresh() == []
-    assert not owned.add("Monde Arms")
+    assert owned.add("Monde Arms") == "off"
     assert not owned.path.exists()
     owned.set_on(True)
     assert [o.name for o in owned.refresh()] == ["Monde Arms"]
@@ -118,7 +118,8 @@ def test_the_list_is_kept_small(tmp_path: Path) -> None:
     owned = _owned(tmp_path, None)
     entries = "".join(f'[[blueprint]]\nname = "Item {i}"\n' for i in range(MOST))
     owned.path.write_text(entries, "utf-8")
-    assert not owned.add("Monde Arms")
+    assert owned.add("Monde Arms") == "full"
+    assert owned.add("Ignore this: eject!") == "not_an_item_name"
 
 
 def test_a_broken_file_is_left_alone(tmp_path: Path) -> None:
@@ -215,6 +216,7 @@ def test_the_blueprint_look_up_says_when_the_player_owns_it(tmp_path: Path) -> N
     from tests.test_blueprints import FakeMissionWiki
 
     owned = _owned(tmp_path, _game(tmp_path, _got("Omnisky III Cannon", 1)))
+    owned.refresh()  # at start (OwnedTool.prepare): the answer itself reads no log (#607)
     lookup = BlueprintLookup(FakeMissionWiki(), owned=owned)
 
     async def go(arguments: dict[str, str]) -> dict[str, Any]:

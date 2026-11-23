@@ -249,7 +249,7 @@ def _items(workshop: Workshop) -> Built:
             return None
 
     owned = OwnedBlueprints(
-        paths.pack_dir(workshop.pack.id) / "blueprints.toml",  # as owned_blueprints()
+        paths.blueprints_file(workshop.pack.id),
         folder,
         _game_text(folder),
         on=current.memory,
@@ -268,7 +268,7 @@ def owned_blueprints(pack: GamePack) -> OwnedBlueprints | None:
 
     if "items" not in pack.parts.lookups:
         return None
-    return OwnedBlueprints(paths.pack_dir(pack.id) / "blueprints.toml", lambda: None)
+    return OwnedBlueprints(paths.blueprints_file(pack.id), lambda: None)
 
 
 def _also_live(workshop: Workshop, name: str, apply: Callable[[object], None]) -> None:
