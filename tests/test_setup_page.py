@@ -22,6 +22,8 @@ from tests.fakes.fake_setup_pc import FakeSetupPC
 from tycho import credentials, settings, updates
 from tycho.desktop import window
 from tycho.desktop.bridge import Bridge
+from tycho.packs import GamePack
+from tycho.packs.parts import HangarImport
 from tycho.runtime.messages import Result
 from tycho.runtime.recent import Recent
 from tycho.settings import Game, Settings
@@ -81,6 +83,7 @@ class Setup:
         listening: bool | None = None,
         opening: str = "",
         can_quit: bool = False,
+        hangar: Callable[[GamePack, Path], HangarImport] | None = None,
     ) -> None:
         self.path = path
         self.quits: list[bool] = []
@@ -106,6 +109,8 @@ class Setup:
             trying=lambda on: self.listening is not None and not self.trying.append(on),
             opening=opening,
             quit_tycho=(lambda: self.quits.append(True)) if can_quit else None,
+            choose_file=lambda: r"C:\Users\me\Downloads\ships.csv",
+            import_hangar=hangar or _no_hangar,
         )
         self.page: Page = browser.new_page()
         self.errors: list[str] = []
@@ -130,6 +135,10 @@ class Setup:
     def close(self) -> None:
         self.page.close()
         assert self.errors == []
+
+
+def _no_hangar(_pack: GamePack, _file: Path) -> HangarImport:
+    raise AssertionError("no hangar import in this test")
 
 
 @pytest.fixture
@@ -1115,4 +1124,57 @@ def test_setup_run_again_shows_another_game_before_switching(
     expect(page.locator("#voiceNow")).to_have_text(
         "Now: The Ship's Mind. Pick one of these to change it."
     )
+    setup.close()
+
+
+class FakeHangar:
+    """A hangar export as the games side reads it: what it would change, then saved."""
+
+    done = "Saved. Your fleet has 2 ships, and Tycho uses them from now on."
+
+    def __init__(self) -> None:
+        self.lines = ["ships.csv lists 2 ships.", "Adds 2: Caterpillar, Cutlass Black."]
+        self.changes = True
+        self.saved = 0
+
+    def save(self) -> None:
+        self.saved += 1
+
+
+def test_settings_imports_a_hangar_after_showing_what_changes(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    hangar = FakeHangar()
+    asked: list[tuple[str, Path]] = []
+
+    def read(pack: GamePack, file: Path) -> HangarImport:
+        asked.append((pack.id, file))
+        return hangar
+
+    setup = Setup(browser, path, first_run=False, hangar=read)
+    page = setup.page
+    page.get_by_role("button", name="Settings", exact=True).click()
+    page.get_by_role("tab", name="Game and controls").click()
+    row = page.locator(".set", has_text="Your ships")
+    expect(row).to_contain_text("ccugame.app")
+    row.get_by_role("button", name="Import…").click()
+    expect(page.locator("#hangarPlan")).to_contain_text("Adds 2: Caterpillar, Cutlass Black.")
+    assert asked == [("star-citizen", Path(r"C:\Users\me\Downloads\ships.csv"))]
+    assert hangar.saved == 0  # nothing saved before the player says so
+    page.get_by_role("button", name="Save", exact=True).click()
+    expect(page.locator("#toastText")).to_have_text(FakeHangar.done)
+    expect(page.locator("#hangarPlan")).to_be_empty()
+    assert hangar.saved == 1
+    setup.close()
+
+
+def test_a_game_with_no_fleet_has_no_hangar_import(
+    browser: Browser, path: Path, vault: dict[str, str]
+) -> None:
+    settings.save(Settings(game="wow-forever", crash_reports=False, look_at_screen=False), path)
+    setup = Setup(browser, path, first_run=False)
+    setup.page.get_by_role("button", name="Settings", exact=True).click()
+    setup.page.get_by_role("tab", name="Game and controls").click()
+    expect(setup.page.locator(".set", has_text="Push-to-talk")).to_have_count(1)
+    expect(setup.page.locator("#hangarChoose")).to_have_count(0)
     setup.close()

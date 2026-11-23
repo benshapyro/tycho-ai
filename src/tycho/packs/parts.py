@@ -55,6 +55,30 @@ class GameDataError(Exception):
     """The game's files couldn't be read: missing, mid-patch, or corrupt."""
 
 
+class HangarImport(Protocol):
+    """A hangar export read and matched against the game's data, waiting for the
+    player's yes before it changes their fleet (#556)."""
+
+    @property
+    def lines(self) -> list[str]:
+        """What saving would change, in plain lines."""
+        ...
+
+    @property
+    def changes(self) -> bool:
+        """False when the fleet already matches the file: nothing to save."""
+        ...
+
+    @property
+    def done(self) -> str:
+        """What to tell the player once it's saved."""
+        ...
+
+    def save(self) -> None:
+        """Save it. ``OSError`` if the fleet file can't be written."""
+        ...
+
+
 class GameFolder(Protocol):
     """Where the game is on this PC (Star Citizen's: one channel's folder)."""
 

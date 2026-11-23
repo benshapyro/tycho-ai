@@ -8,6 +8,9 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ## [Unreleased]
 
+### Added
+- Tycho can fill in your ships from your hangar: export your hangar on ccugame.app, then in Settings, under Game and controls, choose Import next to "Your ships" and pick `ships.csv` or `fleetview.json`. Tycho shows what it will add, and any names it couldn't match, before it saves. Importing again later swaps in the new list and keeps the ships you told Tycho about yourself. Only the ship names are kept: never your account, pledge numbers or what you paid, and nothing leaves your PC. Agents can run `tycho fleet import <file>`. ([#556](https://github.com/benshapyro/tycho-ai/issues/556))
+
 ### Fixed
 - In World of Warcraft: Forever, the brain no longer shows ship, fleet or loadout cards, which Settings had no switch to hide. Every card it can show now has a switch in Settings, under The Tile. ([#528](https://github.com/benshapyro/tycho-ai/issues/528))
 
