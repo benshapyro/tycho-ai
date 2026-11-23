@@ -125,7 +125,9 @@ def test_years_into_the_game_is_a_game_fact_not_an_age() -> None:
     assert PERSONAL.search("I'm 34 yrs old")
 
 
-@pytest.mark.parametrize("said", ["I'm 34 years", "I'm 34 yrs.", "I'm 34 years of age"])
+@pytest.mark.parametrize(
+    "said", ["I'm 34 years", "I'm 34 yrs.", "I'm 34 years of age", "I'm 34 years, and I play solo"]
+)
 def test_an_age_without_old_is_still_an_age(said: str) -> None:
     """#625 item 2: "I'm 34 years" matched nothing once "old" was needed."""
     from tycho.memory.tool import PERSONAL
@@ -142,6 +144,13 @@ def test_an_age_without_old_is_still_an_age(said: str) -> None:
         ("don't ever delete that note", False),
         ("keep the Area18 note, remove the other one", True),
         ("keep the Area18 note", False),
+        # #627's review: a reason with a negation before the forget word still forgets.
+        ("I don't fly the Cutlass anymore so forget that", True),
+        ("never mind, just delete it", True),
+        ("never mind just delete it", True),
+        ("I didn't say remove it", False),
+        ("you shouldn't delete that", False),
+        ("don\u2019t ever delete that note", False),
     ],
 )
 def test_asking_to_forget_reads_a_negation_before_the_word(said: str, forgets: bool) -> None:
