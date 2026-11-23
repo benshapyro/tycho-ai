@@ -50,11 +50,15 @@ class Conversation:
         """The brain's last answer, for "show me that" (ADR 16)."""
         self.last_line = Line()
         """The last line for the player, for "say that again" (#222, #226)."""
+        self._offered_at: float | None = None
+        """When Tycho's line offered to look (#31), until the next request (#553)."""
 
     def offered_look(self) -> bool:
         """Whether Tycho's last line offered to look at the game window, and recently
         (#31): a "yes" now asks for the look."""
-        return LOOK_OFFER.lower() in self.last_line.text.lower() and bool(self.follow_ups())
+        if self._offered_at is None:
+            return False
+        return self._clock() - self._offered_at <= FOLLOW_UP_SECONDS
 
     def follow_ups(self) -> tuple[Exchange, ...]:
         """The last few exchanges, if the latest was recent; otherwise a fresh start."""
@@ -64,6 +68,10 @@ class Conversation:
 
     def heard(self, result: Result) -> None:
         """Take in how a request ended."""
+        if result.text and result.commands != ("say_again",):
+            # Any other request, a silent command too, means a "yes" after it isn't an
+            # answer to the offer (#553). Replaying the offer leaves it standing.
+            self._offered_at = None
         if result.commands == ("cancel",):
             # "Never mind" ends the talk so far: the next request starts fresh, not as
             # an answer to whatever Tycho last asked (#351).
@@ -77,6 +85,8 @@ class Conversation:
                 self.last_line = Line(result.question, question=result.request)
             elif would_speak(result):
                 self.last_line = Line(result.say)
+                if LOOK_OFFER.lower() in result.say.lower():
+                    self._offered_at = self._clock()
 
     def _remember(self, result: Result) -> None:
         if not result.text or result.status in ("empty", "cancelled"):

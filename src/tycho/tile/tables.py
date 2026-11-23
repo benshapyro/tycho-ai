@@ -22,8 +22,9 @@ from tycho.tile.faces import wrap as _wrap
 
 type Rgba = tuple[int, int, int, int]
 
-_NUMBER = re.compile(r"^\D*?(\d[\d,]*(?:\.\d+)?)\s*([^\d]*)$")
-"""One number with its unit around it: "3,048", "72 SCU", "681.8 Gm", "S3"."""
+_NUMBER = re.compile(r"^(\D*?)([-\u2212]?)(\d[\d,]*(?:\.\d+)?)\s*([^\d]*)$")
+"""One number with its unit around it: "3,048", "72 SCU", "681.8 Gm", "S3", "-1,200"."""
+_WORDS = re.compile(r"[^\W\d_]+")
 CLOSE = 0.9
 """Bars that would all be this close to the biggest say nothing: none are drawn."""
 
@@ -49,22 +50,28 @@ class Pen(Protocol):
 
 
 def number(value: str) -> tuple[float, str] | None:
-    """The one number in ``value`` and its unit, or None: "1 to 4" has two, "Large" none."""
+    """The one number in ``value``, with its sign, and its unit, or None: "1 to 4" has
+    two, "Large" none. Words before the number are part of the unit, so "Nov 20" and
+    "Oct 3" aren't in one unit (#527); a sign such as "$" isn't."""
     match = _NUMBER.match(value.strip())
     if not match:
         return None
-    return float(match.group(1).replace(",", "")), match.group(2).strip().lower()
+    before, sign, digits, after = match.groups()
+    found = float(digits.replace(",", "")) * (-1 if sign else 1)
+    unit = " ".join([*_WORDS.findall(before.lower()), after.strip().lower()]).strip()
+    return found, unit
 
 
 def bar_lengths(values: Sequence[str]) -> list[float] | None:
     """Each value against the biggest, 0 to 1, when every one is a number in the same
-    unit and they aren't all equal; otherwise None, and no bars are drawn."""
+    unit, none below zero, and they aren't all equal; otherwise None, and no bars are
+    drawn."""
     numbers = [number(v) for v in values]
     if len(numbers) < 2 or any(n is None for n in numbers):
         return None
     found = [n for n in numbers if n is not None]
-    if len({unit for _, unit in found}) != 1:
-        return None
+    if len({unit for _, unit in found}) != 1 or any(v < 0 for v, _ in found):
+        return None  # a loss can't be a bar as long as a gain (#527)
     top = max(v for v, _ in found)
     if top <= 0 or min(v for v, _ in found) > top * CLOSE:
         return None

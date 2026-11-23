@@ -15,6 +15,7 @@ nothing is pressed (``ANSWER_ONLY``): nothing in a picture can press a key.
 
 import asyncio
 import logging
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -69,19 +70,33 @@ ANSWER_ONLY = Unseen(
 """The brain picked keys to press in a request with a picture: nothing is pressed."""
 
 
-NOT_NOW = frozenset({"not", "dont", "stop", "never", "off", "disable", "without"})
-"""Words that turn a look phrase around ("don't look at my screen", "stop looking"):
-never a look. That goes to the brain, which can turn looking off (``settings``)."""
+NOT_NOW = frozenset({"not", "dont", "never"})
+"""Words that turn a look phrase around anywhere before it in the same clause ("I don't
+really want you to look at my screen"): never a look. That goes to the brain, which can
+turn looking off (``settings``)."""
+NOT_NEAR = frozenset({"stop", "off", "disable", "without"})
+"""Words that turn it around only just before it ("stop, take a look" is a clause apart;
+"turn off ... looking"), within ``NOT_NEAR_REACH`` words. After the phrase ("take a look,
+is my shield off?") neither kind counts: it's about something else (#554)."""
+NOT_NEAR_REACH = 4
+_CLAUSES = re.compile(r"[,.;:!?]+")
 
 
 def asks_to_look(text: str, phrases: Sequence[str]) -> bool:
     """Whether ``text`` holds one of ``phrases``, word for word, anywhere in it, and
-    doesn't say not to (``NOT_NOW``)."""
-    words = normalize(text)
-    if NOT_NOW.intersection(words):
-        return False
-    said = f" {' '.join(words)} "
-    return any(f" {' '.join(normalize(p))} " in said for p in phrases if normalize(p))
+    doesn't say not to before it (``NOT_NOW``, ``NOT_NEAR``)."""
+    wanted = [words for words in (normalize(p) for p in phrases) if words]
+    return any(_asked(normalize(clause), wanted) for clause in _CLAUSES.split(text))
+
+
+def _asked(words: list[str], phrases: list[list[str]]) -> bool:
+    return any(
+        words[start : start + len(phrase)] == phrase
+        and not NOT_NOW.intersection(words[:start])
+        and not NOT_NEAR.intersection(words[max(0, start - NOT_NEAR_REACH) : start])
+        for phrase in phrases
+        for start in range(len(words) - len(phrase) + 1)
+    )
 
 
 def says_yes(text: str) -> bool:
@@ -133,8 +148,11 @@ async def look(
         return Unseen("failed", "this game has no window to look at", NOT_SEEN)
     try:
         picture = await asyncio.to_thread(eyes.camera.take)
-    except CaptureError as e:
-        log.warning("No picture of the game window: %s", e)
+    except Exception as e:  # anything, in the frozen build too: the player hears why (#552)
+        if isinstance(e, CaptureError):
+            log.warning("No picture of the game window: %s", e)
+        else:
+            log.exception("Taking a picture of the game window failed")
         if not only_a_look(text, eyes.phrases):
             return None
         return Unseen("failed", f"no picture: {e}", NOT_SEEN)

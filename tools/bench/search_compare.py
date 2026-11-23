@@ -20,7 +20,8 @@ them and no new account is needed:
 A judge (Sonnet, through OpenRouter) grades each question's answers side by side,
 shuffled, against the reference answers in ``web_references.toml``, with
 ``web_trial.py``'s brief. Prints each answer, then a summary per mode: grades, median
-and slowest time, and cost as OpenRouter billed it. Rows go to
+and slowest time, and cost: as OpenRouter billed it for the plugin rows and the final
+total, and Tycho's own estimate at Haiku rates for the ``tycho`` rows. Rows go to
 ``recordings/search_compare.jsonl``.
 
 Costs money: about 1 to 3 cents a question for each mode, and about 1 cent a question

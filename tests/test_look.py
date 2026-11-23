@@ -138,6 +138,26 @@ def test_other_words_and_saying_not_to_never_ask_for_a_look(said: str) -> None:
     assert not asks_to_look(said, SC.look)
 
 
+@pytest.mark.parametrize(
+    "said",
+    [
+        "take a look, is my shield off?",
+        "take a look, is this not a good deal?",
+        "Is it not worth it? Take a look.",
+        "have a look without the HUD clutter",
+    ],
+)
+def test_a_not_or_off_away_from_the_look_phrase_doesnt_cancel_it(said: str) -> None:
+    """#554: only a negation just before the phrase, in the same clause, turns it around."""
+    assert asks_to_look(said, SC.look)
+
+
+def test_saying_not_to_look_in_more_words_still_isnt_a_look() -> None:
+    assert not asks_to_look("I don't want you to look at my screen", SC.look)
+    assert not asks_to_look("please never take a look", SC.look)
+    assert not asks_to_look("I don't really want you to take a look", SC.look)
+
+
 def test_only_a_plain_yes_answers_the_offer() -> None:
     assert says_yes("Yes")
     assert says_yes("yeah go ahead") is False  # a whole utterance, from the list
@@ -311,6 +331,63 @@ def test_yes_to_the_brains_offer_is_a_look_and_only_soon_after_it() -> None:
     assert camera.taken == 1
     assert asked[2].picture is None  # half a minute later, "yes" is only a word
     assert r.results[1].commands == ("look",)
+
+
+def test_yes_after_another_request_doesnt_answer_the_offer() -> None:
+    """#553: "landing gear" (silent, fast path) in between, then "ok" within the
+    follow-up window: no picture, though the offer is still the last spoken line."""
+    now = [100.0]
+    brain = FakeBrain(Reply(f"I can't tell from here. {LOOK_OFFER}"), Reply("Okay."))
+    camera = FakeCamera(PICTURE)
+
+    async def scenario() -> Rig:
+        r = rig(
+            "is this contract worth it",
+            "landing gear",
+            "ok",
+            brain=brain,
+            eyes=_eyes(camera),
+            looking=True,
+            clock=lambda: now[0],
+        )
+        for wait in (0, 10, 15):
+            now[0] += wait
+            r.say()
+            await r.session.idle()
+        await r.session.close()
+        return r
+
+    r = run(scenario)
+    assert r.results[1].commands != ("look",)
+    assert camera.taken == 0
+    assert all(asked.picture is None for asked in brain.asked)
+
+
+def test_yes_more_than_30_s_after_the_offer_isnt_a_look_even_after_a_follow_up() -> None:
+    from tycho.runtime.conversation import Conversation
+
+    now = [0.0]
+    talk = Conversation(clock=lambda: now[0])
+    talk.heard(Result(1, "replied", text="is it worth it", say=f"Hm. {LOOK_OFFER}", by_brain=True))
+    now[0] += 20
+    assert talk.offered_look()
+    now[0] += 11
+    assert not talk.offered_look()
+
+
+@pytest.mark.parametrize(
+    "error", [ImportError("winrt"), AttributeError("frame"), ValueError("buffer"), RuntimeError()]
+)
+def test_any_capture_error_says_it_cant_see_the_game_window(error: Exception) -> None:
+    """#552: not only CaptureError: the player always hears why, and nothing is sent."""
+    brain = FakeBrain()
+    speaker = FakeSpeaker()
+    r = _talk(
+        "take a look", brain=brain, eyes=_eyes(FakeCamera(error)), looking=True, speaker=speaker
+    )
+    assert brain.asked == []
+    assert r.results[0].status == "failed"
+    assert speaker.spoken == [NOT_SEEN]
 
 
 def test_the_brain_may_offer_a_look_only_with_looking_on_in_a_game_that_can() -> None:

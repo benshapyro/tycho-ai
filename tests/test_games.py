@@ -55,6 +55,22 @@ def test_web_search_off_builds_nothing() -> None:
     assert BUILT_IN.lookups["web"](off) == Built()
 
 
+def test_openrouter_search_falls_back_on_the_anthropic_key_only_when_there_is_one() -> None:
+    """#551: with both keys, a refused OpenRouter key leaves Anthropic's search."""
+    from tycho.knowledge.web import WebSearch
+    from tycho.knowledge.web_plugin import PluginSearch
+
+    for anthropic_key, falls_back in (("sk-ant-test", True), (None, False)):
+        both = Workshop(
+            SC, Settings(), search_key=lambda k=anthropic_key: k, openrouter_key=lambda: "sk-or"
+        )
+        (search,) = BUILT_IN.lookups["web"](both).lookups
+        assert isinstance(search, PluginSearch)
+        fallback = search._fallback  # pyright: ignore[reportPrivateUsage]
+        assert isinstance(fallback, WebSearch) is falls_back
+        asyncio.run(search.close())
+
+
 def test_a_test_s_fake_part_is_known_but_builds_nothing() -> None:
     registry = BUILT_IN.with_parts("lookups", "fake")
     assert "fake" in registry.known("lookups")
