@@ -136,6 +136,16 @@ class Fleet:
         return "[" + ". ".join(parts) + "]"
 
 
+def patch_line(library: ShipLibrary | None) -> str:
+    """The game's patch, as one line for each request's header (#59), so the brain judges
+    what's current by it, not by what it remembers; empty until the ship data is in."""
+    if library is None or not library.patch:
+        return ""
+    if library.stale:
+        return f"[Game patch: {library.patch} when last checked; today's couldn't be checked]"
+    return f"[Game patch: {library.patch}]"
+
+
 class FleetUpdate:
     """The ``update_fleet`` tool. Satisfies ``brain.lookups.Lookup``."""
 

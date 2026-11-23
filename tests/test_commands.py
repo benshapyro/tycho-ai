@@ -33,6 +33,7 @@ def _ids(text: str) -> str:
         ("cut the throttle", "throttle_min"),
         ("Enter the remote turret two.", "remote_turret_2"),  # #356
         ("leave the remote turrets", "remote_turret_exit"),
+        ("Shut all the doors, please.", "doors_close"),  # #567
     ],
 )
 def test_matches_unseen_wordings(text: str, expected: str) -> None:

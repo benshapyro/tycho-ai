@@ -13,21 +13,30 @@ def tile_word(display: Display, what: str, last_reply: tuple[str, Card | None]) 
     if what == "pin":
         done = display.pin()
     elif what == "again":
-        done = display.again()
+        # With no card that gave way, the last answer's card comes back (#565).
+        done = display.again() or show_last(display, last_reply, card_only=True)
     elif what == "forward":
         done = display.forward()
     elif what == "clear":
         display.clear()
         done = True
     else:
-        said, card = last_reply
-        if card is not None:
-            done = display.show(card, pinned=True)
-        else:
-            done = bool(said) and display.show(long_answer(said))
+        done = show_last(display, last_reply)
     if done:
         return ""
     return "nothing on the Tile for that" if what != "show" else "nothing to show"
+
+
+def show_last(
+    display: Display, last_reply: tuple[str, Card | None], *, card_only: bool = False
+) -> bool:
+    """Put the last answer up and keep it there: its card, or (unless ``card_only``)
+    its words to read. False if there's nothing to show. Pinned, even when it's already
+    up: the player asked to see it, so it stays until they move on (#565)."""
+    said, card = last_reply
+    if card is not None:
+        return display.show(card, pinned=True)
+    return not card_only and bool(said) and display.show(long_answer(said))
 
 
 def tile_request(

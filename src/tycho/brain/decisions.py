@@ -42,6 +42,9 @@ class Reply:
     """An answer, or a question back to the player. Nothing is pressed."""
     card: Card | None = None
     """The details, for the Tile (#2): said in a line, read on the card."""
+    looked_up: tuple[str, ...] = field(default=(), compare=False)
+    """What the brain looked up for it, in a few words each, for the follow-ups (#564).
+    Not part of what the reply is: two replies with the same words and card are equal."""
 
 
 type Decision = RunActions | RunSequence | Reply

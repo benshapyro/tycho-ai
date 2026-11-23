@@ -68,6 +68,8 @@ class Result:
     """For "asking": what Tycho asks, from the gate's own words ("Eject? Say confirm.")."""
     card: Card | None = None
     """The details of a reply, for the Tile (#2)."""
+    looked_up: tuple[str, ...] = ()
+    """What the brain looked up for its reply, in a few words each (#564)."""
     confirmed: bool = False
     """The player said "confirm" to a question Tycho asked about this request."""
     toggled: bool = False
@@ -102,6 +104,11 @@ class Progress:
     card: Card | None = None
     would_press: list[str] = field(default_factory=list[str])
     toggled: bool = False
+    looked_up: tuple[str, ...] = ()
+
+    def answered(self, say: str, card: Card | None, looked_up: tuple[str, ...]) -> None:
+        """The brain replied: what it said, its card, and what it looked up (#564)."""
+        self.say, self.card, self.looked_up = say, card, looked_up
 
     def result(
         self,
@@ -127,6 +134,7 @@ class Progress:
             announced=self.announced,
             question=self.question,
             card=self.card,
+            looked_up=self.looked_up,
             timings=dict(trace.stages),
             total_ms=trace.total_ms,
             keydown_ms=self.keydown_ms,

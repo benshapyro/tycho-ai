@@ -23,8 +23,13 @@ SEEN = (
 )
 MAY_OFFER = (
     "[You can't see the game unless the player asks you to look. If seeing their screen "
-    f'is what would answer this, say so in one short line ending with exactly: "{LOOK_OFFER}"]'
+    f'is what would answer this, say so in one short line ending with exactly: "{LOOK_OFFER}" '
+    "Offer only when what's on screen now could hold the answer. What only a menu shows "
+    "(a loadout, a parts list, prices) isn't on the game view: answer it yourself, or say "
+    "which screen to open and to ask you to look once it's open.]"
 )
+"""Only where the screen could answer (#566): asked twice for a loadout from the pilot's
+seat, the brain offered to look both times, and the look couldn't show one."""
 
 
 def picture_block(picture: Picture) -> ImageBlockParam:

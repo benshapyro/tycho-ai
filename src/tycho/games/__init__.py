@@ -159,7 +159,10 @@ def _ship_lookup(workshop: Workshop) -> ShipLookup:
 
 
 def _ships(workshop: Workshop) -> Built:
-    return Built((_ship_lookup(workshop),))
+    from tycho.games.star_citizen.fleet import patch_line
+
+    ships = _ship_lookup(workshop)
+    return Built((ships,), about=lambda: patch_line(ships.library))
 
 
 def _fleet(workshop: Workshop) -> Built:
