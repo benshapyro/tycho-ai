@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from tycho.games.star_citizen import blueprints
+from tycho.games.star_citizen import blueprint_names, blueprints
 from tycho.games.star_citizen.blueprints import BlueprintLookup
 from tycho.games.star_citizen.wiki import WikiError
 
@@ -301,3 +301,48 @@ def test_missions_in_an_unexpected_shape_are_the_source_failing() -> None:
         return (await lookup.run({"blueprint": "x", "mission": ""})).is_error
 
     assert asyncio.run(go())
+
+
+def test_a_page_whose_data_is_not_a_list_is_the_source_failing() -> None:
+    # The records were read outside the try, so this escaped as a TypeError (#602).
+    class Odd(FakeMissionWiki):
+        async def get(self, path: str, params: Mapping[str, str | int] | None = None) -> Any:
+            return {"data": 5, "meta": {"last_page": 1}}
+
+    async def go() -> bool:
+        return (await BlueprintLookup(Odd()).run({"blueprint": "x", "mission": ""})).is_error
+
+    assert asyncio.run(go())
+
+
+def test_a_mission_record_that_is_not_an_object_has_no_pools() -> None:
+    # A record whose "data" was a list crashed the look-up with an AttributeError (#602).
+    class Odd(FakeMissionWiki):
+        async def get(self, path: str, params: Mapping[str, str | int] | None = None) -> Any:
+            if path == "/api/missions":
+                return await super().get(path, params)
+            return {"data": ["not", "a", "record"]}
+
+    (mission,) = _run(BlueprintLookup(Odd()), blueprint="omnisky iii")["missions"]
+    assert mission["title"] == "Tactical Strike Group Needed"
+    assert "pool_size" not in mission
+
+
+def test_a_page_count_sent_as_a_digit_string_still_loads_every_page() -> None:
+    # Only the first page loaded, silently, when last_page was "2" (#602).
+    class Stringy(FakeMissionWiki):
+        async def get(self, path: str, params: Mapping[str, str | int] | None = None) -> Any:
+            data = await super().get(path, params)
+            if path == "/api/missions":
+                data["meta"]["last_page"] = str(data["meta"]["last_page"])
+            return data
+
+    wiki = Stringy()
+    _run(BlueprintLookup(wiki), mission="vaughn")
+    assert wiki.page_calls() == len(PAGES)
+
+
+@pytest.mark.parametrize("said", ["mark 3", "mark three", "mark iii"])
+def test_a_name_that_spells_its_number_as_a_word_matches_digits(said: str) -> None:
+    # "mark 3" missed a name spelled "Mark Three": only what was said had its spellings (#602).
+    assert blueprint_names.score(f"arclight {said}", "Arclight Mark Three") >= blueprint_names.MATCH

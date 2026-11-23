@@ -253,7 +253,8 @@ class BlueprintLookup:
             log.info("A mission's pools didn't load: %s", e)
             return []
         body = cast(dict[str, Any], data) if isinstance(data, dict) else {}
-        record = cast(dict[str, Any], body.get("data") or {})
+        found = body.get("data")
+        record = cast(dict[str, Any], found) if isinstance(found, dict) else {}  # #602
         pools: list[_Pool] = []
         for pool in cast(list[Any], record.get("blueprints") or []):
             if not isinstance(pool, dict):
@@ -288,16 +289,15 @@ class BlueprintLookup:
     async def _load(self) -> _Index:
         first = await self._page(1)
         meta = first.get("meta")
-        pages = cast(dict[str, Any], meta).get("last_page") if isinstance(meta, dict) else 1
-        last = min(pages if isinstance(pages, int) and pages > 0 else 1, MAX_PAGES)
+        last = min(_last_page(meta), MAX_PAGES)
         rest = await asyncio.gather(*(self._page(n) for n in range(2, last + 1)))
-        records = [
-            cast(dict[str, Any], r)
-            for page in (first, *rest)
-            for r in cast(list[Any], page.get("data") or [])
-            if isinstance(r, dict)
-        ]
-        try:
+        try:  # an odd shape anywhere is the Wiki's problem, never a crash (#602)
+            records = [
+                cast(dict[str, Any], r)
+                for page in (first, *rest)
+                for r in cast(list[Any], page.get("data") or [])
+                if isinstance(r, dict)
+            ]
             return _indexed(records)
         except (AttributeError, TypeError, ValueError) as e:
             raise WikiError(f"/api/missions: unexpected shape ({e})") from e
@@ -374,6 +374,12 @@ class BlueprintLookup:
         return LookupResult(
             json.dumps({"source": SOURCE, **body}, ensure_ascii=False, separators=(",", ":"))
         )
+
+
+def _last_page(meta: object) -> int:
+    """The page count, sent as an int or a digit string (#602); 1 when it's odd."""
+    pages = str(cast(dict[str, Any], meta).get("last_page") if isinstance(meta, dict) else 1)
+    return int(pages) if pages.isdecimal() and int(pages) > 0 else 1
 
 
 def _indexed(records: Sequence[Mapping[str, Any]]) -> _Index:

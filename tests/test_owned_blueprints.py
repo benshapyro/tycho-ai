@@ -225,3 +225,62 @@ def test_the_blueprint_look_up_says_when_the_player_owns_it(tmp_path: Path) -> N
     assert asyncio.run(go({"blueprint": "omnisky iii", "mission": ""}))["you_own_it"] is True
     giver = asyncio.run(go({"blueprint": "", "mission": "tactical strike group"}))
     assert giver["you_own"] == ["Omnisky III Cannon"]
+
+
+def test_forgetting_takes_off_only_the_one_the_player_named(tmp_path: Path) -> None:
+    # The brain's blueprint wasn't checked against the player's words (#608).
+    owned = _owned(tmp_path, _game(tmp_path, _got("Omnisky III Cannon", 1)))
+    tool = OwnedTool(owned, _known)
+    assert _ask(tool, "forget", "omnisky iii", "forget the killshot rifle blueprint")["error"]
+    assert [o.name for o in owned.listed()] == ["Omnisky III Cannon"]
+    # Numbers said as words still count as the player's words.
+    assert _ask(tool, "forget", "omnisky iii", "forget the omnisky three blueprint")["removed"]
+
+
+def test_forgetting_asks_which_when_more_than_one_fits(tmp_path: Path) -> None:
+    # Whichever ranked first was taken off (#608).
+    game = _game(tmp_path, _got("Killshot Rifle", 1), _got("Killshot Pistol", 2))
+    owned = _owned(tmp_path, game)
+    tool = OwnedTool(owned, _known)
+    answer = _ask(tool, "forget", "killshot", "forget the killshot blueprint")
+    assert sorted(answer["which_one"]) == ["Killshot Pistol", "Killshot Rifle"]
+    assert len(owned.listed()) == 2
+    said = "forget the killshot rifle blueprint"
+    assert _ask(tool, "forget", "killshot rifle", said)["removed"] == "Killshot Rifle"
+
+
+def test_every_reader_of_one_list_shares_its_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The Memory page's own OwnedBlueprints had its own lock, so a log read beside its
+    # delete wrote the old list back (#608).
+    import threading
+
+    folder = _game(tmp_path, _got("Omnisky III Cannon", 1))
+    look_up = _owned(tmp_path, folder)
+    look_up.refresh()
+    page = OwnedBlueprints(tmp_path / "blueprints.toml", lambda: None)
+    assert page.lock is look_up.lock
+
+    reading, go_on = threading.Event(), threading.Event()
+    real = look_up._from_logs  # pyright: ignore[reportPrivateUsage]
+
+    def slow(*args: Any) -> Any:
+        reading.set()
+        go_on.wait(5)
+        return real(*args)
+
+    monkeypatch.setattr(look_up, "_from_logs", slow)
+    (folder / "Game.log").write_text(
+        HEADER + _got("Omnisky III Cannon", 1) + _got("Killshot Rifle", 2), "utf-8"
+    )
+    reader = threading.Thread(target=look_up.refresh)
+    reader.start()
+    assert reading.wait(5)
+    deleter = threading.Thread(target=page.remove, args=("Omnisky III Cannon",))
+    deleter.start()
+    deleter.join(0.2)  # with its own lock, the delete is done before the read writes
+    go_on.set()
+    reader.join(5)
+    deleter.join(5)
+    assert [o.name for o in page.listed()] == ["Killshot Rifle"]

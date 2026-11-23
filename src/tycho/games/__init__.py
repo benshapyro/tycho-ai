@@ -180,7 +180,7 @@ def _game_text(folder: Callable[[], Path | None]) -> Callable[[str], str]:
     def cached() -> Path | None:
         return max(default_cache_dir().glob("global-*.ini"), default=None, key=_modified)
 
-    return localization.lazy_names(loose, cached)
+    return localization.lazy_names(loose, cached, keep="item_name")
 
 
 def _modified(path: Path) -> float:

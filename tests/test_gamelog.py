@@ -417,3 +417,18 @@ def test_item_names_with_marks_are_kept_whole(tmp_path: Path, item: str) -> None
 def test_an_odd_blueprint_name_is_never_kept(tmp_path: Path, item: str) -> None:
     situation = GameLog(_log(tmp_path, _hud(f"Received Blueprint: {item}"))).situation()
     assert situation.recent == ()
+
+
+def test_a_long_item_key_is_still_a_blueprint(tmp_path: Path) -> None:
+    # 75 characters after "@item_Name_" were cut to "…" first, so the line was dropped (#605).
+    key = "item_name_" + "a" * 75
+    looked: list[str] = []
+
+    def names(found: str) -> str:
+        looked.append(found)
+        return ""
+
+    line = _hud("Received Blueprint: @item_Name_" + "a" * 75)
+    (event,) = GameLog(_log(tmp_path, line), names).situation().recent
+    assert event.kind == loglines.BLUEPRINT_UNNAMED
+    assert looked == [key]

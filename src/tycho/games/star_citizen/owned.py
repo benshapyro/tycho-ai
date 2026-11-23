@@ -90,6 +90,17 @@ def _blueprints(
             yield line.name, at.date() if at else None
 
 
+_LOCKS: dict[Path, threading.Lock] = {}
+_LOCKS_LOCK = threading.Lock()
+
+
+def _lock_for(path: Path) -> threading.Lock:
+    """One lock per list file, however many ``OwnedBlueprints`` read it: the Memory
+    page makes its own, and a log read beside its delete wrote the delete away (#608)."""
+    with _LOCKS_LOCK:
+        return _LOCKS.setdefault(path.absolute(), threading.Lock())
+
+
 class OwnedBlueprints:
     """The list, read fresh from its file each time: the player may edit it."""
 
@@ -109,7 +120,7 @@ class OwnedBlueprints:
         self._names = names
         self.on = on
         self._today = today
-        self.lock = threading.Lock()
+        self.lock = _lock_for(path)
         """Held while the list changes: the look-up and the Memory page share the file."""
         self.problem = ""
 

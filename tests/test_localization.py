@@ -28,3 +28,12 @@ def test_names_come_from_the_first_file_there_and_are_read_once(tmp_path: Path) 
 
 def test_no_file_means_no_names() -> None:
     assert lazy_names(lambda: None)("item_name_x") == ""
+
+
+def test_only_the_kept_keys_are_held(tmp_path: Path) -> None:
+    # All ~85k strings stayed in memory for the session, for item names only (#605).
+    ini = tmp_path / "global.ini"
+    ini.write_text("item_Name_core=Core\nui_toggle=Toggle\n", "utf-8")
+    names = lazy_names(lambda: ini, keep="item_name")
+    assert names("item_name_core") == "Core"
+    assert names("ui_toggle") == ""
