@@ -196,10 +196,11 @@ class Round:
         if turn.trace is not None:
             turn.trace.call()
 
-    def streaming(self) -> None:
+    def streaming(self, *, answering: bool = True) -> None:
         """A piece of this call's stream arrived: the first one is the time to first
-        token in the trace."""
-        if not self._streamed:
+        token in the trace. The first that is part of an answer (``answering``: not an
+        error OpenRouter sent inside the stream, #576) means the cache was read."""
+        if answering and not self._streamed:
             self._streamed = True
             if self.turn.answering is not None:
                 self.turn.answering()

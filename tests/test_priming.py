@@ -443,3 +443,20 @@ def test_a_failed_claude_request_doesnt_count_as_reading_the_cache(monkeypatch: 
 
     asyncio.run(go())
     assert _due(brain, now)
+
+
+def test_an_error_inside_the_stream_doesnt_count_as_reading_the_cache(
+    monkeypatch: Any,
+) -> None:
+    """#576: OpenRouter can send an error as the first chunk of a 200 stream."""
+    chat = FakeChat([{"error": {"message": "overloaded", "code": 502}}, BrainError("overloaded")])
+    brain, now = _stale_openrouter(chat, monkeypatch)
+
+    async def go() -> None:
+        with contextlib.suppress(BrainError):
+            await brain.decide(BrainRequest("hello", KEYBINDS))
+        await brain.close()
+
+    asyncio.run(go())
+    now[0] += 120
+    assert _due(brain, now)
