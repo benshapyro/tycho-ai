@@ -52,6 +52,7 @@ These checks fail a pull request, and are easy to trip over:
 - **No game's words in game-neutral code:** no "Star Citizen", "ship" or "quantum" outside a game's own folders (`tests/test_wording.py`).
 - **Star Citizen's briefing is pinned by a hash** (`tests/test_packs.py`). If you change its text on purpose, update the hash, and say so: it needs an eval run.
 - **The agent skills exist twice,** in `.claude/skills/` and `.agents/skills/`, as identical copies. Edit one and copy it to the other (`tests/test_agent_skills.py`).
+- **A player's saved files must still load after an update** (`tests/test_upgrades.py`, #612). If you change the shape of a file Tycho saves, keep reading the old one and add a fixture: `uv run python tools/upgrades/make_fixtures.py main`.
 - **Test coverage** can't drop below the floor in `pyproject.toml`.
 - **A GitHub Action** must be pinned to a full commit SHA, with the version in a comment.
 

@@ -1,0 +1,10 @@
+# The blueprints you own, as far as Tycho knows (ADR 8). Tycho adds one when the
+# game's log says you received it, or when you tell it. Delete a line here, say
+# "forget the ... blueprint", or use the Memory page in Tycho's window.
+scanned_logs = 0.0  # the newest saved log already read
+taken_off = ["Arclight Pistol"]  # the log never adds these back
+
+[[blueprint]]
+name = "FS-9 LMG"
+got = 2026-11-23
+from = "you"

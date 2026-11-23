@@ -26,6 +26,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - Tycho offers "Want me to take a look?" only when your screen could show the answer. For something only a menu shows, like a loadout, it says which screen to open first. ([#566](https://github.com/benshapyro/tycho-ai/issues/566))
 
 ### Fixed
+- A fleet you wrote by hand with more than 100 ships kept only the first 100 the next time Tycho changed it. Every ship is kept now (Tycho still tells the brain about 100). A `fleet.toml` or `blueprints.toml` in the wrong shape (say, `ships = "Cutlass Black"` without the brackets) is now left alone with a note saying what's wrong, where before Tycho read it as empty and wrote over it. ([#612](https://github.com/benshapyro/tycho-ai/issues/612))
 - "Where do I mine Hephaestanite?" found nowhere, because the game names its ore "Hephaestanite (R)". It now finds it. ([#597](https://github.com/benshapyro/tycho-ai/issues/597))
 - With no voice, speaking up no longer pushes an answer off the Tile: while an answer's card is still up in full, Tycho stays quiet rather than shrinking it to a strip before you've read it. ([#550](https://github.com/benshapyro/tycho-ai/issues/550))
 - `crash.txt` in Tycho's logs folder now starts with a note saying Tycho is running and that a Windows exception written there may have been handled, so a handled one no longer reads like a crash. ([#582](https://github.com/benshapyro/tycho-ai/issues/582))
