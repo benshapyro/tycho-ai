@@ -303,7 +303,7 @@ def test_a_piped_run_prints_a_name_outside_the_code_page(
     export = _ships_csv(tmp_path, "Zorblatt 九")
     assert commands.fleet_import_command(Settings(), export, yes=True) == 0
     piped.flush()
-    assert b"Zorblatt ?" in cast(io.BytesIO, piped.buffer).getvalue()
+    assert b"Zorblatt ?" in piped.buffer.getvalue()
 
 
 def test_the_command_says_why_a_file_cant_be_imported(
