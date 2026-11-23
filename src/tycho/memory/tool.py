@@ -38,8 +38,13 @@ ASKED = re.compile(
     r"\b(?:remember|keep in mind|make a note|take a note|note that|don'?t forget)\b", re.I
 )
 """Words that ask Tycho to keep something."""
-QUESTION = re.compile(r"\b(?:what|anything|do you|did you|can you)\b[^.!?]*\bremember\b", re.I)
-"""Asking what Tycho remembers isn't asking it to keep something."""
+QUESTION = re.compile(
+    r"\b(?:what|anything|do you|did you)\b[^.!?]*\bremember\b"
+    r"|\bcan you remember\s+(?:what|which|where|when|who|how|if|whether|anything)\b",
+    re.I,
+)
+"""Asking what Tycho remembers isn't asking it to keep something. "Can you remember I
+like short answers" is asking (#590); "can you remember what I fly" isn't."""
 FORGET = re.compile(
     r"\b(?<!don't )(?<!dont )(?<!do not )"
     r"(?:forget|delete|remove|erase|scratch|stop remembering|don'?t remember)\b",
@@ -49,12 +54,19 @@ FORGET = re.compile(
 PERSONAL = re.compile(
     r"\b(?:my (?:real )?name|i'?m called|years old|birthday|i live|live in|lives in|"
     r"my (?:wife|husband|partner|girlfriend|boyfriend|kids?|children|son|daughter|mum|"
-    r"mom|dad|mother|father|family|job|boss|work|doctor|address|email|phone|number)|"
+    r"mom|dad|mother|father|family|job|boss|work|doctor|address|email|phone|number|"
+    r"brothers?|sisters?|siblings?|friends?|cousins?|uncle|aunt|grand\w+|nan|age|"
+    r"career|employer|office|school|uni|university|college|teacher|neighbou?rs?)|"
+    r"i'?m from|i am from|i come from|i grew up|i'?m (?:\d{1,2}|an? \d{1,2} year)(?!\s*\w)|"
+    r"i work (?:as|at|in|for)|for a living|i'?m an? (?:nurse|teacher|doctor|student|"
+    r"lawyer|accountant|programmer|developer|electrician|plumber|chef|cook|soldier)|"
     r"health|sick|medic\w*|diagnos\w*|disabilit\w*|adhd|autis\w*|depress\w*|anxiety|"
     r"pregnan\w*|religio\w*|politic\w*|real life|irl)\b",
     re.I,
 )
-"""About the player outside the game: saved only when they ask, never as they say it."""
+"""About the player outside the game (who they are, where they're from, their age and
+work, other people): saved only when they ask, never as they say it (ADR 8's second
+amendment, #590). "Engineer" stays out: it's a role in Star Citizen."""
 NOTE_WORDS = (
     PLAIN
     | {"home", "main", "base", "usual", "favourite", "favorite", "prefers"}

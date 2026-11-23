@@ -60,6 +60,7 @@ def _texts(memory: Memory) -> list[str]:
         "remember I trade out of Area18",
         "Tycho, keep in mind that I trade out of Area18",
         "make a note that I trade out of Area18",
+        "can you remember I trade out of Area18",  # #590: polite, still asking
     ],
 )
 def test_a_note_is_saved_when_the_player_asks(said: str) -> None:
@@ -74,6 +75,7 @@ def test_a_note_is_saved_when_the_player_asks(said: str) -> None:
     [
         ("I mostly trade out of Area18", ""),  # told, but the note isn't what they said
         ("what do you remember about me", ""),  # a question, not an ask
+        ("can you remember what I fly", ""),
         ("sure", "said: I remember you fly a Cutlass."),  # an answer, not an offer
         ("yes", ""),  # a yes to nothing
         ("yes", "said: The Cutlass Black carries 46 SCU."),  # a yes to something else
@@ -122,6 +124,15 @@ def test_a_game_fact_the_player_states_is_saved_and_noted_aloud(said: str, note:
         ("I live in Berlin", "Lives in Berlin", "this game"),  # outside the game
         ("my name is Dana by the way", "Dana", "this game"),
         ("my wife plays too", "Plays with wife", "this game"),
+        # #590: other people, where they're from, their age and work.
+        ("I play with my brother", "Plays with brother", "this game"),
+        ("I play with my sister", "Plays with sister", "this game"),
+        ("I fly with my friend Sam", "Flies with friend Sam", "this game"),
+        ("I play with my grandparents", "Plays with grandparents", "this game"),
+        ("I'm from Germany", "From Germany", "this game"),
+        ("I'm 34", "34", "this game"),
+        ("I work as a nurse so I play late", "Works as a nurse", "this game"),
+        ("I'm a teacher so I play late", "Teacher", "this game"),
         ("I like short answers", "Likes short answers", "every game"),  # every game: ask
     ],
 )
