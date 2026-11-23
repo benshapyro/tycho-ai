@@ -16,6 +16,7 @@ import atexit
 import contextlib
 import faulthandler
 import logging
+import os
 import re
 import threading
 import time
@@ -37,8 +38,10 @@ RECENT_SECONDS = 3 * 24 * 3600.0
 """How long ``tycho check`` and the window's status keep saying Tycho crashed."""
 STOPPED = "Tycho stopped unexpectedly last time. What it was doing is in {file}."
 
+NOTE_START = "Tycho is running."
+"""How every version's note starts, so a later wording is still known as the note."""
 NOTE = (
-    "Tycho is running. A native crash is written below. So are some Windows exceptions "
+    f"{NOTE_START} A native crash is written below. So are some Windows exceptions "
     "that Windows or .NET then handles, such as code 0x8001010d: Tycho goes on after "
     "those, and this file is removed when Tycho stops.\n\n"
 )
@@ -103,6 +106,15 @@ def only_handled(record: str) -> bool:
     return bool(headers) and all(header.group(1) in HANDLED for header in headers)
 
 
+def _without_note(text: str) -> str:
+    """``text`` without its leading note, whatever its wording was in the version that
+    wrote it: up to the first record, or all of it if there's none (#582)."""
+    if not text.startswith(NOTE_START):
+        return text  # a file from before the note
+    first = _HEADER.search(text)
+    return text[first.start() :] if first else ""
+
+
 def _keep(live: Path) -> Path | None:
     """The last run's file, if it's there: kept under a dated name if anything was
     written to it after ``NOTE``, and removed if not (Tycho was ended from outside, or
@@ -111,7 +123,7 @@ def _keep(live: Path) -> Path | None:
         if not live.exists():
             return None
         stat = live.stat()
-        record = live.read_text(encoding="utf-8", errors="replace").removeprefix(NOTE)
+        record = _without_note(live.read_text(encoding="utf-8", errors="replace"))
         if not record.strip():
             live.unlink()
             return None
@@ -121,7 +133,9 @@ def _keep(live: Path) -> Path | None:
             return None
         when = time.strftime("%Y-%m-%d-%H%M%S", time.localtime(stat.st_mtime))
         kept = live.with_name(f"crash-{when}.txt")
-        live.replace(kept)
+        kept.write_text(record, encoding="utf-8")  # without the note: it's no longer true
+        os.utime(kept, (stat.st_atime, stat.st_mtime))  # when it crashed, not now
+        live.unlink()
     except OSError as e:
         log.warning("Couldn't read the last run's crash file %s: %s", live, e)
         return None
