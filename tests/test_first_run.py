@@ -172,7 +172,7 @@ def test_no_button_in_time_says_the_other_one_doesnt_count(path: Path) -> None:
     pc.button = "joystick:vkb-l:3"
     bridge.capture_push_to_talk(True)
     pc.button = None  # choosing the first again, with a second set: the second is skipped
-    assert "is your other push-to-talk button" in bridge.capture_push_to_talk()["problem"]
+    assert "is your other push-to-talk button" in str(bridge.capture_push_to_talk()["problem"])
     assert pc.ignored[-1] == "joystick:vkb-l:3"
 
 
