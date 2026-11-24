@@ -718,7 +718,7 @@ def test_check_gives_each_push_to_talk_button_its_own_conflict_line(
 
 
 def test_bind_doesnt_take_the_second_button_as_the_first(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """#629: `tycho bind` and the app agree: the other push-to-talk button, pressed out of
     habit, is never taken, so the two can't end up the same."""
@@ -740,5 +740,6 @@ def test_bind_doesnt_take_the_second_button_as_the_first(
     monkeypatch.setattr(monitor, "capture_binding", capture)
     assert cli.main(["bind"]) == 0
     assert Binding.parse(stick) in ignored[0]
+    assert "joystick button 4 is your second push-to-talk button" in capsys.readouterr().out
     assert settings.load().push_to_talk == "mouse:0x05"
     assert settings.load().push_to_talk_2 == stick
