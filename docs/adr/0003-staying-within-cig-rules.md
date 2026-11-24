@@ -57,3 +57,21 @@ Some "power user" automation requests will be declined by design.
 - The pack's route flow names its steps as data: open the map, find the box, click, type, Enter, then click the result if needed, then R, then check the log, then close the map (F).
 - Tests: no click without a fresh frame showing the map; never on foot; NAV is set before any click; at most two clicks; success only with the matching id.
 - The per-patch game data needs the starmap ids (`rs_...`) and their shown names.
+
+## Amendment, 24 November 2026: the second click closes the search panel
+
+*Status: accepted. The maintainer approved this text on 24 November 2026 (#631), after the PC retest ([#588](https://github.com/benshapyro/tycho-ai/issues/588)).*
+
+**Context.** In the retest, Enter picked the top result. But the search box kept the keys, so R typed "r" into the box, and Esc closed the whole map. Clicking the search panel's close button (its "x") gave the keys back to the map, and then R plotted: `Successfully calculated route to levski_all-001`. So the second click the evening amendment allowed, on the first result, isn't the one needed. The close button is.
+
+**Decision.** The second of the evening amendment's two clicks goes on the search panel's close button instead of the first result. All its other terms stand. In addition:
+
+- **Only after the frame shows the right place picked.** The frame taken just before the click must show the map open and the result for the chosen place.
+- **Aimed from the search box, not from the "x" alone.** A lone "x" is a weak match for text recognition. The button's spot is worked out from where the check found the search box in that same frame, using the panel's layout, which the pack states as data. Text recognition only has to agree that something is there. If they don't agree, nothing is clicked, and Tycho says it couldn't finish.
+- **No first-result click.** Enter does that job.
+- **Not an empty spot on the map.** Clicking empty map also gives the keys back (maintainer, 24 November 2026). But a spot that looks empty can hold a marker, and clicking it would change what's picked. The close button is always in the same place relative to the box.
+
+**Consequences.**
+- The pack's route flow becomes: NAV, open the map, find the box, click it, type, Enter, check the result, click close, then C (`mapui_action_clearroute`) if a route is already set (the game won't plot over one: maintainer, 24 November 2026), R, check the log, close the map (F). C is the player's own keybind, like R. Saying "plot a route to X" counts as asking to replace the current route, and Tycho says "Replacing your route to Y."
+- The route line names the game's internal id (`levski_all-001`, `rs_ext_pyro3_leo`). The per-patch game data has to map each id to its shown name, so that "Route set to Levski" is said only when the id matches.
+- The PC test still needs a second resolution and UI scale, to show that the close button's offset from the box holds.
