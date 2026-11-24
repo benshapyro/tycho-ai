@@ -42,7 +42,7 @@ Some "power user" automation requests will be declined by design.
 
 ## Amendment, 23 November 2026 (evening): clicking the search box, after the PC test
 
-*Status: proposed. The maintainer asked for this after the PC test on 23 November 2026 ("I am fine with Tycho clicking the search box", [#588](https://github.com/benshapyro/tycho-ai/issues/588)); this text waits for his OK.*
+*Status: accepted. The maintainer approved this text on 24 November 2026 (#630), after asking for it following the PC test ("I am fine with Tycho clicking the search box", [#588](https://github.com/benshapyro/tycho-ai/issues/588)).*
 
 **Context.** The PC test (#588) found that the star map's search box can't be reached from the keyboard: Tab and typing do nothing until the box is clicked. R (`mapui_action_planroute`) plots a route once a place is picked, and C clears it. Game.log doesn't write "Quantum route plotted to X" with a shown name. It writes `Successfully calculated route to rs_ext_pyro3_leo`, using the game's internal id. Letting the player pick the place and Tycho press R saves nothing, because R is one key. So the click is the main way, not a fallback. This replaces the morning amendment's "the mouse, only if the keyboard can't" point and its "proved by the game's log" point. The rest of that amendment stands.
 

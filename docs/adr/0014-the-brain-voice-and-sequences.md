@@ -175,6 +175,6 @@ Claude was asked for one tool a reply (`disable_parallel_tool_use`). In the play
 
 ## Amendment, 23 November 2026 (evening): the check also aims the click
 
-*Status: proposed, with ADR 3's evening amendment of the same date ([#588](https://github.com/benshapyro/tycho-ai/issues/588)); this text waits for the maintainer's OK.*
+*Status: accepted with ADR 3's evening amendment of the same date. The maintainer approved this text on 24 November 2026 (#630, [#588](https://github.com/benshapyro/tycho-ai/issues/588)).*
 
 The local check (above) may also find where to click: the search box, and the first result's text, for ADR 3's two clicks. It takes a new frame right before each click. If that frame doesn't show the open map with the thing it's looking for, nothing is clicked or typed. All other terms stand: read on the PC by Windows' text recognition, never sent or kept, only the outcome logged. The check can stop a click but never choose what to plot.
