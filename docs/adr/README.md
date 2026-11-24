@@ -6,7 +6,7 @@ Each record explains one decision: the context, what was decided, and what follo
 |---|---|---|
 | [1](0001-build-from-scratch-in-python.md) | Build from scratch, in Python | Accepted |
 | [2](0002-cascaded-voice-pipeline.md) | Cascaded voice pipeline, measured before committing | Accepted after the latency spike; providers superseded in part by 6 and 9 |
-| [3](0003-staying-within-cig-rules.md) | Staying within CIG's rules | Accepted; amended 23 Nov 2026 (typing a place name into the star map); amended 23 Nov 2026 (clicking the search box); amendment proposed 24 Nov 2026 (the second click closes the search panel) |
+| [3](0003-staying-within-cig-rules.md) | Staying within CIG's rules | Accepted; amended 23 Nov 2026 (typing a place name into the star map); amended 23 Nov 2026 (clicking the search box); amended 24 Nov 2026 (the second click closes the search panel) |
 | [4](0004-built-for-every-player.md) | Built for every player, modular at the seams | Accepted; privacy amended 14 Nov 2026 (opt-in crash reports) |
 | [5](0005-settings-one-schema-three-ways-in.md) | Settings: one schema, three ways in | Accepted |
 | [6](0006-cloud-brain-local-ears.md) | Cloud brain, local ears | Accepted; amended by 9 |

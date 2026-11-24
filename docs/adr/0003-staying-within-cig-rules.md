@@ -60,7 +60,7 @@ Some "power user" automation requests will be declined by design.
 
 ## Amendment, 24 November 2026: the second click closes the search panel
 
-*Status: proposed. It follows the PC retest on 24 November 2026 ([#588](https://github.com/benshapyro/tycho-ai/issues/588)), and this text waits for the maintainer's OK.*
+*Status: accepted. The maintainer approved this text on 24 November 2026 (#631), after the PC retest ([#588](https://github.com/benshapyro/tycho-ai/issues/588)).*
 
 **Context.** In the retest, Enter picked the top result. But the search box kept the keys, so R typed "r" into the box, and Esc closed the whole map. Clicking the search panel's close button (its "x") gave the keys back to the map, and then R plotted: `Successfully calculated route to levski_all-001`. So the second click the evening amendment allowed, on the first result, isn't the one needed. The close button is.
 
