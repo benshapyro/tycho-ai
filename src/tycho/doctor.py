@@ -24,7 +24,7 @@ from tycho.games import fleet_findings, game_findings
 from tycho.packs import YOU_TURNED_THEM_OFF, GameKeys, GamePack, PackError, as_run, built_in
 from tycho.ptt.binding import DeviceKind, every_binding
 from tycho.ptt.conflicts import conflict_warnings
-from tycho.ptt.devices import describe_all
+from tycho.ptt.devices import describe, describe_all
 from tycho.settings import Settings
 from tycho.stt import (
     PARAKEET_V2,
@@ -178,14 +178,19 @@ def checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Finding
 
     bindings = every_binding(current.push_to_talk, current.push_to_talk_2)
     if bindings and store is not None:
-        warnings = [w for b in bindings for w in conflict_warnings(b, store)]
-        if warnings:
-            for warning in warnings:
-                yield Finding("warn", "Push-to-talk conflict", warning)
-        elif any(b.kind is DeviceKind.JOYSTICK for b in bindings):
-            yield Finding("ok", "Push-to-talk conflict", "joystick buttons aren't checked yet")
-        else:
-            yield Finding("ok", "Push-to-talk conflict", "not bound to anything in game")
+        # One line per button (#629): a mouse button's clear check isn't lost behind a
+        # stick button's "not checked".
+        for b in bindings:
+            name = f"{describe(b)}: " if len(bindings) > 1 else ""
+            if warnings := conflict_warnings(b, store):
+                for warning in warnings:
+                    yield Finding("warn", "Push-to-talk conflict", warning)
+            elif b.kind is DeviceKind.JOYSTICK:
+                yield Finding(
+                    "ok", "Push-to-talk conflict", f"{name}joystick buttons aren't checked yet"
+                )
+            else:
+                yield Finding("ok", "Push-to-talk conflict", f"{name}not bound to anything in game")
 
     model = ModelStore(paths.models_dir())
     specs = speech_models(device_choice(current).device)

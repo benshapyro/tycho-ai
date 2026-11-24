@@ -125,8 +125,10 @@ class Display(Protocol):
 
     def idle(self) -> None: ...
 
-    def show(self, card: Card, *, pinned: bool = False) -> bool:
-        """False if the Tile is off or the player hid this kind: say it, don't show it."""
+    def show(self, card: Card, *, pinned: bool = False, asked: str = "", said: str = "") -> bool:
+        """False if the Tile is off or the player hid this kind: say it, don't show it.
+        ``asked`` and ``said``: the request and the reply it came with, for the Tile's
+        record when that's on (``tile.record``)."""
         ...
 
     def ask(self, question: str, seconds: float) -> None:

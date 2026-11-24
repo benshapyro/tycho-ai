@@ -132,6 +132,7 @@ def test_a_second_push_to_talk_button_is_chosen_and_removed(path: Path) -> None:
     }
     bridge.capture_push_to_talk()
     assert bridge.capture_push_to_talk(True)["ok"] is False  # the same mouse button again
+    assert pc.ignored[-1] == "mouse:0x06"  # #629: the first, pressed out of habit, isn't taken
     assert settings.load(path).push_to_talk_2 is None
     pc.button = "joystick:vkb-l:3"
     result = bridge.capture_push_to_talk(True)

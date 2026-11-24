@@ -123,10 +123,12 @@ class SetupPage(SettingsPage, CommandsPage):
         before = settings.load(self._path)
         if name == "push_to_talk_2" and before.push_to_talk is None:
             return {"ok": False, "problem": "Choose your first push-to-talk button first."}
+        other = before.push_to_talk if name == "push_to_talk_2" else before.push_to_talk_2
         self._capture.set()  # one capture at a time: a new one replaces the last
         self._capture = cancel = threading.Event()
         try:
-            found = self._pc.capture(setup.CAPTURE_SECONDS, cancel)
+            # The other button, pressed out of habit, isn't taken (#629), as in `tycho bind`.
+            found = self._pc.capture(setup.CAPTURE_SECONDS, cancel, other)
         except Exception as e:  # a joystick library that won't start, a device gone
             log.exception("Couldn't listen for a push-to-talk button")
             return {"ok": False, "problem": f"Tycho couldn't listen for a button: {e}"}
@@ -135,8 +137,7 @@ class SetupPage(SettingsPage, CommandsPage):
         if found is None:
             seconds = round(setup.CAPTURE_SECONDS)
             return {"ok": False, "problem": f"No button was pressed in {seconds} seconds."}
-        other = before.push_to_talk if name == "push_to_talk_2" else before.push_to_talk_2
-        if found == other:
+        if found == other:  # one behaviour with `tycho bind` (#629): never the same twice
             problem = "That's your other push-to-talk button already. Press a different one."
             return {"ok": False, "problem": problem}
         result, current = self._save_choice(name, found)
