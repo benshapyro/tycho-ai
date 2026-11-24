@@ -61,6 +61,6 @@ def to_tile(display: Display, result: Result, *, listening: bool, confirm_second
         display.idle()
     if result.status == "replied":
         if result.card is not None:
-            display.show(result.card)
+            display.show(result.card, asked=result.heard, said=result.say)
     elif result.status == "asking" and result.question:
         display.ask(result.question, confirm_seconds)

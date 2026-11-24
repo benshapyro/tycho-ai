@@ -19,6 +19,7 @@ from tycho.tile.board import Board, Shown
 from tycho.tile.cards import ALL_KINDS, BRAIN_KINDS, Card, Kind, confirm, notice
 from tycho.tile.design import PICKS, TEXT_SIZES, TYCHO_ACCENT, game_accent, game_cards
 from tycho.tile.draw import Light, Look, draw
+from tycho.tile.record import CardRecord
 from tycho.tile.screens import Where, connected
 from tycho.tile.window import SAME, Frame, Screen, TileWindow, screen_of_foreground
 
@@ -47,12 +48,15 @@ class TileDisplay:
         ship_accent: Callable[[], str | None] = lambda: None,
         clock: Callable[[], float] = time.monotonic,
         window: Callable[[Callable[[Screen], Frame]], TileWindow] = TileWindow,
+        record: CardRecord | None = None,
     ) -> None:
-        """``ship_accent`` is the accent of the ship the player is flying, if known."""
+        """``ship_accent`` is the accent of the ship the player is flying, if known.
+        ``record`` saves each card as drawn, to look back at (``TYCHO_TILE_RECORD``)."""
         self._settings = current
         self.ship_accent = ship_accent
         """Set once the ship data is loaded (``brain_choice.load_brain``)."""
         self._clock = clock
+        self._record = record
         self._lock = threading.Lock()
         self._board = Board(clock=clock)
         self._apply()
@@ -87,6 +91,8 @@ class TileDisplay:
 
     def close(self) -> None:
         self._window.close()
+        if self._record is not None:
+            self._record.close()
 
     @property
     def on(self) -> bool:
@@ -122,13 +128,15 @@ class TileDisplay:
     def idle(self) -> None:
         self._set_light(None)
 
-    def show(self, card: Card, *, pinned: bool = False) -> bool:
+    def show(self, card: Card, *, pinned: bool = False, asked: str = "", said: str = "") -> bool:
         """Put a card up. False if the Tile is off or the player hid its kind."""
         if not self.on:
             return False
         with self._lock:
             shown = self._board.show(card, pinned=pinned)
             self._changed = self._changed or shown  # a hidden kind redraws nothing
+            if shown and self._record is not None:
+                self._record.shown(card, asked=asked, said=said, pinned=pinned)
         return shown
 
     def answering(self) -> bool:
@@ -214,6 +222,8 @@ class TileDisplay:
             if light is not None:
                 phase = ((now - self._light_since) % PERIOD[light]) / PERIOD[light]
             image = draw(view, look, now=now, light=light, phase=phase)
+            if self._record is not None:
+                self._record.drawn(view, image, look)
         x, y = self._place(screen, image.width, image.height)
         self._last = (x, y, image.width, image.height)
         return image, x, y
