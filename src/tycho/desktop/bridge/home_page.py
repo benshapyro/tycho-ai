@@ -6,8 +6,9 @@ import time
 from dataclasses import asdict
 
 from tycho import settings
-from tycho.desktop.bridge.settings_page import _shown  # pyright: ignore[reportPrivateUsage]
 from tycho.desktop.bridge.state import State
+from tycho.ptt.binding import every_binding
+from tycho.ptt.devices import describe_all
 
 
 class HomePage(State):
@@ -21,12 +22,9 @@ class HomePage(State):
         if button:
             try:
                 current = settings.load(self._path)
-                name = " or ".join(
-                    str(_shown(n, getattr(current, n)))
-                    for n in ("push_to_talk", "push_to_talk_2")
-                    if getattr(current, n)
-                )
-            except settings.SettingsError:
+                # A second counts only with a first (#629), as everywhere else.
+                name = describe_all(every_binding(current.push_to_talk, current.push_to_talk_2))
+            except settings.SettingsError, ValueError:
                 name = ""
         return {
             "listening": self._listening(),

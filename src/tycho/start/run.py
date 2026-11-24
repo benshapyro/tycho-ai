@@ -16,7 +16,7 @@ from tycho.doctor import start_update_check
 from tycho.findings import TYCHO
 from tycho.history import follow, kept
 from tycho.packs import GameDataError, built_in
-from tycho.ptt.binding import every_binding
+from tycho.ptt.binding import Binding, every_binding
 from tycho.ptt.devices import describe, describe_all, input_sources
 from tycho.runtime.messages import Result
 from tycho.runtime.recent import Recent
@@ -387,11 +387,14 @@ NO_BUTTON = (
 
 def bind_command(current: Settings, *, second: bool = False) -> Settings | None:
     """Choose the push-to-talk button, or with ``second`` another one held the same way
-    (#621): pressing the first button then isn't taken as the second."""
+    (#621). The other button, pressed out of habit, is never taken (#629), as in the app."""
     from tycho.ptt import windows as win
     from tycho.ptt.monitor import capture_binding
 
     ignore = {win.LEFT_MOUSE}
+    if not second and current.push_to_talk_2:
+        # The same answer as the app's (#629): the second isn't taken as the first.
+        ignore.add(Binding.parse(current.push_to_talk_2))
     if second:
         first = current.push_to_talk_binding
         if first is None:
@@ -409,10 +412,7 @@ def bind_command(current: Settings, *, second: bool = False) -> Settings | None:
         print("No button pressed within 30 seconds; nothing changed.")
         return None
     name = "push_to_talk_2" if second else "push_to_talk"
-    changes: dict[str, object] = {name: str(found)}
-    if not second and current.push_to_talk_2 == str(found):
-        changes["push_to_talk_2"] = None  # the same button twice is one button
-    updated = current.model_copy(update=changes)
+    updated = current.model_copy(update={name: str(found)})
     path = settings.save(updated)
     which = "Your second push-to-talk button" if second else "Push-to-talk"
     print(f"{which} is now {describe(found)}. Saved to {path}")
