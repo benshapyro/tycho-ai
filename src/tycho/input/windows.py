@@ -116,9 +116,22 @@ class WindowsClicker:
         """Click at (``x``, ``y``) in ``window``'s ``frame``-sized picture: "" if it
         clicked, else why not."""
         user32 = win32.user32()
-        # Real pixels, as the frame has them, whatever the screen's scaling: per thread.
+        # Real pixels, as the frame has them, whatever the screen's scaling: on this
+        # thread, and only for this click.
+        before = None
         with contextlib.suppress(AttributeError, OSError):
-            user32.SetThreadDpiAwarenessContext(_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+            before = user32.SetThreadDpiAwarenessContext(
+                _DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+            )
+        try:
+            return self._click(window, frame, x, y)
+        finally:
+            if before:
+                with contextlib.suppress(AttributeError, OSError):
+                    user32.SetThreadDpiAwarenessContext(before)
+
+    def _click(self, window: int, frame: tuple[int, int], x: int, y: int) -> str:
+        user32 = win32.user32()
         if user32.GetForegroundWindow() != window:
             return "the game window isn't in front"
         rect = wintypes.RECT()

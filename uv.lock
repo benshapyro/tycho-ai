@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.14"
 resolution-markers = [
     "platform_machine == 'AMD64' and sys_platform == 'win32'",
@@ -826,6 +826,7 @@ wheels = [
 name = "tycho-ai"
 version = "0.10.0"
 source = { editable = "." }
+default-groups = ["bench", "dev", "gpu"]
 dependencies = [
     { name = "anthropic" },
     { name = "httpx2" },

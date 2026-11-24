@@ -45,6 +45,7 @@ from tycho.keybinds import Keybinds
 from tycho.packs import Safety
 from tycho.runtime.messages import Status
 from tycho.runtime.planning import Refusal, Steps, plan_request
+from tycho.safety import is_confirm_grade
 from tycho.situation import Logged
 
 MAX_CLICKS = 2
@@ -211,6 +212,9 @@ class _Run:
         if not NAME.fullmatch(name):
             raise _Stop("refused", lines.bad_name.format(name=name), "not a name Tycho may type")
         presses = self._plan()
+        if risky := self._risky_letter(name):
+            detail = f"{risky} is on a key in the name, so it isn't typed"
+            raise _Stop("refused", lines.bad_name.format(name=name), detail)
         mark = self.log.newest()
         self._press(presses[flow.nav])
         self._press(presses[flow.open_map])
@@ -221,6 +225,8 @@ class _Run:
             self._press(presses[flow.close_map])
             raise _Stop("refused", lines.on_foot, "the log shows no pilot's seat")
         self._click(reading, _middle(box), "the search box")
+        if not self._fresh().has(flow.search_box):  # the map closed: type nothing
+            raise _Stop("failed", lines.stuck, "the map closed before typing")
         self._type(name)
         self._press(presses[flow.enter])
         self._wait(flow.beat_seconds)
@@ -260,6 +266,18 @@ class _Run:
                 raise _Stop("refused", "", f"{action} would need a confirmation")
             presses[action] = planned.presses[0][1]
         return presses
+
+    def _risky_letter(self, name: str) -> str:
+        """A confirm-grade action on one of the name's keys alone, if any: if the box
+        didn't take the keys after all, a letter must not press it (review of #636)."""
+        letters = {_TYPED.get(letter, letter) for letter in name.lower()}
+        for action in self.keybinds:
+            risky = is_confirm_grade(action.name, self.lists) or (
+                bool(action.label) and is_confirm_grade(action.label, self.lists)
+            )
+            if risky and any(k.key in letters and not k.modifiers for k in action.inputs):
+                return action.label or action.name
+        return ""
 
     def _press(self, press: Press) -> None:
         if self.cancel.is_set():
@@ -323,7 +341,7 @@ class _Run:
     def _picked(self, reading: Reading, box: tuple[Word, ...]) -> None:
         """The frame shows the map open, with the chosen place among the results."""
         lines, name = self.flow.lines, self.place.name
-        under = reading.below(max(word.top + word.height for word in box))
+        under = _column(reading.below(max(word.top + word.height for word in box)), box, reading)
         if reading.has(self.flow.no_results):
             raise _Stop("failed", lines.no_results.format(name=name), "the map found nothing")
         if not reading.has(self.flow.results) or not reading.has(name):
@@ -348,7 +366,10 @@ class _Run:
             raise _Stop("cancelled", "", "cancelled")
         if self.clicks >= MAX_CLICKS:
             raise _Stop("failed", self.flow.lines.stuck, "no more clicks")
-        why = self.clicker.click(reading.window, (reading.width, reading.height), *spot)
+        try:
+            why = self.clicker.click(reading.window, (reading.width, reading.height), *spot)
+        except OSError as e:  # Windows refused the input
+            raise _Stop("failed", self.flow.lines.stuck, f"didn't click {what}: {e}") from e
         if why:
             raise _Stop("failed", self.flow.lines.stuck, f"didn't click {what}: {why}")
         self.clicks += 1
@@ -372,6 +393,15 @@ def _middle(words: tuple[Word, ...]) -> tuple[int, int]:
     top = min(word.top for word in words)
     bottom = max(word.top + word.height for word in words)
     return (left + right) // 2, (top + bottom) // 2
+
+
+def _column(reading: Reading, box: tuple[Word, ...], frame: Reading) -> Reading:
+    """Only the words in the search panel's column, under its box: the results list,
+    not a marker on the map with the same name (review of #636)."""
+    left = min(word.left for word in box) - round(0.03 * frame.height)
+    right = max(word.right for word in box) + round(0.35 * frame.height)
+    kept = tuple(w for w in reading.words if left <= w.left and w.right <= right)
+    return Reading(reading.width, reading.height, kept, reading.window)
 
 
 def _near(point: tuple[int, int], spot: tuple[int, int], reach: float) -> bool:

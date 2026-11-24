@@ -375,3 +375,66 @@ def test_only_a_plain_name_is_ever_typed(name: str) -> None:
 )
 def test_the_id_names_the_place(route_id: str, name: str, named: bool) -> None:
     assert id_names(route_id, name) is named
+
+
+# --- From the review of #636 -------------------------------------------------------------
+
+
+def test_a_name_on_a_dangerous_key_is_never_typed() -> None:
+    # If the box didn't take the keys after all, "l" would eject.
+    game = Game()
+    keybinds = Keybinds([*KEYBINDS, _bound("v_eject", "l", "spaceship_general")])
+    done = _plot(game, keybinds=keybinds)
+    assert done.status == "refused"
+    assert done.pressed == []
+    assert game.clicks == []
+
+
+def test_a_map_that_closed_after_the_first_click_gets_no_letters() -> None:
+    game = Game()
+
+    class ClosesAfterClick:
+        def click(self, window: int, frame: tuple[int, int], x: int, y: int) -> str:
+            game.click(window, frame, x, y)
+            game.map_open = False  # the accepted gap: the map closed just then
+            return ""
+
+    done = _plot(game, clicker=ClosesAfterClick())
+    assert done.status == "failed"
+    assert game.typed == ""
+    assert not done.typed
+
+
+def test_windows_refusing_the_click_is_a_stop_not_a_crash() -> None:
+    game = Game()
+
+    class Refuses:
+        def click(self, window: int, frame: tuple[int, int], x: int, y: int) -> str:
+            raise OSError("SendInput failed")
+
+    done = _plot(game, clicker=Refuses())
+    assert (done.status, done.say) == ("failed", LINES.stuck)
+    assert not done.typed
+
+
+def test_a_map_marker_with_the_name_is_not_a_result() -> None:
+    game = Game()
+    real = game.read
+
+    def read() -> Reading:
+        reading = real()
+        if not game.entered:
+            return reading
+        # The results list lost the place, but a marker far out on the map has its name.
+        kept = tuple(w for w in reading.words if w.line != 2)
+        marker = Word("LEVSKI", 1800, 900, 80, 20, 9)
+        return Reading(reading.width, reading.height, (*kept, marker), reading.window)
+
+    class Reader:
+        def read(self) -> Reading:
+            return read()
+
+    done = _plot(game, reader=Reader())
+    assert done.status == "failed"
+    assert done.say == "The map didn't list Levski."
+    assert game.clicks == [BOX_MIDDLE]
