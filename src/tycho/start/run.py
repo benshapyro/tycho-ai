@@ -391,20 +391,26 @@ def bind_command(current: Settings, *, second: bool = False) -> Settings | None:
     from tycho.ptt.monitor import capture_binding
 
     ignore = {win.LEFT_MOUSE}
+    other = None
     if not second and current.push_to_talk_2:
         # The same answer as the app's (#629): the second isn't taken as the first.
-        ignore.add(Binding.parse(current.push_to_talk_2))
+        other = Binding.parse(current.push_to_talk_2)
+        ignore.add(other)
     if second:
         first = current.push_to_talk_binding
         if first is None:
             print("Choose your first push-to-talk button before a second: run `tycho bind`.")
             return None
         ignore.add(first)
+        other = first
         print("Press the second button you want to hold while talking, say one on your")
         print(f"joystick. {describe(first)} stays your push-to-talk too.")
     else:
         print("Press the button you want to hold while talking: a keyboard key, a mouse")
         print("button (not left click) or a joystick button. A mouse side button works well.")
+        if other is not None:  # #634: say it's skipped, or pressing it seems unheard
+            print(f"{describe(other)} is your second push-to-talk button, so it doesn't count")
+            print("here: run `tycho bind --remove-second` first to make it your first.")
     sources = input_sources(None)
     found = capture_binding(sources, ignore=frozenset(ignore), timeout=30)
     if found is None:

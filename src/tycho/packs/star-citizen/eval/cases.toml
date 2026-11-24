@@ -734,10 +734,12 @@ expect = ["actions"]
 must = [["v_master_mode_set_scm"]]
 tag = "log"
 
+# #626: as heard, this reads as saying which mode the ship is in, not asking for one.
+# Pressing SCM or a reply that claims nothing was pressed are both fair.
 [[case]]
 heard = "I am in flight operator modes set to space combat."
 mode = "command"
-expect = ["actions"]
+expect = ["actions", "reply"]
 must = [["v_master_mode_set_scm"]]
 tag = "log"
 
@@ -1471,11 +1473,12 @@ expect = ["reply"]
 card = ["route", "list"]
 tag = "tile"
 
+# #626: no look-up has fitted loadouts yet (#617, after 1.0), so an honest "I don't have
+# that" with no card is right today. Put the card back with #617.
 [[case]]
 heard = "what's the best loadout for my M80"
 mode = "planning"
 expect = ["reply", "look_up"]
-card = ["loadout", "list", "ship", "steps"]
 tag = "tile"
 
 # #491: the comparison card, two ships side by side.
@@ -1500,8 +1503,10 @@ expect = ["reply"]
 settings_after = { tile_size = "large" }
 tag = "settings"
 
+# #626: "hide the tile" clears the cards since #541 (a Tile word), so the setting's case
+# says it another way.
 [[case]]
-heard = "hide the tile"
+heard = "turn the tile off"
 mode = "settings"
 expect = ["reply"]
 settings_after = { tile = false }

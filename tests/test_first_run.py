@@ -158,6 +158,19 @@ def test_no_button_pressed_changes_nothing(path: Path) -> None:
     assert settings.load(path).push_to_talk is None
 
 
+def test_no_button_in_time_says_the_other_one_doesnt_count(path: Path) -> None:
+    """#634: the other push-to-talk button is skipped while listening, so pressing it
+    must not read as Tycho not hearing anything."""
+    pc = FakeSetupPC()
+    bridge = _bridge(path, pc)
+    bridge.capture_push_to_talk()
+    pc.button = None
+    assert bridge.capture_push_to_talk(True)["problem"] == (
+        "No button was pressed in 15 seconds. Mouse side (forward) is your other "
+        "push-to-talk button, so it doesn't count here."
+    )
+
+
 def test_choosing_a_microphone_from_the_list_or_the_default(path: Path) -> None:
     bridge = _bridge(path)
     assert bridge.set_microphone("Desk mic, MME")["ok"] is True
