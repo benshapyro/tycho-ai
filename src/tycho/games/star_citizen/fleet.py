@@ -216,6 +216,16 @@ class FleetUpdate:
         changed: dict[str, list[str]] = {"added": [], "removed": []}
         problems: list[dict[str, object]] = []
 
+        # Removes first (#634): a swap at 100 ships frees the slot its add needs.
+        for asked in _names(arguments.get("remove")):
+            ship = _match(library, asked, problems)
+            if ship is None:
+                continue
+            if (entry := owned(library, fleet.ships, ship)) is not None:
+                fleet.remove(entry)
+                changed["removed"].append(entry)
+            else:
+                problems.append({"asked": asked, "note": f"{ship.name} isn't in the fleet"})
         for asked in _names(arguments.get("add")):
             ship = _match(library, asked, problems)
             if ship is None or owned(library, fleet.ships, ship) is not None:
@@ -227,15 +237,6 @@ class FleetUpdate:
             else:
                 fleet.ships.append(ship.name)
                 changed["added"].append(ship.name)
-        for asked in _names(arguments.get("remove")):
-            ship = _match(library, asked, problems)
-            if ship is None:
-                continue
-            if (entry := owned(library, fleet.ships, ship)) is not None:
-                fleet.remove(entry)
-                changed["removed"].append(entry)
-            else:
-                problems.append({"asked": asked, "note": f"{ship.name} isn't in the fleet"})
         flying = str(arguments.get("flying") or "").strip()
         if flying.lower() in ("none", "nothing", "no ship"):
             fleet.flying = ""

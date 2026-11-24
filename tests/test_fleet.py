@@ -167,6 +167,17 @@ def test_a_full_fleet_says_why_nothing_was_added(tmp_path: Path) -> None:
     assert fleet.ships == ships  # nothing dropped from the file
 
 
+def test_a_swap_in_a_full_fleet_frees_the_slot_first(tmp_path: Path) -> None:
+    """#634: removes go before adds, so "swap the Cutlass for a Cat" works at 100."""
+    ships = ["Cutlass Black", *(f"Ship {n}" for n in range(MAX_SHIPS - 1))]
+    fleet = Fleet(tmp_path / "fleet.toml", ships)
+    _, result = _update(fleet, add=["Caterpillar"], remove=["Cutlass Black"])
+    assert result["added"] == ["Caterpillar"]
+    assert result["removed"] == ["Cutlass Black"]
+    assert "problems" not in result
+    assert len(fleet.ships) == MAX_SHIPS
+
+
 def test_concept_ships_can_be_owned(tmp_path: Path) -> None:
     fleet = Fleet(tmp_path / "fleet.toml")
     _, result = _update(fleet, add=["Kraken"])
