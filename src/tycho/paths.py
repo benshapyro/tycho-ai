@@ -101,6 +101,12 @@ def logs_dir() -> Path:
     return data_dir() / "logs"
 
 
+def tile_cards_dir() -> Path:
+    """The Tile's cards as they were drawn, only with ``TYCHO_TILE_RECORD`` on: a review
+    tool (``tile.record``). On this PC only, beside the logs."""
+    return logs_dir() / "tile-cards"
+
+
 def history_dir() -> Path:
     """Past conversations, one file per play session, only with ``keep_history`` on
     (ADR 14, #484). On this PC only: never the roaming config folder."""

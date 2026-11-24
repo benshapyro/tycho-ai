@@ -23,7 +23,7 @@ class FakeDisplay:
         self.light = None
         self.calls.append("idle")
 
-    def show(self, card: Card, *, pinned: bool = False) -> bool:
+    def show(self, card: Card, *, pinned: bool = False, asked: str = "", said: str = "") -> bool:
         self.calls.append(f"show {card.kind}{' pinned' if pinned else ''}")
         if not self.on:
             return False
