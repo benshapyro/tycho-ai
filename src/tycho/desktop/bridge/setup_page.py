@@ -138,8 +138,10 @@ class SetupPage(SettingsPage, CommandsPage):
             seconds = round(setup.CAPTURE_SECONDS)
             problem = f"No button was pressed in {seconds} seconds."
             if other:  # skipped while listening (#634): say so, or it reads as unheard
-                name = self._pc.name(other)
-                problem += f" {name} is your other push-to-talk button, so it doesn't count here."
+                skipped = self._pc.name(other)
+                problem += (
+                    f" {skipped} is your other push-to-talk button, so it doesn't count here."
+                )
             return {"ok": False, "problem": problem}
         if found == other:  # one behaviour with `tycho bind` (#629): never the same twice
             problem = "That's your other push-to-talk button already. Press a different one."

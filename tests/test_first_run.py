@@ -169,6 +169,11 @@ def test_no_button_in_time_says_the_other_one_doesnt_count(path: Path) -> None:
         "No button was pressed in 15 seconds. Mouse side (forward) is your other "
         "push-to-talk button, so it doesn't count here."
     )
+    pc.button = "joystick:vkb-l:3"
+    bridge.capture_push_to_talk(True)
+    pc.button = None  # choosing the first again, with a second set: the second is skipped
+    assert "is your other push-to-talk button" in bridge.capture_push_to_talk()["problem"]
+    assert pc.ignored[-1] == "joystick:vkb-l:3"
 
 
 def test_choosing_a_microphone_from_the_list_or_the_default(path: Path) -> None:
