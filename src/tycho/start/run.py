@@ -239,6 +239,7 @@ def _start(
     from tycho.feedback import SoundDevicePlayer, SoundFeedback
     from tycho.input.windows import GAME_EXECUTABLE, WindowsFocusCheck, WindowsKeySender
     from tycho.runtime.actionlog import FileActionLog
+    from tycho.tile import record as tile_record
     from tycho.tile.cards import notice
     from tycho.tile.display import TileDisplay
     from tycho.voice.elevenlabs import ElevenLabsSpeaker
@@ -290,7 +291,7 @@ def _start(
     for name in ("call_me", "call_me_says", "call_me_how_often"):
         live[name] = lambda v, name=name: address.set(name, v)
     # The Tile (ADR 16): a window of its own, never anything in the game.
-    tile = TileDisplay(current)
+    tile = TileDisplay(current, record=tile_record.from_env())  # a review tool, off
     unseen = told
     """What the Tile couldn't show (it's off, or didn't open): said aloud instead (#428)."""
     if tile.start():
