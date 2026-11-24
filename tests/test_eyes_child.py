@@ -12,6 +12,7 @@ import pytest
 from PIL import Image
 
 from tycho.eyes import CaptureError, Picture, child
+from tycho.eyes.words import Reading, Word, decode, squeezed
 
 PICTURE = Picture(b"\xff\xd8 a jpeg", 160, 90)
 ACCESS_VIOLATION = 0xC0000005  # how Windows reports the crash in #558
@@ -117,3 +118,83 @@ def test_the_installed_app_starts_the_child_before_anything_else() -> None:
     main = (Path(__file__).parents[1] / "packaging" / "tycho_main.py").read_text("utf-8")
     assert "child.FLAG" in main
     assert main.index("child.FLAG") < main.index("windowed(sys.argv[1:])")
+
+
+# --- Reading the window's words, for the route flow (#588) -----------------------------
+
+READING = Reading(2560, 1440, (Word("SEARCH", 230, 165, 60, 22, 0), Word("x", 726, 168, 12, 16, 0)))
+
+
+def test_the_words_come_back_and_never_the_frame(monkeypatch: pytest.MonkeyPatch) -> None:
+    out, err = io.BytesIO(), io.StringIO()
+    monkeypatch.setattr(sys, "stdout", SimpleNamespace(buffer=out, flush=lambda: None))
+    monkeypatch.setattr(sys, "stderr", err)
+    monkeypatch.setattr(child.faulthandler, "enable", lambda: None)
+    from tycho import win32
+
+    monkeypatch.setattr(win32, "no_crash_box", lambda: None)
+    seen: list[Image.Image] = []
+
+    def words(image: Image.Image) -> Reading:
+        seen.append(image)
+        return READING
+
+    assert child.main_words(["7"], frame=_blank(2560, 1440), words=words) == 0
+    assert len(seen) == 1
+    sent = out.getvalue()
+    assert b"\xff\xd8" not in sent  # no picture
+    assert decode(sent) == READING
+    assert child.read_words(7, _ran(0, sent)) == READING
+
+
+def test_the_words_child_is_started_with_its_own_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert child.command(42, words=True) == [
+        sys.executable,
+        "-m",
+        "tycho.eyes.child",
+        "--words",
+        "42",
+    ]
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(Path("C:/Tycho/tycho-app.exe")))
+    assert child.command(42, words=True)[1] == child.READ_FLAG
+    main = (Path(__file__).parents[1] / "packaging" / "tycho_main.py").read_text("utf-8")
+    assert main.index("child.READ_FLAG") < main.index("windowed(sys.argv[1:])")
+
+
+@pytest.mark.parametrize(
+    "sent",
+    [
+        b"",
+        b"not json",
+        b'{"width": 0, "height": 10, "words": []}',
+        b'{"width": 10, "height": 10, "words": [["x", -1, 0, 1, 1, 0]]}',
+        b'{"width": 10, "height": 10, "words": [[3, 0, 0, 1, 1, 0]]}',
+        b'{"width": 10, "height": 10, "words": [["x", true, 0, 1, 1, 0]]}',
+        b'{"width": 10, "height": 10}',
+    ],
+)
+def test_anything_malformed_is_no_reading(sent: bytes) -> None:
+    with pytest.raises(CaptureError):
+        decode(sent)
+
+
+def test_a_phrase_is_found_on_one_line_whatever_its_case_and_dots() -> None:
+    reading = Reading(
+        100,
+        100,
+        (
+            Word("SEARCH", 10, 10, 30, 5, 0),
+            Word("LOCATIONS...", 45, 10, 40, 5, 0),
+            Word("PORT", 10, 40, 20, 5, 1),
+            Word("TRESSLER", 35, 40, 30, 5, 2),  # another line: not "port tressler"
+        ),
+    )
+    found = reading.find("Search locations")
+    assert found is not None
+    assert [word.text for word in found] == ["SEARCH", "LOCATIONS..."]
+    assert not reading.has("port tressler")
+    assert reading.below(20).has("tressler")
+    assert not reading.below(20).has("search")
+    assert reading.find("") is None
+    assert squeezed("RESULTS (1)") == "results 1"

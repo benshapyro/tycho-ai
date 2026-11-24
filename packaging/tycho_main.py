@@ -52,6 +52,10 @@ LAZY_IMPORTS = (
     # Looking at the game window (#31), in a child process (#558).
     "tycho.eyes.child",
     "tycho.eyes.windows",
+    # Reading the star map's words to plot a route (#588), in the same child process.
+    "tycho.eyes.ocr",
+    "winrt.windows.globalization",
+    "winrt.windows.media.ocr",
     "winrt.runtime",
     "winrt.windows.foundation",
     "winrt.windows.graphics",
@@ -156,6 +160,8 @@ if __name__ == "__main__":
 
     if sys.argv[1:2] == [child.FLAG]:  # one picture of the game window, for Tycho (#558)
         sys.exit(child.main(sys.argv[2:]))
+    if sys.argv[1:2] == [child.READ_FLAG]:  # the game window's words, for a route (#588)
+        sys.exit(child.main_words(sys.argv[2:]))
     if sys.stdout is None or sys.stderr is None:  # tycho-app.exe: no terminal
         sys.exit(windowed(sys.argv[1:]))
     from tycho.cli import main

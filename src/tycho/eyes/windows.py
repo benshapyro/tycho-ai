@@ -13,6 +13,7 @@ rest of Tycho (and the cloud's tests) never need them.
 
 import contextlib
 import ctypes
+import dataclasses
 import logging
 import time
 from ctypes import wintypes
@@ -20,6 +21,7 @@ from typing import TYPE_CHECKING
 
 from tycho import win32
 from tycho.eyes import CaptureError, Picture, child
+from tycho.eyes.words import Reading
 from tycho.input.windows import executable_of
 
 if TYPE_CHECKING:
@@ -48,6 +50,23 @@ class WindowsCamera:
 
     def close(self) -> None:
         pass
+
+
+class WindowsScreenReader:
+    """Reads the words on ``executable``'s window, for the route flow's local check
+    (#588). Satisfies ``runtime.route.ScreenReader``. Blocking: called off the event
+    loop. No camera sound: the frame never leaves the child process, and the words are
+    only compared with what Tycho chose (ADR 14's amendment "a local check before a
+    press")."""
+
+    def __init__(self, executable: str) -> None:
+        self.executable = executable
+
+    def read(self) -> Reading:
+        window = game_window(self.executable)
+        if window is None:
+            raise CaptureError(f"no {self.executable} window is open (or it's minimised)")
+        return dataclasses.replace(child.read_words(window), window=window)
 
 
 def game_window(executable: str) -> int | None:

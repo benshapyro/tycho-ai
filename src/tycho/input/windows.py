@@ -1,7 +1,11 @@
-"""Windows key presses (SendInput with scan codes) and the game-focus check."""
+"""Windows key presses (SendInput with scan codes), the game-focus check, and the route
+flow's left click on the star map (#588)."""
 
+import contextlib
 import ctypes
 import os
+import time
+from collections.abc import Callable
 from ctypes import wintypes
 
 from tycho import win32
@@ -18,7 +22,11 @@ _MOUSE_BUTTONS = {
     4: (0x0080, 0x0100, 1),
     5: (0x0080, 0x0100, 2),
 }
+_LEFT = 1
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
+CLICK_SECONDS = 0.06
+"""How long the left button is held: a plain click, like a tap's key."""
 GAME_EXECUTABLE = "StarCitizen.exe"
 
 
@@ -90,6 +98,47 @@ class WindowsKeySender:
         else:
             raise ValueError("wheel notches are sent with wheel(), not down()/up()")
         _send(event)
+
+
+class WindowsClicker:
+    """One left click on the game window, at a spot in a frame the check just read (ADR
+    3's amendments for #588). Satisfies ``runtime.route.Clicker``. Blocking: call it on
+    the key thread.
+
+    It clicks only if ``window`` is the window in front and is exactly the size of the
+    frame the spot came from, so the spot is the same pixel on screen. Otherwise (a
+    windowed game with borders, another window in front) nothing is clicked."""
+
+    def __init__(self, sleep: Callable[[float], None] = time.sleep) -> None:
+        self._sleep = sleep
+
+    def click(self, window: int, frame: tuple[int, int], x: int, y: int) -> str:
+        """Click at (``x``, ``y``) in ``window``'s ``frame``-sized picture: "" if it
+        clicked, else why not."""
+        user32 = win32.user32()
+        # Real pixels, as the frame has them, whatever the screen's scaling: per thread.
+        with contextlib.suppress(AttributeError, OSError):
+            user32.SetThreadDpiAwarenessContext(_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+        if user32.GetForegroundWindow() != window:
+            return "the game window isn't in front"
+        rect = wintypes.RECT()
+        if not user32.GetWindowRect(window, ctypes.byref(rect)):
+            return "the game window's place on screen is unknown"
+        size = (rect.right - rect.left, rect.bottom - rect.top)
+        if size != frame:
+            return f"the game window is {size[0]}x{size[1]}, not the frame's {frame[0]}x{frame[1]}"
+        if not 0 <= x < size[0] or not 0 <= y < size[1]:
+            return "the spot is outside the game window"
+        if not user32.SetCursorPos(rect.left + x, rect.top + y):
+            return "Windows didn't move the pointer"
+        sender = WindowsKeySender()
+        left = Code("mouse", _LEFT)
+        sender.down(left)
+        try:
+            self._sleep(CLICK_SECONDS)
+        finally:
+            sender.up(left)
+        return ""
 
 
 class WindowsFocusCheck:

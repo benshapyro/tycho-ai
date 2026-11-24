@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.14"
 resolution-markers = [
     "platform_machine == 'AMD64' and sys_platform == 'win32'",
@@ -826,7 +826,6 @@ wheels = [
 name = "tycho-ai"
 version = "0.10.0"
 source = { editable = "." }
-default-groups = ["bench", "dev", "gpu"]
 dependencies = [
     { name = "anthropic" },
     { name = "httpx2" },
@@ -843,6 +842,7 @@ dependencies = [
     { name = "tomlkit" },
     { name = "winrt-runtime" },
     { name = "winrt-windows-foundation" },
+    { name = "winrt-windows-globalization" },
     { name = "winrt-windows-graphics" },
     { name = "winrt-windows-graphics-capture" },
     { name = "winrt-windows-graphics-capture-interop" },
@@ -850,6 +850,7 @@ dependencies = [
     { name = "winrt-windows-graphics-directx-direct3d11" },
     { name = "winrt-windows-graphics-directx-direct3d11-interop" },
     { name = "winrt-windows-graphics-imaging" },
+    { name = "winrt-windows-media-ocr" },
     { name = "winrt-windows-storage-streams" },
 ]
 
@@ -891,6 +892,7 @@ requires-dist = [
     { name = "tomlkit", specifier = ">=0.13.3" },
     { name = "winrt-runtime", specifier = ">=4.2.0" },
     { name = "winrt-windows-foundation", specifier = ">=4!10.0.28000.2957" },
+    { name = "winrt-windows-globalization", specifier = ">=4!10.0.28000.2957" },
     { name = "winrt-windows-graphics", specifier = ">=4!10.0.28000.2957" },
     { name = "winrt-windows-graphics-capture", specifier = ">=4!10.0.28000.2957" },
     { name = "winrt-windows-graphics-capture-interop", specifier = ">=4.0.0" },
@@ -898,6 +900,7 @@ requires-dist = [
     { name = "winrt-windows-graphics-directx-direct3d11", specifier = ">=4!10.0.28000.2957" },
     { name = "winrt-windows-graphics-directx-direct3d11-interop", specifier = ">=4.1.0" },
     { name = "winrt-windows-graphics-imaging", specifier = ">=4!10.0.28000.2957" },
+    { name = "winrt-windows-media-ocr", specifier = ">=4!10.0.28000.2957" },
     { name = "winrt-windows-storage-streams", specifier = ">=4!10.0.28000.2957" },
 ]
 
@@ -997,6 +1000,20 @@ wheels = [
 ]
 
 [[package]]
+name = "winrt-windows-globalization"
+version = "4!10.0.28000.2957"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime" },
+    { name = "winrt-windows-foundation" },
+    { name = "winrt-windows-foundation-collections" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3a/7b/a07085aa0d7a79de5616c9e97320ee73abab972a789d53d4d7e040e69fc1/winrt_windows_globalization-4!10.0.28000.2957.tar.gz", hash = "sha256:9d0b63b245b351310a8b23211860a8a5958be547fa88656a883bcab42be3ef3f", size = 16808, upload-time = "2026-10-31T23:44:30.207Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f3/7a/fa563b8bd5a2f0026fdf2db979e0282280fac9229f13e03f67a6634c61c0/winrt_windows_globalization-4!10.0.28000.2957-py3-none-any.whl", hash = "sha256:188dfa558bee1b75b5c5f9d12ca1b335501a014e3733bfe884b515c2f5ede4a2", size = 20633, upload-time = "2026-10-31T23:39:45.34Z" },
+]
+
+[[package]]
 name = "winrt-windows-graphics"
 version = "4!10.0.28000.2957.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1092,6 +1109,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/40/44/5e7a1ee1120a78db48d53da831bfb039617322dabbe2a3a51abf19ef807a/winrt_windows_graphics_imaging-4!10.0.28000.2957.tar.gz", hash = "sha256:c73b020093a2bfaa42fee0fa1f92a3b72ef363452a9a3cb147b44ad07bcc5a11", size = 19769, upload-time = "2026-10-31T23:44:39.805Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/be/be/d11c554f17aa976c80a063f5b8239d143ec94e6cf82774955d20eb8ff4d0/winrt_windows_graphics_imaging-4!10.0.28000.2957-py3-none-any.whl", hash = "sha256:af6f0b463cb0588b014e0a0c82d76e27c73be372d06d6cb2c25b63c573b204ac", size = 22021, upload-time = "2026-10-31T23:39:57.393Z" },
+]
+
+[[package]]
+name = "winrt-windows-media-ocr"
+version = "4!10.0.28000.2957"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime" },
+    { name = "winrt-windows-foundation" },
+    { name = "winrt-windows-foundation-collections" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/79/f3/a644dbf5800354620c2d1392de9b674fd8b9c3c37af788d5e423b3c16e59/winrt_windows_media_ocr-4!10.0.28000.2957.tar.gz", hash = "sha256:9502c925ed3b371fae097e59a72783fec32eee85c44e233517b984d3e1fbc758", size = 7035, upload-time = "2026-10-31T23:45:07.101Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/13/e7/341b69f049081213665ad0630505482c3ba137678aaf66dc9031a78b5925/winrt_windows_media_ocr-4!10.0.28000.2957-py3-none-any.whl", hash = "sha256:945140b8964e0583018e69968cfbcbfee336ec2940542009cd861ab5a51af8ec", size = 8947, upload-time = "2026-10-31T23:40:35.496Z" },
 ]
 
 [[package]]

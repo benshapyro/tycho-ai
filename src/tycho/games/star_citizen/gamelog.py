@@ -59,6 +59,7 @@ class GameLog:
         self._facts: set[str] = set()
         self._now: dict[str, Logged] = {}
         self._recent: deque[Logged] = deque(maxlen=RECENT)
+        self._last: dict[str, Logged] = {}
         self._number = 0
         self.readable = False
         """Whether the last read found the log."""
@@ -74,6 +75,20 @@ class GameLog:
         with self._lock:
             self._catch_up()
             return Situation(frozenset(self._facts), tuple(self._now.values()), tuple(self._recent))
+
+    def last(self, kind: str) -> Logged | None:
+        """The newest line of ``kind`` (a quiet one too), if one was read since the game
+        started. Blocking, like ``facts``. The route flow compares its ``number`` with
+        one it saw before acting, to tell a new line from an old one (#588)."""
+        with self._lock:
+            self._catch_up()
+            return self._last.get(kind)
+
+    def newest(self) -> int:
+        """The number the newest line read so far has (0 for none). Blocking."""
+        with self._lock:
+            self._catch_up()
+            return self._number
 
     def _catch_up(self) -> None:
         try:
@@ -120,6 +135,7 @@ class GameLog:
         self._facts.clear()
         self._now.clear()
         self._recent.clear()
+        self._last.clear()
 
     def _apply(self, raw: bytes) -> None:
         # Matched as bytes first: decoding every line of a long session was most of the time.
@@ -130,6 +146,9 @@ class GameLog:
             line = loglines.named_blueprint(line, self._names(line.key))
         self._number += 1
         logged = Logged(line.kind, line.said, loglines.when(raw), self._number, line.name)
+        self._last[line.kind] = logged
+        if line.quiet:
+            return
         if line.set_route is True:
             self._facts.add(QUANTUM_ROUTE)
         elif line.set_route is False:
