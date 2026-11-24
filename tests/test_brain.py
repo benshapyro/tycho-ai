@@ -390,7 +390,8 @@ def test_claude_is_asked_the_way_adr_14_says() -> None:
     assert request["tool_choice"] == {"type": "auto"}  # several tools a reply (#149, #156)
     assert request["system"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
     assert {t["name"] for t in request["tools"]} == {"run_actions", "run_sequence", "player_keys"}
-    assert all(t["strict"] for t in request["tools"])
+    # Only the acts are strict: 18 strict tools broke every request (test_tool_budget).
+    assert {t["name"] for t in request["tools"] if t["strict"]} == {"run_actions", "run_sequence"}
 
 
 def _picks(actions: list[str], use_id: str = "toolu_1") -> tuple[list[Any], Any]:
@@ -587,7 +588,8 @@ def test_look_ups_are_offered_alongside_the_acts() -> None:
         "ship_lookup",
         "player_keys",
     ]
-    assert all(t["strict"] for t in request["tools"])
+    # Only the acts are strict: 18 strict tools broke every request (test_tool_budget).
+    assert {t["name"] for t in request["tools"] if t["strict"]} == {"run_actions", "run_sequence"}
 
 
 def test_claude_can_act_after_a_look_up_and_the_act_is_still_checked() -> None:

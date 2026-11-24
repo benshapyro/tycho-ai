@@ -79,11 +79,20 @@ DRAIN_SECONDS = 10.0
 _PRICES = (0.10, 0.50, 0.01, 0.20)
 
 
+STRICT = ACTS
+"""Only the acts are ``strict``: 18 strict tools made a grammar Anthropic refused (#638)."""
+
+
 def _tools(
     sequences: list[str], lookups: Iterable[Lookup] = (), *, keys: bool = True
 ) -> list[ToolParam]:
-    specs = tool_specs(sequences, lookups, keys=keys)
-    return [cast(ToolParam, {**spec, "strict": True}) for spec in specs]
+    return [_shaped(spec) for spec in tool_specs(sequences, lookups, keys=keys)]
+
+
+def _shaped(spec: Mapping[str, object]) -> ToolParam:
+    """A tool as sent, ``strict`` before the schema: the order the cache has (#576)."""
+    sent = {"name": spec["name"], "description": spec["description"]}
+    return cast(ToolParam, {**sent, "strict": spec["name"] in STRICT, **spec})
 
 
 def history(
@@ -172,12 +181,8 @@ class ClaudeBrain:
         if clash := ACTS & self._lookups.keys():
             raise ValueError(f"a look-up can't be named {', '.join(sorted(clash))}")
         self._tools = _tools(self._sequences, lookups, keys=self._keys)
-        card = show_card(pack.tile.cards)  # its keys in the order the cache has (#576)
-        name, described, schema = card["name"], card["description"], card["input_schema"]
-        self._show_card = cast(
-            ToolParam,
-            {"name": name, "description": described, "strict": True, "input_schema": schema},
-        )
+        # Its keys in the order the cache has (#576); strict, as ADR 16 says.
+        self._show_card = _shaped(show_card(pack.tile.cards))
         """Offered only while the Tile is on, so Claude never says "on the Tile" without
         one; only the kinds this game's Settings can hide (#528)."""
         self._reference = reference
@@ -428,7 +433,7 @@ def _unanswered(message: Any, round_: Round) -> bool:
 def _cut_off(name: str, arguments: object, tools: Sequence[ToolParam]) -> bool:
     """Whether an act was cut off at the output limit (#266). The SDK reads a cut
     call's arguments as far as they go, so a card arrives with its last rows and fields
-    missing, and a cut run_actions would press only the actions it got to. Every tool
+    missing, and a cut run_actions would press only the actions it got to. Every act
     is strict, so a whole call always has every required field. (A look-up's arguments
     are short, and checked by the look-up itself.)"""
     if name not in ACTS:
