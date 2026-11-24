@@ -122,3 +122,15 @@ def test_after_a_first_run_the_window_opens_once_on_try_it(tmp_path: Path) -> No
     bridge = Bridge(settings_path=path, opening="try_it", latest_release=lambda: None)
     assert bridge.about()["opening"] == "try_it"
     assert bridge.about()["opening"] == ""  # opened again from the tray: Home
+
+
+def test_home_names_both_push_to_talk_buttons_and_a_second_only_with_a_first(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#629: a hand-edited settings.toml with only a second named it alone."""
+    monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path))
+    bridge = Bridge(latest_release=lambda: None)
+    settings.save(settings.Settings(push_to_talk="mouse:0x06", push_to_talk_2="joystick:x:2"))
+    assert bridge.recent()["button"] == "Mouse side (forward) or joystick button 3"
+    settings.save(settings.Settings(push_to_talk_2="joystick:x:2"))
+    assert bridge.recent()["button"] == ""

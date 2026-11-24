@@ -280,7 +280,7 @@
         if (!live && !document.hasFocus()) tryCard = `<div class="card frame" id="tryCard"><h3>Try it now</h3><p>Click here to try it: Tycho tries only while this window is in front.</p></div>`;
         if (live) tryCard = `<div class="card frame" id="tryCard"><h3>Try it now</h3>
           ${live.listening === false ? `<p class="warn-line">Tycho is paused. Resume it from its icon by the clock, then try.</p>`
-            : `<p>Tycho is listening. Hold <b>${esc(s.push_to_talk.name || "your button")}</b>, say something, and let go: what it heard and what it would do shows here.</p>`}
+            : `<p>Tycho is listening. Hold <b>${esc([s.push_to_talk.name, s.push_to_talk_2 && s.push_to_talk_2.set ? s.push_to_talk_2.name : ""].filter(Boolean).join(" or ") || "your button")}</b>, say something, and let go: what it heard and what it would do shows here.</p>`}
           <p class="ok-line">✓ Nothing reaches the game while this step is open and in front: Tycho shows the keys it would press instead. Switch to the game, and Tycho presses keys again.</p>
           <div id="tried">${recentList(tried(live), TRIED_EMPTY)}</div>
           <p class="note">Tycho tries with the settings it started with. Changes you made here apply when it restarts.</p></div>`;
