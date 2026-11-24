@@ -50,6 +50,7 @@ a = Analysis(  # noqa: F821
         # which the analysis can't see (#555). Only the capture's child process loads them.
         "tycho.eyes.child",
         "tycho.eyes.windows",
+        "tycho.eyes.ocr",
         *collect_submodules("winrt"),
     ],
     excludes=[

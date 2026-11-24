@@ -33,7 +33,12 @@ from dataclasses import dataclass
 from datetime import datetime
 
 ROUTE = "route"
-"""A quantum route is plotted (``now``)."""
+"""A quantum route is plotted (``now``); ``name`` is the game's id for the place
+("levski_all-001"), which the route flow checks (#588)."""
+NO_ROUTE_ON_MAP = "no_route_on_map"
+"""A ship's star map was opened with no route set (quiet): "No Route loaded!". The only
+line that shows the player is in a ship's seat with the map open, so the route flow
+reads it (#588). It repeats while the map stays open."""
 SHIP = "ship"
 """The ship the player last had the controls of (``now``). Only the player's own
 control-token lines name it: ships in ATC or navigation lines may be anyone's."""
@@ -89,6 +94,9 @@ class Line:
     key: str = ""
     """The game's text key for ``name``, when the log gave a key instead of words
     (``BLUEPRINT_UNNAMED``): the reader looks it up in the game's own text."""
+    quiet: bool = False
+    """Not news: kept only as the newest of its kind (``GameLog.last``), never in what
+    the brain or a callout hears."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,7 +157,14 @@ def when(line: bytes | str) -> datetime | None:
 def _route(line: str) -> Line | None:
     if match := _ROUTE_TO.search(line):
         said = f"Quantum route plotted to {place(match.group(1))}"
-        return Line(ROUTE, said, keep=True, set_route=True)
+        return Line(ROUTE, said, keep=True, set_route=True, name=clean(match.group(1)))
+    return None
+
+
+def _no_route_on_map(line: str) -> Line | None:
+    # Names the ship's entity and the game's internal ids: none of it is kept.
+    if "GetStarmapRouteSegmentData" in line and "No Route loaded!" in line:
+        return Line(NO_ROUTE_ON_MAP, "The star map has no route", quiet=True)
     return None
 
 
@@ -229,6 +244,7 @@ def _joined(line: str) -> Line | None:
 PATTERNS = (
     Pattern(b"Successfully calculated route to", _route),
     Pattern(b"Arrived at Final Destination", _arrived),
+    Pattern(b"<Failed to get starmap route data!>", _no_route_on_map),
     Pattern(b"ClearDriver", _left_seat),
     Pattern(b"Added notification", _notification),
     Pattern(b"<Join PU>", _joined),

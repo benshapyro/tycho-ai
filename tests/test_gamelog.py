@@ -432,3 +432,46 @@ def test_a_long_item_key_is_still_a_blueprint(tmp_path: Path) -> None:
     (event,) = GameLog(_log(tmp_path, line), names).situation().recent
     assert event.kind == loglines.BLUEPRINT_UNNAMED
     assert looked == [key]
+
+
+# The route flow's lines (#588): the author's Game.log, 22 Nov and 16 Nov 2026.
+NO_ROUTE_ON_MAP = (
+    "<2026-11-22T20:35:37.057Z> [Notice] <Failed to get starmap route data!> [ItemNavigation]"
+    "[CL][24704] | NOT AUTH | DRAK_Ironclad_Assault_949476015757[949476015757]|CSCItemNavigation"
+    "::GetStarmapRouteSegmentData|No Route loaded! [Team_CGP4][QuantumTravel]\n"
+)
+PLOTTED_BY_ID = (
+    "<2026-11-16T07:34:20.235Z> [Notice] <Calculate Route> [ItemNavigation][CL][32348] | NOT "
+    "AUTH | ORIG_m80_936381640985[936381640985]|CSCItemNavigation::CalculateRoute|Successfully"
+    " calculated route to rs_ext_pyro3_leo fuel estimate 641097.000000 [Team_CGP4][QuantumTravel]\n"
+)
+
+
+def test_a_plotted_route_keeps_the_places_id(tmp_path: Path) -> None:
+    log = GameLog(_log(tmp_path, PLOTTED_BY_ID))
+    route = log.last(loglines.ROUTE)
+    assert route is not None
+    assert route.name == "rs_ext_pyro3_leo"
+    assert route.number == log.newest()
+
+
+def test_the_map_with_no_route_is_quiet_but_its_newest_is_known(tmp_path: Path) -> None:
+    path = _log(tmp_path, NO_ROUTE_ON_MAP)
+    log = GameLog(path)
+    first = log.last(loglines.NO_ROUTE_ON_MAP)
+    assert first is not None
+    situation = log.situation()
+    assert situation.now == ()
+    assert situation.recent == ()
+    assert log.facts() == frozenset()
+    _append(path, NO_ROUTE_ON_MAP)
+    again = log.last(loglines.NO_ROUTE_ON_MAP)
+    assert again is not None
+    assert again.number > first.number
+    assert log.newest() == again.number
+
+
+def test_nothing_read_yet_has_no_last_line(tmp_path: Path) -> None:
+    log = GameLog(_log(tmp_path))
+    assert log.last(loglines.ROUTE) is None
+    assert log.newest() == 0
