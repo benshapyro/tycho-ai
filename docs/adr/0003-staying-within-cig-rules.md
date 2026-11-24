@@ -39,3 +39,21 @@ Some "power user" automation requests will be declined by design.
 - Tests: nothing typed when the check fails, a name not in the list is never typed, typing stops at its fixed end, and success needs the log line naming the place. Brain eval cases: plot a route, an unknown place, a place spelt two ways.
 - Before it ships, a PC test at two resolutions and two UI scales.
 - Star map changes in a patch can break the flow. When the check or the log line fails, Tycho says so and presses nothing more; it never guesses.
+
+## Amendment, 23 November 2026 (evening): clicking the search box, after the PC test
+
+*Status: accepted. The maintainer approved this text on 24 November 2026 (#630), after asking for it following the PC test ("I am fine with Tycho clicking the search box", [#588](https://github.com/benshapyro/tycho-ai/issues/588)).*
+
+**Context.** The PC test (#588) found that the star map's search box can't be reached from the keyboard: Tab and typing do nothing until the box is clicked. R (`mapui_action_planroute`) plots a route once a place is picked, and C clears it. Game.log doesn't write "Quantum route plotted to X" with a shown name. It writes `Successfully calculated route to rs_ext_pyro3_leo`, using the game's internal id. Letting the player pick the place and Tycho press R saves nothing, because R is one key. So the click is the main way, not a fallback. This replaces the morning amendment's "the mouse, only if the keyboard can't" point and its "proved by the game's log" point. The rest of that amendment stands.
+
+**Decision.**
+
+- **Up to two left clicks per request, each on something the check just found.** The first is on the search box. The second is only needed if Enter doesn't pick the place, and it goes on the first search result, only if its text matches the chosen place's name. Each click is aimed at a spot the local check (ADR 14) found in a frame taken just before that click, and that same frame must show the map still open. Never a fixed screen position, never a drag, never a right click, and never moving the cursor to steer.
+- **Only from a ship's seat, and in NAV mode first.** Before the first click Tycho sets NAV (`v_master_mode_set_nav`), which takes the ship's weapons offline (ADR 12's mode guard). That way a click that misses the map can't fire a gun. On foot, plotting is refused, because a drawn weapon can't be ruled out. Tycho says "Sit down in your ship first."
+- **Proved by the game's log, by its id.** Success means Game.log's `Successfully calculated route to <id>` line, where `<id>` is the chosen place's id in that patch's game data. Anything else is reported as not done, and the map is left open.
+- **Accepted risk.** If the map closes during the gap between the last frame and the click (well under a second), the click lands in the cockpit. With NAV set, that can't fire. It could engage the quantum drive only if the player had quantum mode on with a route already set. Tycho never turns quantum mode on in this flow.
+
+**Consequences.**
+- The pack's route flow names its steps as data: open the map, find the box, click, type, Enter, then click the result if needed, then R, then check the log, then close the map (F).
+- Tests: no click without a fresh frame showing the map; never on foot; NAV is set before any click; at most two clicks; success only with the matching id.
+- The per-patch game data needs the starmap ids (`rs_...`) and their shown names.
