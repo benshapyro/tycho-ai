@@ -72,6 +72,6 @@ Some "power user" automation requests will be declined by design.
 - **Not an empty spot on the map.** Clicking empty map also gives the keys back (maintainer, 24 November 2026). But a spot that looks empty can hold a marker, and clicking it would change what's picked. The close button is always in the same place relative to the box.
 
 **Consequences.**
-- The pack's route flow becomes: NAV, open the map, find the box, click it, type, Enter, check the result, click close, R, check the log, close the map (F).
+- The pack's route flow becomes: NAV, open the map, find the box, click it, type, Enter, check the result, click close, then C (`mapui_action_clearroute`) if a route is already set (the game won't plot over one: maintainer, 24 November 2026), R, check the log, close the map (F). C is the player's own keybind, like R. Saying "plot a route to X" counts as asking to replace the current route, and Tycho says "Replacing your route to Y."
 - The route line names the game's internal id (`levski_all-001`, `rs_ext_pyro3_leo`). The per-patch game data has to map each id to its shown name, so that "Route set to Levski" is said only when the id matches.
 - The PC test still needs a second resolution and UI scale, to show that the close button's offset from the box holds.
