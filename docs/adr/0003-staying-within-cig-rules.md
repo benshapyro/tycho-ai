@@ -69,6 +69,7 @@ Some "power user" automation requests will be declined by design.
 - **Only after the frame shows the right place picked.** The frame taken just before the click must show the map open and the result for the chosen place.
 - **Aimed from the search box, not from the "x" alone.** A lone "x" is a weak match for text recognition. The button's spot is worked out from where the check found the search box in that same frame, using the panel's layout, which the pack states as data. Text recognition only has to agree that something is there. If they don't agree, nothing is clicked, and Tycho says it couldn't finish.
 - **No first-result click.** Enter does that job.
+- **Not an empty spot on the map.** Clicking empty map also gives the keys back (maintainer, 24 November 2026). But a spot that looks empty can hold a marker, and clicking it would change what's picked. The close button is always in the same place relative to the box.
 
 **Consequences.**
 - The pack's route flow becomes: NAV, open the map, find the box, click it, type, Enter, check the result, click close, R, check the log, close the map (F).
