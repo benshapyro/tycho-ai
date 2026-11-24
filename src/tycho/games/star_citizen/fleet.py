@@ -218,9 +218,13 @@ class FleetUpdate:
 
         for asked in _names(arguments.get("add")):
             ship = _match(library, asked, problems)
-            if ship is None or len(fleet.ships) >= MAX_SHIPS:
+            if ship is None or owned(library, fleet.ships, ship) is not None:
                 continue
-            if owned(library, fleet.ships, ship) is None:
+            if len(fleet.ships) >= MAX_SHIPS:  # #620: say why, so the brain can tell the player
+                problems.append(
+                    {"asked": asked, "note": f"the fleet holds {MAX_SHIPS} ships at most"}
+                )
+            else:
                 fleet.ships.append(ship.name)
                 changed["added"].append(ship.name)
         for asked in _names(arguments.get("remove")):
@@ -248,7 +252,7 @@ class FleetUpdate:
                 )
         result: dict[str, object] = {
             **{k: v for k, v in changed.items() if v},
-            "fleet": fleet.ships,
+            "fleet": fleet.ships[:MAX_SHIPS],  # the header's limit; the file keeps the rest
             "flying": fleet.flying or None,
         }
         if problems:

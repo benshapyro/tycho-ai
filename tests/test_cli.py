@@ -688,3 +688,57 @@ def test_bind_second_adds_a_stick_button_and_remove_second_takes_it_off(
     assert "second push-to-talk button is now joystick button 3" in capsys.readouterr().out
     assert cli.main(["bind", "--remove-second"]) == 0
     assert settings.load().push_to_talk_2 is None
+
+
+def test_check_gives_each_push_to_talk_button_its_own_conflict_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#629: a mouse button that's free in game was hidden behind the stick button's
+    "not checked yet"."""
+
+    def game(*_args: object, **_kwargs: object) -> Iterator[Finding]:
+        yield from ()
+        return SimpleNamespace()  # a store: conflict_warnings is a stand-in below
+
+    def free(_binding: Binding, _store: object) -> list[str]:
+        return []
+
+    monkeypatch.setattr(doctor, "game_findings", game)
+    monkeypatch.setattr(doctor, "conflict_warnings", free)
+    both = settings.Settings(push_to_talk="mouse:0x06", push_to_talk_2="joystick:vkb-l:3")
+    lines = [
+        f.detail
+        for f in doctor.checks(both, quick=True, ask=False)
+        if f.what == "Push-to-talk conflict"
+    ]
+    assert lines == [
+        "Mouse side (forward): not bound to anything in game",
+        "joystick button 4: joystick buttons aren't checked yet",
+    ]
+
+
+def test_bind_doesnt_take_the_second_button_as_the_first(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#629: `tycho bind` and the app agree: the other push-to-talk button, pressed out of
+    habit, is never taken, so the two can't end up the same."""
+    from tycho.ptt import monitor
+
+    monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path))
+    stick = "joystick:vkb-l:3"
+    settings.save(settings.Settings(push_to_talk="mouse:0x06", push_to_talk_2=stick))
+    ignored: list[frozenset[Binding]] = []
+
+    def capture(sources: object, *, ignore: frozenset[Binding], timeout: float) -> Binding:
+        ignored.append(ignore)
+        return Binding.parse("mouse:0x05")
+
+    def no_sources(*bindings: Binding | None) -> list[object]:
+        return []
+
+    monkeypatch.setattr(start_run, "input_sources", no_sources)
+    monkeypatch.setattr(monitor, "capture_binding", capture)
+    assert cli.main(["bind"]) == 0
+    assert Binding.parse(stick) in ignored[0]
+    assert settings.load().push_to_talk == "mouse:0x05"
+    assert settings.load().push_to_talk_2 == stick

@@ -10,7 +10,7 @@ import pytest
 
 from tests.test_knowledge import CONCEPTS, LIBRARY
 from tycho.brain.claude import history
-from tycho.games.star_citizen.fleet import Fleet, FleetUpdate, patch_line
+from tycho.games.star_citizen.fleet import MAX_SHIPS, Fleet, FleetUpdate, patch_line
 from tycho.games.star_citizen.ships import ShipLibrary, concepts_from_uex
 
 WITH_CONCEPTS = LIBRARY.with_concepts(concepts_from_uex(CONCEPTS[:3], LIBRARY.ships))
@@ -151,6 +151,20 @@ def test_an_unclear_name_changes_nothing_and_says_why(tmp_path: Path) -> None:
     assert unclear["note"] == "ask which"
     assert len(unclear["could_be"]) == 3
     assert unknown["note"] == "not found"
+
+
+def test_a_full_fleet_says_why_nothing_was_added(tmp_path: Path) -> None:
+    """#620: past 100 ships an add used to vanish with no word to the brain, and the
+    result listed every ship though the header stops at 100."""
+    ships = [f"Ship {n}" for n in range(MAX_SHIPS + 5)]  # a hand-written list kept since #619
+    fleet = Fleet(tmp_path / "fleet.toml", ships)
+    _, result = _update(fleet, add=["Caterpillar"])
+    assert "added" not in result
+    assert result["problems"] == [
+        {"asked": "Caterpillar", "note": f"the fleet holds {MAX_SHIPS} ships at most"}
+    ]
+    assert result["fleet"] == ships[:MAX_SHIPS]
+    assert fleet.ships == ships  # nothing dropped from the file
 
 
 def test_concept_ships_can_be_owned(tmp_path: Path) -> None:

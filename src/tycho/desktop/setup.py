@@ -48,9 +48,12 @@ class SetupPC(Protocol):
         """The folder to save as game_root, from whichever level the player picked."""
         ...
 
-    def capture(self, seconds: float, cancel: threading.Event) -> str | None:
+    def capture(
+        self, seconds: float, cancel: threading.Event, ignore: str | None = None
+    ) -> str | None:
         """The next button pressed, as a push_to_talk setting; None if none in time, or
-        once ``cancel`` is set."""
+        once ``cancel`` is set. ``ignore``: a push_to_talk setting not to take (the
+        other push-to-talk button, pressed out of habit: #629)."""
         ...
 
     def name(self, setting: str) -> str:
@@ -114,19 +117,23 @@ class WindowsPC:
         found = game_root(Path(folder), channel)
         return str(found) if found is not None else None
 
-    def capture(self, seconds: float, cancel: threading.Event) -> str | None:
+    def capture(
+        self, seconds: float, cancel: threading.Event, ignore: str | None = None
+    ) -> str | None:
         """Keyboard, mouse (not left click) or joystick. The joystick source is made and
         polled on this thread and closed after, as SDL requires: Tycho's own joystick
         source, on its push-to-talk thread, is untouched."""
         from tycho.ptt import windows as win
+        from tycho.ptt.binding import Binding
         from tycho.ptt.devices import input_sources
         from tycho.ptt.monitor import capture_binding
 
+        skip = {win.LEFT_MOUSE, *([Binding.parse(ignore)] if ignore else [])}
         sources = input_sources(None)
         try:
             found = capture_binding(
                 sources,
-                ignore=frozenset({win.LEFT_MOUSE}),
+                ignore=frozenset(skip),
                 timeout=seconds,
                 cancelled=cancel.is_set,
             )
