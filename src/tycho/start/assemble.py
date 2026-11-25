@@ -4,6 +4,7 @@ keybinds, the speech model, the commands. Out of ``app.py`` (#398)."""
 import logging
 import time
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from tycho import paths
@@ -156,6 +157,8 @@ def build_session(
     presser = Presser(sender, focus, game=pack.name)
     called = (lambda: address.name) if address is not None else (lambda: "")
     plotter = plotter_for(pack, game_state, reader, clicker, keybinds, presser, called, record)
+    if plotter is not None and make_brain is not None:  # an unknown place goes to the brain
+        plotter = replace(plotter, brain=True)
     tool = plotter.tool if plotter is not None and not pack.safety.keys_off else None
     extra = [tool] if tool is not None else []  # keys off: the brain explains the map
     return Session(
