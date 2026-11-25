@@ -78,7 +78,7 @@ Some "power user" automation requests will be declined by design.
 
 ## Amendment, 25 November 2026: place names from UEX, checked by the map
 
-*Status: proposed. The maintainer chose UEX's list on 24 November 2026 ("UEX list, checked by the map", [#588](https://github.com/benshapyro/tycho-ai/issues/588)); this text waits for the maintainer's OK.*
+*Status: accepted. The maintainer chose UEX's list on 24 November 2026 ("UEX list, checked by the map", [#588](https://github.com/benshapyro/tycho-ai/issues/588)) and approved this text on 25 November 2026 (#643).*
 
 **Context.** The morning amendment says names come from the game's own list, and the evening one that the route line's id is checked against that patch's game data. Tycho can't read either yet. UEX's terminal list has the names of the cities, stations, outposts, moons and planets the map plots to.
 
