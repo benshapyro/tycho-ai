@@ -14,7 +14,9 @@ picture.
 
 With ``READ_FLAG`` the child reads the frame's words instead (``eyes.ocr``, #588), for
 the route flow's local check: only the words and their boxes come back, and the frame
-never leaves the child.
+never leaves the child. With ``LOOP_FLAG`` it stays up for one route and reads a new
+frame's words each time it's asked on stdin (``eyes.loop``): starting the child takes 1 to
+2 s, which left only two looks in the map's 3 s (#661).
 """
 
 import faulthandler
@@ -24,7 +26,7 @@ import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, BinaryIO
 
 from tycho.eyes import CaptureError, Picture
 from tycho.eyes.words import Reading, decode, encode
@@ -40,6 +42,12 @@ READ_FLAG = "--read-game-window"
 """Its hidden argument for one reading of the window's words (#588)."""
 _WORDS = "--words"
 """From source, ``python -m tycho.eyes.child --words <window>``."""
+LOOP_FLAG = "--read-game-window-loop"
+"""Its hidden argument for a child that reads the window's words on request (#661)."""
+_LOOP = "--words-loop"
+"""From source, ``python -m tycho.eyes.child --words-loop <window>``."""
+ANSWER = struct.Struct(">BI")
+"""A looping child's answer: 0 and the words, or 1 and why not, then the length."""
 SECONDS = 8.0
 """Starting the child, loading the WinRT modules and one frame: usually 1 to 2 s."""
 NO_PICTURE = 3
@@ -47,14 +55,15 @@ NO_PICTURE = 3
 _SIZE = struct.Struct(">II")
 
 
-def command(window: int, words: bool = False) -> list[str]:
-    """How to start the child for ``window`` (``words``: to read its words). In the
-    installed app, the terminal program, tycho.exe, whose stdout works even when
-    tycho-app.exe (no terminal) asks."""
+def command(window: int, words: bool = False, loop: bool = False) -> list[str]:
+    """How to start the child for ``window`` (``words``: to read its words; ``loop``: to
+    read them on request until stdin closes). In the installed app, the terminal
+    program, tycho.exe, whose stdout works even when tycho-app.exe (no terminal) asks."""
     if getattr(sys, "frozen", False):
-        flag = READ_FLAG if words else FLAG
+        flag = LOOP_FLAG if loop else READ_FLAG if words else FLAG
         return [str(Path(sys.executable).with_name("tycho.exe")), flag, str(window)]
-    return [sys.executable, "-m", "tycho.eyes.child", *([_WORDS] if words else []), str(window)]
+    extra = [_LOOP] if loop else [_WORDS] if words else []
+    return [sys.executable, "-m", "tycho.eyes.child", *extra, str(window)]
 
 
 Run = Callable[..., "subprocess.CompletedProcess[bytes]"]
@@ -127,6 +136,43 @@ def main_words(
     return _child(argv, frame, lambda image: encode(reader(image)))
 
 
+def main_words_loop(
+    argv: Sequence[str],
+    frame: Callable[[int], Image.Image] | None = None,
+    words: Callable[[Image.Image], Reading] | None = None,
+    stdin: BinaryIO | None = None,
+    stdout: BinaryIO | None = None,
+) -> int:
+    """The child: for each line on stdin, read the words on a new frame of the window
+    ``argv[0]`` names and answer on stdout (``ANSWER``, then the words or why not). Never
+    the frame. Ends when stdin closes."""
+    faulthandler.enable()
+    if sys.platform == "win32":
+        from tycho import win32
+
+        win32.no_crash_box()
+    try:
+        window = int(argv[0])
+    except (IndexError, ValueError) as e:
+        sys.stderr.write(f"{e}\n")
+        return NO_PICTURE
+    if frame is None:
+        from tycho.eyes.windows import frame_of
+
+        frame = frame_of
+    if words is None:
+        from tycho.eyes.ocr import read_words as words
+    asked, out = stdin or sys.stdin.buffer, stdout or sys.stdout.buffer
+    while asked.readline():
+        try:
+            status, sent = 0, encode(words(frame(window)))
+        except Exception as e:  # any error says why, and the child carries on
+            status, sent = 1, (str(e) or type(e).__name__).encode("utf-8", "replace")
+        out.write(ANSWER.pack(status, len(sent)) + sent)
+        out.flush()
+    return 0
+
+
 def _child(
     argv: Sequence[str],
     frame: Callable[[int], Image.Image] | None,
@@ -156,6 +202,8 @@ def _child(
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] == [_LOOP]:
+        sys.exit(main_words_loop(sys.argv[2:]))
     if sys.argv[1:2] == [_WORDS]:
         sys.exit(main_words(sys.argv[2:]))
     sys.exit(main(sys.argv[1:]))

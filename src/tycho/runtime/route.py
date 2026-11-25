@@ -73,6 +73,16 @@ class ScreenReader(Protocol):
     def read(self) -> Reading: ...
 
 
+@runtime_checkable
+class Warm(Protocol):
+    """A reader that can get ready before the map opens, and be put away after: one
+    route's looks then share one reading process (``eyes.loop``, #661). Blocking."""
+
+    def warm(self) -> None: ...
+
+    def finish(self) -> None: ...
+
+
 class Clicker(Protocol):
     """One left click at a spot in a frame of ``window`` (``frame`` is its size), only if
     that window is in front and the frame's size. Blocking. "" if it clicked, else why not."""
@@ -146,6 +156,9 @@ def plot(
             except Exception:  # a review tool never changes what the player hears
                 logging.getLogger(__name__).debug("The route record failed", exc_info=True)
         return Plotted(stop.status, stop.say, stop.detail, run.pressed, run.clicks, run.typed)
+    finally:
+        if isinstance(reader, Warm):  # one route's reading process ends with it
+            reader.finish()
     return Plotted("done", said, f"route plotted to {place.name}", run.pressed, run.clicks, True)
 
 
@@ -178,6 +191,8 @@ class _Run:
         if risky := self._risky_letter(name):
             detail = f"{risky} is on a key in the name, so it isn't typed"
             raise _Stop("refused", lines.bad_name.format(name=name), detail)
+        if isinstance(self.reader, Warm):  # starts reading while the map opens (#661)
+            self.reader.warm()
         mark = self.log.newest()
         self._press(presses[flow.nav])
         self._press(presses[flow.open_map])
@@ -298,14 +313,18 @@ class _Run:
         """The search box's words in a frame, once the log shows a seat too, or the last
         frame read when the time's up."""
         deadline = self.clock() + self.flow.open_seconds
-        reading, box = Reading(0, 0), None
+        reading, box, looks = Reading(0, 0), None, 0
         while True:
+            looks += 1
             try:
                 reading = self.last = self.reader.read()
                 box = reading.find(self.flow.search_box)
-            except CaptureError:
+            except CaptureError as e:
+                log.info("Map check, look %d: %s", looks, e)
                 box = None
             if (box is not None and self._seated(mark)) or self.clock() >= deadline:
+                if box is None:  # how many looks it had, for the log (#661)
+                    log.info("No search box in %d looks over %.1f s", looks, self.flow.open_seconds)
                 return box, reading
             self._wait(self.flow.read_every)
 

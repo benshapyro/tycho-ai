@@ -581,3 +581,30 @@ def test_a_record_that_breaks_still_ends_with_the_flows_own_line() -> None:
     done = _plot(Game(), "Port Tressler", record=broken)
     assert done.status == "failed"
     assert done.say
+
+
+@dataclass
+class _WarmGame(Game):
+    """A reader that gets ready before the map opens, and is put away after (#661)."""
+
+    warmed: list[bool] = field(default_factory=list[bool])
+    """Whether the map was open each time it was warmed."""
+    finished: int = 0
+
+    def warm(self) -> None:
+        self.warmed.append(self.map_open)
+
+    def finish(self) -> None:
+        self.finished += 1
+
+
+def test_one_reading_process_is_warmed_before_the_map_and_put_away_after() -> None:
+    game = _WarmGame()
+    assert _plot(game).status == "done"
+    assert (game.warmed, game.finished) == ([False], 1)
+
+
+def test_the_reading_process_is_put_away_when_a_route_fails_too() -> None:
+    game = _WarmGame()
+    assert _plot(game, "Port Tressler").status == "failed"
+    assert game.finished == 1
