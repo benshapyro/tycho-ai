@@ -14,6 +14,8 @@ Each kind of part is a boundary with a fake (ADR 4):
   built from the game's folder.
 - ``lookups``: the brain's look-up tools (``brain.lookups.Lookup``), built in a
   ``Workshop``.
+- ``places``: where a route may go (``packs.routes.Places``), named by a pack's
+  ``[route]`` table (#588).
 
 A game-state or look-up id maps to the function that builds it. Builders import their
 code when called, so start-up stays as fast.
@@ -29,6 +31,7 @@ from tycho.keybinds import Keybinds
 if TYPE_CHECKING:
     from tycho.brain.lookups import Lookup
     from tycho.packs.pack import GamePack
+    from tycho.packs.routes import Places
     from tycho.runtime.ports import GameState
     from tycho.settings import Settings
     from tycho.spoken_settings import Live
@@ -138,6 +141,8 @@ class Built:
 type GameStateBuilder = Callable[[Path], GameState]
 """Builds a game-state part from the game's folder."""
 type LookupBuilder = Callable[[Workshop], Built]
+type PlacesBuilder = Callable[[], Places]
+"""Builds the list of places a route may go to (``[route]``'s ``places``)."""
 
 
 def _not_built(*_: object) -> Built:
@@ -152,6 +157,8 @@ class Registry:
     keybinds: frozenset[str]
     game_state: Mapping[str, GameStateBuilder]
     lookups: Mapping[str, LookupBuilder]
+    places: Mapping[str, PlacesBuilder] = field(default_factory=dict[str, "PlacesBuilder"])
+    """Where a route's places come from (``packs.routes``, #588), by id."""
 
     def known(self, kind: Kind) -> frozenset[str]:
         match kind:

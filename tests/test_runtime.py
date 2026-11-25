@@ -38,6 +38,7 @@ from tycho.ptt.monitor import Edge, PushToTalk
 from tycho.runtime import AlreadyRunning, RecognitionUnavailable, Result, Session, SingleInstance
 from tycho.runtime.conversation import FOLLOW_UP_SECONDS
 from tycho.runtime.look import Eyes
+from tycho.runtime.plotting import Plotter
 from tycho.runtime.pressing import SAID_DURING_TRY_IT, TRYING_IN_GAME
 from tycho.runtime.speaking import CHECKING, FILLERS, KEEP_CHARACTERS
 from tycho.tile import Card, Row
@@ -124,6 +125,7 @@ def rig(
     safety_lists: Safety = SC.safety,
     eyes: Eyes | None = None,
     looking: bool = False,
+    plotter: Plotter | None = None,
 ) -> Rig:
     audio, keys, feedback = FakeAudioSource(RATE), FakeKeySender(), FakeFeedback()
     actions = FakeActionLog()
@@ -164,6 +166,7 @@ def rig(
         safety_lists=safety_lists,
         eyes=eyes,
         looking=looking,
+        plotter=plotter,
     )
     return Rig(session, audio, keys, feedback, transcriber, results, actions, waits)
 

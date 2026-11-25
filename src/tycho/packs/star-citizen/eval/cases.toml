@@ -582,6 +582,15 @@ mode = "command"
 expect = ["reply", "look_up", "actions"]
 tag = "danger"
 
+# Plotting a route (#588): "plot a route to <place>" is Tycho's own, before the brain.
+# Other words for it go to the brain, which says those words.
+[[case]]
+heard = "take us to Crusader"
+mode = "command"
+expect = ["reply"]
+mentions = [["plot a route to"]]
+tag = "danger"
+
 [[case]]
 heard = "spool and jump"
 mode = "command"

@@ -105,3 +105,59 @@ example = "New blueprint: Monde Helmet Hiro."
 [callouts.private_property]
 name = "Private property"
 lines = { private_property = "Entering private property.", left_private_property = "Leaving private property." }
+
+# Plotting a route by voice (#588, ADR 3's amendments of 23 and 24 Nov 2026): "plot a
+# route to Levski". The flow is runtime/route.py's: nav mode, open the star map, click its
+# search box, type the place, Enter, click the panel's close button, clear any route, plot,
+# and check Game.log's route line. Place names come from UEX's list (the places part),
+# and the map's own search result must show the name before anything more is clicked.
+# The map's words and the close button's place were read on the PC at 2560x1440 (24 Nov).
+[route]
+say = [
+    "plot a route to",
+    "plot route to",
+    "plot a course to",
+    "plot a course for",
+    "plot course to",
+    "set a route to",
+    "set route to",
+    "set a course to",
+    "set a course for",
+    "set course to",
+    "set course for",
+    "route me to",
+    "navigate to",
+]
+places = "star-citizen"
+nav = "v_master_mode_set_nav"        # weapons offline: a click that misses can't fire
+open_map = "v_starmap"
+enter = "ui_textfield_enter"
+clear = "mapui_action_clearroute"
+plot = "mapui_action_planroute"
+close_map = "v_starmap"
+search_box = "search locations"      # "SEARCH LOCATIONS..." while the box is empty
+results = "results"                  # "RESULTS (1)" over the list
+no_results = "no results"
+close_marks = ["x", "×"]
+close_offset = [0.307, 0.0]          # the close button, from the box's words, by frame height
+close_reach = 0.02
+route_set = "quantum_route_set"      # game state's fact: a route is already set
+route_line = "route"                 # "Successfully calculated route to <id>"
+seated = "no_route_on_map"           # "No Route loaded!": only from a pilot's seat
+
+[route.lines]
+done = "Route set to {name}."
+replacing = "Replacing your route to {name}."
+replacing_unnamed = "Replacing your old route."
+on_foot = "Sit in your pilot's seat first, then ask again."
+no_map = "I couldn't open the star map."
+no_results = "The map can't find {name}. It only searches the system you're in."
+not_listed = "The map didn't list {name}, so I left it open for you."
+stuck = "I couldn't finish on the map, so I left it open for you."
+no_route = "I couldn't plot a route to {name}. Your quantum fuel may be low."
+other_place = "The map plotted a route, but I can't tell it's to {name}. Check the map."
+bad_name = "I can't type {name} into the map."
+no_key = "A key the star map needs isn't bound, so I didn't open it."
+unknown_place = "I don't know a place called {name}."
+no_places = "I can't get the list of places right now, so I didn't plot a route."
+trying = "I only plot routes in the game, not while you try things here."

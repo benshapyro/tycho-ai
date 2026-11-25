@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from tycho.games.star_citizen.ship_lookup import ShipLookup
     from tycho.games.star_citizen.ships import ShipLibrary
     from tycho.packs import GamePack, Tile
+    from tycho.packs.routes import Places
     from tycho.runtime.ports import GameState
     from tycho.settings import Settings
 
@@ -299,6 +300,13 @@ def _trade(_: Workshop) -> Built:
     return Built(tuple(trade_lookups(UexApi())))
 
 
+def _places() -> Places:
+    from tycho.games.star_citizen.places import UexPlaces
+    from tycho.games.star_citizen.uex import UexApi
+
+    return UexPlaces(UexApi())
+
+
 def _settings(workshop: Workshop) -> Built:
     from tycho.spoken_settings import SettingsTool
 
@@ -419,4 +427,6 @@ BUILT_IN = Registry(
         HISTORY: _history,
         "web": _web,
     },
+    # games/star_citizen/places.py: UEX's list, until the game's own (#588).
+    places={"star-citizen": _places},
 )

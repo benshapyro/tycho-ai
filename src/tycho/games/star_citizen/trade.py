@@ -154,8 +154,8 @@ class Trade:
         """The most specific place the name matches, and any others it matches as well
         (a best guess among a few, #147). Raises ``TradeError`` when none matches, or
         more than ``GUESS_AMONG`` do ("Lagrange": name one)."""
-        key = _squash(PLACE_ALIASES.get(" ".join(normalize(asked)), asked))
-        key = _squash(" ".join(w for w in normalize(key) if w not in FILLER)) or key
+        named = PLACE_ALIASES.get(" ".join(normalize(asked)), asked)
+        key = squash(" ".join(w for w in normalize(named) if w not in FILLER)) or squash(named)
         if not key:
             raise TradeError("name a place")
         # The whole name first, everywhere ("Pyro" is the system, not "Pyro Gateway"),
@@ -165,7 +165,7 @@ class Trade:
                 values: dict[str, tuple[str, int]] = {}
                 for terminal in self.terminals.values():
                     value = _terminal_name(terminal) if field == "terminal" else terminal.get(field)
-                    if value and _place_matches(key, str(value), exact=exact):
+                    if value and place_matches(key, str(value), exact=exact):
                         id_field = "id" if field == "terminal" else _id_field(field)
                         values.setdefault(str(value), (id_field, int(terminal.get(id_field) or 0)))
                 if len(values) > GUESS_AMONG:
@@ -303,12 +303,12 @@ def _score(said: list[str], name: list[str], code: str) -> float:
     return name_score(said, name)
 
 
-def _squash(text: str) -> str:
+def squash(text: str) -> str:
     return "".join(normalize(text))
 
 
-def _place_matches(key: str, value: str, *, exact: bool) -> bool:
-    name = _squash(value)
+def place_matches(key: str, value: str, *, exact: bool) -> bool:
+    name = squash(value)
     if exact:
         return key == name
     return (len(key) >= 4 and key in name) or (len(key) >= 5 and similarity(key, name) >= 0.85)

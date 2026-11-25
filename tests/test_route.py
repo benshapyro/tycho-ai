@@ -20,7 +20,8 @@ from tycho.input import Presser
 from tycho.input.keys import Code, code_for
 from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.packs import STAR_CITIZEN, as_run, built_in
-from tycho.runtime.route import Place, Plotted, RouteFlow, RouteLines, id_names, plot
+from tycho.packs.routes import RouteFlow, RouteLines
+from tycho.runtime.route import Place, Plotted, id_names, plot
 from tycho.situation import Logged
 
 SC = built_in(STAR_CITIZEN)

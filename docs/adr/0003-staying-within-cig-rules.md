@@ -75,3 +75,21 @@ Some "power user" automation requests will be declined by design.
 - The pack's route flow becomes: NAV, open the map, find the box, click it, type, Enter, check the result, click close, then C (`mapui_action_clearroute`) if a route is already set (the game won't plot over one: maintainer, 24 November 2026), R, check the log, close the map (F). C is the player's own keybind, like R. Saying "plot a route to X" counts as asking to replace the current route, and Tycho says "Replacing your route to Y."
 - The route line names the game's internal id (`levski_all-001`, `rs_ext_pyro3_leo`). The per-patch game data has to map each id to its shown name, so that "Route set to Levski" is said only when the id matches.
 - The PC test still needs a second resolution and UI scale, to show that the close button's offset from the box holds.
+
+## Amendment, 25 November 2026: place names from UEX, checked by the map
+
+*Status: proposed. The maintainer chose UEX's list on 24 November 2026 ("UEX list, checked by the map", [#588](https://github.com/benshapyro/tycho-ai/issues/588)); this text waits for the maintainer's OK.*
+
+**Context.** The morning amendment says names come from the game's own list, and the evening one that the route line's id is checked against that patch's game data. Tycho can't read either yet. UEX's terminal list has the names of the cities, stations, outposts, moons and planets the map plots to.
+
+**Decision.**
+
+- **Names come from UEX's list until Tycho reads the game's own.** Only cities, stations, outposts, points of interest, moons and planets: never a shop's terminal, an orbit or a whole system. A name that matches nothing, or more than four places, is never typed: Tycho says "I don't know a place called X."
+- **The map's own result decides.** After Enter, the frame must show the typed name among the search results, under the box, before the close button is clicked. A name UEX has and the map doesn't ends there, with nothing more pressed.
+- **The route line's id is checked by its words.** Until there's a list of ids, the plotted route counts as done only when one of the place's own words (at least 3 letters, not "station" or "port") is a word of the id (`levski_all-001` names Levski). Anything else is reported as not checked, never as done.
+- **The player's words start it, not the brain.** Only a request that starts with one of the pack's route phrases ("plot a route to Levski") plots. The brain has no tool for it: for "take us to Crusader" it says which words to use.
+- **The map closes with the key that opened it** (`v_starmap`), not F.
+
+**Consequences.**
+- When Tycho can read the game's own place and id lists, they replace UEX's and the word check.
+- The first route request fetches UEX's terminal list (two requests), as a trade question does.

@@ -61,6 +61,7 @@ from tycho.runtime.planning import (
     plan_request,
     toggle_receipt,
 )
+from tycho.runtime.plotting import Plotter
 from tycho.runtime.ports import (
     ActionLog,
     Brain,
@@ -119,20 +120,16 @@ class Session:
         safety_lists: Safety,
         eyes: Eyes | None = None,
         looking: bool = False,
+        plotter: Plotter | None = None,
     ) -> None:
-        """``safety_lists``: the pack's lists for the gate (ADR 18). ``eyes``, ``looking``: #31."""
-        self._eyes, self._looking = eyes, looking
+        """``safety_lists``: the gate's lists (ADR 18). ``eyes``, ``looking``: #31. Routes: #588."""
+        self._eyes, self._looking, self._plotter = eyes, looking, plotter
         self._safety_lists = safety_lists
-        self._tail_seconds = tail_seconds
-        self._tail_pending = False
-        self._audio = audio
-        self._ptt = push_to_talk
-        self._transcriber = transcriber
-        self._lexicon = lexicon
-        self._matcher = matcher
-        self._keybinds = keybinds
-        self._presser = presser
-        self._feedback = feedback
+        self._tail_seconds, self._tail_pending = tail_seconds, False
+        self._audio, self._ptt = audio, push_to_talk
+        self._transcriber, self._lexicon = transcriber, lexicon
+        self._matcher, self._keybinds = matcher, keybinds
+        self._presser, self._feedback = presser, feedback
         self._game_state = game_state
         self._reporter = Reporter(log_transcripts=log_transcripts, action_log=action_log)
         self._brain = brain
@@ -366,6 +363,9 @@ class Session:
         question, self._question = self._question, None
         if question is not None and self._display is not None:
             self._display.answered()
+        if self._plotter is not None and (place := self._plotter.asked(text)) is not None:
+            status, detail = await self._plotter.answer(place, self._keys, cancel, trying, progress)
+            return progress.result(request, status, trace, heard, text, detail)
         routed = route(
             text,
             self._matcher,

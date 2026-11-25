@@ -235,9 +235,14 @@ def _start(
     opens the window once listening, on setup's Try it (ADR 17)."""
     from tycho.address import Address, Pronouncing
     from tycho.audio.microphone import Microphone
-    from tycho.eyes.windows import WindowsCamera
+    from tycho.eyes.windows import WindowsCamera, WindowsScreenReader
     from tycho.feedback import SoundDevicePlayer, SoundFeedback
-    from tycho.input.windows import GAME_EXECUTABLE, WindowsFocusCheck, WindowsKeySender
+    from tycho.input.windows import (
+        GAME_EXECUTABLE,
+        WindowsClicker,
+        WindowsFocusCheck,
+        WindowsKeySender,
+    )
     from tycho.runtime.actionlog import FileActionLog
     from tycho.tile import record as tile_record
     from tycho.tile.cards import notice
@@ -329,6 +334,8 @@ def _start(
             address=address,
             display=display,
             camera=WindowsCamera(pack.window) if pack.window and pack.look else None,
+            reader=WindowsScreenReader(pack.window) if pack.window and pack.route else None,
+            clicker=WindowsClicker() if pack.route else None,
             pack=pack,
             on_result=ended,
         )

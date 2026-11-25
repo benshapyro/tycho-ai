@@ -33,7 +33,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from tycho.commands import Command
 from tycho.eyes import CaptureError
@@ -43,6 +43,7 @@ from tycho.input.keys import Code, UnsupportedKey, code_for
 from tycho.input.plan import TAP_SECONDS, Press
 from tycho.keybinds import Keybinds
 from tycho.packs import Safety
+from tycho.packs.routes import RouteFlow
 from tycho.runtime.messages import Status
 from tycho.runtime.planning import Refusal, Steps, plan_request
 from tycho.safety import is_confirm_grade
@@ -72,6 +73,7 @@ class Clicker(Protocol):
     def click(self, window: int, frame: tuple[int, int], x: int, y: int) -> str: ...
 
 
+@runtime_checkable
 class RouteLog(Protocol):
     """What the route flow reads from the game's log (``GameLog``). Blocking."""
 
@@ -80,63 +82,6 @@ class RouteLog(Protocol):
     def last(self, kind: str) -> Logged | None: ...
 
     def newest(self) -> int: ...
-
-
-@dataclass(frozen=True, slots=True)
-class RouteLines:
-    """What Tycho says at each end, in the pack's words. ``{name}`` is the place's."""
-
-    done: str
-    replacing: str
-    """Said before the new route's line when one was already set ({name} is its place)."""
-    replacing_unnamed: str
-    """The same, when the old route's place has no name Tycho knows."""
-    on_foot: str
-    no_map: str
-    no_results: str
-    not_listed: str
-    stuck: str
-    no_route: str
-    other_place: str
-    bad_name: str
-
-
-@dataclass(frozen=True, slots=True)
-class RouteFlow:
-    """A pack's route flow (ADR 3: only a built-in pack may declare one)."""
-
-    nav: str
-    open_map: str
-    enter: str
-    clear: str
-    plot: str
-    close_map: str
-    search_box: str
-    """The search box's words while it's empty ("SEARCH LOCATIONS...")."""
-    results: str
-    """A word over the search results once something is typed ("RESULTS (1)")."""
-    no_results: str
-    close_offset: tuple[float, float]
-    """Where the panel's close button is from the middle of the search box's words, as
-    fractions of the frame's height (the panel scales with it)."""
-    close_marks: tuple[str, ...]
-    """What text recognition may read the close button as ("x", "\u00d7")."""
-    close_reach: float
-    """How near, as a fraction of the frame's height, the read mark must be."""
-    lines: RouteLines
-    route_set: str
-    """The fact for a route already set (the game state's)."""
-    route_line: str
-    """The kind of log line for a plotted route, whose ``name`` is the place's id."""
-    seated: str
-    """The kind of log line that only comes from a pilot's seat with the map open."""
-    open_seconds: float = 3.0
-    """How long the map may take to show its search box (ADR 3: at most 3 s)."""
-    route_seconds: float = 4.0
-    """How long the log may take to write the route line after the plot key."""
-    beat_seconds: float = 0.3
-    """After a key or click, for the game to act on it before the next one."""
-    read_every: float = 0.25
 
 
 @dataclass(frozen=True, slots=True)
@@ -261,7 +206,8 @@ class _Run:
             command = Command(id=f"route:{action}", say=(), actions=(action,))
             planned = plan_request((command,), self.keybinds, lists=self.lists)
             if isinstance(planned, Refusal):
-                raise _Stop(planned.status, planned.detail, planned.detail)
+                say = self.flow.lines.no_key if planned.status == "no_key" else planned.detail
+                raise _Stop(planned.status, say, planned.detail)
             if not isinstance(planned, Steps) or len(planned.presses) != 1:
                 raise _Stop("refused", "", f"{action} would need a confirmation")
             presses[action] = planned.presses[0][1]
