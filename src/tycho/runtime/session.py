@@ -1,12 +1,9 @@
 """The talking loop: hold push-to-talk, speak, and Tycho presses the right keys (ADR 11).
 
-One asyncio loop coordinates; nothing blocking runs on it: push-to-talk is polled on
-its own thread (``listening``), transcription has one worker thread, and key presses
-have another, so only one press happens at a time (``pressing``).
-
-One request at a time. Pressing push-to-talk again cancels whatever is in flight, and
-a key sequence stops within about 10 ms with every key released; Tycho stops talking
-at once too (``speaking``, which also says who speaks when, ADR 14).
+Nothing blocking runs on the asyncio loop: push-to-talk is polled on its own thread
+(``listening``), and transcription and key presses have a worker thread each (``pressing``).
+One request at a time: push-to-talk cancels what's in flight, every key released within
+about 10 ms, and stops Tycho talking (``speaking``, which says who speaks when, ADR 14).
 
 The session keeps the threads, cancellation, barge-in and the confirm question (ADR 13).
 Where words go is ``routing``, what gets pressed is ``planning`` (both pure, so the eval
@@ -79,6 +76,7 @@ from tycho.runtime.tiling import tile_request, to_tile
 from tycho.tile.cards import notice
 
 log = logging.getLogger(__name__)
+type Job = tuple[threading.Event, bool, Progress, int, Trace, str, str]  # for _plot
 
 
 MIN_CLIP_SECONDS = 0.25
@@ -123,7 +121,7 @@ class Session:
     ) -> None:
         """``safety_lists``: the gate's lists (ADR 18). ``eyes``, ``looking``: #31. Routes: #588."""
         self._eyes, self._looking, self._plotter = eyes, looking, plotter
-        self._safety_lists = safety_lists
+        self._safety_lists, self._confirm_seconds = safety_lists, confirm_seconds
         self._tail_seconds, self._tail_pending = tail_seconds, False
         self._audio, self._ptt = audio, push_to_talk
         self._transcriber, self._lexicon = transcriber, lexicon
@@ -140,7 +138,6 @@ class Session:
         times = Times(brain_seconds, search_seconds, search_limit, looking_seconds, looking_limit)
         lately, voice, may = self._conversation.follow_ups, self._voice, bool(eyes and looking)
         self._asker = Asker(brain, times, matcher, safety_lists, voice, keybinds, lately, may)
-        self._confirm_seconds = confirm_seconds
         self._question: Question | None = None
         self._samplerate, self._on_result = samplerate, on_result
         self._address = address
@@ -148,15 +145,12 @@ class Session:
         self._display, self._poll_interval, self._clock = display, poll_interval, clock
         self._sleep = sleep
         """The wait between a sequence's steps; tests pass one that only records it (#61)."""
-        self._ids = itertools.count(1)
-        self._listening = False
+        self._ids, self._listening = itertools.count(1), False
         self._current: asyncio.Task[Result] | None = None
         self._cancel = threading.Event()
         self._stt = ThreadPoolExecutor(1, thread_name_prefix="tycho-stt")
         self._keys = ThreadPoolExecutor(1, thread_name_prefix="tycho-keys")
-        self._closed = False
-        self._paused = False
-        self._trying = False
+        self._closed = self._paused = self._trying = False
 
     def try_it(self, on: bool) -> bool:
         """Setup's Try it (ADR 17): plan presses, send none. A change drops a question."""
@@ -223,8 +217,7 @@ class Session:
             return
         if edge is Edge.PRESSED:
             if self._paused:
-                # Paused means nothing new starts. Push-to-talk still stops whatever
-                # is running, as it always does: a key sequence, or Tycho talking.
+                # Paused, nothing new starts, but push-to-talk still stops what's running.
                 self._cancel_current()
                 self._voice.stop()
                 return
@@ -250,8 +243,7 @@ class Session:
             self._tail_pending = True
             if self._display is not None:
                 self._display.thinking()
-            # Try it is decided now, as the button is let go (#467): switching to the
-            # game while the brain thinks mustn't turn a try into a real press.
+            # Try it is decided as the button is let go (#467), never later.
             self._current = asyncio.create_task(self._serve(next(self._ids), self._trying))
 
     async def idle(self) -> Result | None:
@@ -356,9 +348,10 @@ class Session:
         question, self._question = self._question, None
         if question is not None and self._display is not None:
             self._display.answered()
+        said = (request, trace, heard, text)
+        job: Job = (cancel, trying, progress, *said)
         if self._plotter is not None and (place := self._plotter.asked(text)) is not None:
-            status, detail = await self._plotter.answer(place, self._keys, cancel, trying, progress)
-            return progress.result(request, status, trace, heard, text, detail)
+            return await self._plot(place, job)
         routed = route(
             text,
             self._matcher,
@@ -370,7 +363,6 @@ class Session:
         trace.mark("match")
         if isinstance(routed, Reserved):
             word = routed.word
-            said = (request, trace, heard, text)
             if word == "say_again":
                 line, now = self._conversation.last_line, self._clock()
                 answer = say_again(line, question, now, self._confirm_seconds)
@@ -378,6 +370,8 @@ class Session:
                 return answer.result(*said)
             if word == "confirm" or word == "cancel":
                 answer = answered(word, question, self._clock())
+                if isinstance(answer, Question) and answer.route:  # a guessed place (#650)
+                    return await self._plot(answer.route, job, sure=True)
                 if isinstance(answer, Answer):
                     progress.commands = answer.commands
                     return progress.result(
@@ -404,10 +398,7 @@ class Session:
             trace.mark("brain")
             plain = seen is None and isinstance(picked, Reply) and not picked.looked_up
             if self._plotter is not None and (place := self._plotter.handed(plain)):  # #647
-                status, detail = await self._plotter.answer(
-                    place, self._keys, cancel, trying, progress
-                )
-                return progress.result(request, status, trace, heard, text, detail)
+                return await self._plot(place, job)
             if isinstance(picked, Reply):
                 progress.answered(picked.text, picked.card, picked.looked_up)
                 return progress.result(request, "replied", trace, heard, text)
@@ -460,8 +451,8 @@ class Session:
             still_trying=lambda: self._trying,
         )
         if status == "done" and planned.toggled and not trying and not progress.announced:
-            said = toggle_receipt(planned.toggled, progress.say, others=planned.others)
-            progress.say, progress.toggled = said, True
+            line = toggle_receipt(planned.toggled, progress.say, others=planned.others)
+            progress.say, progress.toggled = line, True
         return end(status, detail)
 
     def _report(self, result: Result) -> None:
@@ -481,6 +472,16 @@ class Session:
         self._voice.tell(result, self._feedback, speak=speak, keys_off=keys_off)
         if self._on_result is not None:
             self._on_result(result)
+
+    async def _plot(self, place: str, job: Job, sure: bool = False) -> Result:
+        """A route (#588). A guessed place is a confirm question first, like any (#650)."""
+        plotter, (cancel, trying, progress, request, trace, heard, text) = self._plotter, job
+        assert plotter is not None  # noqa: S101 - only called with a plotter
+        status, detail = await plotter.answer(place, self._keys, cancel, trying, progress, sure)
+        if status == "asking":
+            deadline = self._clock() + self._confirm_seconds
+            self._question = Question(request, (), deadline, route=plotter.asking.name)
+        return progress.result(request, status, trace, heard, text, detail)
 
     def busy(self) -> bool:
         """Whether speaking up now would talk over someone (#4): push-to-talk is held, a

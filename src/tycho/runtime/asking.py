@@ -67,6 +67,8 @@ class Question:
     deadline: float
     by_brain: bool = False
     say: str = ""
+    route: str = ""
+    """A guessed place to plot on "confirm", in place of the commands (#650)."""
 
 
 async def ask_brain(
@@ -199,7 +201,9 @@ def answered(word: str, question: Question | None, now: float) -> Answer | Quest
             return Answer("done", detail, commands=("cancel",))
         return Answer("not_understood", detail)
     if word == "cancel":
-        asked = "+".join(command.id for command in question.commands)
+        asked = (
+            "+".join(command.id for command in question.commands) or f"route to {question.route}"
+        )
         # "cancel" is never logged as the cancelled command
         return Answer("done", f"cancelled #{question.request} ({asked})", commands=("cancel",))
     return question

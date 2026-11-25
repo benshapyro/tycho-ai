@@ -464,48 +464,68 @@ def test_a_guessed_place_is_asked_about_and_nothing_is_pressed() -> None:
     assert not game.nav
 
 
-def test_confirm_plots_the_place_tycho_asked_about() -> None:
-    game = Game()
-    plotter = _plotter(game)
-    assert _answer(plotter, "lefski")[0] == "asking"
-    place = plotter.asked("confirm")
-    assert place == "Levski"
-    status, _detail, progress = _answer(plotter, place)
-    assert (status, progress.say) == ("done", LINES.done.format(name="Levski"))
-    assert game.route_id == "levski_all-001"
-
-
-def test_other_words_end_the_question() -> None:
-    plotter = _plotter(Game())
-    _answer(plotter, "lefski")
-    assert plotter.asked("landing gear") is None
-    assert plotter.asked("confirm") is None
-
-
-def test_a_late_confirm_plots_nothing() -> None:
-    now = [0.0]
-    plotter = _plotter(Game(), clock=lambda: now[0], confirm_seconds=5.0)
-    _answer(plotter, "lefski")
-    now[0] = 6.0
-    assert plotter.asked("confirm") is None
-
-
-def test_the_session_asks_then_plots_on_confirm() -> None:
+def _session(*said: str) -> tuple[list[Result], Game]:
     game = Game()
 
     async def scenario() -> list[Result]:
-        r = rig("plot a route to lefski", "confirm", plotter=_plotter(game))
-        r.say()
-        first = await r.session.idle()
-        r.say()
-        second = await r.session.idle()
+        r = rig(*said, plotter=_plotter(game))
+        results: list[Result] = []
+        for _ in said:
+            r.say()
+            if (result := await r.session.idle()) is not None:
+                results.append(result)
         await r.session.close()
-        return [result for result in (first, second) if result is not None]
+        return results
 
-    asked, plotted = run(scenario)
+    return run(scenario), game
+
+
+def test_the_session_asks_then_plots_on_confirm() -> None:
+    (asked, plotted), game = _session("plot a route to lefski", "confirm")
     assert (asked.status, asked.question) == ("asking", "Plot a route to Levski? Say confirm.")
     assert (plotted.status, plotted.say) == ("done", LINES.done.format(name="Levski"))
+    assert plotted.commands == (ROUTE,)
     assert game.route_id == "levski_all-001"
+
+
+def test_other_words_end_the_route_question() -> None:
+    (_asked, _other, confirmed), game = _session("plot a route to lefski", "hello", "confirm")
+    assert confirmed.status == "not_understood"
+    assert not game.nav
+
+
+def test_cancel_ends_the_route_question() -> None:
+    (asked, cancelled), game = _session("plot a route to lefski", "cancel")
+    assert asked.status == "asking"
+    assert (cancelled.status, cancelled.detail) == ("done", "cancelled #1 (route to Levski)")
+    assert not game.nav
+
+
+def test_say_that_again_asks_the_route_question_again() -> None:
+    results, game = _session("plot a route to lefski", "say that again", "confirm")
+    asked, again, plotted = results
+    assert (again.status, again.question) == ("asking", asked.question)
+    assert plotted.status == "done"
+    assert game.route_id == "levski_all-001"
+
+
+def test_a_late_confirm_plots_nothing() -> None:
+    now, game = [100.0], Game()
+
+    async def scenario() -> Result | None:
+        r = rig("plot a route to lefski", "confirm", clock=lambda: now[0], plotter=_plotter(game))
+        r.say()
+        await r.session.idle()
+        now[0] += 60.0
+        r.say()
+        late = await r.session.idle()
+        await r.session.close()
+        return late
+
+    late = run(scenario)
+    assert late is not None
+    assert late.status == "not_understood"
+    assert not game.nav
 
 
 @pytest.mark.parametrize(
