@@ -495,8 +495,9 @@ def test_other_words_end_the_route_question() -> None:
 
 
 def test_cancel_ends_the_route_question() -> None:
-    (_asked, cancelled), game = _session("plot a route to lefski", "cancel")
-    assert cancelled.status == "done"
+    (asked, cancelled), game = _session("plot a route to lefski", "cancel")
+    assert asked.status == "asking"
+    assert (cancelled.status, cancelled.detail) == ("done", "cancelled #1 (route to Levski)")
     assert not game.nav
 
 

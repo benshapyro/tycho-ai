@@ -206,7 +206,7 @@ class Plotter:
             progress.say = lines.unknown_place.format(name=said)
             return "not_understood", f"no place called {said!r}"
         if not sure and self.places.guessed(said, name):  # #650: ask first
-            asking = (lines.confirm.format(name=name),)
+            asking = (lines.confirm.format(name=name).rstrip("?"),)  # "? Say confirm." follows
             self.asking.name, progress.question = (
                 name,
                 Questions((), asking).question(self.address()),
