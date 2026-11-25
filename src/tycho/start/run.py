@@ -327,8 +327,8 @@ def _start(
             focus=WindowsFocusCheck(pack.window or GAME_EXECUTABLE),
             feedback=feedback,
             action_log=action_log,
-            make_brain=lambda matcher: load_brain(
-                matcher, current, live, address, display, pack=pack
+            make_brain=lambda matcher, extra: load_brain(
+                matcher, current, live, address, display, pack=pack, extra=extra
             ),
             speaker=speaker,
             address=address,

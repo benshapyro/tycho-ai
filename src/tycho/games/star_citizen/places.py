@@ -24,7 +24,7 @@ from tycho.games.star_citizen.trade import (
 )
 from tycho.games.star_citizen.wiki import WikiError, WikiSource
 from tycho.packs.routes import PlaceError
-from tycho.text import normalize
+from tycho.text import normalize, similarity
 
 log = logging.getLogger(__name__)
 
@@ -86,7 +86,41 @@ def best_place(terminals: Iterable[Mapping[str, Any]], said: str) -> str | None:
                 return None
             if found:
                 return found[0]
-    return None
+    return _sounds_like(rows, key)
+
+
+SOUNDS = ((r"ph", "f"), (r"ck", "k"), (r"w", "v"), (r"f", "v"), (r"y", "i"), (r"z", "s"))
+"""Letters speech-to-text swaps for one another in a name it doesn't know ("Lewski",
+"Lefsky" for Levski: #647)."""
+SOUNDS_ALIKE = 0.8
+"""How alike, letter for letter, a misheard name and the place's must sound."""
+
+
+def _sounds_like(rows: list[Mapping[str, Any]], key: str) -> str | None:
+    """The one place whose name sounds most like ``key`` ("dlevsky" is Levski), if
+    it's alike enough and nothing else is as close. The map's own search still has to
+    list it before anything is clicked."""
+    heard = _sound(key)
+    if len(heard) < 5:
+        return None
+    scored: dict[str, float] = {}
+    for row in rows:
+        for field in ROUTE_FIELDS:
+            if value := row.get(field):
+                scored[str(value)] = similarity(heard, _sound(squash(str(value))))
+    ranked = sorted(scored.items(), key=lambda pair: -pair[1])
+    if not ranked or ranked[0][1] < SOUNDS_ALIKE:
+        return None
+    if len(ranked) > 1 and ranked[1][1] >= ranked[0][1] - 0.05:
+        log.debug("%r sounds like %s and %s", key, ranked[0][0], ranked[1][0])
+        return None
+    return ranked[0][0]
+
+
+def _sound(text: str) -> str:
+    for letters, sound in SOUNDS:
+        text = re.sub(letters, sound, text)
+    return re.sub(r"(.)\1+", r"\1", text)
 
 
 def _fits(key: str, whole: str, value: str, *, exact: bool) -> bool:

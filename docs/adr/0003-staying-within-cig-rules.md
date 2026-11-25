@@ -93,3 +93,19 @@ Some "power user" automation requests will be declined by design.
 **Consequences.**
 - When Tycho can read the game's own place and id lists, they replace UEX's and the word check.
 - The first route request fetches UEX's terminal list (two requests), as a trade question does.
+
+## Amendment, 25 November 2026: misheard requests, and the brain may hand over a place
+
+*Status: proposed ([#647](https://github.com/benshapyro/tycho-ai/issues/647)). Needs the maintainer's OK.*
+
+**Context.** In the first test in Nyx, speech-to-text heard "Plotta Route to Lewski" and "Pona route to Dlevsky". Neither started with a route phrase, so both went to the brain, which had no tool: it said "Plotting a route to Levski." and nothing happened. The player had to repeat himself, and Tycho claimed something it hadn't done.
+
+**Decision.** This replaces "The player's words start it, not the brain" above.
+
+- **Misheard phrases still count.** The words before the phrase's last word ("to") may be heard a little wrong ("plotta route", "pona route"), as long as the first word doesn't make it a question ("best route to sell gold", "fastest route to Pyro"). Words that ask for more than a route ("to Hurston and spool up") go to the brain whole.
+- **A misheard place is the one it sounds like**, when one place sounds clearly closer than any other ("Lewski", "Dlevsky" are Levski). The map's own result still has to show it before anything more is clicked.
+- **The brain may hand over a place, and nothing more.** For a route asked in other words ("take us to Crusader"), the brain's `plot_route` tool only names the place. Once the brain is done, Tycho runs the same flow as for the phrase, with the same gate, the map's own search and the log check. Tycho's own line says how it went; the brain's words are dropped, so it can't claim a route.
+- **The brain never names the player's system from a guess.** Only the request's situation says where the player is; a home base in their notes doesn't.
+
+**Consequences.**
+- Brain eval cases: "take us to Crusader", "Pona route to Dlevsky" and "a course over to Lorville" use `plot_route` and never say a route is set; "which system am I in" with a home base note never says Stanton.

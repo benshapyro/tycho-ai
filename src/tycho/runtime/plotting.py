@@ -9,19 +9,21 @@ key thread, through the safety gate, one step at a time (``runtime/route.py``).
 
 import asyncio
 import functools
+import json
 import logging
 import threading
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import Executor
 from dataclasses import dataclass
 
+from tycho.brain.lookups import LookupResult, failure
 from tycho.input import Presser
 from tycho.keybinds import Keybinds
 from tycho.packs import Safety
 from tycho.packs.routes import PlaceError, Places, Route
 from tycho.runtime.messages import Progress, Status
 from tycho.runtime.route import Clicker, Place, RouteLog, ScreenReader, plot
-from tycho.text import normalize
+from tycho.text import normalize, similarity
 
 log = logging.getLogger(__name__)
 
@@ -37,20 +39,94 @@ FILLER = frozenset(
 ("Tycho, plot a route to Levski please")."""
 
 
+HEARD_ALIKE = 0.75
+"""How alike, letter for letter, the words before the phrase's last word must be to
+the phrase's: "plotta route to" and "pona route to" are "plot a route to" misheard
+(#647)."""
+NOT_A_REQUEST = frozenset(
+    {"best", "fastest", "quickest", "shortest", "safest", "cheapest", "longest", "nearest"}
+    | {"closest", "good", "great", "trade", "trading", "mining", "cargo", "delivery"}
+    | {"a", "an", "the", "any", "another", "what", "which", "how", "where", "why", "when"}
+)
+"""First words that make it a question about a route, not a request for one ("best
+route to sell gold": "best" is one letter from "set")."""
+
+
 def asked_place(text: str, phrases: Sequence[str]) -> str | None:
     """The place, if ``text`` starts with one of ``phrases`` (after ``FILLER``) and
-    names one after it: "plot a route to Area 18" is "area 18". None otherwise."""
+        names one after it: "plot a route to Area 18" is "area 18". The phrase may be
+        misheard, but its last word ("to") must be there, and its first word mustn't make
+        it a question (``NOT_A_REQUEST``). None otherwise, and for more than a route ("to
+    Hurston and spool up"), which the brain hears whole."""
     words = normalize(text)
     while words and words[0] in FILLER:
         words.pop(0)
+    if not words or words[0] in NOT_A_REQUEST:
+        return None
     for phrase in phrases:
-        wanted = normalize(phrase)
-        if wanted and words[: len(wanted)] == wanted:
-            rest = words[len(wanted) :]
+        if (used := _heard(words, normalize(phrase))) is not None:
+            rest = words[used:]
             while rest and rest[-1] in FILLER:
                 rest.pop()
+            if "and" in rest or "then" in rest:  # more than a route: the brain's (#647)
+                return None
             return " ".join(rest) or None
     return None
+
+
+def _heard(words: list[str], phrase: list[str]) -> int | None:
+    """How many of ``words`` say ``phrase``, exactly or misheard, if they do."""
+    if not phrase:
+        return None
+    if words[: len(phrase)] == phrase:
+        return len(phrase)
+    *before, last = phrase
+    for used in range(max(2, len(phrase) - 1), len(phrase) + 2):
+        if used < len(words) and words[used - 1] == last:
+            said = "".join(words[: used - 1])
+            if similarity(said, "".join(before)) >= HEARD_ALIKE:
+                return used
+    return None
+
+
+class RouteTool:
+    """The brain's ``plot_route`` (#647): for a route asked in words the phrases missed.
+    It only hands the place over. The session plots once the brain is done, whatever it
+    decided, through the same flow, so the gate, the map's own search and the log still
+    decide, and Tycho's line says how it went, never the brain's."""
+
+    name = "plot_route"
+    instant = True
+
+    def __init__(self, description: str) -> None:
+        self.description = description
+        self.input_schema: Mapping[str, object] = {
+            "type": "object",
+            "properties": {
+                "place": {
+                    "type": "string",
+                    "description": "The place, spelt as the game spells it (Levski, Area 18)",
+                }
+            },
+            "required": ["place"],
+            "additionalProperties": False,
+        }
+        self.place: str | None = None
+
+    async def prepare(self) -> None:
+        return None
+
+    async def run(self, arguments: Mapping[str, object]) -> LookupResult:
+        place = " ".join(str(arguments.get("place", "")).split())[:60]
+        if not place:
+            return failure("name the place")
+        self.place = place
+        said = 'Tycho plots it after your reply and says how it went: reply "On it." only'
+        return LookupResult(json.dumps({"handed_over": place, "reply": said}))
+
+    def take(self) -> str | None:
+        place, self.place = self.place, None
+        return place
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,10 +142,19 @@ class Plotter:
     keybinds: Callable[[], Keybinds]
     lists: Safety
     presser: Presser
+    tool: RouteTool | None = None
+    """The brain's way to ask for a route, if the pack gives it one."""
 
     def asked(self, text: str) -> str | None:
-        """The place the player asked for a route to, if they did."""
+        """The place the player asked for a route to, if they did. A new request:
+        anything the brain handed over for an earlier one is dropped."""
+        if self.tool is not None:
+            self.tool.take()
         return asked_place(text, self.route.say)
+
+    def handed(self) -> str | None:
+        """The place the brain handed over in this request, if it did."""
+        return self.tool.take() if self.tool is not None else None
 
     async def answer(
         self,

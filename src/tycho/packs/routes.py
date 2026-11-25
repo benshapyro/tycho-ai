@@ -108,11 +108,14 @@ class Route:
     places: str
     """The built-in part that lists the places (``Registry.places``)."""
     flow: RouteFlow
+    tool: str = ""
+    """What the brain's ``plot_route`` tool says it's for, in the game's words (#647):
+    the brain hands Tycho the place when the words missed ``say``. None: no tool."""
 
 
 _ACTIONS = ("nav", "open_map", "enter", "clear", "plot", "close_map")
 _WORDS = ("search_box", "results", "no_results", "route_set", "route_line", "seated")
-_KEYS = frozenset({"say", "places", "close_offset", "close_marks", "close_reach", "lines"})
+_KEYS = frozenset({"say", "places", "close_offset", "close_marks", "close_reach", "lines", "tool"})
 _LINES = frozenset(f.name for f in fields(RouteLines))
 _REQUIRED_LINES = frozenset(f.name for f in fields(RouteLines) if f.default is MISSING)
 
@@ -172,7 +175,10 @@ def read(
         close_reach=float(cast(float, reach)),
         lines=_lines(table.get("lines"), f"{where} lines"),
     )
-    return Route(say, places, flow)
+    tool = table.get("tool", "")
+    if not isinstance(tool, str):
+        raise ValueError(f"{where}: tool must be some text")
+    return Route(say, places, flow, " ".join(tool.split()))
 
 
 def _lines(value: object, where: str) -> RouteLines:
