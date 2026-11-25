@@ -339,14 +339,18 @@ class _Run:
         flow = self.flow
         for _ in range(SETTLE_LOOKS):
             self._wait(flow.settle_seconds)
-            reading = self._fresh()
+            try:
+                reading = self.last = self.reader.read()
+            except CaptureError as e:  # one bad look is one of the looks (review of #670)
+                log.info("Map check, settling: %s", e)
+                continue
             now = reading.find(flow.search_box)
-            if now is None:
-                raise _Stop("failed", flow.lines.no_map, "the map's search box went away")
+            if now is None:  # missed over the moving map, or gone: look again
+                continue
             if _near(_middle(now), _middle(box), _STILL * reading.height):
                 return now, reading
             box = now
-        raise _Stop("failed", flow.lines.no_map, "the map's search box kept moving")
+        raise _Stop("failed", flow.lines.no_map, "the map's search box didn't sit still")
 
     def _seated(self, mark: int) -> bool:
         if self.flow.route_set in self.log.facts():

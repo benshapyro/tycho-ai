@@ -319,6 +319,14 @@ SPACE = [
     {"city_name": "Orison", "planet_name": "Crusader"},
     {"space_station_name": "Levski", "planet_name": "Delamar"},
     {"outpost_name": "Lyria"},
+    {"space_station_name": "Baijini Point", "planet_name": "ArcCorp"},
+    {"space_station_name": "Seraphim Station", "planet_name": "Crusader"},
+    {"space_station_name": "Everus Harbor", "planet_name": "Hurston"},
+    {"space_station_name": "Port Tressler", "planet_name": "MicroTech"},
+    {"space_station_name": "Ruin Station", "planet_name": "Pyro"},
+    {"space_station_name": "Checkmate", "planet_name": "Pyro"},
+    {"space_station_name": "Orbituary", "planet_name": "Pyro"},
+    {"poi_name": "Lazarus Complex"},
 ]
 
 
@@ -331,6 +339,10 @@ SPACE = [
         ("lipsky", "Levski"),  # Ben's PC try, 25 Nov 2026
         ("lepski", "Levski"),
         ("lorvil", "Lorville"),
+        ("bajini point", "Baijini Point"),
+        ("seraphin station", "Seraphim Station"),
+        ("everest harbor", "Everus Harbor"),
+        ("port tresler", "Port Tressler"),
         ("sell gold", None),
         ("lev", None),
     ],

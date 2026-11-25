@@ -268,11 +268,30 @@ def test_a_map_still_opening_is_clicked_only_once_its_box_sits_still() -> None:
     assert game.clicks == [BOX_MIDDLE, CLOSE]
 
 
+def test_one_bad_look_while_the_map_settles_is_only_one_look() -> None:
+    game = Game(slides=1)
+
+    class Blinks:
+        """Text recognition misses one frame as the map settles (review of #670)."""
+
+        looks = 0
+
+        def read(self) -> Reading:
+            self.looks += 1
+            if self.looks == 2:
+                raise CaptureError("a frame was late")
+            return game.read()
+
+    done = _plot(game, reader=Blinks())
+    assert done.status == "done"
+    assert game.clicks == [BOX_MIDDLE, CLOSE]
+
+
 def test_a_box_that_never_sits_still_is_never_clicked() -> None:
     game = Game(slides=50)
     done = _plot(game)
     assert (done.status, done.say) == ("failed", "I couldn't open the star map.")
-    assert done.detail == "the map's search box kept moving"
+    assert done.detail == "the map's search box didn't sit still"
     assert game.clicks == []
     assert game.typed == ""
 
