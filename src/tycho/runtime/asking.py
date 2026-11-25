@@ -7,6 +7,7 @@ limit (#150, #169, #314). A confirm-grade request waits for the player's "confir
 """
 
 import asyncio
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 
@@ -17,9 +18,12 @@ from tycho.keybinds import Keybinds
 from tycho.packs import Safety
 from tycho.runtime.conversation import Line
 from tycho.runtime.messages import Progress, Result, Status, Trace
-from tycho.runtime.ports import Brain
+from tycho.runtime.ports import Brain, GameState
 from tycho.runtime.routing import Picked, from_brain
 from tycho.runtime.speaking import Speaking
+from tycho.situation import told
+
+log = logging.getLogger(__name__)
 
 CONFIRM_SECONDS = 5.0
 """How long a question waits for "confirm", unless the settings say otherwise."""
@@ -85,13 +89,14 @@ async def ask_brain(
     checking: Callable[[], None],
     picture: Picture | None = None,
     may_look: bool = False,
+    where: str = "",
 ) -> Picked | Reply | str:
     """What the brain decides, within its time (ADR 14, #150, #169): commands, a
     reply, or why it couldn't answer. ``own_keys`` names the player's keys for a
     built-in command said with key actions off (#386). ``searching`` and ``checking``
     hear a web search or another look-up start, to say a line while it runs.
     ``picture``: the game window, for a look (#31); ``may_look``: looking is on, so
-    the brain may offer one."""
+    the brain may offer one. ``where``: what the game's log shows now (#656)."""
     loop = asyncio.get_running_loop()
     try:
         async with asyncio.timeout(times.brain) as budget:
@@ -124,6 +129,7 @@ async def ask_brain(
                     checking=checking,
                     picture=picture,
                     may_look=may_look,
+                    where=where,
                 )
             )
         return from_brain(decision, matcher, lists)
@@ -146,6 +152,8 @@ class Asker:
     follow_ups: Callable[[], tuple[Exchange, ...]]
     may_look: bool
     """Looking at the game window is on, so the brain may offer a look (#31)."""
+    game_state: GameState | None = None
+    """What the game's log shows now goes with each request (#656): where the player is."""
 
     async def ask(
         self, text: str, own_keys: str = "", picture: Picture | None = None
@@ -154,6 +162,7 @@ class Asker:
         which is dropped once the request ends."""
         assert self.brain is not None  # noqa: S101 - only routed here with a brain
         self.voice.warm()
+        where = await asyncio.to_thread(self._where)
         return await ask_brain(
             self.brain,
             text,
@@ -167,7 +176,18 @@ class Asker:
             checking=self.voice.check,
             picture=picture,
             may_look=self.may_look,
+            where=where,
         )
+
+    def _where(self) -> str:
+        """``situation.told``, or nothing without a log. Blocking: it reads the log."""
+        if self.game_state is None:
+            return ""
+        try:
+            return told(self.game_state.situation())
+        except Exception:  # the brain still answers, only without the log's line
+            log.exception("Couldn't read where the player is from the game's log")
+            return ""
 
 
 @dataclass(frozen=True, slots=True)

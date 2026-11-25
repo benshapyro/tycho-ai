@@ -134,8 +134,8 @@ def history(
 
 
 def turns(request: BrainRequest, today: datetime.date, about: str) -> list[MessageParam]:
-    """``history`` for one request: its earlier exchanges, words, keys and picture."""
-    r = request
+    """``history`` for one request, headed by where the log says the player is (#656)."""
+    r, about = request, "\n".join(line for line in (request.where, about) if line)
     return history(
         r.recent, r.text, today, about, r.own_keys, picture=r.picture, may_look=r.may_look
     )

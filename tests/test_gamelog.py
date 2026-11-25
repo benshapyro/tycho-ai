@@ -273,12 +273,50 @@ def test_monitored_space_and_jurisdiction_are_known_until_they_change(tmp_path: 
     assert [(f.kind, f.said) for f in log.situation().now] == [
         (loglines.MONITORED, "Entered Monitored Space"),
         (loglines.JURISDICTION, "Entered UEE Jurisdiction"),
+        (loglines.SYSTEM, "In the Stanton system"),
     ]
     _append(path, _hud("Exited Monitored Space", 3), _hud("Entered Rough & Ready Jurisdiction"))
     assert [(f.kind, f.said) for f in log.situation().now] == [
-        (loglines.JURISDICTION, "Entered Rough & Ready Jurisdiction")
+        (loglines.JURISDICTION, "Entered Rough & Ready Jurisdiction"),
+        (loglines.SYSTEM, "In the Pyro system"),
     ]
     assert log.situation().recent[-2].said == "Exited Monitored Space"
+
+
+@pytest.mark.parametrize(
+    ("text", "system"),
+    [
+        ("Entered People's Alliance Jurisdiction", "Nyx"),
+        ("Entered People\u2019s Alliance Jurisdiction", "Nyx"),  # a curly apostrophe
+        ("Entered microTech Jurisdiction", "Stanton"),
+        ("Entered Hurston Dynamics Jurisdiction", "Stanton"),
+        ("Entered Rough & Ready Jurisdiction", "Pyro"),
+    ],
+)
+def test_a_known_jurisdiction_says_which_system(tmp_path: Path, text: str, system: str) -> None:
+    # #656: the brain answered "where do I mine" for Stanton while the player was in Nyx.
+    now = GameLog(_log(tmp_path, _hud(text))).situation().now
+    assert (now[-1].kind, now[-1].said, now[-1].name) == (
+        loglines.SYSTEM,
+        f"In the {system} system",
+        system,
+    )
+
+
+def test_an_unknown_jurisdiction_or_a_new_server_forgets_the_system(tmp_path: Path) -> None:
+    # Unknown, never a guess: the brain then asks which system (#656).
+    path = _log(tmp_path, _hud("Entered People's Alliance Jurisdiction"))
+    log = GameLog(path)
+    _append(path, _hud("Entered Somewhere New Jurisdiction", 2))
+    assert loglines.SYSTEM not in {f.kind for f in log.situation().now}
+    _append(path, _hud("Entered People's Alliance Jurisdiction", 3), JOINED)
+    assert log.situation().now == ()
+
+
+def test_the_system_is_not_news(tmp_path: Path) -> None:
+    # Only the jurisdiction is an event a callout may say; the system is what's true now.
+    situation = GameLog(_log(tmp_path, _hud("Entered People's Alliance Jurisdiction"))).situation()
+    assert [e.kind for e in situation.recent] == [loglines.JURISDICTION]
 
 
 def test_an_armistice_zone_is_only_news(tmp_path: Path) -> None:

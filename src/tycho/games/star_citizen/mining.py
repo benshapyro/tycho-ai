@@ -43,8 +43,9 @@ DESCRIPTION = """\
 Where to mine a resource in Star Citizen, from the current patch's game files: the \
 moons, planets and asteroid fields that have it, how it's mined there (ship, ground \
 vehicle or hand mining), and the chance of finding it. Pass the resource as the \
-player said it ("quantanium", "lindinium"), and a place if they named one (a system, \
-planet or moon), to keep to it. Use it for "where do I mine X" and "is there X on \
+player said it ("quantanium", "lindinium"), and a place to keep to: one they named (a \
+system, planet or moon), else the system they're in now (their words, then the \
+request's log line; never a home base). Use it for "where do I mine X" and "is there X on \
 Daymar"; it needs a resource. For selling ore use commodity_prices. In the \
 answer, credit the Star Citizen Wiki once, in a few words. A result with not_found: \
 say briefly what wasn't found."""
@@ -77,7 +78,7 @@ class MiningLookup:
                 "resource": {"type": "string", "description": "As the player said it."},
                 "place": {
                     "type": "string",
-                    "description": "A system, planet or moon, if they named one; otherwise empty.",
+                    "description": "A system, planet or moon: named, else theirs now; else empty.",
                 },
             },
             "required": ["resource", "place"],

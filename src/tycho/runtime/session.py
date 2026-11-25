@@ -123,9 +123,8 @@ class Session:
         self._eyes, self._looking, self._plotter = eyes, looking, plotter
         self._safety_lists, self._confirm_seconds = safety_lists, confirm_seconds
         self._tail_seconds, self._tail_pending = tail_seconds, False
-        self._audio, self._ptt = audio, push_to_talk
-        self._transcriber, self._lexicon = transcriber, lexicon
-        self._matcher, self._keybinds = matcher, keybinds
+        self._audio, self._ptt, self._transcriber = audio, push_to_talk, transcriber
+        self._lexicon, self._matcher, self._keybinds = lexicon, matcher, keybinds
         self._presser, self._feedback = presser, feedback
         self._game_state, self._brain, self._speaker = game_state, brain, speaker
         self._reporter = Reporter(log_transcripts=log_transcripts, action_log=action_log)
@@ -136,8 +135,9 @@ class Session:
         self._brain_warming: asyncio.Task[None] | None = None
         self._conversation = Conversation(clock)
         times = Times(brain_seconds, search_seconds, search_limit, looking_seconds, looking_limit)
-        lately, voice, may = self._conversation.follow_ups, self._voice, bool(eyes and looking)
-        self._asker = Asker(brain, times, matcher, safety_lists, voice, keybinds, lately, may)
+        asks = (brain, times, matcher, safety_lists, self._voice, keybinds)
+        lately, may = self._conversation.follow_ups, bool(eyes and looking)
+        self._asker = Asker(*asks, lately, may, game_state)  # where the player is (#656)
         self._question: Question | None = None
         self._samplerate, self._on_result = samplerate, on_result
         self._address = address

@@ -116,6 +116,7 @@ from tycho.runtime import routing
 from tycho.runtime.planning import Questions, Refusal, Steps, plan_request
 from tycho.runtime.plotting import RouteTool
 from tycho.runtime.routing import NotUnderstood, Picked, Reserved, from_brain
+from tycho.situation import Logged, Situation, told
 from tycho.spoken_settings import SettingsTool
 from tycho.start.assemble import NO_KEYBINDS, load_commands
 
@@ -447,7 +448,35 @@ def grade_path(outcome: Outcome, rule: dict[str, Any]) -> str:
         return f"used {', '.join(sorted(used))}, expected not to"
     if rule.get("no_errors") and outcome.errors:
         return f"look-up errors: {'; '.join(outcome.errors)}"
+    return grade_asked(rule)
+
+
+ASKED: list[tuple[str, str]] = []
+"""This case's look-up calls: each one's name and its arguments, lower case (#656)."""
+
+
+def grade_asked(rule: dict[str, Any]) -> str:
+    """What the look-ups were asked (#656): "asked_with" (a look-up's name and words one
+    call's arguments must hold, e.g. the system the player is in) and "asked_without"
+    (words no call to it may hold, e.g. the home base)."""
+    for name, words in rule.get("asked_with", {}).items():
+        calls = [args for called, args in ASKED if called == name]
+        if not any(all(w.lower() in args for w in words) for args in calls):
+            return f"{name} wasn't asked with {words}: {calls or 'not called'}"
+    for name, words in rule.get("asked_without", {}).items():
+        for args in (args for called, args in ASKED if called == name):
+            if said := [w for w in words if w.lower() in args]:
+                return f"{name} was asked with {said}: {args}"
     return "pass"
+
+
+def where(rule: dict[str, Any]) -> str:
+    """A case's "where": what the game's log shows now, as the session tells the brain
+    (#656). Without one, no line: as with no game log."""
+    if "where" not in rule:
+        return ""
+    now = tuple(Logged("now", said, None, n) for n, said in enumerate(rule["where"]))
+    return told(Situation(now=now))
 
 
 def grade_fleet(fleet: Fleet, rule: dict[str, Any]) -> str:
@@ -571,6 +600,7 @@ class _Counted:
 
     async def run(self, arguments: Mapping[str, object]) -> LookupResult:
         self.calls += 1
+        ASKED.append((self.name, json.dumps(arguments, ensure_ascii=False).lower()))
         try:
             result = await self.inner.run(arguments)
         except BaseException as e:
@@ -617,6 +647,7 @@ async def run_case(
     before = counted.calls if counted else 0
     journal = journal if journal is not None else []
     journal.clear()
+    ASKED.clear()
     replies = costs.replies if costs else 0
     hosts = len(costs.hosts) if costs else 0
     try:
@@ -637,6 +668,7 @@ async def run_case(
                 waiting=searching,
                 picture=seen,
                 may_look=bool(rule.get("may_look", seen is not None)),
+                where=where(rule),
             )
         )
     except BrainError as e:
