@@ -141,7 +141,10 @@ def plot(
         said = run.steps(name_of)
     except _Stop as stop:
         if record is not None and stop.status == "failed" and run.opened:
-            record(stop.detail, run.last)
+            try:
+                record(stop.detail, run.last)
+            except Exception:  # a review tool never changes what the player hears
+                logging.getLogger(__name__).debug("The route record failed", exc_info=True)
         return Plotted(stop.status, stop.say, stop.detail, run.pressed, run.clicks, run.typed)
     return Plotted("done", said, f"route plotted to {place.name}", run.pressed, run.clicks, True)
 

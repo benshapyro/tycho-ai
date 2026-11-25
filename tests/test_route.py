@@ -570,4 +570,14 @@ def test_a_route_plotted_or_refused_before_the_map_is_never_recorded() -> None:
     record = _Record()
     assert _plot(Game(), record=record).status == "done"
     assert _plot(Game(), "Levski\nR", record=record).status == "refused"  # not a name
+    assert _plot(Game(seated=False), record=record).status == "refused"  # on foot, map opened
     assert record.told == []
+
+
+def test_a_record_that_breaks_still_ends_with_the_flows_own_line() -> None:
+    def broken(_why: str, _read: Reading | None) -> None:
+        raise RuntimeError("can't start new thread")
+
+    done = _plot(Game(), "Port Tressler", record=broken)
+    assert done.status == "failed"
+    assert done.say

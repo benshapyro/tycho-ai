@@ -188,7 +188,7 @@ The local check (above) may also find where to click: the search box, and the fi
 **Decision.** With `TYCHO_ROUTE_RECORD=1` set on the PC, and only then:
 
 - **When.** A route that fails after the map was opened gets one more picture of the game window. A route that's plotted, refused or cancelled gets none, and so does a failure before the map opens.
-- **What's kept.** The picture goes into the logs folder's `route-frames`, at the size a look sends (a JPEG). Beside it, a line in `frames.jsonl` holds when, the place, why the flow stopped, and the words the last check read, with their boxes. Only the newest 20 of each are kept.
+- **What's kept.** The picture goes into the logs folder's `route-frames`, at the size a look sends (a JPEG). Beside it, a line in `frames.jsonl` holds when, the place, why the flow stopped, and the words the last check read, with their boxes. Only the newest 20 of each are kept. The picture is a new frame, taken a second or two after the failing one, and the line gives both times, so the two aren't mistaken for one frame.
 - **Never sent.** The picture and the words stay on the PC. They never go to the brain, crash reports, or anyone else. The words aren't put in the log, and they're never said or acted on. The record only holds them as data.
 - **Off for players.** No setting in the window or settings.toml turns it on, and setup never asks about it. It's for the maintainer's PC checks. As with the Tile's record, a player is never asked to turn it on without being told what it keeps.
 

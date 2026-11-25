@@ -6,8 +6,9 @@ PC could not be explained from the log). When the route flow stops on the map (i
 the map and then failed), one more picture of the game window is taken and saved, with a
 line in ``frames.jsonl`` beside it: when, the place, why the flow stopped, and the words
 the last local check read, with their boxes, so the picture and what text recognition
-made of it can be compared. Only the newest ``KEEP`` pictures are kept, in
-``paths.route_frames_dir()``.
+made of it can be compared. The picture is a new frame, taken a second or two after the
+failing one (``taken``, after ``at``), so the map may have changed in between. Only the
+newest ``KEEP`` pictures are kept, in ``paths.route_frames_dir()``.
 
 Nothing here leaves the PC, and nothing is saved with the setting off. The words are the
 game's and untrusted (a marker can carry another player's name): they are only written as
@@ -86,8 +87,10 @@ class FrameRecord:
         job.start()
 
     def _save(self, place: str, why: str, reading: Reading | None, at: datetime) -> None:
+        taken = None
         try:
             picture = self._camera.take()
+            taken = self._now()
         except CaptureError as e:
             picture = None
             log.info("No picture for the route record: %s", e)
@@ -96,12 +99,18 @@ class FrameRecord:
             picture = None
         try:
             with self._lock:
-                self._write(place, why, reading, picture, at)
+                self._write(place, why, reading, picture, at, taken)
         except Exception:  # a full disk mustn't matter to the player
             log.debug("Couldn't save the route record", exc_info=True)
 
     def _write(
-        self, place: str, why: str, reading: Reading | None, picture: Picture | None, at: datetime
+        self,
+        place: str,
+        why: str,
+        reading: Reading | None,
+        picture: Picture | None,
+        at: datetime,
+        taken: datetime | None,
     ) -> None:
         self._folder.mkdir(parents=True, exist_ok=True)
         name = ""
@@ -120,6 +129,7 @@ class FrameRecord:
             "place": place,
             "why": why,
             "file": name,
+            "taken": taken.isoformat(timespec="milliseconds") if taken is not None else None,
             "size": [picture.width, picture.height] if picture is not None else None,
             "read": None
             if reading is None
