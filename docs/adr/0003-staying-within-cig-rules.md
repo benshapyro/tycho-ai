@@ -96,7 +96,7 @@ Some "power user" automation requests will be declined by design.
 
 ## Amendment, 25 November 2026: misheard requests, and the brain may hand over a place
 
-*Status: proposed ([#647](https://github.com/benshapyro/tycho-ai/issues/647)). Needs the maintainer's OK.*
+*Status: accepted. The maintainer approved it on 25 November 2026 ("Yes, change ADR 3", [#647](https://github.com/benshapyro/tycho-ai/issues/647)).*
 
 **Context.** In the first test in Nyx, speech-to-text heard "Plotta Route to Lewski" and "Pona route to Dlevsky". Neither started with a route phrase, so both went to the brain, which had no tool: it said "Plotting a route to Levski." and nothing happened. The player had to repeat himself, and Tycho claimed something it hadn't done.
 
