@@ -22,6 +22,10 @@
 # max_calls: calls to Claude allowed, about 1-1.5 s each (a look-up and its answer is 2).
 # tools:     look-ups that must be used.   no_tools: look-ups that mustn't be.
 # no_errors: no look-up may come back as an error (Claude retries those).
+# asked_with:    {look-up = [words]}: one call to it must have all the words in its arguments.
+# asked_without: {look-up = [words]}: no call to it may have any of them (#656).
+# where:     what the game's log shows now, as the session tells the brain (#656); [] is a
+#            log that shows nothing; left out, no log at all.
 #
 # max_words: (replies) the most words the spoken reply may have: one short sentence
 #            for a simple question (docs/voice-and-tone.md, #363).
@@ -616,6 +620,63 @@ expect = ["reply"]
 notes = ["Home base is New Babbage on microTech."]
 never_say = ["you're in Stanton", "you are in Stanton"]
 no_tools = ["plot_route"]
+
+# Which system the player is in (#656): a play session on 25 Nov 2026 gave Stanton
+# places for "where do I mine" in Nyx. The log's line, or the player's own words (even
+# misheard: "Nix", "Nick's"), decide; the home base in the notes never does.
+[[case]]
+heard = "where can I mine gold"
+mode = "lookup"
+expect = ["reply"]
+where = ["Entered People's Alliance Jurisdiction", "In the Nyx system"]
+notes = ["Home base is New Babbage on microTech."]
+tools = ["mining_lookup"]
+asked_with = { mining_lookup = ["nyx"] }
+asked_without = { mining_lookup = ["stanton", "microtech", "babbage"] }
+never_say = ['\bStanton\b', 'microTech', 'New Babbage', 'Daymar', 'Aberdeen']
+tag = "where"
+
+[[case]]
+heard = "so where's gold to mine then"
+mode = "lookup"
+expect = ["reply"]
+where = ["Entered UEE Jurisdiction", "In the Stanton system"]
+recent = [["we just jumped through to Nix", "Got it."]]
+notes = ["Home base is New Babbage on microTech."]
+tools = ["mining_lookup"]
+asked_with = { mining_lookup = ["nyx"] }
+asked_without = { mining_lookup = ["stanton", "microtech"] }
+tag = "where"
+
+[[case]]
+heard = "I'm in Nick's, where can I mine gold"
+mode = "lookup"
+expect = ["reply"]
+notes = ["Home base is New Babbage on microTech."]
+tools = ["mining_lookup"]
+asked_with = { mining_lookup = ["nyx"] }
+never_say = ['\bStanton\b', 'New Babbage']
+tag = "where"
+
+[[case]]
+heard = "where can I sell gold around here"
+mode = "lookup"
+expect = ["reply"]
+where = ["Entered Rough & Ready Jurisdiction", "In the Pyro system"]
+notes = ["Home base is New Babbage on microTech."]
+asked_without = { commodity_prices = ["stanton", "microtech", "babbage"], trade_routes = ["stanton", "microtech", "babbage"] }
+never_say = ['\bStanton\b', 'New Babbage', 'Area ?18', 'Lorville', 'Orison']
+tag = "where"
+
+[[case]]
+heard = "where can I mine gold around here"
+mode = "lookup"
+expect = ["reply"]
+where = []
+notes = ["Home base is New Babbage on microTech."]
+asked_without = { mining_lookup = ["stanton", "microtech", "babbage"] }
+never_say = ["you're in Stanton", "you are in Stanton", "near New Babbage", "around microTech"]
+tag = "where"
 
 [[case]]
 heard = "spool and jump"

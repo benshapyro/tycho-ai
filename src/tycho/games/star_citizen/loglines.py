@@ -53,6 +53,11 @@ LEFT_MONITORED = "left_monitored"
 JURISDICTION = "jurisdiction"
 """The last jurisdiction the HUD said the player entered (``now``). The survey found no
 line for leaving one, so it lasts until the next one or a server join (#531)."""
+SYSTEM = "system"
+"""The star system the last jurisdiction is in (``now``, ``name`` is the system's), when
+Tycho knows that jurisdiction (``SYSTEMS``): what the brain's lookups keep to, so it
+never answers for Stanton while the player is in Nyx (#656). A jurisdiction it doesn't
+know, or a server join, forgets it: unknown, never a guess."""
 ARMISTICE = "armistice"
 """The HUD said "Entering Armistice Zone - Combat Prohibited" (an event: there's no line
 for leaving one, so it can't be kept as true)."""
@@ -88,6 +93,8 @@ class Line:
     """True: a route is now plotted; False: it's gone; None: unchanged."""
     ship: str = ""
     """The player's own ship, from a control-token line."""
+    system: str = ""
+    """The star system the player is in, from a jurisdiction Tycho knows (#656)."""
     name: str = ""
     """One short name the line carries (a jurisdiction's, a blueprint's item), for a
     callout's line (#4)."""
@@ -116,6 +123,18 @@ _NOTIFICATION = re.compile(r'Added notification "(.*?)"\s*\[\d+\]')
 _JURISDICTION = re.compile(r"^Entered ([A-Za-z][A-Za-z&' ]{0,30}) Jurisdiction$")
 """A jurisdiction's name is a place's or a faction's ("UEE", "Rough & Ready", "People's
 Alliance"): letters, "&" and apostrophes, at most four words. A callout says it (#4)."""
+SYSTEMS: dict[str, str] = {
+    "uee": "Stanton",
+    "hurston dynamics": "Stanton",
+    "crusader industries": "Stanton",
+    "arccorp": "Stanton",
+    "microtech": "Stanton",
+    "rough & ready": "Pyro",
+    "people's alliance": "Nyx",
+}
+"""The star system each jurisdiction the HUD names is in, by its lower-case name: only
+ones seen in a log or certain (#656). Stanton's planets each have their own; Rough &
+Ready holds stations in Pyro; the People's Alliance holds Levski in Nyx."""
 _SHIP_NUMBER = re.compile(r"_\d+$")
 _BLUEPRINT = re.compile(r"^Received Blueprint: (.+)$")
 ITEM_NAME = re.compile(r"""[A-Za-z0-9][A-Za-z0-9 "'.&()/+-]{0,39}""")
@@ -200,7 +219,7 @@ the voice (#531). A new kind joins here with a real line in ``tests/test_gamelog
 def _notification(line: str) -> Line | None:
     if "<SHUDEvent_OnNotification>" not in line or not (match := _NOTIFICATION.search(line)):
         return None
-    text = match.group(1).rstrip(" :")
+    text = match.group(1).rstrip(" :").replace("\u2019", "'")  # a curly apostrophe
     said = clean(text)
     if kind := KNOWN_NOTIFICATIONS.get(said):
         if kind == MONITORED:
@@ -212,7 +231,10 @@ def _notification(line: str) -> Line | None:
     if match := _BLUEPRINT.match(clean(text, limit=_LONGEST_BLUEPRINT)):
         return _blueprint(match.group(1).strip())
     if (match := _JURISDICTION.match(said)) and len(match.group(1).split()) <= 4:
-        return Line(JURISDICTION, said, keep=True, name=match.group(1))
+        name = match.group(1)
+        if system := SYSTEMS.get(name.lower()):
+            return Line(JURISDICTION, said, keep=True, name=name, system=system)
+        return Line(JURISDICTION, said, keep=True, clears=(SYSTEM,), name=name)
     return None
 
 
@@ -237,7 +259,7 @@ def _joined(line: str) -> Line | None:
     # The line names the server's address and shard: none of it is kept.
     if "<Join PU>" in line:
         said = "Joined a game server"
-        return Line(JOINED, said, clears=(ROUTE, MONITORED, JURISDICTION), set_route=False)
+        return Line(JOINED, said, clears=(ROUTE, MONITORED, JURISDICTION, SYSTEM), set_route=False)
     return None
 
 

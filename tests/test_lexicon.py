@@ -147,3 +147,19 @@ def test_misheard_words_match_whole_words_only() -> None:
     lexicon = Lexicon(["Idris"], misheard=[("address", "Idris")])
     assert lexicon.correct("the addresses").misheard == ()
     assert [h.heard for h in lexicon.correct("The Address").misheard] == ["Address"]
+
+
+@pytest.mark.parametrize(
+    ("heard", "term"),
+    [
+        ("we're in Nix", "Nyx"),
+        ("I'm in Nick's", "Nyx"),
+        ("Nicks system", "Nyx"),
+        ("in Piro", "Pyro"),
+    ],
+)
+def test_a_system_misheard_is_named_to_the_brain(heard: str, term: str) -> None:
+    # #656: speech-to-text heard Nyx as "Nick's" or "Nix", too short to sound alike.
+    corrected = Lexicon.default(pack=SC).correct(heard)
+    assert corrected.text == heard  # "Nick's" may be a real name: never rewritten
+    assert f'may be "{term}"' in corrected.for_brain

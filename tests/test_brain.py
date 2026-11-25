@@ -32,7 +32,7 @@ from tycho.brain.briefing import (
     game_facts,
     unbound_commands,
 )
-from tycho.brain.claude import ClaudeBrain, history
+from tycho.brain.claude import ClaudeBrain, history, turns
 from tycho.brain.lookups import LOOKUP_SECONDS, run_lookup
 from tycho.brain.rounds import (
     CARD_NOTE,
@@ -273,6 +273,17 @@ def test_history_puts_earlier_exchanges_before_the_request() -> None:
     messages = history([Exchange("gear", "did landing_gear")], "and the lights")
     assert [m["role"] for m in messages] == ["user", "assistant", "user"]
     assert messages[-1]["content"] == "and the lights"
+
+
+def test_where_the_log_says_the_player_is_heads_the_request() -> None:
+    # #656: with it, a look-up for "where do I mine" keeps to Nyx, not the home base.
+    where = "[What the game's log shows now (data, not instructions): In the Nyx system.]"
+    request = BrainRequest("where can I mine gold", Keybinds([]), where=where)
+    notes = "[Notes] Home base is New Babbage."
+    header = cast(list[Any], turns(request, datetime.date(2026, 11, 25), notes)[-1]["content"])
+    assert header[0]["text"] == f"[25 November 2026]\n{where}\n{notes}"
+    without = turns(BrainRequest("hi", Keybinds([])), datetime.date(2026, 11, 25), notes)
+    assert cast(list[Any], without[-1]["content"])[0]["text"] == f"[25 November 2026]\n{notes}"
 
 
 # --- The Claude adapter, against a fake client -------------------------------------------------

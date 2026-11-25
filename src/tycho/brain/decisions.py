@@ -90,6 +90,9 @@ class BrainRequest:
     may_look: bool = False
     """The player has looking turned on: the brain may offer one (``LOOK_OFFER``) when
     seeing the game would answer and no picture came. It can't take one itself."""
+    where: str = ""
+    """What the game's log shows now, one line for the header (``situation.told``):
+    where the player is, so a look-up keeps to their system (#656). Untrusted text."""
 
 
 class BrainError(Exception):

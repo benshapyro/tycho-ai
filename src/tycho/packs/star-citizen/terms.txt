@@ -6,8 +6,8 @@
 
 # Systems, planets and moons
 Stanton
-Pyro
-Nyx
+Pyro = Piro
+Nyx = Nix, Nick's, Nicks
 Hurston
 Crusader
 ArcCorp
@@ -47,7 +47,7 @@ Grim HEX
 Ruin Station
 Checkmate
 Orbituary
-Levski
+Levski = Lewski, Lefsky
 Klescher
 Lagrange
 Jump Point

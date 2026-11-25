@@ -51,8 +51,10 @@ SPEAKING = (
 PRICES = f"""\
 Live Star Citizen commodity prices from UEX: where to sell a commodity for the \
 most, where to buy it cheapest, and the price at a particular place. Pass the \
-commodity as the player said it ("quantanium", "raw laranite"), and a place if \
-they named one (a city, station, outpost, moon, planet or system). Don't use it \
+commodity as the player said it ("quantanium", "raw laranite"), and a place: one \
+they named (a city, station, outpost, moon, planet or system), else for where to \
+sell or buy, the system they're in now (their words, then the request's log line; \
+never a home base). Don't use it \
 for trade routes (use trade_routes) or ship prices. {SPEAKING}"""
 
 ROUTES = f"""\
@@ -121,7 +123,7 @@ class CommodityPrices(_TradeLookup):
                 "commodity": {"type": "string", "description": "As the player said it."},
                 "place": {
                     "type": "string",
-                    "description": "Where, if the player named a place; otherwise empty.",
+                    "description": "Where: named, else their system now for selling or buying.",
                 },
             },
             "required": ["commodity", "place"],

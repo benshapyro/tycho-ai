@@ -162,4 +162,8 @@ class GameLog:
             said = f"Last at the controls of the {line.ship}"
             self._now.pop(loglines.SHIP, None)
             self._now[loglines.SHIP] = Logged(loglines.SHIP, said, logged.at, self._number)
+        if line.system:  # where the brain's lookups look (#656)
+            said, system = f"In the {line.system} system", loglines.SYSTEM
+            self._now.pop(system, None)
+            self._now[system] = Logged(system, said, logged.at, self._number, line.system)
         self._recent.append(logged)
