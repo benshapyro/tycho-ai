@@ -158,7 +158,8 @@ class Speaking:
             if speaker is not None:
                 self.start(speaker, result.detail, lambda: None)
         elif speaker is not None and speak:
-            self.start(speaker, result.say, feedback.done)
+            ended = result.done or result.status == "replied"
+            self.start(speaker, result.say, feedback.done if ended else feedback.not_done)
         elif result.status == "asking" and speaker is not None and result.question:
             self.start(speaker, result.question, feedback.ask)
         elif result.done or result.status == "replied":

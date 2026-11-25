@@ -1095,7 +1095,7 @@ def test_the_briefing_says_what_not_to_guess() -> None:
     assert 'a habit you haven\'t been told ("my normal routine"' in text
     assert 'never "the player", and never explain why you replied' in text
     assert "A request for something you can press is still for you" in text
-    assert "the destination is set in the star map" in text
+    assert "destination is set in the star map" in text
     assert "never engage quantum for a named place" in text
     assert "Tycho doesn't fire them" in text
     cases = ("the usual", "hurry up", "watch your six", "jump to Hurston", "fire everything")

@@ -12,6 +12,7 @@ from tycho.brain.looking import LOOK_OFFER
 from tycho.brain.lookups import RECALLED
 from tycho.runtime.look import LOOK
 from tycho.runtime.messages import Result
+from tycho.runtime.plotting import ROUTE
 from tycho.tile import Card
 
 FOLLOW_UP_SECONDS = 30.0
@@ -33,6 +34,8 @@ def would_speak(result: Result) -> bool:
     """Whether this result has a line for the player, given a voice to say it."""
     if result.commands == ("say_again",):
         return result.done and bool(result.say)
+    if result.commands == (ROUTE,):  # Tycho's own line about the route (#588)
+        return bool(result.say.strip())
     if result.commands == (LOOK,) and not result.by_brain:
         return bool(result.say.strip())  # Tycho's own line: looking is off, or no window (#31)
     if result.toggled:  # the fast path's too: it can't tell which way a toggle went
