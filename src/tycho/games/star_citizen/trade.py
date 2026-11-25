@@ -165,7 +165,8 @@ class Trade:
                 values: dict[str, tuple[str, int]] = {}
                 for terminal in self.terminals.values():
                     value = _terminal_name(terminal) if field == "terminal" else terminal.get(field)
-                    if value and place_matches(key, str(value), exact=exact):
+                    whole = exact and squash(str(value)) == squash(named)
+                    if value and (whole or place_matches(key, str(value), exact=exact)):
                         id_field = "id" if field == "terminal" else _id_field(field)
                         values.setdefault(str(value), (id_field, int(terminal.get(id_field) or 0)))
                 if len(values) > GUESS_AMONG:

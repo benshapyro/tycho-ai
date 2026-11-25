@@ -70,7 +70,8 @@ def best_place(terminals: Iterable[Mapping[str, Any]], said: str) -> str | None:
     of a name or a misspelling; the shortest when a few fit ("Lorville" before "Lorville
     Gates"). None when nothing fits, or more than ``GUESS_AMONG`` do ("Lagrange")."""
     said = PLACE_ALIASES.get(" ".join(normalize(said)), said)
-    key = squash(" ".join(w for w in normalize(said) if w not in FILLER)) or squash(said)
+    whole = squash(said)
+    key = squash(" ".join(w for w in normalize(said) if w not in FILLER)) or whole
     if not key:
         return None
     rows = list(terminals)
@@ -78,7 +79,7 @@ def best_place(terminals: Iterable[Mapping[str, Any]], said: str) -> str | None:
         for field in ROUTE_FIELDS:
             values = {str(row[field]) for row in rows if row.get(field)}
             found = sorted(
-                (v for v in values if place_matches(key, v, exact=exact)), key=lambda v: (len(v), v)
+                (v for v in values if _fits(key, whole, v, exact=exact)), key=lambda v: (len(v), v)
             )
             if len(found) > GUESS_AMONG:
                 log.debug("%r could be %d places", said, len(found))
@@ -86,3 +87,9 @@ def best_place(terminals: Iterable[Mapping[str, Any]], said: str) -> str | None:
             if found:
                 return found[0]
     return None
+
+
+def _fits(key: str, whole: str, value: str, *, exact: bool) -> bool:
+    """``key`` (without filler words) fits ``value``; or, exactly, all that was said
+    does ("The Pit" keeps its "the": review of #643)."""
+    return place_matches(key, value, exact=exact) or (exact and squash(value) == whole)

@@ -15,7 +15,7 @@ from tests.fakes.fake_uex import FakeTradeUex
 from tests.test_route import KEYBINDS, Game, _key_went_down  # pyright: ignore[reportPrivateUsage]
 from tests.test_runtime import rig, run
 from tycho.games import BUILT_IN
-from tycho.games.star_citizen.places import UexPlaces
+from tycho.games.star_citizen.places import UexPlaces, best_place
 from tycho.input import Presser
 from tycho.packs import STAR_CITIZEN, as_run, built_in
 from tycho.packs.routes import PlaceError, Route, read
@@ -282,3 +282,26 @@ def test_uex_places_name_a_route_id_by_its_first_word() -> None:
     assert places.name_of("lorville_city-001") == "Lorville"
     assert places.name_of("area18_all-002") == "Area 18"
     assert places.name_of("rs_ext_pyro3_leo") is None
+
+
+def test_a_place_whose_name_starts_with_a_filler_word_still_matches() -> None:
+    rows = [{"outpost_name": "The Pit"}, {"city_name": "Area 18"}]
+    assert best_place(rows, "the pit") == "The Pit"
+    assert best_place(rows, "the area 18") == "Area 18"
+
+
+def test_with_key_actions_off_no_place_is_looked_up() -> None:
+    places = FakePlaces("Levski")
+    lists = as_run(SC, key_actions=False).safety
+    status, _detail, progress = _answer(_plotter(Game(), places, lists=lists), "levski")
+    assert (status, progress.say) == ("refused", lists.keys_off)
+    assert places.asked == []
+
+
+def test_a_slow_list_of_places_says_why_in_the_log() -> None:
+    class Slow(FakePlaces):
+        async def find(self, said: str) -> str | None:
+            raise TimeoutError
+
+    status, detail, _progress = _answer(_plotter(Game(), Slow()), "levski")
+    assert (status, detail) == ("failed", "no list of places: it took too long")

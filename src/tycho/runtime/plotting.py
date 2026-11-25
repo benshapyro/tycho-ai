@@ -86,12 +86,16 @@ class Plotter:
         if trying:  # setup's Try it: nothing is pressed, and a route can't be shown
             progress.say = lines.trying
             return "refused", "routes aren't plotted in Try it"
+        if self.lists.keys_off:  # the gate's reason, with nothing looked up (review of #643)
+            progress.say = self.lists.keys_off
+            return "refused", self.lists.keys_off
         try:
             name = await asyncio.wait_for(self.places.find(said), PLACES_SECONDS)
         except (PlaceError, TimeoutError) as e:
-            log.warning("No list of places: %s", e or "it took too long")
+            why = str(e) or "it took too long"
+            log.warning("No list of places: %s", why)
             progress.say = lines.no_places
-            return "failed", f"no list of places: {e or 'it took too long'}"
+            return "failed", f"no list of places: {why}"
         if name is None:
             progress.say = lines.unknown_place.format(name=said)
             return "not_understood", f"no place called {said!r}"
