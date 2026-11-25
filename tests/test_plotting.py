@@ -25,7 +25,7 @@ from tycho.packs import STAR_CITIZEN, as_run, built_in
 from tycho.packs.routes import PlaceError, Route, read
 from tycho.runtime.conversation import would_speak
 from tycho.runtime.messages import Progress, Result
-from tycho.runtime.plotting import ROUTE, Plotter, RouteTool, asked_place
+from tycho.runtime.plotting import ROUTE, Plotter, RouteTool, asked_place, placed
 
 SC = built_in(STAR_CITIZEN)
 assert SC.route is not None
@@ -218,6 +218,8 @@ def _table() -> dict[str, object]:
         "close_reach": flow.close_reach,
         "lines": lines,
         "tool": SC.route.tool,
+        "here": sorted(SC.route.here),
+        "away": sorted(SC.route.away),
     }
 
 
@@ -542,3 +544,55 @@ def test_a_late_confirm_plots_nothing() -> None:
 )
 def test_uex_places_say_when_a_name_is_a_guess(said: str, name: str, guess: bool) -> None:
     assert UexPlaces(FakeTradeUex()).guessed(said, name) is guess
+
+
+# --- Where the place was said to be (#661) -------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("said", "place", "where"),
+    [
+        ("levski in the next system", "levski", "in the next system"),
+        ("levski in this system", "levski", "in this system"),
+        ("Levski, In the next system.", "levski", "in the next system"),  # the brain's
+        ("the spaceport in lorville", "the spaceport in lorville", ""),
+        ("levski in nyx", "levski in nyx", ""),
+        ("area 18", "area 18", ""),
+        ("in", "in", ""),
+    ],
+)
+def test_where_a_place_was_said_to_be_is_cut_off(said: str, place: str, where: str) -> None:
+    assert placed(said, ROUTE_TABLE.here | ROUTE_TABLE.away) == (place, where)
+
+
+def test_the_brains_place_in_another_system_is_said_plainly() -> None:
+    game = Game()
+    tool = RouteTool("plot")
+    asyncio.run(tool.run({"place": "Levski, in the next system."}))
+    status, _detail, progress = _answer(_plotter(game), tool.take() or "")
+    assert (status, progress.say) == ("refused", LINES.elsewhere)
+    assert not game.nav
+
+
+def test_a_place_in_this_system_is_plotted() -> None:
+    game = Game()
+    status, _detail, _progress = _answer(_plotter(game), "levski in this system")
+    assert status == "done"
+    assert game.route_id == "levski_all-001"
+
+
+def test_a_place_in_another_system_is_said_plainly_and_nothing_is_pressed() -> None:
+    game = Game()
+    places = FakePlaces("Levski")
+    status, _detail, progress = _answer(_plotter(game, places), "levski in the next system")
+    assert (status, progress.say) == ("refused", LINES.elsewhere)
+    assert places.asked == []
+    assert not game.nav
+
+
+def test_a_pack_without_here_or_away_cuts_nothing_off() -> None:
+    route = replace(ROUTE_TABLE, here=frozenset(), away=frozenset())
+    assert placed("levski in the next system", route.here | route.away) == (
+        "levski in the next system",
+        "",
+    )

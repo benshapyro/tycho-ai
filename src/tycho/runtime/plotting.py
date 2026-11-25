@@ -12,7 +12,7 @@ import functools
 import json
 import logging
 import threading
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from concurrent.futures import Executor
 from dataclasses import dataclass, field
 
@@ -89,6 +89,19 @@ def _heard(words: list[str], phrase: list[str]) -> int | None:
             if similarity(said, "".join(before)) >= HEARD_ALIKE:
                 return used
     return None
+
+
+def placed(said: str, ends: Collection[str]) -> tuple[str, str]:
+    """The place and where it was said to be, when it ends in one of ``ends`` (the pack's
+    ``here`` and ``away``): "levski in the next system" is ("levski", "in the next
+    system"). Any other "in ..." stays part of the place ("the spaceport in lorville")
+    (#661, review of #662). Compared as normalised words, as the brain may hand over
+    "Levski, in the next system."."""
+    words = normalize(said)
+    for cut in range(1, len(words)):
+        if (where := " ".join(words[cut:])) in ends:
+            return " ".join(words[:cut]), where
+    return said, ""
 
 
 class RouteTool:
@@ -195,6 +208,10 @@ class Plotter:
         if self.lists.keys_off:  # the gate's reason, with nothing looked up (review of #643)
             progress.say = self.lists.keys_off
             return "refused", self.lists.keys_off
+        said, where = placed(said, self.route.here | self.route.away)
+        if where in self.route.away:  # e.g. the map only searches the player's system
+            progress.say = lines.elsewhere.format(name=said)
+            return "refused", f"{said!r} is {where}"
         try:
             name = await asyncio.wait_for(self.places.find(said), PLACES_SECONDS)
         except (PlaceError, TimeoutError) as e:
