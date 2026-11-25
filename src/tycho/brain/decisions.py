@@ -99,6 +99,15 @@ class BrainError(Exception):
     """The brain gave no usable answer: offline, a refusal, a timeout, or bad output."""
 
 
+class EmptyAct(BrainError):
+    """``run_actions`` with no actions and nothing real to say (#666): "unused", or
+    empty, which the acts' strict schema makes the model fill in. Not an answer: the
+    model is told, and answers on its next call (``rounds.EMPTY_ACT``)."""
+
+    def __init__(self) -> None:
+        super().__init__("run_actions: no actions and nothing to say")
+
+
 class UnboundAction(BrainError):
     """``run_actions`` named actions that aren't bound: invented ("v_noise_launch"), or
     real with no key. The brain is told, with the closest bound names, and picks again
@@ -116,15 +125,16 @@ def parse_tool_call(
     if not isinstance(arguments, dict):
         raise BrainError(f"{name}: the arguments aren't an object")
     args: dict[str, object] = {str(k): v for k, v in arguments.items()}  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
-    say = args.get("say", "")
-    say = say[:MAX_SAY].strip() if isinstance(say, str) else ""
+    say = line(args.get("say", ""))
     if name == "run_actions":
         picked = args.get("actions")
-        if isinstance(picked, list) and not picked and say:
+        if isinstance(picked, list) and not picked:
             # Nothing to press, but a line to say: a reply in the wrong tool, as for
             # "good fight everyone, o7" in the #192 eval after #276. The player
-            # hears the line, not an error.
-            return Reply(say)
+            # hears the line, not an error. With no real line, it's no answer (#666).
+            if say:
+                return Reply(say)
+            raise EmptyAct
         if not isinstance(picked, list) or not picked:
             raise BrainError("run_actions: no actions")
         names = tuple(str(a) for a in picked)  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
@@ -151,6 +161,39 @@ def parse_tool_call(
             raise BrainError("show_card: nothing to say")
         return Reply(say, card)
     raise BrainError(f"unknown tool {name!r}")
+
+
+PLACEHOLDERS = frozenset(
+    {
+        "unused",
+        "none",
+        "n/a",
+        "na",
+        "null",
+        "nil",
+        "empty",
+        "placeholder",
+        "nothing",
+        "no action",
+        "no actions",
+        "tbd",
+        "todo",
+        "undefined",
+        "-",
+    }
+)
+"""What a model writes in a ``say`` it has to fill but has nothing for (#666): never
+spoken. The acts are strict (#639), so ``say`` is always there, even when empty."""
+
+
+def line(say: object) -> str:
+    """A tool call's ``say`` as a line to speak: cut to ``MAX_SAY``, and empty for a
+    placeholder ("unused", "n/a") the player must never hear (#666)."""
+    if not isinstance(say, str):
+        return ""
+    said = say[:MAX_SAY].strip()
+    key = said.lower().strip(" .!\"'")
+    return "" if not key or key in PLACEHOLDERS else said
 
 
 _ON_THE_TILE = re.compile(r"(?<=[.!?])\s+[^.!?]*\bon the Tile\b[^.!?]*[.!?]?\s*$", re.IGNORECASE)

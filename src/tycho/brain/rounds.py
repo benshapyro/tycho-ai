@@ -29,6 +29,7 @@ from tycho.brain.decisions import (
     BrainError,
     BrainRequest,
     Decision,
+    EmptyAct,
     Reply,
     UnboundAction,
     parse_tool_call,
@@ -64,6 +65,11 @@ SECOND_ACT = (
     "Not done: an earlier action in this reply was refused, so {tool} wasn't used. Call "
     "it again on its own if it's still wanted."
 )
+EMPTY_ACT = (
+    "Nothing was pressed or said: run_actions had no actions. Answer the player now, "
+    "in words or with show_card."
+)
+"""The result for an empty act with nothing real to say (#666): it isn't an answer."""
 LAST_PICK = "No more look-ups for this request: pick the actions again, or say what you can't do."
 """Instead of LAST_CALL, when the turn holds a refused act (review of #177)."""
 
@@ -150,6 +156,8 @@ class Round:
         self._started = started
         self._checking = False
         self._streamed = False
+        self._empty = 0
+        """Empty acts in this reply (#666): answered with ``EMPTY_ACT``, never said."""
         self._instant: list[asyncio.Task[LookupResult]] = []
         """A fleet or settings note in the same reply as an act: it runs too (#156)."""
         self._looks: dict[asyncio.Task[LookupResult], Look] = {}
@@ -237,6 +245,13 @@ class Round:
             return None
         try:
             decided = parse_tool_call(name, arguments, self._actions, self._sequences)
+        except EmptyAct:
+            # Not an answer ("unused", #666): the model hears so and answers next call,
+            # unless this reply's words already did (``said``).
+            log.debug("Brain called run_actions with nothing to press or say")
+            self._empty += 1
+            self.looking.append((use_id, answered(failure(EMPTY_ACT))))
+            return None
         except UnboundAction as e:
             # Not pressed: the model hears why, with the closest bound names, and
             # picks again on the next call (#164).
@@ -246,6 +261,19 @@ class Round:
             return None
         await self._end()
         return decided
+
+    def said(self, text: str, credits: Sequence[str], stopped: str) -> Reply | None:
+        """The reply's words as the answer, if they end the request: it looked nothing
+        up (``final_reply``, which raises if there's nothing to say), or its only tool
+        calls were empty acts after words to say (#666). None if results are owed."""
+        if not self.looking:
+            return final_reply(text, credits, stopped)
+        if not self._empty or self._empty != len(self.looking) or not spoken(text):
+            return None
+        try:
+            return final_reply(text, credits, stopped)
+        except BrainError:
+            return None
 
     async def cut_short(self, name: str) -> Reply:
         """A tool call the output limit cut off (#266): its arguments aren't all there,
