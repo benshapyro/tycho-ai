@@ -107,6 +107,13 @@ class RouteFlow:
     """How long the log may take to write the route line after the plot key."""
     beat_seconds: float = 0.3
     """After a key or click, for the game to act on it before the next one."""
+    settle_seconds: float = 0.5
+    """Once a frame shows the search box, before the next look: the map is still opening
+    then, and a click lands on nothing (Ben's PC try, 25 Nov 2026). The box must be in
+    the same place in two looks this far apart before it's clicked."""
+    click_seconds: float = 0.5
+    """After the click on the search box, before the first letter: the box takes keys a
+    moment after it's clicked (#654, Ben's PC try)."""
     read_every: float = 0.25
 
 

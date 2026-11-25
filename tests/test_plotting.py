@@ -30,7 +30,10 @@ from tycho.runtime.plotting import ROUTE, Plotter, RouteTool, asked_place, place
 SC = built_in(STAR_CITIZEN)
 assert SC.route is not None
 ROUTE_TABLE: Route = replace(
-    SC.route, flow=replace(SC.route.flow, beat_seconds=0.0, read_every=0.0)
+    SC.route,
+    flow=replace(
+        SC.route.flow, beat_seconds=0.0, read_every=0.0, settle_seconds=0.0, click_seconds=0.0
+    ),
 )
 LINES = ROUTE_TABLE.flow.lines
 
@@ -325,6 +328,8 @@ SPACE = [
         ("lewski", "Levski"),
         ("dlevsky", "Levski"),
         ("lefsky", "Levski"),
+        ("lipsky", "Levski"),  # Ben's PC try, 25 Nov 2026
+        ("lepski", "Levski"),
         ("lorvil", "Lorville"),
         ("sell gold", None),
         ("lev", None),

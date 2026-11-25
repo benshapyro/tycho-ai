@@ -14,6 +14,8 @@ from tycho.input.keys import Code
 _INPUT_MOUSE, _INPUT_KEYBOARD = 0, 1
 _KEYEVENTF_EXTENDEDKEY, _KEYEVENTF_KEYUP, _KEYEVENTF_SCANCODE = 0x0001, 0x0002, 0x0008
 _MOUSEEVENTF_WHEEL, _WHEEL_DELTA = 0x0800, 120
+_MOUSEEVENTF_MOVE, _MOUSEEVENTF_VIRTUALDESK, _MOUSEEVENTF_ABSOLUTE = 0x0001, 0x4000, 0x8000
+_SM_XVIRTUALSCREEN, _SM_YVIRTUALSCREEN, _SM_CXVIRTUALSCREEN, _SM_CYVIRTUALSCREEN = 76, 77, 78, 79
 # Mouse buttons 1-5 (left, right, middle, back, forward): (down flag, up flag, extra data).
 _MOUSE_BUTTONS = {
     1: (0x0002, 0x0004, 0),
@@ -27,6 +29,8 @@ _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 _DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
 CLICK_SECONDS = 0.06
 """How long the left button is held: a plain click, like a tap's key."""
+MOVE_SECONDS = 0.1
+"""After the pointer moves, before the button goes down: for the game to see it there."""
 GAME_EXECUTABLE = "StarCitizen.exe"
 
 
@@ -66,6 +70,25 @@ class _INPUT(ctypes.Structure):
 def _send(event: _INPUT) -> None:
     if win32.user32().SendInput(1, ctypes.byref(event), ctypes.sizeof(_INPUT)) != 1:
         raise ctypes.WinError(ctypes.get_last_error())
+
+
+def _move_to(x: int, y: int) -> _INPUT:
+    """A mouse move, as input, to the screen's pixel (``x``, ``y``): SendInput wants it
+    in 0 to 65535 across the whole virtual desktop."""
+    user32 = win32.user32()
+    left, top = (
+        user32.GetSystemMetrics(_SM_XVIRTUALSCREEN),
+        user32.GetSystemMetrics(_SM_YVIRTUALSCREEN),
+    )
+    width = max(2, user32.GetSystemMetrics(_SM_CXVIRTUALSCREEN))
+    height = max(2, user32.GetSystemMetrics(_SM_CYVIRTUALSCREEN))
+    event = _INPUT(type=_INPUT_MOUSE)
+    event.union.mi = _MOUSEINPUT(
+        dx=round((x - left) * 65535 / (width - 1)),
+        dy=round((y - top) * 65535 / (height - 1)),
+        dwFlags=_MOUSEEVENTF_MOVE | _MOUSEEVENTF_ABSOLUTE | _MOUSEEVENTF_VIRTUALDESK,
+    )
+    return event
 
 
 class WindowsKeySender:
@@ -144,6 +167,11 @@ class WindowsClicker:
             return "the spot is outside the game window"
         if not user32.SetCursorPos(rect.left + x, rect.top + y):
             return "Windows didn't move the pointer"
+        # SetCursorPos sends no input, and a game that reads the mouse's raw input (as
+        # Star Citizen's map may) never sees the pointer move: a move as input does
+        # (Ben's PC try, 25 Nov 2026: the click didn't reach the search box).
+        _send(_move_to(rect.left + x, rect.top + y))
+        self._sleep(MOVE_SECONDS)
         sender = WindowsKeySender()
         left = Code("mouse", _LEFT)
         sender.down(left)

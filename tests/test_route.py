@@ -62,6 +62,8 @@ FLOW = RouteFlow(
     seated=loglines.NO_ROUTE_ON_MAP,
     beat_seconds=0.0,
     read_every=0.0,
+    settle_seconds=0.0,
+    click_seconds=0.0,
 )
 
 
@@ -112,6 +114,11 @@ class Game:
     recent: tuple[str, ...] = ()
     """Places in the map's RECENT list, shown under the box before anything is typed."""
     stray: list[str] = field(default_factory=list[str])
+    slides: int = 0
+    """Looks, after the map opens, in which its panel is still sliding in: the box is
+    drawn further left each look before, and a click on it does nothing (Ben's PC try,
+    25 Nov 2026)."""
+    sliding: int = 0
 
     def __post_init__(self) -> None:
         if self.route_id:
@@ -134,6 +141,7 @@ class Game:
         elif what == "map":
             self.map_open = not self.map_open
             self.box_has_keys, self.typed, self.entered = False, "", False
+            self.sliding = self.slides if self.map_open else 0
             if self.map_open and self.seated and not self.route_id and not self.log_quiet:
                 self._log(loglines.NO_ROUTE_ON_MAP)
         elif code == code_for("c") and self.map_open:
@@ -156,6 +164,8 @@ class Game:
         self.clicks.append((x, y))
         if not self.map_open:
             return ""  # in the cockpit: with NAV set, nothing fires
+        if self.sliding:
+            return ""  # the map is still opening: the click lands on nothing
         if abs(x - BOX_MIDDLE[0]) < 20 and abs(y - BOX_MIDDLE[1]) < 20:
             self.box_has_keys = True
         elif abs(x - CLOSE[0]) < 20 and abs(y - CLOSE[1]) < 20:
@@ -167,7 +177,9 @@ class Game:
         if not self.map_open:
             return Reading(WIDTH, HEIGHT, (Word("FUEL", 100, 900, 60, 20, 0),), window=7)
         box = self.typed.upper().split() or ["SEARCH", "LOCATIONS..."]
-        words = [Word(text, BOX[0] + 70 * i, BOX[1], 60, BOX[3], 0) for i, text in enumerate(box)]
+        left = BOX[0] - 40 * self.sliding
+        self.sliding = max(0, self.sliding - 1)
+        words = [Word(text, left + 70 * i, BOX[1], 60, BOX[3], 0) for i, text in enumerate(box)]
         if not self.typed:
             for i, place in enumerate(("RECENT", *(p.upper() for p in self.recent))):
                 words.append(Word(place, BOX[0], 220 + 40 * i, 90, 20, 10 + i))
@@ -247,6 +259,22 @@ def test_a_route_is_plotted_and_checked_by_the_logs_id() -> None:
     assert len(game.clicks) == 2
     assert game.clicks == [BOX_MIDDLE, CLOSE]
     assert not game.map_open  # closed again once it's done
+
+
+def test_a_map_still_opening_is_clicked_only_once_its_box_sits_still() -> None:
+    game = Game(slides=2)  # Ben's PC try, 25 Nov 2026: the first click came too soon
+    done = _plot(game)
+    assert done.status == "done"
+    assert game.clicks == [BOX_MIDDLE, CLOSE]
+
+
+def test_a_box_that_never_sits_still_is_never_clicked() -> None:
+    game = Game(slides=50)
+    done = _plot(game)
+    assert (done.status, done.say) == ("failed", "I couldn't open the star map.")
+    assert done.detail == "the map's search box kept moving"
+    assert game.clicks == []
+    assert game.typed == ""
 
 
 def test_a_route_with_no_known_name_is_still_said_to_be_replaced() -> None:

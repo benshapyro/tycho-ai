@@ -292,6 +292,8 @@ def _type_user32(u: ctypes.WinDLL) -> None:
     # The route flow's click on the star map (input/windows.py, #588).
     u.SetCursorPos.restype = wintypes.BOOL
     u.SetCursorPos.argtypes = [i, i]
+    u.GetSystemMetrics.restype = i
+    u.GetSystemMetrics.argtypes = [i]
     # Push to talk (ptt/windows.py).
     u.GetAsyncKeyState.restype = wintypes.SHORT
     u.GetAsyncKeyState.argtypes = [i]
