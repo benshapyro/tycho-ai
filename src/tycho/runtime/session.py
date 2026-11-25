@@ -350,7 +350,7 @@ class Session:
             self._display.answered()
         said = (request, trace, heard, text)
         job: Job = (cancel, trying, progress, *said)
-        if self._plotter is not None and (place := self._plotter.asked(text)) is not None:
+        if self._plotter is not None and (place := await self._plotter.wanted(text)) is not None:
             return await self._plot(place, job)
         routed = route(
             text,

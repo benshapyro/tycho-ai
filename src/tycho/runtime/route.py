@@ -8,7 +8,8 @@ The flow, as the pack declares it (``RouteFlow``):
 2. open the map (``open_map``) and wait, at most ``open_seconds``, for a frame that shows
    its search box, and for the log to show the player is in a pilot's seat: a route
    already set (``route_set``), or the map's "no route" line (``seated``) since step 1;
-3. click the search box, in that frame (the first click);
+3. once the box sits still in two looks ``settle_seconds`` apart (the map has finished
+   opening), click it, in the later frame (the first click), and wait ``click_seconds``;
 4. type the place's name, letter by letter: after the first, the box's empty words must
    be gone, and after the last, the box's own line must show the name, before Enter
    (``enter``) is pressed (#654: letters that didn't land could reach the game);
@@ -58,6 +59,8 @@ log = logging.getLogger(__name__)
 
 MAX_CLICKS = 2
 """The search box, then the panel's close button (ADR 3, 24 Nov 2026)."""
+SETTLE_LOOKS = 4
+"""Looks, ``settle_seconds`` apart, for the search box to stop moving as the map opens."""
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9 '.-]{0,39}")
 """What may be typed: letters, digits, spaces and simple punctuation, at most 40. Never
 Enter in the middle, never a command (ADR 3, 23 Nov 2026)."""
@@ -203,10 +206,11 @@ class _Run:
         if not self._seated(mark):
             self._press(presses[flow.close_map])
             raise _Stop("refused", lines.on_foot, "the log shows no pilot's seat")
+        box, reading = self._settled(box)
         self._click(reading, _middle(box), "the search box")
         if not self._fresh().has(flow.search_box):  # the map closed: type nothing
             raise _Stop("failed", lines.stuck, "the map closed before typing")
-        self._wait(flow.beat_seconds)  # the box takes keys a moment after the click (#654)
+        self._wait(flow.click_seconds)  # the box takes keys a moment after the click (#654)
         self._type(name[:1])
         self.pressed.append(f"typed {name[:1]}")  # the log shows it, even if the game took it
         self._wait(flow.beat_seconds)
@@ -328,6 +332,26 @@ class _Run:
                 return box, reading
             self._wait(self.flow.read_every)
 
+    def _settled(self, box: tuple[Word, ...]) -> tuple[tuple[Word, ...], Reading]:
+        """The search box in a frame once the map has finished opening: in the same place
+        as in the look ``settle_seconds`` before (Ben's PC try, 25 Nov 2026: a click
+        straight away, while the map still opened, didn't take)."""
+        flow = self.flow
+        for _ in range(SETTLE_LOOKS):
+            self._wait(flow.settle_seconds)
+            try:
+                reading = self.last = self.reader.read()
+            except CaptureError as e:  # one bad look is one of the looks (review of #670)
+                log.info("Map check, settling: %s", e)
+                continue
+            now = reading.find(flow.search_box)
+            if now is None:  # missed over the moving map, or gone: look again
+                continue
+            if _near(_middle(now), _middle(box), _STILL * reading.height):
+                return now, reading
+            box = now
+        raise _Stop("failed", flow.lines.no_map, "the map's search box didn't sit still")
+
     def _seated(self, mark: int) -> bool:
         if self.flow.route_set in self.log.facts():
             return True
@@ -383,6 +407,11 @@ class _Run:
             if self.clock() >= deadline:
                 return None
             self._wait(self.flow.read_every)
+
+
+_STILL = 0.005
+"""How far, as a fraction of the frame's height, the box may move and still be settled:
+a few pixels, as text recognition reads the same words a little differently."""
 
 
 def _middle(words: tuple[Word, ...]) -> tuple[int, int]:

@@ -30,7 +30,10 @@ from tycho.runtime.plotting import ROUTE, Plotter, RouteTool, asked_place, place
 SC = built_in(STAR_CITIZEN)
 assert SC.route is not None
 ROUTE_TABLE: Route = replace(
-    SC.route, flow=replace(SC.route.flow, beat_seconds=0.0, read_every=0.0)
+    SC.route,
+    flow=replace(
+        SC.route.flow, beat_seconds=0.0, read_every=0.0, settle_seconds=0.0, click_seconds=0.0
+    ),
 )
 LINES = ROUTE_TABLE.flow.lines
 
@@ -316,6 +319,14 @@ SPACE = [
     {"city_name": "Orison", "planet_name": "Crusader"},
     {"space_station_name": "Levski", "planet_name": "Delamar"},
     {"outpost_name": "Lyria"},
+    {"space_station_name": "Baijini Point", "planet_name": "ArcCorp"},
+    {"space_station_name": "Seraphim Station", "planet_name": "Crusader"},
+    {"space_station_name": "Everus Harbor", "planet_name": "Hurston"},
+    {"space_station_name": "Port Tressler", "planet_name": "MicroTech"},
+    {"space_station_name": "Ruin Station", "planet_name": "Pyro"},
+    {"space_station_name": "Checkmate", "planet_name": "Pyro"},
+    {"space_station_name": "Orbituary", "planet_name": "Pyro"},
+    {"poi_name": "Lazarus Complex"},
 ]
 
 
@@ -325,7 +336,13 @@ SPACE = [
         ("lewski", "Levski"),
         ("dlevsky", "Levski"),
         ("lefsky", "Levski"),
+        ("lipsky", "Levski"),  # Ben's PC try, 25 Nov 2026
+        ("lepski", "Levski"),
         ("lorvil", "Lorville"),
+        ("bajini point", "Baijini Point"),
+        ("seraphin station", "Seraphim Station"),
+        ("everest harbor", "Everus Harbor"),
+        ("port tresler", "Port Tressler"),
         ("sell gold", None),
         ("lev", None),
     ],
@@ -373,6 +390,43 @@ def test_a_new_request_drops_a_place_handed_over_earlier() -> None:
     assert plotter.handed(plain=True) is None
 
 
+def test_a_place_no_list_has_goes_to_the_brain_when_there_is_one() -> None:
+    # Ben, 25 Nov 2026: "Lipsky" should reach the brain, which knows it's Levski.
+    tool = RouteTool("Plot a route.")
+    with_brain = _plotter(Game(), tool=tool, brain=True)
+    assert asyncio.run(with_brain.wanted("plot a route to Lipsky")) is None
+    assert asyncio.run(with_brain.wanted("plot a route to Levski")) == "levski"
+    assert asyncio.run(with_brain.wanted("landing gear")) is None
+
+
+@pytest.mark.parametrize(
+    ("brain", "tool", "keys", "error"),
+    [
+        (False, True, True, None),  # no brain: Tycho says it knows no such place
+        (True, False, True, None),  # no tool for the brain to hand a place with
+        (True, True, False, None),  # keys off: the flow says why
+        (True, True, True, PlaceError("offline")),  # no list: the flow says so
+    ],
+)
+def test_otherwise_an_unknown_place_stays_with_the_flow(
+    brain: bool, tool: bool, keys: bool, error: Exception | None
+) -> None:
+    plotter = _plotter(
+        Game(),
+        FakePlaces("Levski", error=error),
+        tool=RouteTool("Plot a route.") if tool else None,
+        brain=brain,
+        lists=SC.safety if keys else as_run(SC, key_actions=False).safety,
+    )
+    assert asyncio.run(plotter.wanted("plot a route to Lipsky")) == "lipsky"
+
+
+def test_a_place_in_another_system_stays_with_the_flow_to_say_so() -> None:
+    plotter = _plotter(Game(), tool=RouteTool("Plot a route."), brain=True)
+    said = asyncio.run(plotter.wanted("plot a route to Lipsky in the next system"))
+    assert said == "lipsky in the next system"
+
+
 def test_star_citizen_gives_the_brain_the_route_tool() -> None:
     assert SC.route is not None
     assert "plot" in SC.route.tool.lower()
@@ -405,7 +459,7 @@ def _handed(said: str, place: str, *looked_up: str) -> tuple[Result | None, Game
 
     async def scenario() -> Result | None:
         brain = HandingBrain(tool, place, looked_up)
-        r = rig(said, plotter=_plotter(game, tool=tool), brain=brain)
+        r = rig(said, plotter=_plotter(game, tool=tool, brain=True), brain=brain)
         r.say()
         result = await r.session.idle()
         await r.session.close()
@@ -422,6 +476,14 @@ def test_a_place_the_brain_hands_over_is_plotted_and_tycho_says_how_it_went() ->
         (ROUTE,),
         LINES.done.format(name="Levski"),
     )
+    assert game.route_id == "levski_all-001"
+
+
+def test_a_phrase_with_a_place_no_list_has_goes_to_the_brain() -> None:
+    # Ben's PC try, 25 Nov 2026: "Plot a route to Lipsky" got "no place called lipsky".
+    result, game = _handed("plot a route to Lipsky", "Levski")
+    assert result is not None
+    assert (result.status, result.say) == ("done", LINES.done.format(name="Levski"))
     assert game.route_id == "levski_all-001"
 
 

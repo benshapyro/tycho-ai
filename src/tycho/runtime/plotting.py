@@ -178,6 +178,8 @@ class Plotter:
     record: FailedRoute | None = None
     """Told the place, why and the last words read when a route fails on the map, with
     ``TYCHO_ROUTE_RECORD`` on (``eyes.record.FrameRecord.failed``)."""
+    brain: bool = False
+    """The session has a brain, which ``tool`` hands places to."""
 
     def asked(self, text: str) -> str | None:
         """The place the player asked for a route to, if they did. A new request:
@@ -185,6 +187,24 @@ class Plotter:
         if self.tool is not None:
             self.tool.take()
         return asked_place(text, self.route.say)
+
+    async def wanted(self, text: str) -> str | None:
+        """The place the player asked for a route to, as ``asked``; but None for a place
+        no list has, when the brain can hand one over: it hears the words instead, and
+        knows "Lipsky" is Levski (Ben, 25 Nov 2026)."""
+        place = self.asked(text)
+        if place is None or not self.brain or self.tool is None or self.lists.keys_off:
+            return place
+        said, where = placed(place, self.route.here | self.route.away)
+        if where in self.route.away:
+            return place
+        try:
+            name = await asyncio.wait_for(self.places.find(said), PLACES_SECONDS)
+        except PlaceError, TimeoutError:
+            return place  # ``answer`` says the list is missing
+        if name is None:
+            log.info("No place called %r: the brain hears the words", said)
+        return place if name is not None else None
 
     def handed(self, plain: bool) -> str | None:
         """The place the brain handed over in this request, if it did and ``plain``: the

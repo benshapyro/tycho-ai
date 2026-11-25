@@ -99,9 +99,18 @@ def best_place(terminals: Iterable[Mapping[str, Any]], said: str) -> str | None:
     return _sounds_like(rows, key)
 
 
-SOUNDS = ((r"ph", "f"), (r"ck", "k"), (r"w", "v"), (r"f", "v"), (r"y", "i"), (r"z", "s"))
+SOUNDS = (
+    (r"ph", "f"),
+    (r"ck", "k"),
+    (r"w", "v"),
+    (r"f", "v"),
+    (r"[bp]", "v"),
+    (r"y", "i"),
+    (r"e", "i"),
+    (r"z", "s"),
+)
 """Letters speech-to-text swaps for one another in a name it doesn't know ("Lewski",
-"Lefsky" for Levski: #647)."""
+"Lefsky" for Levski: #647; "Lipsky", "Lepski": Ben's PC try, 25 Nov 2026)."""
 SOUNDS_ALIKE = 0.8
 """How alike, letter for letter, a misheard name and the place's must sound."""
 

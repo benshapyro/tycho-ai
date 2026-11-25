@@ -14,6 +14,7 @@ from tycho.input.keys import Code
 _INPUT_MOUSE, _INPUT_KEYBOARD = 0, 1
 _KEYEVENTF_EXTENDEDKEY, _KEYEVENTF_KEYUP, _KEYEVENTF_SCANCODE = 0x0001, 0x0002, 0x0008
 _MOUSEEVENTF_WHEEL, _WHEEL_DELTA = 0x0800, 120
+_MOUSEEVENTF_MOVE = 0x0001
 # Mouse buttons 1-5 (left, right, middle, back, forward): (down flag, up flag, extra data).
 _MOUSE_BUTTONS = {
     1: (0x0002, 0x0004, 0),
@@ -27,6 +28,8 @@ _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 _DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
 CLICK_SECONDS = 0.06
 """How long the left button is held: a plain click, like a tap's key."""
+MOVE_SECONDS = 0.1
+"""After the pointer moves, before the button goes down: for the game to see it there."""
 GAME_EXECUTABLE = "StarCitizen.exe"
 
 
@@ -66,6 +69,14 @@ class _INPUT(ctypes.Structure):
 def _send(event: _INPUT) -> None:
     if win32.user32().SendInput(1, ctypes.byref(event), ctypes.sizeof(_INPUT)) != 1:
         raise ctypes.WinError(ctypes.get_last_error())
+
+
+def _nudge(pixels: int) -> _INPUT:
+    """A mouse move of ``pixels`` to the right, as input: relative, like a real mouse's,
+    never an absolute one a game might read as a huge steering move (review of #670)."""
+    event = _INPUT(type=_INPUT_MOUSE)
+    event.union.mi = _MOUSEINPUT(dx=pixels, dy=0, dwFlags=_MOUSEEVENTF_MOVE)
+    return event
 
 
 class WindowsKeySender:
@@ -144,6 +155,13 @@ class WindowsClicker:
             return "the spot is outside the game window"
         if not user32.SetCursorPos(rect.left + x, rect.top + y):
             return "Windows didn't move the pointer"
+        # SetCursorPos sends no input, and a game that reads the mouse's raw input (as
+        # Star Citizen's map may) never sees the pointer move: a one-pixel move there
+        # and back, as input, does (Ben's PC try, 25 Nov 2026: the click didn't reach
+        # the search box).
+        _send(_nudge(1))
+        _send(_nudge(-1))
+        self._sleep(MOVE_SECONDS)
         sender = WindowsKeySender()
         left = Code("mouse", _LEFT)
         sender.down(left)
