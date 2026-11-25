@@ -4,7 +4,6 @@ keybinds, the speech model, the commands. Out of ``app.py`` (#398)."""
 import logging
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from tycho import paths
@@ -153,9 +152,8 @@ def build_session(
     matcher = load_commands(pack)
     keybinds = (lambda: store.keybinds) if store is not None else lambda: NO_KEYBINDS
     presser = Presser(sender, focus, game=pack.name)
-    plotter = plotter_for(pack, game_state, reader, clicker, keybinds, presser)
-    if plotter is not None:  # a guessed place waits as long as any question (#650)
-        plotter = replace(plotter, confirm_seconds=current.confirm_seconds)
+    called = (lambda: address.name) if address is not None else (lambda: "")
+    plotter = plotter_for(pack, game_state, reader, clicker, keybinds, presser, called)
     tool = plotter.tool if plotter is not None and not pack.safety.keys_off else None
     extra = [tool] if tool is not None else []  # keys off: the brain explains the map
     return Session(
@@ -177,7 +175,7 @@ def build_session(
         confirm_seconds=current.confirm_seconds,
         log_transcripts=current.keep_transcripts,
         on_result=on_result,
-        address=(lambda: address.name) if address is not None else (lambda: ""),
+        address=called,
         display=display,
         safety_lists=pack.safety,
         eyes=Eyes(pack.look, camera) if camera is not None and pack.look else None,
@@ -193,6 +191,7 @@ def plotter_for(
     clicker: Clicker | None,
     keybinds: Callable[[], Keybinds],
     presser: Presser,
+    address: Callable[[], str] = lambda: "",
 ) -> Plotter | None:
     """Plotting a route on the game's map (#588), for a pack with a ``[route]`` table
     whose game state reads the log lines the flow needs."""
@@ -205,7 +204,10 @@ def plotter_for(
         return None
     places = BUILT_IN.places[route.places]()
     tool = RouteTool(route.tool) if route.tool else None
-    return Plotter(route, places, reader, clicker, game_state, keybinds, pack.safety, presser, tool)
+    safety = pack.safety
+    return Plotter(
+        route, places, reader, clicker, game_state, keybinds, safety, presser, tool, address=address
+    )
 
 
 def game_state_for(pack: GamePack, store: GameKeys | None) -> GameState | None:

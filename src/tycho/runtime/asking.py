@@ -67,6 +67,8 @@ class Question:
     deadline: float
     by_brain: bool = False
     say: str = ""
+    route: str = ""
+    """A guessed place to plot on "confirm", in place of the commands (#650)."""
 
 
 async def ask_brain(
