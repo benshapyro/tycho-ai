@@ -9,8 +9,11 @@ The flow, as the pack declares it (``RouteFlow``):
    its search box, and for the log to show the player is in a pilot's seat: a route
    already set (``route_set``), or the map's "no route" line (``seated``) since step 1;
 3. click the search box, in that frame (the first click);
-4. type the place's name, letter by letter, and press Enter (``enter``);
-5. read a fresh frame: the typed name, the results, and the chosen place among them;
+4. type the place's name, letter by letter: after the first, the box's empty words must
+   be gone, and after the last, the box's own line must show the name, before Enter
+   (``enter``) is pressed (#654: letters that didn't land could reach the game);
+5. read a fresh frame: the RESULTS header under the box, and the chosen place under it
+   in the panel's column (a RECENT list doesn't count, #654);
 6. click the panel's close button (the second, last click), found from the search box
    by the pack's offset and only if text recognition agrees something is there;
 7. clear the route (``clear``) if one is set, then plot (``plot``);
@@ -28,6 +31,7 @@ Blocking: the session runs ``plot`` on the key thread. A cancel (push-to-talk pr
 again) stops it between steps.
 """
 
+import logging
 import re
 import threading
 import time
@@ -48,6 +52,8 @@ from tycho.runtime.messages import Status
 from tycho.runtime.planning import Refusal, Steps, plan_request
 from tycho.safety import is_confirm_grade
 from tycho.situation import Logged
+
+log = logging.getLogger(__name__)
 
 MAX_CLICKS = 2
 """The search box, then the panel's close button (ADR 3, 24 Nov 2026)."""
@@ -172,7 +178,17 @@ class _Run:
         self._click(reading, _middle(box), "the search box")
         if not self._fresh().has(flow.search_box):  # the map closed: type nothing
             raise _Stop("failed", lines.stuck, "the map closed before typing")
-        self._type(name)
+        self._wait(flow.beat_seconds)  # the box takes keys a moment after the click (#654)
+        self._type(name[:1])
+        self.pressed.append(f"typed {name[:1]}")  # the log shows it, even if the game took it
+        self._wait(flow.beat_seconds)
+        if self._fresh().has(flow.search_box):  # still empty: type no more letters
+            raise _Stop("failed", lines.not_typed, "the search box didn't take the first letter")
+        self._type(name[1:])
+        self._wait(flow.beat_seconds)
+        if not _shows(_row(self._fresh(), box), name):
+            raise _Stop("failed", lines.not_typed, "the search box doesn't show the name")
+        self.pressed[-1] = f"typed {name}"
         self._press(presses[flow.enter])
         self._wait(flow.beat_seconds)
         reading = self._fresh()
@@ -243,6 +259,7 @@ class _Run:
             except UnsupportedKey as e:  # NAME only lets through what can be typed
                 raise _Stop("failed", "", str(e)) from e
             self._key(code)
+            log.debug("Typed %r into the map's search", letter)
             self.typed = True
 
     def _key(self, code: Code) -> None:
@@ -290,9 +307,11 @@ class _Run:
         under = _column(reading.below(max(word.top + word.height for word in box)), box, reading)
         if reading.has(self.flow.no_results):
             raise _Stop("failed", lines.no_results.format(name=name), "the map found nothing")
-        if not reading.has(self.flow.results) or not reading.has(name):
+        header = under.find(self.flow.results)
+        if header is None:
             raise _Stop("failed", lines.stuck, "the frame doesn't show the search results")
-        if not under.has(name):
+        listed = under.below(max(word.top + word.height for word in header))
+        if not _shows(listed, name):  # under RESULTS, not a RECENT list or a marker (#654)
             raise _Stop("failed", lines.not_listed.format(name=name), "not among the results")
 
     def _close_button(self, reading: Reading, box: tuple[Word, ...]) -> tuple[int, int]:
@@ -348,6 +367,27 @@ def _column(reading: Reading, box: tuple[Word, ...], frame: Reading) -> Reading:
     right = max(word.right for word in box) + round(0.35 * frame.height)
     kept = tuple(w for w in reading.words if left <= w.left and w.right <= right)
     return Reading(reading.width, reading.height, kept, reading.window)
+
+
+def _row(reading: Reading, box: tuple[Word, ...]) -> Reading:
+    """Only the words on the search box's own line: what's typed in it (#654)."""
+    top = min(word.top for word in box)
+    bottom = max(word.top + word.height for word in box)
+    slack = (bottom - top) // 2
+    across = _column(reading, box, reading)
+    kept = tuple(w for w in across.words if top - slack <= w.middle[1] <= bottom + slack)
+    return Reading(reading.width, reading.height, kept, reading.window)
+
+
+def _shows(reading: Reading, name: str) -> bool:
+    """Whether a line of ``reading`` holds ``name``, compared as squeezed text, so
+    "ARC-L1" read as one word still matches, and a caret read as a letter after the
+    typed name doesn't hide it (review of #655)."""
+    wanted = squeezed(name).replace(" ", "")
+    return bool(wanted) and any(
+        wanted in squeezed(" ".join(w.text for w in line)).replace(" ", "")
+        for line in reading.lines()
+    )
 
 
 def _near(point: tuple[int, int], spot: tuple[int, int], reach: float) -> bool:

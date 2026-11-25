@@ -107,6 +107,11 @@ class Game:
     log_quiet: bool = False
     """The map opens but no "No Route loaded!" line comes (a patch changed it)."""
     shows_x: bool = True
+    takes_keys: bool = True
+    """False: the clicked box ignores the keys Tycho sends, and they reach the game (#654)."""
+    recent: tuple[str, ...] = ()
+    """Places in the map's RECENT list, shown under the box before anything is typed."""
+    stray: list[str] = field(default_factory=list[str])
 
     def __post_init__(self) -> None:
         if self.route_id:
@@ -115,7 +120,10 @@ class Game:
     # --- keys ---
     def key(self, code: Code) -> None:
         if self.box_has_keys and code in LETTERS:  # the box takes every letter, R and C too
-            self.typed += LETTERS[code]
+            if self.takes_keys:
+                self.typed += LETTERS[code]
+            else:
+                self.stray.append(LETTERS[code])
             return
         if code == code_for("enter") and self.box_has_keys:
             self.entered = True
@@ -160,6 +168,9 @@ class Game:
             return Reading(WIDTH, HEIGHT, (Word("FUEL", 100, 900, 60, 20, 0),), window=7)
         box = self.typed.upper().split() or ["SEARCH", "LOCATIONS..."]
         words = [Word(text, BOX[0] + 70 * i, BOX[1], 60, BOX[3], 0) for i, text in enumerate(box)]
+        if not self.typed:
+            for i, place in enumerate(("RECENT", *(p.upper() for p in self.recent))):
+                words.append(Word(place, BOX[0], 220 + 40 * i, 90, 20, 10 + i))
         if (self.box_has_keys or self.entered) and self.shows_x:
             words.append(Word("x", CLOSE[0] - 6, CLOSE[1] - 8, 12, 16, 0))
         if self.entered:
@@ -439,3 +450,86 @@ def test_a_map_marker_with_the_name_is_not_a_result() -> None:
     assert done.status == "failed"
     assert done.say == "The map didn't list Levski."
     assert game.clicks == [BOX_MIDDLE]
+
+
+def test_a_box_that_takes_no_letters_gets_one_and_no_enter() -> None:
+    game = Game(takes_keys=False)
+    done = _plot(game)
+    assert (done.status, done.say) == ("failed", LINES.not_typed)
+    assert game.stray == ["l"]  # one letter, then it stopped
+    assert "typed L" in done.pressed  # and the action log shows it
+    assert not game.entered
+    assert not game.route_id
+    assert "ui_textfield_enter" not in done.pressed
+
+
+def test_a_recent_list_is_not_the_search_results() -> None:
+    game = Game(recent=("levski",))
+    real = game.read
+
+    def read() -> Reading:
+        reading = real()
+        if not game.entered:
+            return reading
+        # The search found nothing under the box; RESULTS shows only far out of the
+        # panel, while the RECENT list under the box still names Levski.
+        kept = tuple(w for w in reading.words if w.line not in (1, 2))
+        recent = (Word("RECENT", BOX[0], 220, 90, 20, 10), Word("LEVSKI", BOX[0], 260, 90, 20, 11))
+        elsewhere = Word("RESULTS", 1800, 600, 90, 20, 12)
+        return Reading(reading.width, reading.height, (*kept, *recent, elsewhere), reading.window)
+
+    class Reader:
+        def read(self) -> Reading:
+            return read()
+
+    done = _plot(game, reader=Reader())
+    assert done.status == "failed"
+    assert game.clicks == [BOX_MIDDLE]  # never the close button
+    assert not game.route_id
+
+
+def test_a_caret_or_a_hyphenated_name_still_reads_as_typed() -> None:
+    game = Game(places={"arc-l1": "arcl1_all-001"})
+    real = game.read
+
+    def read() -> Reading:
+        reading = real()
+        if game.typed and not game.entered:  # one OCR word, and the caret as an I
+            kept = tuple(w for w in reading.words if w.line != 0)
+            box = Word(game.typed.upper() + "I", BOX[0], BOX[1], 90, BOX[3], 0)
+            return Reading(reading.width, reading.height, (*kept, box), reading.window)
+        return reading
+
+    class Reader:
+        def read(self) -> Reading:
+            return read()
+
+    _plot(game, "ARC-L1", reader=Reader())
+    assert game.entered
+
+
+def test_the_name_must_show_in_the_box_before_enter() -> None:
+    game = Game()
+    real = game.read
+
+    def read() -> Reading:
+        reading = real()
+        if game.typed and not game.entered:  # only part of the name reached the box
+            kept = tuple(w for w in reading.words if w.line != 0)
+            part = Word(game.typed[:2].upper(), BOX[0], BOX[1], 60, BOX[3], 0)
+            return Reading(reading.width, reading.height, (*kept, part), reading.window)
+        return reading
+
+    class Reader:
+        def read(self) -> Reading:
+            return read()
+
+    done = _plot(game, reader=Reader())
+    assert (done.status, done.say) == ("failed", LINES.not_typed)
+    assert not game.entered
+
+
+def test_typing_is_in_the_pressed_list() -> None:
+    done = _plot(Game())
+    assert done.status == "done"
+    assert "typed Levski" in done.pressed
