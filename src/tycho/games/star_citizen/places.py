@@ -52,6 +52,16 @@ class UexPlaces:
             raise PlaceError(f"UEX's list of places: {e}") from e
         return best_place(self._trade.terminals.values(), said)
 
+    def guessed(self, said: str, name: str) -> bool:
+        """A guess unless every word said (but filler) is a word of the name, or it's
+        one of the names' short forms ("a18"): "lorvile" and "dlevsky" are guesses,
+        "wide forest" for ARC-L1 Wide Forest Station isn't."""
+        spoken = " ".join(normalize(said))
+        if spoken in PLACE_ALIASES or squash(said) == squash(name):
+            return False
+        words = {squash(word) for word in normalize(name)}
+        return not all(squash(w) in words for w in normalize(said) if w not in FILLER)
+
     def name_of(self, route_id: str) -> str | None:
         """ "levski_all-001" is Levski: the id's first word is a place's whole name."""
         first = re.split(r"[^a-z0-9]+", route_id.lower())[0]

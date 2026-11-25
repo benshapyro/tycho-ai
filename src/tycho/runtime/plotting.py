@@ -12,9 +12,10 @@ import functools
 import json
 import logging
 import threading
+import time
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import Executor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from tycho.brain.lookups import LookupResult, failure
 from tycho.input import Presser
@@ -23,6 +24,7 @@ from tycho.packs import Safety
 from tycho.packs.routes import PlaceError, Places, Route
 from tycho.runtime.messages import Progress, Status
 from tycho.runtime.route import Clicker, Place, RouteLog, ScreenReader, plot
+from tycho.runtime.routing import reply_to_question
 from tycho.text import normalize, similarity
 
 log = logging.getLogger(__name__)
@@ -130,6 +132,17 @@ class RouteTool:
         return place
 
 
+@dataclass(slots=True)
+class Asking:
+    """A guessed place Tycho asked about (#650): plotted if the next words are "confirm"
+    before ``deadline``; any other words end the question (ADR 13)."""
+
+    name: str | None = None
+    deadline: float = 0.0
+    sure: str | None = None
+    """The place the player just confirmed, so ``answer`` doesn't ask again."""
+
+
 @dataclass(frozen=True, slots=True)
 class Plotter:
     """What the session needs to plot a route: the pack's ``[route]`` table, its places,
@@ -145,12 +158,20 @@ class Plotter:
     presser: Presser
     tool: RouteTool | None = None
     """The brain's way to ask for a route, if the pack gives it one."""
+    confirm_seconds: float = 10.0
+    clock: Callable[[], float] = time.monotonic
+    asking: Asking = field(default_factory=Asking)
 
     def asked(self, text: str) -> str | None:
-        """The place the player asked for a route to, if they did. A new request:
-        anything the brain handed over for an earlier one is dropped."""
+        """The place the player asked for a route to, if they did, or confirmed one
+        Tycho asked about. A new request: anything the brain handed over for an earlier
+        one is dropped, and so is a question the words don't confirm."""
         if self.tool is not None:
             self.tool.take()
+        name, self.asking.name = self.asking.name, None
+        if name and self.clock() <= self.asking.deadline and reply_to_question(text) == "confirm":
+            self.asking.sure = name
+            return name
         return asked_place(text, self.route.say)
 
     def handed(self, plain: bool) -> str | None:
@@ -189,6 +210,11 @@ class Plotter:
         if name is None:
             progress.say = lines.unknown_place.format(name=said)
             return "not_understood", f"no place called {said!r}"
+        sure, self.asking.sure = self.asking.sure, None
+        if sure != name and self.places.guessed(said, name):  # #650: ask first
+            self.asking.name, self.asking.deadline = name, self.clock() + self.confirm_seconds
+            progress.question = f"{lines.confirm.format(name=name)} Say confirm."
+            return "asking", f'{said!r} may be {name}: hold push-to-talk and say "confirm"'
         log.info("Plotting a route to %s", name)
         run = functools.partial(
             plot,

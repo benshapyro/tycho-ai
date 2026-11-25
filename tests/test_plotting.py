@@ -44,7 +44,11 @@ class FakePlaces:
         self.asked.append(said)
         if self.error is not None:
             raise self.error
-        return next((name for name in self.names if name.lower() == said.lower()), None)
+        guess = {"lefski": "Levski"}.get(said.lower())  # a misheard name it fits
+        return guess or next((n for n in self.names if n.lower() == said.lower()), None)
+
+    def guessed(self, said: str, name: str) -> bool:
+        return said.lower() != name.lower()
 
     def name_of(self, route_id: str) -> str | None:
         return None
@@ -446,3 +450,75 @@ def test_after_a_look_the_place_is_dropped() -> None:
     asyncio.run(tool.run({"place": "Levski"}))
     assert plotter.handed(plain=False) is None
     assert plotter.handed(plain=True) is None  # dropped, not kept for later
+
+
+# --- A guessed place is asked about first (#650) ------------------------------------------
+
+
+def test_a_guessed_place_is_asked_about_and_nothing_is_pressed() -> None:
+    game = Game()
+    status, _detail, progress = _answer(_plotter(game), "lefski")
+    assert status == "asking"
+    assert progress.question == "Plot a route to Levski? Say confirm."
+    assert progress.pressed == []
+    assert not game.nav
+
+
+def test_confirm_plots_the_place_tycho_asked_about() -> None:
+    game = Game()
+    plotter = _plotter(game)
+    assert _answer(plotter, "lefski")[0] == "asking"
+    place = plotter.asked("confirm")
+    assert place == "Levski"
+    status, _detail, progress = _answer(plotter, place)
+    assert (status, progress.say) == ("done", LINES.done.format(name="Levski"))
+    assert game.route_id == "levski_all-001"
+
+
+def test_other_words_end_the_question() -> None:
+    plotter = _plotter(Game())
+    _answer(plotter, "lefski")
+    assert plotter.asked("landing gear") is None
+    assert plotter.asked("confirm") is None
+
+
+def test_a_late_confirm_plots_nothing() -> None:
+    now = [0.0]
+    plotter = _plotter(Game(), clock=lambda: now[0], confirm_seconds=5.0)
+    _answer(plotter, "lefski")
+    now[0] = 6.0
+    assert plotter.asked("confirm") is None
+
+
+def test_the_session_asks_then_plots_on_confirm() -> None:
+    game = Game()
+
+    async def scenario() -> list[Result]:
+        r = rig("plot a route to lefski", "confirm", plotter=_plotter(game))
+        r.say()
+        first = await r.session.idle()
+        r.say()
+        second = await r.session.idle()
+        await r.session.close()
+        return [result for result in (first, second) if result is not None]
+
+    asked, plotted = run(scenario)
+    assert (asked.status, asked.question) == ("asking", "Plot a route to Levski? Say confirm.")
+    assert (plotted.status, plotted.say) == ("done", LINES.done.format(name="Levski"))
+    assert game.route_id == "levski_all-001"
+
+
+@pytest.mark.parametrize(
+    ("said", "name", "guess"),
+    [
+        ("levski", "Levski", False),
+        ("a18", "Area 18", False),
+        ("wide forest", "ARC-L1 Wide Forest Station", False),
+        ("the pyro gateway", "Pyro Gateway", False),
+        ("lorvile", "Lorville", True),
+        ("dlevsky", "Levski", True),
+        ("new babbadge", "New Babbage", True),
+    ],
+)
+def test_uex_places_say_when_a_name_is_a_guess(said: str, name: str, guess: bool) -> None:
+    assert UexPlaces(FakeTradeUex()).guessed(said, name) is guess
