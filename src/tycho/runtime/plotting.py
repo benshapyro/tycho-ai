@@ -41,8 +41,8 @@ FILLER = frozenset(
 
 HEARD_ALIKE = 0.75
 """How alike, letter for letter, the words before the phrase's last word must be to
-the phrase's: "plotta route to" and "pona route to" are "plot a route to" misheard
-(#647)."""
+the phrase's, with its last two words heard right: "plotta route to" and "pona route
+to" are "plot a route to" misheard (#647)."""
 NOT_A_REQUEST = frozenset(
     {"best", "fastest", "quickest", "shortest", "safest", "cheapest", "longest", "nearest"}
     | {"closest", "good", "great", "trade", "trading", "mining", "cargo", "delivery"}
@@ -80,9 +80,10 @@ def _heard(words: list[str], phrase: list[str]) -> int | None:
         return None
     if words[: len(phrase)] == phrase:
         return len(phrase)
-    *before, last = phrase
+    before = phrase[:-1]
     for used in range(max(2, len(phrase) - 1), len(phrase) + 2):
-        if used < len(words) and words[used - 1] == last:
+        # "route" or "course" must be heard right: "set cruise to max" is a command.
+        if used < len(words) and words[used - 2 : used] == phrase[-2:]:
             said = "".join(words[: used - 1])
             if similarity(said, "".join(before)) >= HEARD_ALIKE:
                 return used

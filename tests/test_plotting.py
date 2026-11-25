@@ -93,7 +93,6 @@ def _answer(plotter: Plotter, said: str, trying: bool = False) -> tuple[str, str
         ("set route to the Pyro Gateway", "the pyro gateway"),
         ("Plotta Route to Lewski.", "lewski"),  # misheard (#647)
         ("Pona route to Dlevsky,", "dlevsky"),
-        ("plot a root to Levski", "levski"),
     ],
 )
 def test_a_route_phrase_then_a_place_asks_for_a_route(said: str, place: str) -> None:
@@ -113,6 +112,7 @@ def test_a_route_phrase_then_a_place_asks_for_a_route(said: str, place: str) -> 
         "trade route to Lorville",
         "what is the fastest route to Pyro",
         "plot route Levski",  # no "to": not the phrase
+        "set cruise to max",  # "set course to" a letter or two off: a command
         "plot a route to Hurston and spool up",  # more than a route: the brain's
     ],
 )

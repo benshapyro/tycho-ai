@@ -153,7 +153,8 @@ def build_session(
     keybinds = (lambda: store.keybinds) if store is not None else lambda: NO_KEYBINDS
     presser = Presser(sender, focus, game=pack.name)
     plotter = plotter_for(pack, game_state, reader, clicker, keybinds, presser)
-    extra = [plotter.tool] if plotter is not None and plotter.tool is not None else []
+    tool = plotter.tool if plotter is not None and not pack.safety.keys_off else None
+    extra = [tool] if tool is not None else []  # keys off: the brain explains the map
     return Session(
         audio=audio,
         push_to_talk=PushToTalk(bindings, input_sources(*bindings)),
