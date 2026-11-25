@@ -162,6 +162,8 @@ if __name__ == "__main__":
         sys.exit(child.main(sys.argv[2:]))
     if sys.argv[1:2] == [child.READ_FLAG]:  # the game window's words, for a route (#588)
         sys.exit(child.main_words(sys.argv[2:]))
+    if sys.argv[1:2] == [child.LOOP_FLAG]:  # the words again and again, for one route (#661)
+        sys.exit(child.main_words_loop(sys.argv[2:]))
     if sys.stdout is None or sys.stderr is None:  # tycho-app.exe: no terminal
         sys.exit(windowed(sys.argv[1:]))
     from tycho.cli import main

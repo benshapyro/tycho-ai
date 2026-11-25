@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 from tycho import win32
 from tycho.eyes import CaptureError, Picture, child
+from tycho.eyes.loop import WordsLoop
 from tycho.eyes.words import Reading
 from tycho.input.windows import executable_of
 
@@ -54,19 +55,54 @@ class WindowsCamera:
 
 class WindowsScreenReader:
     """Reads the words on ``executable``'s window, for the route flow's local check
-    (#588). Satisfies ``runtime.route.ScreenReader``. Blocking: called off the event
-    loop. No camera sound: the frame never leaves the child process, and the words are
-    only compared with what Tycho chose (ADR 14's amendment "a local check before a
-    press")."""
+    (#588). Satisfies ``runtime.route.ScreenReader`` and ``runtime.route.Warm``.
+    Blocking: called off the event loop. No camera sound: the frame never leaves the
+    child process, and the words are only compared with what Tycho chose (ADR 14's
+    amendment "a local check before a press"). Between ``warm`` and ``finish`` (one
+    route), one child reads every look (``eyes.loop``, #661)."""
 
     def __init__(self, executable: str) -> None:
         self.executable = executable
+        self._loop: WordsLoop | None = None
+        self._times: list[float] = []
+
+    def warm(self) -> None:
+        """Start the child for the game window now, so the first look is quick."""
+        window = game_window(self.executable)
+        if window is None:
+            return
+        try:
+            self._loop_for(window).open()
+        except CaptureError as e:
+            log.info("The map check's reader didn't start: %s", e)
 
     def read(self) -> Reading:
         window = game_window(self.executable)
         if window is None:
             raise CaptureError(f"no {self.executable} window is open (or it's minimised)")
-        return dataclasses.replace(child.read_words(window), window=window)
+        start = time.monotonic()
+        try:
+            return dataclasses.replace(self._loop_for(window).read(), window=window)
+        finally:
+            self._times.append(time.monotonic() - start)
+
+    def finish(self) -> None:
+        """The route is over: close the child, and log how long the looks took."""
+        if self._loop is not None:
+            self._loop.close()
+            self._loop = None
+        if self._times:
+            shown = ", ".join(f"{t:.2f}" for t in self._times)
+            log.info("Map check: %d looks (%s s)", len(self._times), shown)
+        self._times = []
+
+    def _loop_for(self, window: int) -> WordsLoop:
+        if self._loop is not None and self._loop.window != window:
+            self._loop.close()
+            self._loop = None
+        if self._loop is None:
+            self._loop = WordsLoop(window)
+        return self._loop
 
 
 def game_window(executable: str) -> int | None:
