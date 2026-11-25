@@ -180,14 +180,15 @@ class _Run:
             raise _Stop("failed", lines.stuck, "the map closed before typing")
         self._wait(flow.beat_seconds)  # the box takes keys a moment after the click (#654)
         self._type(name[:1])
+        self.pressed.append(f"typed {name[:1]}")  # the log shows it, even if the game took it
         self._wait(flow.beat_seconds)
         if self._fresh().has(flow.search_box):  # still empty: type no more letters
             raise _Stop("failed", lines.not_typed, "the search box didn't take the first letter")
         self._type(name[1:])
         self._wait(flow.beat_seconds)
-        if not _row(self._fresh(), box).has(name):
+        if not _shows(_row(self._fresh(), box), name):
             raise _Stop("failed", lines.not_typed, "the search box doesn't show the name")
-        self.pressed.append(f"typed {name}")
+        self.pressed[-1] = f"typed {name}"
         self._press(presses[flow.enter])
         self._wait(flow.beat_seconds)
         reading = self._fresh()
@@ -310,7 +311,7 @@ class _Run:
         if header is None:
             raise _Stop("failed", lines.stuck, "the frame doesn't show the search results")
         listed = under.below(max(word.top + word.height for word in header))
-        if not listed.has(name):  # under RESULTS, not a RECENT list or a marker (#654)
+        if not _shows(listed, name):  # under RESULTS, not a RECENT list or a marker (#654)
             raise _Stop("failed", lines.not_listed.format(name=name), "not among the results")
 
     def _close_button(self, reading: Reading, box: tuple[Word, ...]) -> tuple[int, int]:
@@ -376,6 +377,17 @@ def _row(reading: Reading, box: tuple[Word, ...]) -> Reading:
     across = _column(reading, box, reading)
     kept = tuple(w for w in across.words if top - slack <= w.middle[1] <= bottom + slack)
     return Reading(reading.width, reading.height, kept, reading.window)
+
+
+def _shows(reading: Reading, name: str) -> bool:
+    """Whether a line of ``reading`` holds ``name``, compared as squeezed text, so
+    "ARC-L1" read as one word still matches, and a caret read as a letter after the
+    typed name doesn't hide it (review of #655)."""
+    wanted = squeezed(name).replace(" ", "")
+    return bool(wanted) and any(
+        wanted in squeezed(" ".join(w.text for w in line)).replace(" ", "")
+        for line in reading.lines()
+    )
 
 
 def _near(point: tuple[int, int], spot: tuple[int, int], reach: float) -> bool:
