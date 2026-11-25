@@ -272,7 +272,7 @@ def test_with_keys_off_star_citizen_s_own_lines_take_their_advisor_words() -> No
     assert "call update_fleet first and then answer the action as you would alone" in off
     assert "call update_fleet first and run_actions after it, in the same reply" in on
     assert "say to open the star map, set the destination there and engage quantum" in off
-    assert "open the star map if it's listed" in on
+    assert 'when the player\'s words start "plot a route to"' in on
 
 
 def test_with_keys_off_star_citizen_s_briefing_has_no_line_about_pressing() -> None:
