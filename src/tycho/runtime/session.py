@@ -402,7 +402,8 @@ class Session:
                 return seen.result(progress, request, trace, heard, text)
             picked = await self._asker.ask(corrected.for_brain, keys, seen)
             trace.mark("brain")
-            if self._plotter is not None and (place := self._plotter.handed()):  # #647
+            plain = seen is None and isinstance(picked, Reply) and not picked.looked_up
+            if self._plotter is not None and (place := self._plotter.handed(plain)):  # #647
                 status, detail = await self._plotter.answer(
                     place, self._keys, cancel, trying, progress
                 )

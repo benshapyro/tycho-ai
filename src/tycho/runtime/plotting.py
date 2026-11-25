@@ -152,9 +152,13 @@ class Plotter:
             self.tool.take()
         return asked_place(text, self.route.say)
 
-    def handed(self) -> str | None:
-        """The place the brain handed over in this request, if it did."""
-        return self.tool.take() if self.tool is not None else None
+    def handed(self, plain: bool) -> str | None:
+        """The place the brain handed over in this request, if it did and ``plain``: the
+        brain looked at nothing, searched nothing and looked nothing up first, so the
+        place is the player's words. Otherwise it's dropped: nothing presses after a
+        look (ADR 14), a web search (ADR 15) or a search of past talk."""
+        place = self.tool.take() if self.tool is not None else None
+        return place if plain else None
 
     async def answer(
         self,
