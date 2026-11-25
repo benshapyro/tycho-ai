@@ -533,3 +533,41 @@ def test_typing_is_in_the_pressed_list() -> None:
     done = _plot(Game())
     assert done.status == "done"
     assert "typed Levski" in done.pressed
+
+
+# --- The route record (TYCHO_ROUTE_RECORD, ADR 14's amendment of 25 Nov 2026) ---------------
+
+
+class _Record:
+    def __init__(self) -> None:
+        self.told: list[tuple[str, Reading | None]] = []
+
+    def __call__(self, why: str, read: Reading | None) -> None:
+        self.told.append((why, read))
+
+
+def test_a_failure_on_the_map_is_told_to_the_record_with_the_last_words() -> None:
+    record = _Record()
+    done = _plot(Game(), "Port Tressler", record=record)
+    assert done.status == "failed"
+    [(why, read)] = record.told
+    assert why == done.detail
+    assert read is not None
+    assert read.words
+
+
+def test_no_search_box_is_recorded_even_with_no_words() -> None:
+    class Blind:
+        def read(self) -> Reading:
+            raise CaptureError("no StarCitizen.exe window is open")
+
+    record = _Record()
+    _plot(Game(), reader=Blind(), record=record)
+    assert record.told == [("no frame showed the map's search box", None)]
+
+
+def test_a_route_plotted_or_refused_before_the_map_is_never_recorded() -> None:
+    record = _Record()
+    assert _plot(Game(), record=record).status == "done"
+    assert _plot(Game(), "Levski\nR", record=record).status == "refused"  # not a name
+    assert record.told == []

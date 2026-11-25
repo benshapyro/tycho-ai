@@ -37,7 +37,7 @@ if TYPE_CHECKING:
         Transcriber,
     )
     from tycho.runtime.callouts import Callouts
-    from tycho.runtime.plotting import Plotter
+    from tycho.runtime.plotting import FailedRoute, Plotter
     from tycho.runtime.route import Clicker, ScreenReader
     from tycho.stt.parakeet import ParakeetTranscriber
 
@@ -133,6 +133,7 @@ def build_session(
     camera: Camera | None = None,
     reader: ScreenReader | None = None,
     clicker: Clicker | None = None,
+    record: FailedRoute | None = None,
     pack: GamePack,
 ) -> Session:
     """The talking loop, wired the way ``tycho run`` wires it, for ``pack``'s game: its
@@ -140,7 +141,8 @@ def build_session(
     ``store`` is None for a pack with no keybinds part. ``camera``: the game window's,
     for a pack that can look (its ``look`` phrases, #31). ``reader``, ``clicker``: the
     game window's words and clicks, for a pack that plots routes (its ``[route]``, #588);
-    ``make_brain`` gets the route's look-up, if the pack gives the brain one (#647)."""
+    ``make_brain`` gets the route's look-up, if the pack gives the brain one (#647).
+    ``record``: told when a route fails on the map (``TYCHO_ROUTE_RECORD``)."""
     from tycho.input import Presser
     from tycho.lexicon import Lexicon
     from tycho.ptt.monitor import PushToTalk
@@ -153,7 +155,7 @@ def build_session(
     keybinds = (lambda: store.keybinds) if store is not None else lambda: NO_KEYBINDS
     presser = Presser(sender, focus, game=pack.name)
     called = (lambda: address.name) if address is not None else (lambda: "")
-    plotter = plotter_for(pack, game_state, reader, clicker, keybinds, presser, called)
+    plotter = plotter_for(pack, game_state, reader, clicker, keybinds, presser, called, record)
     tool = plotter.tool if plotter is not None and not pack.safety.keys_off else None
     extra = [tool] if tool is not None else []  # keys off: the brain explains the map
     return Session(
@@ -192,6 +194,7 @@ def plotter_for(
     keybinds: Callable[[], Keybinds],
     presser: Presser,
     address: Callable[[], str] = lambda: "",
+    record: FailedRoute | None = None,
 ) -> Plotter | None:
     """Plotting a route on the game's map (#588), for a pack with a ``[route]`` table
     whose game state reads the log lines the flow needs."""
@@ -206,7 +209,17 @@ def plotter_for(
     tool = RouteTool(route.tool) if route.tool else None
     safety = pack.safety
     return Plotter(
-        route, places, reader, clicker, game_state, keybinds, safety, presser, tool, address=address
+        route,
+        places,
+        reader,
+        clicker,
+        game_state,
+        keybinds,
+        safety,
+        presser,
+        tool,
+        address=address,
+        record=record,
     )
 
 

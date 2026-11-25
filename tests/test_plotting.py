@@ -596,3 +596,15 @@ def test_a_pack_without_here_or_away_cuts_nothing_off() -> None:
         "levski in the next system",
         "",
     )
+
+
+def test_a_route_that_fails_on_the_map_tells_the_record_its_place() -> None:
+    told: list[tuple[str, str]] = []
+
+    def record(place: str, why: str, _read: object) -> None:
+        told.append((place, why))
+
+    places = FakePlaces("Port Tressler")
+    status, detail, _progress = _answer(_plotter(Game(), places, record=record), "port tressler")
+    assert status == "failed"
+    assert told == [("Port Tressler", detail)]
