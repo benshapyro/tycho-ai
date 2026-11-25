@@ -50,12 +50,12 @@ from tycho.tile.design import accent_for, accent_for_maker
 
 SC = built_in(STAR_CITIZEN)
 
-STAR_CITIZEN_INSTRUCTIONS = "714418d6a29b750e7e8bcc07eae1f708e0fda5b8ec05077a50a29fd97b3b9371"
+STAR_CITIZEN_INSTRUCTIONS = "cdfdd24710348dfb8aa9312f7bac82c1f3d4bd9259d6abd91f92170f8328f39e"
 """The SHA-256 of Star Citizen's fixed briefing text: as it was before packs (main at
 6645025), then with "where is" and "how do I" searched on the first ask (#353), then
 saying a toggle was toggled, not which way (#545), then a card for any how-to with
 more than one step (#626), then plotting a route by voice (#588), then which system
-the player is in (#656). The
+the player is in (#656) and asking it only for "around here" (#660). The
 prompt cache and the eval's scores depend on it staying byte for byte the same. If you
 change the text on purpose, update this, and expect the cache to refill."""
 

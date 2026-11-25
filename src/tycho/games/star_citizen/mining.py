@@ -44,9 +44,10 @@ Where to mine a resource in Star Citizen, from the current patch's game files: t
 moons, planets and asteroid fields that have it, how it's mined there (ship, ground \
 vehicle or hand mining), and the chance of finding it. Pass the resource as the \
 player said it ("quantanium", "lindinium"), and a place to keep to: one they named (a \
-system, planet or moon), else the system they're in now (their words, then the \
-request's log line; never a home base). Use it for "where do I mine X" and "is there X on \
-Daymar"; it needs a resource. For selling ore use commodity_prices. In the \
+system, planet or moon), else the system they're in now if known (their words, then \
+the request's log line; never a home base), else empty for every system. Use it \
+for "where do I mine X" and "is there X on Daymar"; it needs a resource. For \
+selling ore use commodity_prices. In the \
 answer, credit the Star Citizen Wiki once, in a few words. A result with not_found: \
 say briefly what wasn't found."""
 
