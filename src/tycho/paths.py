@@ -107,6 +107,12 @@ def tile_cards_dir() -> Path:
     return logs_dir() / "tile-cards"
 
 
+def route_frames_dir() -> Path:
+    """Pictures of the map when a route failed on it, only with ``TYCHO_ROUTE_RECORD`` on:
+    a review tool (``eyes.record``, ADR 14's amendment of 25 Nov 2026). On this PC only."""
+    return logs_dir() / "route-frames"
+
+
 def history_dir() -> Path:
     """Past conversations, one file per play session, only with ``keep_history`` on
     (ADR 14, #484). On this PC only: never the roaming config folder."""

@@ -2,7 +2,8 @@
 
 The picture is kept in memory, sent to the brain with that one request, and dropped:
 never written to disk, never kept for follow-ups, and never put in the log, the brain
-traces, the action log or a crash report. ``Picture`` keeps its bytes out of its own
+traces, the action log or a crash report. (The one exception is a review tool that's off
+for players: ``eyes.record``, ``TYCHO_ROUTE_RECORD``.) ``Picture`` keeps its bytes out of its own
 ``repr`` so a stray log line can't hold them either.
 
 Taking one is a boundary (``runtime.Camera``, with a fake in ``tests/fakes``); the

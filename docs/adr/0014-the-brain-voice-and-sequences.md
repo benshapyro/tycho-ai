@@ -178,3 +178,18 @@ Claude was asked for one tool a reply (`disable_parallel_tool_use`). In the play
 *Status: accepted with ADR 3's evening amendment of the same date. The maintainer approved this text on 24 November 2026 (#630, [#588](https://github.com/benshapyro/tycho-ai/issues/588)).*
 
 The local check (above) may also find where to click: the search box, and the first result's text, for ADR 3's two clicks. It takes a new frame right before each click. If that frame doesn't show the open map with the thing it's looking for, nothing is clicked or typed. All other terms stand: read on the PC by Windows' text recognition, never sent or kept, only the outcome logged. The check can stop a click but never choose what to plot.
+
+## Amendment, 25 November 2026: a picture of the map when a route fails, for review
+
+*Status: accepted. The maintainer chose "yes, opt-in, on my PC only" on 25 November 2026, after a route on his PC stopped with "no frame showed the map's search box" and the log couldn't say why ([#661](https://github.com/benshapyro/tycho-ai/issues/661)).*
+
+**Context.** The local check (above) never keeps a frame, so when it fails, nobody can see what the map looked like. A review tool like the Tile's card record (`TYCHO_TILE_RECORD`) is needed to find the cause.
+
+**Decision.** With `TYCHO_ROUTE_RECORD=1` set on the PC, and only then:
+
+- **When.** A route that fails after the map was opened gets one more picture of the game window. A route that's plotted, refused or cancelled gets none, and so does a failure before the map opens.
+- **What's kept.** The picture goes into the logs folder's `route-frames`, at the size a look sends (a JPEG). Beside it, a line in `frames.jsonl` holds when, the place, why the flow stopped, and the words the last check read, with their boxes. Only the newest 20 of each are kept. The picture is a new frame, taken a second or two after the failing one, and the line gives both times, so the two aren't mistaken for one frame.
+- **Never sent.** The picture and the words stay on the PC. They never go to the brain, crash reports, or anyone else. The words aren't put in the log, and they're never said or acted on. The record only holds them as data.
+- **Off for players.** No setting in the window or settings.toml turns it on, and setup never asks about it. It's for the maintainer's PC checks. As with the Tile's record, a player is never asked to turn it on without being told what it keeps.
+
+All other terms of the local check stand: during the flow, frames are read and dropped, and only the outcome is logged.

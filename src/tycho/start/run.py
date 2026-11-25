@@ -34,7 +34,9 @@ from tycho.stt import ModelError
 from tycho.voice.choice import load_speaker
 
 if TYPE_CHECKING:
+    from tycho.packs import GamePack
     from tycho.runtime.instance import OpenRequests
+    from tycho.runtime.plotting import FailedRoute
     from tycho.runtime.ports import Speaker
     from tycho.spoken_settings import Live
     from tycho.tile.display import TileDisplay
@@ -336,6 +338,7 @@ def _start(
             camera=WindowsCamera(pack.window) if pack.window and pack.look else None,
             reader=WindowsScreenReader(pack.window) if pack.window and pack.route else None,
             clicker=WindowsClicker() if pack.route else None,
+            record=_route_record(pack),
             pack=pack,
             on_result=ended,
         )
@@ -440,3 +443,15 @@ def remove_second_command(current: Settings) -> int:
     path = settings.save(current.model_copy(update={"push_to_talk_2": None}))
     print(f"Removed your second push-to-talk button. Saved to {path}")
     return 0
+
+
+def _route_record(pack: GamePack) -> FailedRoute | None:
+    """A picture of the map when a route fails on it, with ``TYCHO_ROUTE_RECORD`` on (a
+    review tool, ADR 14's amendment of 25 Nov 2026). Off for players."""
+    from tycho.eyes import record
+    from tycho.eyes.windows import WindowsCamera
+
+    if not (pack.window and pack.route):
+        return None
+    frames = record.from_env(WindowsCamera(pack.window))
+    return frames.failed if frames is not None else None

@@ -17,6 +17,7 @@ from concurrent.futures import Executor
 from dataclasses import dataclass, field
 
 from tycho.brain.lookups import LookupResult, failure
+from tycho.eyes.words import Reading
 from tycho.input import Presser
 from tycho.keybinds import Keybinds
 from tycho.packs import Safety
@@ -152,6 +153,10 @@ class Asking:
     name: str = ""
 
 
+type FailedRoute = Callable[[str, str, Reading | None], None]
+"""Told the place, why and the last words read, when a route fails on the map."""
+
+
 @dataclass(frozen=True, slots=True)
 class Plotter:
     """What the session needs to plot a route: the pack's ``[route]`` table, its places,
@@ -170,6 +175,9 @@ class Plotter:
     asking: Asking = field(default_factory=Asking)
     address: Callable[[], str] = lambda: ""
     """What to call the player, at the end of a question (#15)."""
+    record: FailedRoute | None = None
+    """Told the place, why and the last words read when a route fails on the map, with
+    ``TYCHO_ROUTE_RECORD`` on (``eyes.record.FrameRecord.failed``)."""
 
     def asked(self, text: str) -> str | None:
         """The place the player asked for a route to, if they did. A new request:
@@ -242,6 +250,7 @@ class Plotter:
             log=self.log,
             cancel=cancel,
             name_of=self.places.name_of,
+            record=functools.partial(self.record, name) if self.record is not None else None,
         )
         plotted = await asyncio.get_running_loop().run_in_executor(keys, run)
         progress.pressed.extend(plotted.pressed)

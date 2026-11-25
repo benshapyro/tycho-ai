@@ -25,7 +25,8 @@ key that clashes with something dangerous, nothing is pressed. Every press and c
 checks the game window is in front. Any step that fails stops the flow there: nothing
 more is pressed, and the map is left open for the player (except on foot, where it's
 closed again, having shown nothing). One request types one name once, and never tries
-again on its own.
+again on its own. With ``record`` (``TYCHO_ROUTE_RECORD``, a review tool), a stop after
+the map was opened hands why, and the last check's words, to it (ADR 14, 25 Nov 2026).
 
 Blocking: the session runs ``plot`` on the key thread. A cancel (push-to-talk pressed
 again) stops it between steps.
@@ -130,13 +131,20 @@ def plot(
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
     name_of: Callable[[str], str | None] = lambda _id: None,
+    record: Callable[[str, Reading | None], None] | None = None,
 ) -> Plotted:
     """Plot a route to ``place``, step by step as the module says. Blocking.
-    ``name_of``: the shown name for a route line's id, if known, for "replacing"."""
+    ``name_of``: the shown name for a route line's id, if known, for "replacing".
+    ``record``: told why, and the last words read, when the flow fails on the map."""
     run = _Run(place, flow, keybinds, lists, presser, reader, clicker, log, cancel, sleep, clock)
     try:
         said = run.steps(name_of)
     except _Stop as stop:
+        if record is not None and stop.status == "failed" and run.opened:
+            try:
+                record(stop.detail, run.last)
+            except Exception:  # a review tool never changes what the player hears
+                logging.getLogger(__name__).debug("The route record failed", exc_info=True)
         return Plotted(stop.status, stop.say, stop.detail, run.pressed, run.clicks, run.typed)
     return Plotted("done", said, f"route plotted to {place.name}", run.pressed, run.clicks, True)
 
@@ -157,6 +165,10 @@ class _Run:
     pressed: list[str] = field(default_factory=list[str])
     clicks: int = 0
     typed: bool = False
+    opened: bool = False
+    """The map's key was pressed: a failure from here on is the map's to record."""
+    last: Reading | None = None
+    """The last frame's words, for the record."""
 
     def steps(self, name_of: Callable[[str], str | None]) -> str:
         flow, lines, name = self.flow, self.flow.lines, self.place.name
@@ -169,6 +181,7 @@ class _Run:
         mark = self.log.newest()
         self._press(presses[flow.nav])
         self._press(presses[flow.open_map])
+        self.opened = True
         box, reading = self._map_open(mark)
         if box is None:
             raise _Stop("failed", lines.no_map, "no frame showed the map's search box")
@@ -276,7 +289,8 @@ class _Run:
 
     def _fresh(self) -> Reading:
         try:
-            return self.reader.read()
+            self.last = self.reader.read()
+            return self.last
         except CaptureError as e:
             raise _Stop("failed", self.flow.lines.stuck, f"no frame: {e}") from e
 
@@ -287,7 +301,7 @@ class _Run:
         reading, box = Reading(0, 0), None
         while True:
             try:
-                reading = self.reader.read()
+                reading = self.last = self.reader.read()
                 box = reading.find(self.flow.search_box)
             except CaptureError:
                 box = None
