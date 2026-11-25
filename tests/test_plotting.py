@@ -10,10 +10,14 @@ from typing import Any, cast
 
 import pytest
 
+from tests.fakes.fake_brain import FakeBrain
 from tests.fakes.fake_keys import FakeClock, FakeFocus, FakeKeySender
 from tests.fakes.fake_uex import FakeTradeUex
 from tests.test_route import KEYBINDS, Game, _key_went_down  # pyright: ignore[reportPrivateUsage]
 from tests.test_runtime import rig, run
+from tycho.brain import Reply
+from tycho.brain.decisions import BrainRequest, Decision
+from tycho.brain.lookups import RECALLED
 from tycho.games import BUILT_IN
 from tycho.games.star_citizen.places import UexPlaces, best_place
 from tycho.input import Presser
@@ -21,7 +25,7 @@ from tycho.packs import STAR_CITIZEN, as_run, built_in
 from tycho.packs.routes import PlaceError, Route, read
 from tycho.runtime.conversation import would_speak
 from tycho.runtime.messages import Progress, Result
-from tycho.runtime.plotting import ROUTE, Plotter, asked_place
+from tycho.runtime.plotting import ROUTE, Plotter, RouteTool, asked_place
 
 SC = built_in(STAR_CITIZEN)
 assert SC.route is not None
@@ -40,7 +44,7 @@ class FakePlaces:
         self.asked.append(said)
         if self.error is not None:
             raise self.error
-        return next((name for name in self.names if name.lower() == said), None)
+        return next((name for name in self.names if name.lower() == said.lower()), None)
 
     def name_of(self, route_id: str) -> str | None:
         return None
@@ -87,6 +91,8 @@ def _answer(plotter: Plotter, said: str, trying: bool = False) -> tuple[str, str
         ("can you plot a route to New Babbage for me", "new babbage"),
         ("navigate to Lorville", "lorville"),
         ("set route to the Pyro Gateway", "the pyro gateway"),
+        ("Plotta Route to Lewski.", "lewski"),  # misheard (#647)
+        ("Pona route to Dlevsky,", "dlevsky"),
     ],
 )
 def test_a_route_phrase_then_a_place_asks_for_a_route(said: str, place: str) -> None:
@@ -101,6 +107,13 @@ def test_a_route_phrase_then_a_place_asks_for_a_route(said: str, place: str) -> 
         "plot a route to please",
         "landing gear",
         "what's the best route to sell Laranite",
+        "best route to sell gold",  # "best" is one letter from "set" (#647)
+        "fastest route to Pyro",
+        "trade route to Lorville",
+        "what is the fastest route to Pyro",
+        "plot route Levski",  # no "to": not the phrase
+        "set cruise to max",  # "set course to" a letter or two off: a command
+        "plot a route to Hurston and spool up",  # more than a route: the brain's
     ],
 )
 def test_other_words_never_ask_for_a_route(said: str) -> None:
@@ -200,6 +213,7 @@ def _table() -> dict[str, object]:
         "close_offset": list(flow.close_offset),
         "close_reach": flow.close_reach,
         "lines": lines,
+        "tool": SC.route.tool,
     }
 
 
@@ -261,6 +275,7 @@ def test_only_a_built_in_pack_with_a_window_and_a_log_may_plot() -> None:
         ("the pyro gateway", "Pyro Gateway"),
         ("arccorp", "ArcCorp"),
         ("terminus", "Terminus"),
+        ("sell gold", None),
         ("nowhere at all", None),
     ],
 )
@@ -290,6 +305,29 @@ def test_a_place_whose_name_starts_with_a_filler_word_still_matches() -> None:
     assert best_place(rows, "the area 18") == "Area 18"
 
 
+SPACE = [
+    {"city_name": "Lorville", "planet_name": "Hurston"},
+    {"city_name": "Orison", "planet_name": "Crusader"},
+    {"space_station_name": "Levski", "planet_name": "Delamar"},
+    {"outpost_name": "Lyria"},
+]
+
+
+@pytest.mark.parametrize(
+    ("said", "name"),
+    [
+        ("lewski", "Levski"),
+        ("dlevsky", "Levski"),
+        ("lefsky", "Levski"),
+        ("lorvil", "Lorville"),
+        ("sell gold", None),
+        ("lev", None),
+    ],
+)
+def test_a_misheard_place_is_the_one_it_sounds_like(said: str, name: str | None) -> None:
+    assert best_place(SPACE, said) == name
+
+
 def test_with_key_actions_off_no_place_is_looked_up() -> None:
     places = FakePlaces("Levski")
     lists = as_run(SC, key_actions=False).safety
@@ -305,3 +343,106 @@ def test_a_slow_list_of_places_says_why_in_the_log() -> None:
 
     status, detail, _progress = _answer(_plotter(Game(), Slow()), "levski")
     assert (status, detail) == ("failed", "no list of places: it took too long")
+
+
+# --- The brain hands a place over (#647) --------------------------------------------------
+
+
+def test_the_route_tool_only_hands_the_place_over() -> None:
+    tool = RouteTool("Plot a route.")
+    said = asyncio.run(tool.run({"place": "  Levski  "}))
+    assert not said.is_error
+    assert "Levski" in said.content
+    assert tool.take() == "Levski"
+    assert tool.take() is None
+    assert asyncio.run(tool.run({"place": " "})).is_error
+    assert tool.take() is None
+
+
+def test_a_new_request_drops_a_place_handed_over_earlier() -> None:
+    tool = RouteTool("Plot a route.")
+    plotter = _plotter(Game(), tool=tool)
+    asyncio.run(tool.run({"place": "Levski"}))
+    assert plotter.asked("landing gear") is None
+    assert plotter.handed(plain=True) is None
+
+
+def test_star_citizen_gives_the_brain_the_route_tool() -> None:
+    assert SC.route is not None
+    assert "plot" in SC.route.tool.lower()
+    assert "\n" not in SC.route.tool
+
+
+def test_a_route_table_without_a_tool_gives_the_brain_none() -> None:
+    table = {key: value for key, value in _table().items() if key != "tool"}
+    route = _read(table)
+    assert route is not None
+    assert route.tool == ""
+    with pytest.raises(ValueError, match="tool"):
+        _read(_table() | {"tool": 3})
+
+
+class HandingBrain(FakeBrain):
+    """A brain that calls ``plot_route`` with ``place``, then replies as if it plotted."""
+
+    def __init__(self, tool: RouteTool, place: str, looked_up: tuple[str, ...] = ()) -> None:
+        super().__init__(Reply("Plotting a route to Levski.", looked_up=looked_up))
+        self.tool, self.place = tool, place
+
+    async def decide(self, request: BrainRequest) -> Decision:
+        await self.tool.run({"place": self.place})
+        return await super().decide(request)
+
+
+def _handed(said: str, place: str, *looked_up: str) -> tuple[Result | None, Game]:
+    game, tool = Game(), RouteTool("Plot a route.")
+
+    async def scenario() -> Result | None:
+        brain = HandingBrain(tool, place, looked_up)
+        r = rig(said, plotter=_plotter(game, tool=tool), brain=brain)
+        r.say()
+        result = await r.session.idle()
+        await r.session.close()
+        return result
+
+    return run(scenario), game
+
+
+def test_a_place_the_brain_hands_over_is_plotted_and_tycho_says_how_it_went() -> None:
+    result, game = _handed("take us to Levski", "Levski")
+    assert result is not None
+    assert (result.status, result.commands, result.say) == (
+        "done",
+        (ROUTE,),
+        LINES.done.format(name="Levski"),
+    )
+    assert game.route_id == "levski_all-001"
+
+
+def test_the_brain_never_says_a_route_it_didnt_plot() -> None:
+    result, game = _handed("take us to Narnia", "Narnia")
+    assert result is not None
+    assert result.status == "not_understood"
+    assert result.say == LINES.unknown_place.format(name="Narnia")
+    assert "Plotting" not in (result.say or "")
+    assert not game.nav
+
+
+@pytest.mark.parametrize(
+    "looked_up",
+    [RECALLED, "searched the web for where to sell Laranite", "looked up trade routes"],
+)
+def test_a_place_found_by_a_search_or_look_up_is_never_plotted(looked_up: str) -> None:
+    result, game = _handed("take me where we went yesterday", "Levski", looked_up)
+    assert result is not None
+    assert result.status == "replied"
+    assert result.commands != (ROUTE,)
+    assert not game.nav
+
+
+def test_after_a_look_the_place_is_dropped() -> None:
+    tool = RouteTool("Plot a route.")
+    plotter = _plotter(Game(), tool=tool)
+    asyncio.run(tool.run({"place": "Levski"}))
+    assert plotter.handed(plain=False) is None
+    assert plotter.handed(plain=True) is None  # dropped, not kept for later

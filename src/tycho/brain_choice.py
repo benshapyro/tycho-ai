@@ -57,13 +57,14 @@ def load_brain(
     display: TileDisplay | None = None,
     *,
     pack: GamePack,
+    extra: Sequence[Lookup] = (),
 ) -> Brain | None:
     """The brain the settings pick, if the player stored its provider's key. Without
     one, the fast path only. ``live`` applies settings changed by voice to the running
     session; ``address`` is what to call the player (#15), read fresh for each request.
     With a ``display``, the brain may show cards while the Tile is on, in the colour of
     the ship being flown. ``pack`` is the game: its briefing,
-    and only the look-ups it names (ADR 18)."""
+    and only the look-ups it names (ADR 18), with ``extra`` (the route's, #647)."""
     choice = chosen(current)
     key = brain_key(choice)
     if key is None:
@@ -87,6 +88,7 @@ def load_brain(
     if "web" not in pack.parts.lookups:
         log.info("Web search: %s has none", pack.name)
     lookups: list[Lookup] = [lookup for part in built for lookup in part.lookups]
+    lookups.extend(extra)
     abouts = [part.about for part in built if part.about is not None]
     accents = [part.accent for part in built if part.accent is not None]
 

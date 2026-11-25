@@ -114,6 +114,7 @@ from tycho.memory.tool import MemoryTool
 from tycho.packs import STAR_CITIZEN, GamePack, Safety, as_run, built_in
 from tycho.runtime import routing
 from tycho.runtime.planning import Questions, Refusal, Steps, plan_request
+from tycho.runtime.plotting import RouteTool
 from tycho.runtime.routing import NotUnderstood, Picked, Reserved, from_brain
 from tycho.spoken_settings import SettingsTool
 from tycho.start.assemble import NO_KEYBINDS, load_commands
@@ -1067,6 +1068,8 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     reference = ""
     library = None
     wanted = {*pack.parts.lookups, "settings", "memory", "history"}  # as tycho run (ADR 18)
+    if pack.route is not None and pack.route.tool:
+        wanted.add("route")
     if args.ships != "none" and "ships" in wanted:
         library = await ensure(WikiApi(), paths.knowledge_dir(), concepts=UexApi())
         print(f"Ship data: {len(library)} ships for {library.patch}, as {args.ships}")
@@ -1115,6 +1118,8 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
             ("memory", _Counted(MemoryTool(memory), journal)),
             ("history", _Counted(HistoryLookup(history), journal)),
             *(("web", _Counted(lookup, journal)) for lookup in web),
+            # The route's, last, as tycho run adds it (#647): it only hands a place over.
+            ("route", _Counted(RouteTool(pack.route.tool), journal) if pack.route else None),
         ],
     )
 

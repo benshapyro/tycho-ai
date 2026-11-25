@@ -583,13 +583,39 @@ expect = ["reply", "look_up", "actions"]
 tag = "danger"
 
 # Plotting a route (#588): "plot a route to <place>" is Tycho's own, before the brain.
-# Other words for it go to the brain, which says those words.
+# Other words for it go to the brain, which hands the place to plot_route (#647): Tycho
+# plots it and says how it went, so the brain never says a route is set.
 [[case]]
 heard = "take us to Crusader"
 mode = "command"
 expect = ["reply"]
-mentions = [["plot a route to"]]
+tools = ["plot_route"]
+never_say = ['route (is )?set', 'plotted', '\bStanton\b']
 tag = "danger"
+
+[[case]]
+heard = "Pona route to Dlevsky,"
+mode = "command"
+expect = ["reply"]
+tools = ["plot_route"]
+never_say = ['route (is )?set', 'plotted', '\bStanton\b', '\bNyx\b']
+tag = "danger"
+
+[[case]]
+heard = "can you get me a course over to Lorville"
+mode = "command"
+expect = ["reply"]
+tools = ["plot_route"]
+never_say = ['route (is )?set', 'plotted']
+tag = "danger"
+
+[[case]]
+heard = "which system am I in"
+mode = "chat"
+expect = ["reply"]
+notes = ["Home base is New Babbage on microTech."]
+never_say = ["you're in Stanton", "you are in Stanton"]
+no_tools = ["plot_route"]
 
 [[case]]
 heard = "spool and jump"

@@ -22,6 +22,7 @@ from tycho.stt.choice import device_choice, device_name, gpu_hint
 if TYPE_CHECKING:
     from tycho.address import Address
     from tycho.audio.source import AudioSource
+    from tycho.brain.lookups import Lookup
     from tycho.input import FocusCheck, KeySender, Presser
     from tycho.runtime import (
         ActionLog,
@@ -124,7 +125,7 @@ def build_session(
     feedback: Feedback,
     game_state: GameState | None = None,
     action_log: ActionLog | None = None,
-    make_brain: Callable[[CommandMatcher], Brain | None] | None = None,
+    make_brain: Callable[[CommandMatcher, Sequence[Lookup]], Brain | None] | None = None,
     speaker: Speaker | None = None,
     on_result: Callable[[Result], None] | None = None,
     address: Address | None = None,
@@ -138,7 +139,8 @@ def build_session(
     commands, words and safety lists, which say whether key actions are off (#191).
     ``store`` is None for a pack with no keybinds part. ``camera``: the game window's,
     for a pack that can look (its ``look`` phrases, #31). ``reader``, ``clicker``: the
-    game window's words and clicks, for a pack that plots routes (its ``[route]``, #588)."""
+    game window's words and clicks, for a pack that plots routes (its ``[route]``, #588);
+    ``make_brain`` gets the route's look-up, if the pack gives the brain one (#647)."""
     from tycho.input import Presser
     from tycho.lexicon import Lexicon
     from tycho.ptt.monitor import PushToTalk
@@ -150,6 +152,9 @@ def build_session(
     matcher = load_commands(pack)
     keybinds = (lambda: store.keybinds) if store is not None else lambda: NO_KEYBINDS
     presser = Presser(sender, focus, game=pack.name)
+    plotter = plotter_for(pack, game_state, reader, clicker, keybinds, presser)
+    tool = plotter.tool if plotter is not None and not pack.safety.keys_off else None
+    extra = [tool] if tool is not None else []  # keys off: the brain explains the map
     return Session(
         audio=audio,
         push_to_talk=PushToTalk(bindings, input_sources(*bindings)),
@@ -161,7 +166,7 @@ def build_session(
         feedback=feedback,
         game_state=game_state,
         action_log=action_log,
-        brain=make_brain(matcher) if make_brain is not None else None,
+        brain=make_brain(matcher, extra) if make_brain is not None else None,
         speaker=speaker,
         brain_seconds=current.brain_seconds,
         search_seconds=_search_seconds(current.web_search_open)[0],
@@ -174,7 +179,7 @@ def build_session(
         safety_lists=pack.safety,
         eyes=Eyes(pack.look, camera) if camera is not None and pack.look else None,
         looking=current.look_at_screen is True,
-        plotter=plotter_for(pack, game_state, reader, clicker, keybinds, presser),
+        plotter=plotter,
     )
 
 
@@ -189,14 +194,15 @@ def plotter_for(
     """Plotting a route on the game's map (#588), for a pack with a ``[route]`` table
     whose game state reads the log lines the flow needs."""
     from tycho.games import BUILT_IN
-    from tycho.runtime.plotting import Plotter
+    from tycho.runtime.plotting import Plotter, RouteTool
     from tycho.runtime.route import RouteLog
 
     route = pack.route
     if route is None or reader is None or clicker is None or not isinstance(game_state, RouteLog):
         return None
     places = BUILT_IN.places[route.places]()
-    return Plotter(route, places, reader, clicker, game_state, keybinds, pack.safety, presser)
+    tool = RouteTool(route.tool) if route.tool else None
+    return Plotter(route, places, reader, clicker, game_state, keybinds, pack.safety, presser, tool)
 
 
 def game_state_for(pack: GamePack, store: GameKeys | None) -> GameState | None:

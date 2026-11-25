@@ -144,6 +144,11 @@ close_reach = 0.02
 route_set = "quantum_route_set"      # game state's fact: a route is already set
 route_line = "route"                 # "Successfully calculated route to <id>"
 seated = "no_route_on_map"           # "No Route loaded!": only from a pilot's seat
+tool = """Plot a quantum route on the star map to a named place (a city, station, outpost, \
+moon or planet) when the player asks for a route, course or quantum jump to it in words \
+Tycho missed, or misheard ("plotta route to Lewski" is Levski, "take us to Crusader"). \
+Give the place as the game spells it. Tycho plots it after your reply and says how it \
+went in place of your reply, so reply "On it." only: never say a route is set."""
 
 [route.lines]
 done = "Route set to {name}."

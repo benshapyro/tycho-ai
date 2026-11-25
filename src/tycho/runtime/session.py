@@ -8,11 +8,10 @@ One request at a time. Pressing push-to-talk again cancels whatever is in flight
 a key sequence stops within about 10 ms with every key released; Tycho stops talking
 at once too (``speaking``, which also says who speaks when, ADR 14).
 
-The session keeps the threads, cancellation and barge-in, and the open confirm
-question (ADR 13). Where words go is ``routing``, what gets pressed is ``planning``
-(both pure, so the brain eval grades the same code, #55), asking the brain and
-answering the question is ``asking``, the log is the ``Reporter``, what was said
-lately is the ``Conversation``, the Tile's part is ``tiling``, and looking is ``look``.
+The session keeps the threads, cancellation, barge-in and the confirm question (ADR 13).
+Where words go is ``routing``, what gets pressed is ``planning`` (both pure, so the eval
+grades the same code, #55), asking the brain is ``asking``, the log is the ``Reporter``,
+the Tile's part is ``tiling``, looking is ``look`` and plotting a route is ``plotting``.
 """
 
 import asyncio
@@ -130,10 +129,8 @@ class Session:
         self._transcriber, self._lexicon = transcriber, lexicon
         self._matcher, self._keybinds = matcher, keybinds
         self._presser, self._feedback = presser, feedback
-        self._game_state = game_state
+        self._game_state, self._brain, self._speaker = game_state, brain, speaker
         self._reporter = Reporter(log_transcripts=log_transcripts, action_log=action_log)
-        self._brain = brain
-        self._speaker = speaker
         self._voice = Speaking(speaker)
         self._telling = Telling(display, self._voice, feedback)
         self._told_keys_off = False
@@ -145,13 +142,10 @@ class Session:
         self._asker = Asker(brain, times, matcher, safety_lists, voice, keybinds, lately, may)
         self._confirm_seconds = confirm_seconds
         self._question: Question | None = None
-        self._samplerate = samplerate
-        self._on_result = on_result
+        self._samplerate, self._on_result = samplerate, on_result
         self._address = address
         """What to call the player, at the end of a confirm question (#15)."""
-        self._display = display
-        self._poll_interval = poll_interval
-        self._clock = clock
+        self._display, self._poll_interval, self._clock = display, poll_interval, clock
         self._sleep = sleep
         """The wait between a sequence's steps; tests pass one that only records it (#61)."""
         self._ids = itertools.count(1)
@@ -358,8 +352,7 @@ class Session:
         corrected = self._lexicon.correct(heard)
         text = corrected.text
         trace.mark("correct")
-        # A question lasts until the player next says something, whatever it is,
-        # except "say that again", which asks it again (ADR 13, amended for #226).
+        # A question lasts until the next words, but "say that again" asks it again (#226).
         question, self._question = self._question, None
         if question is not None and self._display is not None:
             self._display.answered()
@@ -409,6 +402,12 @@ class Session:
                 return seen.result(progress, request, trace, heard, text)
             picked = await self._asker.ask(corrected.for_brain, keys, seen)
             trace.mark("brain")
+            plain = seen is None and isinstance(picked, Reply) and not picked.looked_up
+            if self._plotter is not None and (place := self._plotter.handed(plain)):  # #647
+                status, detail = await self._plotter.answer(
+                    place, self._keys, cancel, trying, progress
+                )
+                return progress.result(request, status, trace, heard, text, detail)
             if isinstance(picked, Reply):
                 progress.answered(picked.text, picked.card, picked.looked_up)
                 return progress.result(request, "replied", trace, heard, text)
