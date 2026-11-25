@@ -91,6 +91,24 @@ def _heard(words: list[str], phrase: list[str]) -> int | None:
     return None
 
 
+ELSEWHERE = frozenset(
+    {"in the next system", "in another system", "in a different system", "in the other system"}
+    | {"in next system", "in other system", "in a other system"}
+)
+"""Where a place is when the map can't plot to it: not the system the player is in (#661)."""
+
+
+def placed(said: str) -> tuple[str, str]:
+    """The place and where it was said to be: "levski in the next system" is ("levski",
+    "in the next system"). Only "in ..." after the name is cut off: a place's name may
+    hold other small words, but not "in" (#661)."""
+    words = said.split()
+    if "in" not in words[1:]:
+        return said, ""
+    cut = words.index("in", 1)
+    return " ".join(words[:cut]), " ".join(words[cut:])
+
+
 class RouteTool:
     """The brain's ``plot_route`` (#647): for a route asked in words the phrases missed.
     It only hands the place over. The session plots once the brain is done, whatever it
@@ -195,6 +213,10 @@ class Plotter:
         if self.lists.keys_off:  # the gate's reason, with nothing looked up (review of #643)
             progress.say = self.lists.keys_off
             return "refused", self.lists.keys_off
+        said, where = placed(said)
+        if where in ELSEWHERE:  # the map only searches the system the player is in
+            progress.say = lines.elsewhere.format(name=said)
+            return "refused", f"{said!r} is {where}"
         try:
             name = await asyncio.wait_for(self.places.find(said), PLACES_SECONDS)
         except (PlaceError, TimeoutError) as e:
