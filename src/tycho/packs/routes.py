@@ -15,6 +15,8 @@ from collections.abc import Collection
 from dataclasses import MISSING, dataclass, fields
 from typing import Protocol, cast
 
+from tycho.text import normalize
+
 LINE_LIMIT = 100
 """The longest line Tycho may say about a route: one sentence or two, heard once."""
 _ACTION = re.compile(r"[a-z][a-z0-9_]{0,63}")
@@ -63,9 +65,8 @@ class RouteLines:
     unknown_place: str = "I don't know a place called {name}."
     no_places: str = "I can't get the list of places right now, so I didn't plot a route."
     trying: str = "I only plot routes in the game, not while you try things here."
-    elsewhere: str = (
-        "The map only plots routes in the system you're in. Jump there first, then ask."
-    )
+    elsewhere: str = "The map can't plot a route to {name} from where you are."
+    """Said for a place the player put somewhere the map doesn't reach (``Route.away``)."""
     not_typed: str = "The map's search box didn't take what I typed, so I left the map open."
     confirm: str = "Plot a route to {name}"
     """Asked before plotting a place that was only a guess (#650); "? Say confirm." follows."""
@@ -122,11 +123,19 @@ class Route:
     tool: str = ""
     """What the brain's ``plot_route`` tool says it's for, in the game's words (#647):
     the brain hands Tycho the place when the words missed ``say``. None: no tool."""
+    here: frozenset[str] = frozenset()
+    """Said after a place to put it where the player is ("in this system"): cut off, and
+    the place plotted (#661). Normalised words."""
+    away: frozenset[str] = frozenset()
+    """Said after a place to put it where the map doesn't reach ("in the next system"):
+    Tycho says ``lines.elsewhere`` and presses nothing (#661). Normalised words."""
 
 
 _ACTIONS = ("nav", "open_map", "enter", "clear", "plot", "close_map")
 _WORDS = ("search_box", "results", "no_results", "route_set", "route_line", "seated")
-_KEYS = frozenset({"say", "places", "close_offset", "close_marks", "close_reach", "lines", "tool"})
+_KEYS = frozenset(
+    {"say", "places", "close_offset", "close_marks", "close_reach", "lines", "tool", "here", "away"}
+)
 _LINES = frozenset(f.name for f in fields(RouteLines))
 _REQUIRED_LINES = frozenset(f.name for f in fields(RouteLines) if f.default is MISSING)
 
@@ -189,7 +198,15 @@ def read(
     tool = table.get("tool", "")
     if not isinstance(tool, str):
         raise ValueError(f"{where}: tool must be some text")
-    return Route(say, places, flow, " ".join(tool.split()))
+    here, away = (_ends(table.get(key), f"{where} {key}") for key in ("here", "away"))
+    return Route(say, places, flow, " ".join(tool.split()), here, away)
+
+
+def _ends(value: object, where: str) -> frozenset[str]:
+    """Words said after a place, normalised; none when the key is left out."""
+    if value is None:
+        return frozenset()
+    return frozenset(" ".join(normalize(end)) for end in _texts(value, where))
 
 
 def _lines(value: object, where: str) -> RouteLines:

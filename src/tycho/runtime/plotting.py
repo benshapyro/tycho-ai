@@ -12,7 +12,7 @@ import functools
 import json
 import logging
 import threading
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from concurrent.futures import Executor
 from dataclasses import dataclass, field
 
@@ -91,22 +91,17 @@ def _heard(words: list[str], phrase: list[str]) -> int | None:
     return None
 
 
-ELSEWHERE = frozenset(
-    {"in the next system", "in another system", "in a different system", "in the other system"}
-    | {"in next system", "in other system", "in a other system"}
-)
-"""Where a place is when the map can't plot to it: not the system the player is in (#661)."""
-
-
-def placed(said: str) -> tuple[str, str]:
-    """The place and where it was said to be: "levski in the next system" is ("levski",
-    "in the next system"). Only "in ..." after the name is cut off: a place's name may
-    hold other small words, but not "in" (#661)."""
-    words = said.split()
-    if "in" not in words[1:]:
-        return said, ""
-    cut = words.index("in", 1)
-    return " ".join(words[:cut]), " ".join(words[cut:])
+def placed(said: str, ends: Collection[str]) -> tuple[str, str]:
+    """The place and where it was said to be, when it ends in one of ``ends`` (the pack's
+    ``here`` and ``away``): "levski in the next system" is ("levski", "in the next
+    system"). Any other "in ..." stays part of the place ("the spaceport in lorville")
+    (#661, review of #662). Compared as normalised words, as the brain may hand over
+    "Levski, in the next system."."""
+    words = normalize(said)
+    for cut in range(1, len(words)):
+        if (where := " ".join(words[cut:])) in ends:
+            return " ".join(words[:cut]), where
+    return said, ""
 
 
 class RouteTool:
@@ -213,8 +208,8 @@ class Plotter:
         if self.lists.keys_off:  # the gate's reason, with nothing looked up (review of #643)
             progress.say = self.lists.keys_off
             return "refused", self.lists.keys_off
-        said, where = placed(said)
-        if where in ELSEWHERE:  # the map only searches the system the player is in
+        said, where = placed(said, self.route.here | self.route.away)
+        if where in self.route.away:  # e.g. the map only searches the player's system
             progress.say = lines.elsewhere.format(name=said)
             return "refused", f"{said!r} is {where}"
         try:

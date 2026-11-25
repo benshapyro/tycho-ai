@@ -149,6 +149,18 @@ moon or planet) when the player asks for a route, course or quantum jump to it i
 Tycho missed, or misheard ("plotta route to Lewski" is Levski, "take us to Crusader"). \
 Give the place as the game spells it. Tycho plots it after your reply and says how it \
 went in place of your reply, so reply "On it." only: never say a route is set."""
+# Said after a place (#661): "here" is cut off and the place plotted; "away" can't be
+# plotted, as the map only searches the system the player is in.
+here = ["in this system", "in the current system", "in my system", "in this star system"]
+away = [
+    "in the next system",
+    "in next system",
+    "in another system",
+    "in a different system",
+    "in the other system",
+    "in other system",
+    "in another star system",
+]
 
 [route.lines]
 done = "Route set to {name}."
@@ -166,3 +178,4 @@ no_key = "A key the star map needs isn't bound, so I didn't open it."
 unknown_place = "I don't know a place called {name}."
 no_places = "I can't get the list of places right now, so I didn't plot a route."
 trying = "I only plot routes in the game, not while you try things here."
+elsewhere = "The map only plots routes in the system you're in. Jump there first, then ask."
