@@ -63,6 +63,7 @@ class RouteLines:
     unknown_place: str = "I don't know a place called {name}."
     no_places: str = "I can't get the list of places right now, so I didn't plot a route."
     trying: str = "I only plot routes in the game, not while you try things here."
+    not_typed: str = "The map's search box didn't take what I typed, so I left the map open."
     confirm: str = "Plot a route to {name}"
     """Asked before plotting a place that was only a guess (#650); "? Say confirm." follows."""
 
