@@ -32,6 +32,11 @@ class Places(Protocol):
         fits. Raises ``PlaceError`` when the list can't be had."""
         ...
 
+    def guessed(self, said: str, name: str) -> bool:
+        """Whether ``name`` is only a guess at what was ``said`` (misheard or misspelt),
+        so Tycho asks before plotting (#650)."""
+        ...
+
     def name_of(self, route_id: str) -> str | None:
         """The name of the place a log's route id is to, if the list knows it."""
         ...
@@ -58,6 +63,8 @@ class RouteLines:
     unknown_place: str = "I don't know a place called {name}."
     no_places: str = "I can't get the list of places right now, so I didn't plot a route."
     trying: str = "I only plot routes in the game, not while you try things here."
+    confirm: str = "Plot a route to {name}?"
+    """Asked before plotting a place that was only a guess (#650)."""
 
 
 @dataclass(frozen=True, slots=True)
