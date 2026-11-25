@@ -37,6 +37,7 @@ from tycho.brain.lookups import LOOKUP_SECONDS, run_lookup
 from tycho.brain.rounds import (
     CARD_NOTE,
     CUT_SHORT,
+    EMPTY_ACT,
     LAST_CALL,
     LAST_PICK,
     MAX_CALLS,
@@ -105,6 +106,22 @@ def test_no_actions_with_a_line_to_say_is_a_reply() -> None:
     with no actions and "o7", and the player got an error instead of the line."""
     picked = parse_tool_call("run_actions", {"actions": [], "say": " o7. "}, ACTIONS, ())
     assert picked == Reply("o7.")
+
+
+@pytest.mark.parametrize("say", ["unused", "Unused.", "", "  ", "n/a", "None", "..."])
+def test_no_actions_and_a_placeholder_line_is_never_a_reply(say: str) -> None:
+    """#666: for "which blueprints have I got" the brain ended with run_actions, no
+    actions and say "unused" (the acts are strict, so say must be filled: #639), and
+    the player heard "unused"."""
+    with pytest.raises(BrainError, match="nothing to say"):
+        parse_tool_call("run_actions", {"actions": [], "say": say}, ACTIONS, ())
+
+
+def test_a_placeholder_line_with_a_press_is_not_spoken() -> None:
+    picked = parse_tool_call("run_actions", {"actions": ["v_lights"], "say": "unused"}, ACTIONS, ())
+    assert picked == RunActions(("v_lights",), "")
+    sequence = parse_tool_call("run_sequence", {"name": "startup", "say": "N/A"}, (), SEQUENCES)
+    assert sequence == RunSequence("startup", "")
 
 
 def test_a_long_say_line_is_cut() -> None:
@@ -610,6 +627,39 @@ def test_claude_can_act_after_a_look_up_and_the_act_is_still_checked() -> None:
     )
     client = _Calls(_looks_up(), _picks(["v_unbound"], "toolu_2"), ([], _final("No key.")))
     assert _ask(client, FakeLookup()) == Reply("No key.")  # the act was checked: not pressed
+
+
+def _empty_act(text: str = "", use_id: str = "toolu_2") -> tuple[list[Any], Any]:
+    """A call that ends with run_actions, no actions and say "unused" (#666), after
+    ``text`` if any."""
+    stop = _tool_stop("run_actions", {"actions": [], "say": "unused"}, use_id)
+    words = [SimpleNamespace(type="text", text=text)] if text else []
+    return [stop], SimpleNamespace(
+        content=[*words, stop.content_block], stop_reason="tool_use", usage=_final("").usage
+    )
+
+
+def test_an_empty_act_after_a_look_up_gets_a_real_answer_next_call() -> None:
+    """#666, the eval on 25 Nov: owned_blueprints found three, then the brain called
+    run_actions with nothing in it and say "unused", which was spoken. Now the model is
+    told nothing was said, and its next call's answer is what the player hears."""
+    client = _Calls(_looks_up(), _empty_act(), ([], _final("You have three blueprints.")))
+    assert _ask(client, FakeLookup()) == Reply("You have three blueprints.")
+    (result,) = client.requests[2]["messages"][-1]["content"][:1]
+    assert result["tool_use_id"] == "toolu_2"
+    assert EMPTY_ACT in result["content"]
+
+
+def test_an_empty_act_after_the_answer_in_words_says_the_words() -> None:
+    client = _Calls(_looks_up(), _empty_act("You have three blueprints."))
+    assert _ask(client, FakeLookup()) == Reply("You have three blueprints.")
+    assert len(client.requests) == 2  # no third call for words it already wrote
+
+
+def test_only_empty_acts_to_the_end_is_an_error_never_unused() -> None:
+    client = _Calls(*[_empty_act(use_id=f"toolu_{n}") for n in range(MAX_CALLS)])
+    with pytest.raises(BrainError):
+        _ask(client, FakeLookup())
 
 
 def test_a_broken_look_up_becomes_an_error_result_not_a_crash() -> None:

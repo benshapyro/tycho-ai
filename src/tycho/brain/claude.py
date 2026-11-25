@@ -50,7 +50,6 @@ from tycho.brain.rounds import (
     Round,
     Turn,
     credited,
-    final_reply,
     last_note,
     ms,
     traced,
@@ -296,9 +295,9 @@ class ClaudeBrain:
                 round_.used(tokens, cost, str(message.stop_reason), priced="estimate")
                 if message.stop_reason == "refusal":
                     raise BrainError("Claude declined")
-                if not round_.looking:
-                    text = " ".join(b.text for b in message.content if b.type == "text")
-                    return final_reply(text, turn.credits, str(message.stop_reason))
+                text = " ".join(b.text for b in message.content if b.type == "text")
+                if (said := round_.said(text, turn.credits, str(message.stop_reason))) is not None:
+                    return said
                 if message.stop_reason == "max_tokens" and _unanswered(message, round_):
                     # A call cut with no block end never got a result: sent back, Claude
                     # would refuse the request (400), so it ends here (#287).

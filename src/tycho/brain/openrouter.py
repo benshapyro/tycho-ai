@@ -45,7 +45,6 @@ from tycho.brain.rounds import (
     Round,
     Turn,
     credited,
-    final_reply,
     last_note,
     ms,
     traced,
@@ -305,8 +304,10 @@ class OpenRouterBrain:
             round_.used(tokens, cost, message.finish or "unknown", message.host, priced)
             if message.finish == "content_filter":
                 raise BrainError("the model declined")
-            if not round_.looking:
-                return final_reply(message.text, turn.credits, message.finish or "unknown")
+            if (
+                said := round_.said(message.text, turn.credits, message.finish or "unknown")
+            ) is not None:
+                return said
             results = await round_.results()
             messages.append(
                 {

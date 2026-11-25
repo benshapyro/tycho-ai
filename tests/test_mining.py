@@ -5,6 +5,10 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+import pytest
+
+from tycho.brain.lookups import run_lookup
+from tycho.games.star_citizen import mining
 from tycho.games.star_citizen.mining import MiningLookup
 from tycho.games.star_citizen.wiki import WikiError
 
@@ -218,3 +222,75 @@ def test_hephaestanite_is_found_by_its_own_raw_mark() -> None:
     result = _run(lookup, resource="hephaestanite")
     assert result["resource"] == "Hephaestanite (R)"
     assert result["places"][0]["name"] == "Cellin"
+
+
+class _Slow(FakeMiningWiki):
+    """Every answer takes a moment, and Aberdeen's takes ``aberdeen`` seconds."""
+
+    def __init__(self, aberdeen: float = 0.0) -> None:
+        super().__init__()
+        self.aberdeen = aberdeen
+
+    async def get(self, path: str, params: Mapping[str, str | int] | None = None) -> Any:
+        await asyncio.sleep(self.aberdeen if path.endswith("/aberdeen") else 0.01)
+        return await super().get(path, params)
+
+
+def test_look_ups_at_once_share_their_fetches() -> None:
+    """#667: a recipe's materials are looked up at once, and on a cold start each
+    fetched the same locations again, so all three ran out of time together."""
+    wiki = _Slow()
+    lookup = MiningLookup(wiki)
+
+    async def go() -> None:
+        await lookup.prepare()
+        wiki.calls.clear()
+        asked = {"resource": "quantainium", "place": ""}
+        await asyncio.gather(lookup.run(asked), lookup.run(asked), lookup.run(asked))
+
+    asyncio.run(go())
+    paths = [path for path, _ in wiki.calls]
+    assert len(paths) == len(set(paths))  # each fetched once, however many asked
+
+
+def test_a_slow_location_is_listed_without_its_chance_in_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#667: a slow Wiki gave the brain "took too long" and no places at all; now it
+    gets the places, with a chance for those that answered in time."""
+    monkeypatch.setattr(mining, "DETAILS_SECONDS", 0.05)
+    lookup = MiningLookup(_Slow(aberdeen=5.0))
+
+    async def go() -> Any:
+        await lookup.prepare()
+        return await run_lookup(lookup, {"resource": "quantainium", "place": ""}, 1.0)
+
+    result = asyncio.run(go())
+    assert not result.is_error
+    body = json.loads(result.content)
+    chances = {p["name"]: p.get("chance_percent") for p in body["places"]}
+    assert chances == {"Akiro Cluster": 5.0, "Lyria": 3.0, "Aberdeen": None}
+    assert "slow" in body["note"]
+
+
+def test_a_fetch_out_of_time_carries_on_and_is_kept(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(mining, "DETAILS_SECONDS", 0.05)
+    wiki = _Slow(aberdeen=0.2)
+    lookup = MiningLookup(wiki)
+    asked = {"resource": "quantainium", "place": ""}
+
+    async def go() -> tuple[Any, Any]:
+        await lookup.prepare()
+        first = await lookup.run(asked)
+        await asyncio.sleep(0.3)  # Aberdeen's answer comes in after all
+        return first, await lookup.run(asked)
+
+    first, again = asyncio.run(go())
+    assert "Aberdeen" not in _chances(first)
+    assert _chances(again)["Aberdeen"] == 0.1
+    assert sum(path.endswith("/aberdeen") for path, _ in wiki.calls) == 1
+
+
+def _chances(result: Any) -> dict[str, float]:
+    places = json.loads(result.content)["places"]
+    return {p["name"]: p["chance_percent"] for p in places if "chance_percent" in p}

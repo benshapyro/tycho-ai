@@ -7,6 +7,11 @@ filter needs the exact name ("Quantainium (Raw)", "Lindinium (Ore)"), so the nam
 said is matched to the game's own names first. Every location found is looked at
 closely, at once (66 for Quantainium, about 0.7 s), so the best are found; a place
 the player named keeps it to that place.
+
+A recipe asks for several materials at once (#667): their fetches are shared, so the
+same location is fetched once, and a fetch carries on when the look-up that started
+it runs out of time, so the next ask finds it kept. Locations still unanswered at
+``DETAILS_SECONDS`` are listed without their chance rather than the look-up timing out.
 """
 
 import asyncio
@@ -14,7 +19,7 @@ import difflib
 import json
 import logging
 import time
-from collections.abc import Mapping
+from collections.abc import Coroutine, Mapping
 from typing import Any, cast
 
 from tycho.brain.lookups import LookupResult, failure
@@ -33,6 +38,10 @@ DETAILED = 100
 SHOWN = 6
 PAGE = 100
 """Locations asked for in one request; more than this and the answer says so."""
+DETAILS_SECONDS = 2.2
+"""From the look-up's start, how long it waits for locations' chances before it
+answers with what it has, inside ``SECONDS``. Three materials at once on a cold start
+ran past ``SECONDS`` on the player's PC, and the recipe lost every mining spot (#667)."""
 KEEP_SECONDS = 3600.0
 """Mining data changes only with a patch: what was fetched is kept for an hour."""
 FORMS = ("{} (Raw)", "{} (Ore)", "{} (R)", "{}")
@@ -59,6 +68,9 @@ class MiningLookup:
         self._source = source
         self._clock = clock
         self._kept: dict[str, tuple[float, Any]] = {}
+        self._fetching: dict[str, asyncio.Task[dict[str, Any]]] = {}
+        """Fetches under way, by what was asked, shared by every look-up that needs one
+        (#667): three materials at once share their locations."""
         self._names: dict[str, list[str]] = {}
         """The game's commodity names by their plain form ("quantainium": ["Quantainium
         (Raw)"]), for names said or spelt a little wrong. Empty until prepared."""
@@ -107,6 +119,7 @@ class MiningLookup:
                     self._names.setdefault(_key(name), []).append(name)
 
     async def run(self, arguments: Mapping[str, object]) -> LookupResult:
+        by = asyncio.get_running_loop().time() + DETAILS_SECONDS
         said = " ".join(str(arguments.get("resource") or "").split())
         place = " ".join(str(arguments.get("place") or "").split())
         if not said:
@@ -128,13 +141,12 @@ class MiningLookup:
                     )
                 locations = inside
             looked = [loc for loc in locations if loc.get("slug")][:DETAILED]
-            answers = await asyncio.gather(
-                *(self._resources(str(loc["slug"])) for loc in looked), return_exceptions=True
-            )
+            answers = await _by(by, [self._resources(str(loc["slug"])) for loc in looked])
         except WikiError as e:
             log.warning("Mining look-up failed: %s", e)
             return failure(f"the Star Citizen Wiki API didn't answer ({e}); answer without it")
-        if all(isinstance(a, BaseException) for a in answers) and answers:
+        late = sum(isinstance(a, TimeoutError) for a in answers)
+        if all(isinstance(a, BaseException) for a in answers) and answers and not late:
             first = next(a for a in answers if isinstance(a, BaseException))
             log.warning("Mining look-up failed: %s", first)
             return failure(f"the Star Citizen Wiki API didn't answer ({first}); answer without it")
@@ -150,7 +162,12 @@ class MiningLookup:
             "found_in": len(locations),
             "places": places[:SHOWN],
         }
-        if len(locations) >= PAGE:
+        if late:
+            body["note"] = (
+                f"the Wiki was slow: chances for {len(looked) - late} of {len(looked)} "
+                "places; the others are listed without one"
+            )
+        elif len(locations) >= PAGE:
             body["note"] = f"at least {PAGE} places have it; these are the best of those"
         elif len(locations) > DETAILED:
             body["note"] = f"{len(locations)} places have it; the chances are for {DETAILED}"
@@ -188,16 +205,60 @@ class MiningLookup:
         key = f"{path}?{sorted(params.items())}"
         if (hit := self._kept.get(key)) is not None and self._clock() - hit[0] < KEEP_SECONDS:
             return cast(dict[str, Any], hit[1])
+        fetching = self._fetching.get(key)
+        if fetching is None or fetching.done():
+            fetching = asyncio.create_task(self._fetch(key, path, params))
+            self._fetching[key] = fetching
+            fetching.add_done_callback(lambda done: self._fetched(key, done))
+        # Shielded: a look-up out of time stops waiting, but the fetch carries on for
+        # the others sharing it, and is kept for the next ask (#667).
+        return await asyncio.shield(fetching)
+
+    async def _fetch(self, key: str, path: str, params: Mapping[str, str | int]) -> dict[str, Any]:
         data = await self._source.get(path, params)
         if not isinstance(data, dict):
             raise WikiError(f"{path}: not an object")
         self._kept[key] = (self._clock(), data)
         return cast(dict[str, Any], data)
 
+    def _fetched(self, key: str, done: asyncio.Task[dict[str, Any]]) -> None:
+        if self._fetching.get(key) is done:
+            del self._fetching[key]
+        if not done.cancelled():
+            done.exception()  # read, so one nobody waited for isn't logged as lost
+
     def _result(self, body: Mapping[str, object]) -> LookupResult:
         return LookupResult(
             json.dumps({"source": SOURCE, **body}, ensure_ascii=False, separators=(",", ":"))
         )
+
+
+async def _by(
+    deadline: float, fetches: list[Coroutine[Any, Any, list[dict[str, Any]]]]
+) -> list[list[dict[str, Any]] | BaseException]:
+    """Each fetch's answer or error, in order, waiting only until ``deadline`` (the
+    loop's time): one still going then is a ``TimeoutError`` (#667)."""
+    tasks = [asyncio.ensure_future(f) for f in fetches]
+    if not tasks:
+        return []
+    left = max(0.0, deadline - asyncio.get_running_loop().time())
+    try:
+        _, late = await asyncio.wait(tasks, timeout=left)
+    except asyncio.CancelledError:
+        for task in tasks:
+            task.cancel()
+        raise
+    for task in late:
+        task.cancel()  # only its waiting: a shared fetch carries on (``_get``)
+    out: list[list[dict[str, Any]] | BaseException] = []
+    for task in tasks:
+        if task in late:
+            out.append(TimeoutError())
+        elif (error := task.exception()) is not None:
+            out.append(error)
+        else:
+            out.append(task.result())
+    return out
 
 
 def _key(name: str) -> str:

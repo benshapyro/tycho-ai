@@ -17,7 +17,14 @@ from tycho.brain import BrainError, BrainRequest, Reply, RunActions
 from tycho.brain.decisions import UnboundAction
 from tycho.brain.openrouter import MAX_TOKENS, REASONING_TOKENS, OpenRouterBrain, Prices, route
 from tycho.brain.openrouter_http import SAID_CHARACTERS, OpenRouterClient, chunks
-from tycho.brain.rounds import CARD_NOTE, CUT_SHORT, LAST_CALL, MAX_CALLS, NO_PRESS_AFTER_SEARCH
+from tycho.brain.rounds import (
+    CARD_NOTE,
+    CUT_SHORT,
+    EMPTY_ACT,
+    LAST_CALL,
+    MAX_CALLS,
+    NO_PRESS_AFTER_SEARCH,
+)
 from tycho.commands import CommandMatcher
 from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.packs import STAR_CITIZEN, built_in
@@ -239,6 +246,23 @@ def test_an_unbound_action_is_refused_and_never_pressed() -> None:
     assert _ask(client) == Reply("There's no key for that.")
     (result,) = [m for m in client.requests[1]["messages"] if m["role"] == "tool"]
     assert "Nothing was pressed" in result["content"]
+
+
+def test_an_empty_act_is_never_said_and_the_model_answers_next() -> None:
+    """#666, as for Claude: run_actions with nothing to press and say "unused"."""
+    empty: dict[str, object] = {"actions": [], "say": "unused"}
+    client = FakeChat([*tool_call("run_actions", empty), *finished()], text("Three blueprints."))
+    assert _ask(client) == Reply("Three blueprints.")
+    (result,) = [m for m in client.requests[1]["messages"] if m["role"] == "tool"]
+    assert EMPTY_ACT in result["content"]
+
+
+def test_an_empty_act_after_the_answer_in_words_says_the_words() -> None:
+    empty: dict[str, object] = {"actions": [], "say": "unused"}
+    words = text("Three blueprints.")[:1]
+    client = FakeChat([*words, *tool_call("run_actions", empty), *finished()])
+    assert _ask(client) == Reply("Three blueprints.")
+    assert len(client.requests) == 1
 
 
 def test_unbound_picks_to_the_end_fail_as_unbound() -> None:
