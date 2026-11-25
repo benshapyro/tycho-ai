@@ -17,6 +17,7 @@ import contextlib
 import logging
 import queue
 import subprocess
+import tempfile
 import threading
 from collections.abc import Callable
 from typing import IO
@@ -28,8 +29,12 @@ log = logging.getLogger(__name__)
 
 FIRST_SECONDS = child.SECONDS
 """The first look: the child is starting, as for a one-off look."""
-NEXT_SECONDS = 3.0
-"""A later look: one frame and text recognition, usually well under a second."""
+NEXT_SECONDS = 7.0
+"""A later look: one frame and text recognition, usually well under a second, but up to
+the child's own limits (1.5 s for the frame, 1.5 s to copy it, 3 s to read it) on a busy
+PC (review of #665)."""
+ERROR_BYTES = 4000
+"""The end of a stopped child's stderr (a crash's stack) kept for the log, as #558 does."""
 CLOSE_SECONDS = 1.0
 
 type Start = Callable[..., subprocess.Popen[bytes]]
@@ -44,22 +49,26 @@ class WordsLoop:
         self._process: subprocess.Popen[bytes] | None = None
         self._answers: queue.Queue[tuple[int, bytes] | None] = queue.Queue()
         self._asked = 0
+        self._errors: IO[bytes] | None = None
 
     def open(self) -> None:
         """Start the child, if it isn't running: it then loads while other work goes on."""
         if self._process is not None:
             return
+        errors = tempfile.TemporaryFile()  # noqa: SIM115 - open for the child's life, see close()
+        # A file, not a pipe: it never fills up and blocks the child.
         try:
             process = self._start(
                 child.command(self.window, loop=True),
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
+                stderr=errors,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
         except OSError as e:
+            errors.close()
             raise CaptureError(f"the capture couldn't start ({e})") from e
-        self._process, self._asked = process, 0
+        self._process, self._asked, self._errors = process, 0, errors
         self._answers = queue.Queue()
         if process.stdout is None or process.stdin is None:
             self.close()
@@ -89,13 +98,31 @@ class WordsLoop:
             self.close()
             raise CaptureError(f"the capture took longer than {seconds:.0f} s") from None
         if answer is None:
-            code = process.poll()
+            why = self._stopped()
             self.close()
-            raise CaptureError(f"the capture stopped (exit code {(code or 0) & 0xFFFFFFFF:#x})")
+            raise CaptureError(f"the capture stopped ({why})")
         status, sent = answer
         if status != 0:
             raise CaptureError(sent.decode("utf-8", "replace") or "no picture")
         return decode(sent)
+
+    def _stopped(self) -> str:
+        """Why the child ended: its exit code, with its last words logged (#558)."""
+        process, errors = self._process, self._errors
+        if process is None:
+            return "no child"
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            process.wait(CLOSE_SECONDS)
+        said = ""
+        if errors is not None:
+            with contextlib.suppress(OSError, ValueError):
+                errors.seek(0, 2)
+                errors.seek(max(0, errors.tell() - ERROR_BYTES))
+                said = errors.read().decode("utf-8", "replace").strip()
+        code = process.returncode
+        shown = f"exit code {code & 0xFFFFFFFF:#x}" if code is not None else "no exit code yet"
+        log.warning("The map check's reader stopped (%s): %s", shown, said)
+        return shown
 
     def close(self) -> None:
         """End the child: its stdin closes, and it stops; one that doesn't is killed."""
@@ -112,6 +139,9 @@ class WordsLoop:
                 process.wait(CLOSE_SECONDS)
         if process.stdout is not None:
             process.stdout.close()  # the listener's read ends with it
+        if self._errors is not None:
+            self._errors.close()
+            self._errors = None
 
 
 def _listen(out: IO[bytes], answers: queue.Queue[tuple[int, bytes] | None]) -> None:

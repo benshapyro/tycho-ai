@@ -29,6 +29,7 @@ FAKE = textwrap.dedent(
         out.write(answer.pack(0, len(sent)) + sent)
         out.flush()
         if "crash" in sys.argv:
+            sys.stderr.write("Windows fatal exception: access violation\\n")
             sys.exit(7)
     """
 )
@@ -41,7 +42,9 @@ def _start(*flags: str) -> Any:
         started.append(args)
         assert "creationflags" in options  # no console window over the game
         command = [sys.executable, "-c", FAKE, encode(READING).decode(), *flags]
-        return subprocess.Popen(command, stdin=options["stdin"], stdout=options["stdout"])  # noqa: S603
+        return subprocess.Popen(  # noqa: S603 - this interpreter, running the script above
+            command, stdin=options["stdin"], stdout=options["stdout"], stderr=options["stderr"]
+        )
 
     start.started = started  # type: ignore[attr-defined]
     return start
@@ -59,13 +62,16 @@ def test_one_child_answers_every_look_of_a_route() -> None:
     assert args == child.command(1234, loop=True)
 
 
-def test_a_child_that_stops_is_a_capture_error_and_the_next_look_starts_another() -> None:
+def test_a_child_that_stops_is_a_capture_error_and_the_next_look_starts_another(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     start = _start("crash")
     loop = WordsLoop(1234, start)
     try:
         assert loop.read() == READING
-        with pytest.raises(CaptureError, match="stopped"):
+        with pytest.raises(CaptureError, match="exit code 0x7"):
             loop.read()
+        assert "access violation" in caplog.text  # the crash's last words are logged
         assert loop.read() == READING
     finally:
         loop.close()
