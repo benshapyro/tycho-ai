@@ -32,6 +32,8 @@ class Line:
 
 def would_speak(result: Result) -> bool:
     """Whether this result has a line for the player, given a voice to say it."""
+    if result.status == "modifier_held":  # "Let go of Ctrl and say it again." (#645)
+        return bool(result.say.strip())
     if result.commands == ("say_again",):
         return result.done and bool(result.say)
     if result.commands == (ROUTE,):  # Tycho's own line about the route (#588)

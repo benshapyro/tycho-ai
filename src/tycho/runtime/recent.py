@@ -51,6 +51,8 @@ def exchange(result: Result, at: float) -> Exchange | None:
         did = result.question or "Asked you to confirm."
     elif result.status in ("done", "replied"):
         did = result.say or ("Done." if result.status == "done" else "")
+    elif result.status == "modifier_held":
+        did = result.say or result.detail
     elif result.status == "refused":
         did = result.detail or _WORDS["refused"]  # the safety gate's own words, for players
     else:

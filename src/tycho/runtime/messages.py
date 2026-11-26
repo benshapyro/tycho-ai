@@ -16,6 +16,7 @@ type Status = Literal[
     "refused",  # the safety gate said no
     "asking",  # confirm-grade: waiting for the player to say "confirm" (ADR 13)
     "no_focus",  # Star Citizen wasn't in front, so nothing was pressed
+    "modifier_held",  # the player held Shift, Ctrl or Alt; nothing was pressed (#645)
     "cancelled",  # push-to-talk was pressed again, or Tycho is shutting down
     "failed",  # something broke; the loop carries on
 ]

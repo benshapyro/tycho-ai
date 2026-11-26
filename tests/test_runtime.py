@@ -27,9 +27,9 @@ from tests.fakes.fake_runtime import (
 from tests.fakes.fake_speaker import FakeSpeaker
 from tycho import safety
 from tycho.brain import BrainError, BrainRequest, Decision, Reply, RunActions, RunSequence
-from tycho.commands import CommandMatcher
+from tycho.commands import Command, CommandMatcher
 from tycho.games.star_citizen.gamelog import QUANTUM_ROUTE
-from tycho.input import Presser, code_for
+from tycho.input import Code, Presser, code_for
 from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput
 from tycho.lexicon import Lexicon
 from tycho.packs import STAR_CITIZEN, Safety, as_run, built_in
@@ -126,8 +126,10 @@ def rig(
     eyes: Eyes | None = None,
     looking: bool = False,
     plotter: Plotter | None = None,
+    players: list[frozenset[Code]] | None = None,
 ) -> Rig:
-    audio, keys, feedback = FakeAudioSource(RATE), FakeKeySender(), FakeFeedback()
+    audio, feedback = FakeAudioSource(RATE), FakeFeedback()
+    keys = FakeKeySender(players=players or [])
     actions = FakeActionLog()
     transcriber = FakeTranscriber(*lines, hold=hold)
     results: list[Result] = []
@@ -477,6 +479,17 @@ def test_without_a_voice_the_first_keys_off_refusal_is_still_shown() -> None:
     r = _conversation("landing gear", display=display, safety_lists=KEYS_OFF)
     assert [card.kind for card in display.shown] == ["notice"]
     assert r.feedback.played == ["not_done"]
+
+
+def test_a_held_modifier_presses_nothing_and_says_to_let_go() -> None:
+    """#645: Right Ctrl held (a stick button through JoyToKey) through the whole wait:
+    nothing reaches the game, and Tycho says why."""
+    speaker = FakeSpeaker()
+    held = [frozenset({code_for("rctrl")})]
+    r = _conversation("landing gear", speaker=speaker, players=held)
+    assert r.results[0].status == "modifier_held"
+    assert r.keys.events == []
+    assert speaker.spoken == ["Let go of Ctrl and say it again."]
 
 
 def test_other_refusals_are_not_told_as_keys_off() -> None:
@@ -1347,6 +1360,48 @@ def test_modifiers_bound_together_are_caught_when_the_press_holds_them_all() -> 
     lights = _action("v_lights", "lctrl+lalt+x")
     keybinds = Keybinds([lights, _action("v_self_destruct", "lalt+lctrl")])
     assert safety.shares_key_with_danger(lights, keybinds, lists=SC.safety) is not None
+
+
+def _laser(*keys: str) -> Action:
+    inputs = tuple(k for k in (KeyInput.parse(text) for text in keys) if k is not None)
+    return Action("v_toggle_mining_laser_type", "spaceship_mining", "Switch Mining Laser", inputs)
+
+
+def test_a_modifier_and_a_click_on_a_bound_button_is_refused() -> None:
+    """#648: Switch Mining Laser on Left Alt + Mouse 1 turned the laser on, Mouse 1
+    alone. Refused, with what to do, before anything is pressed."""
+    switch = _laser("lalt+mouse1")
+    fire = _action("v_toggle_mining_laser_fire", "mouse1", actionmap="spaceship_mining")
+    verdict = safety.check(
+        Command("x", (), ("v_toggle_mining_laser_type",)),
+        switch,
+        Keybinds([switch, fire]),
+        lists=SC.safety,
+    )
+    assert not verdict.allowed
+    assert not verdict.ask  # "confirm" can't make the click land right
+    assert verdict.reason == (
+        "Switch Mining Laser is on Left Alt + Mouse 1, and Mouse 1 alone is "
+        "v_toggle_mining_laser_fire, which the game can take it for. Give it a key of its own."
+    )
+
+
+@pytest.mark.parametrize(
+    ("keys", "others"),
+    [
+        (("lalt+mouse1", "ralt+x"), ("mouse1",)),  # the keyboard key is pressed instead
+        (("lalt+mouse1",), ("mouse2",)),  # nothing on Mouse 1 alone
+        (("lalt+mouse1",), ("ralt+mouse1",)),  # another chord on it, not the bare click
+    ],
+)
+def test_a_modifier_and_a_click_is_pressed_when_nothing_clashes(
+    keys: tuple[str, ...], others: tuple[str, ...]
+) -> None:
+    switch = _laser(*keys)
+    binds = Keybinds([switch, *(_action(f"v_other_{i}", k) for i, k in enumerate(others))])
+    assert safety.check(
+        Command("x", (), ("v_toggle_mining_laser_type",)), switch, binds, lists=SC.safety
+    ).allowed
 
 
 # --- The voice (ADR 14) ------------------------------------------------------------------
