@@ -27,6 +27,8 @@ log = logging.getLogger(__name__)
 FRESH_SECONDS = 600.0
 """How long a fetched price or route list is reused (UEX itself updates hourly)."""
 TOP = 5
+STALE_HOURS = 24
+"""A price reported longer ago than this is ranked after the fresh ones."""
 """How many places or routes an answer lists."""
 MAX_ORIGINS = 4
 """Terminals asked about at once when a route starts at a station, city or outpost."""
@@ -289,11 +291,23 @@ def hours_ago(timestamp: Any, now: float | None = None) -> float | None:
 
 
 def top(
-    rows: Iterable[Mapping[str, Any]], key: str, *, cheapest: bool = False
+    rows: Iterable[Mapping[str, Any]],
+    key: str,
+    *,
+    cheapest: bool = False,
+    now: float | None = None,
 ) -> list[Mapping[str, Any]]:
-    """The best rows by ``key``, leaving out zeros (not traded there)."""
+    """The best rows by ``key``, leaving out zeros (not traded there). Prices reported
+    over ``STALE_HOURS`` ago come after the fresh ones, whatever they say: a card lights
+    its first row as the best, and a six-day-old price topped one from this morning
+    (the Tile test, 26 November 2026). A price with no date counts as fresh."""
     priced = [r for r in rows if isinstance(r.get(key), int | float) and r[key] > 0]
-    return sorted(priced, key=lambda r: r[key] if cheapest else -r[key])[:TOP]
+
+    def rank(row: Mapping[str, Any]) -> tuple[bool, float]:
+        age = hours_ago(row.get("date_modified"), now)
+        return age is not None and age > STALE_HOURS, row[key] if cheapest else -row[key]
+
+    return sorted(priced, key=rank)[:TOP]
 
 
 def _plain(name: str) -> str:

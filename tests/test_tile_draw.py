@@ -518,3 +518,13 @@ def test_a_comparisons_title_stays_when_it_says_more_than_the_names() -> None:
     assert Card("compare", "M80 versus Arrow.", hero=hero).title_repeats
     assert not Card("compare", "M80 vs Arrow for racing", hero=hero).title_repeats
     assert not Card("compare", "Cargo, M80 vs Arrow", hero=hero).title_repeats
+
+
+def test_a_fleet_is_numbered_and_lit_only_when_it_says_what_its_ranked_for() -> None:
+    """ "What are my ships good for" isn't a ranking: no 1 to 5, no best row."""
+    look = Look(accent="#ff00ff")
+    rows = (Row("Taurus", "174 SCU", "Best"), Row("Galaxy", "64 SCU", "Good"))
+    ranked = _tile(Card("fleet", rows=rows, hero=("Best for", "Hauling")), look)
+    plain = _tile(Card("fleet", rows=rows), look)
+    assert ranked.size == plain.size
+    assert _near(ranked, "#ff00ff", 90) > _near(plain, "#ff00ff", 90) + 100

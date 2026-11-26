@@ -132,9 +132,11 @@ def ranked(pen: Pen) -> None:
     """A list or the player's fleet, best first: each row's name with its value on the
     right and, when it has one, its second line under the name, smaller: where a place
     is, why a ship fits. The best row is lit, unless a list's values are all the same;
-    a fleet's rows are numbered; a list's numbers get bars, and a unit they share is
-    said once, under the first."""
+    a fleet's rows are numbered, and its best lit, only when the card says what they're
+    ranked for (its hero), not when it just runs through the player's ships; a list's
+    numbers get bars, and a unit they share is said once, under the first."""
     fleet = pen.card.kind == "fleet"
+    ranking = not fleet or pen.card.hero is not None  # a fleet only when it says what for
     name_f, value_f, small_f = (
         pen.font("strong", pen.px(18)),
         pen.font("number", pen.px(19)),
@@ -149,7 +151,7 @@ def ranked(pen: Pen) -> None:
     given = {r.value for r in pen.card.rows}  # as sent: the first may have lost its unit
     level = not fleet and len(values) > 1 and len(given) == 1 and "" not in given
     for i, (row, value) in enumerate(zip(pen.card.rows, values, strict=True)):
-        best = i == 0 and not row.dim and not level
+        best = i == 0 and not row.dim and not level and ranking
         top = pen.y
         pen.d.rectangle(
             (pen.pad, top, pen.pad + pen.inner, top + h),
@@ -161,7 +163,7 @@ def ranked(pen: Pen) -> None:
         alpha = 0.6 if row.dim else 1.0
         text = _fade(pen.text, alpha)
         x = pen.pad + pen.px(10)
-        if fleet:
+        if fleet and ranking:
             rank = str(i + 1)
             pen.d.text((x, top + pen.px(5)), rank, font=value_f, fill=_fade(pen.accent, alpha))
             x += value_f.getlength(rank) + pen.px(8)

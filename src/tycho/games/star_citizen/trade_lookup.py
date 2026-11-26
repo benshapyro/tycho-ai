@@ -55,7 +55,8 @@ commodity as the player said it ("quantanium", "raw laranite"), and a place: one
 they named (a city, station, outpost, moon, planet or system), else for where to \
 sell or buy, the system they're in now (their words, then the request's log line; \
 never a home base). Don't use it \
-for trade routes (use trade_routes) or ship prices. {SPEAKING}"""
+for trade routes (use trade_routes) or ship prices. Results are best first, with \
+prices over a day old after the fresh ones: keep that order. {SPEAKING}"""
 
 ROUTES = f"""\
 Live Star Citizen trade routes from UEX: what to buy at a place and where to \

@@ -170,7 +170,8 @@ def from_tool(arguments: Mapping[str, object]) -> Card:
         raise ValueError(f"{kind!r} isn't a card Claude can show")
     rows = tuple(_rows(arguments.get("rows"), sides=kind == "compare"))
     hero_value = clean(arguments.get("hero_value"), LABEL if kind == "compare" else VALUE)
-    hero = (clean(arguments.get("hero_label"), LABEL), hero_value) if hero_value else None
+    said = any(c.isalnum() for c in hero_value)  # '""' is Claude leaving it empty
+    hero = (clean(arguments.get("hero_label"), LABEL), hero_value) if said else None
     if kind == "compare" and (names := _sides(arguments, rows)):
         hero = names
     body = tuple(p for p in [clean(arguments.get("text"), BODY)] if p)
@@ -321,13 +322,16 @@ talk or anything you press. Fill the card from look-up results when you have the
 Kinds and their rows (text | detail | value):
 - list: places or items, best first (place | where | price). Mark nothing dim.
 - route: exactly two rows, buy then sell (place | "Buy" or "Sell" | price per SCU); \
-hero_label and hero_value for the profit. Only a route and a compare use hero_label \
-and hero_value: leave them empty on every other kind.
+hero_label and hero_value for the profit. Only a route, a compare and a fleet ranking \
+use hero_label and hero_value: leave them empty on every other kind.
 - recipe: what to gather (item | where to get it, in a few words, if you know | amount).
 - ship: specs (spec name | | value), one short figure each; title the ship, label its role.
-- fleet: the player's own ships, best first (ship | why | verdict in a word or two); dim ones that \
-can't do the job.
-- steps: one row per step (step | one short line more, if it helps | ), in order.
+- fleet: the player's own ships (ship | why | verdict in a word or two). When they \
+asked which is best for a job, rank them best first, dim ones that can't do it, and \
+put the job in hero_label and hero_value ("Best for" and "Hauling"); otherwise leave \
+both empty.
+- steps: one row per step (step | one short line more, only if it adds to the step | ), \
+in order. Name a key only when you know the player's own; never "the docking key".
 - headlines: news (headline that makes sense alone | | date).
 - compare: two things side by side, such as two ships; hero_label and hero_value \
 name them and nothing else (hero_label "Cutlass Black", hero_value "Freelancer"); rows \
@@ -352,6 +356,7 @@ def offered(own: Collection[str]) -> tuple[Kind, ...]:
 _ONLY_WITH: Mapping[str, tuple[tuple[str, str], ...]] = {
     "ship": (("specs, ", ""), (", such as two ships", "")),
     "loadout": ((" or loadout rows", ""),),
+    "fleet": ((", a compare and a fleet ranking use", " and a compare use"),),
 }
 """Words in ``TOOL_DESCRIPTION`` outside a kind's own line that only make sense with that
 kind, and what they become without it (#576)."""
