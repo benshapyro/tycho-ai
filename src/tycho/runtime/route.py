@@ -12,7 +12,8 @@ The flow, as the pack declares it (``RouteFlow``):
    opening), click it, in the later frame (the first click), and wait ``click_seconds``;
 4. check the map is still open: the box's empty words, or the list a box with the keys
    shows under it (it drops them, 26 Nov 2026); else nothing is typed. Type the name,
-   letter by letter: after the first, the empty words must be gone and a letter on the
+   letter by letter: after the first (the only one on a risky key's letter typed before
+   the box shows it took keys, #682), the empty words must be gone and a letter on the
    box's line or the RECENT list gone, and after the last, the box's own line must
    show the name, before Enter (``enter``) is pressed (#654: letters that didn't land
    could reach the game);
@@ -25,7 +26,8 @@ The flow, as the pack declares it (``RouteFlow``):
    only needs a click outside the search bar, which also leaves the place chosen), else
    on the results panel's close button, read on the box's line or found by the pack's
    offset, and only if text recognition agrees something is there;
-7. clear the route (``clear``) if one is set, then plot (``plot``);
+7. wait while the panel works out the fuel (``calculating``, #682: R does nothing then),
+   then clear the route (``clear``) if one is set, then plot (``plot``);
 8. wait for the log's route line, and check its id names the chosen place;
 9. close the map (``close_map``).
 
@@ -200,9 +202,10 @@ class _Run:
         if not NAME.fullmatch(name):
             raise _Stop("refused", lines.bad_name.format(name=name), "not a name Tycho may type")
         presses = self._plan()
-        if risky := self._risky_letter(name):
-            detail = f"{risky} is on a key in the name, so it isn't typed"
-            raise _Stop("refused", lines.bad_name.format(name=name), detail)
+        if risky := self._risky_letter(name[:1]):  # the rest waits for the box (#682)
+            said = lines.risky_first.format(name=name, action=risky)
+            said = lines.bad_name.format(name=name) if "_" in risky else said  # an id
+            raise _Stop("refused", said, f"{risky} is on the name's first letter")
         if isinstance(self.reader, Warm):  # starts reading while the map opens (#661)
             self.reader.warm()
         if self._open_already():  # the map's key would close it (Ben's Hurston try, #682)
@@ -221,16 +224,16 @@ class _Run:
         box, reading = self._settled(box)
         self._click(reading, middle(box), "the search box")
         after = self._fresh()  # a box with the keys drops its empty words (26 Nov 2026)
-        if not after.has(flow.search_box) and not self._listed(after, box):
+        if not after.has(flow.search_box) and not mapwords.listed(after, box, flow):
             raise _Stop("failed", lines.stuck, "the map closed before typing")
         self._wait(flow.click_seconds)  # the box takes keys a moment after the click (#654)
         self._type(name[:1])
         self.pressed.append(f"typed {name[:1]}")  # the log shows it, even if the game took it
         self._wait(flow.beat_seconds)
         now = self._fresh()
-        if now.has(flow.search_box) or not self._took(after, now, box, squeezed(name[:1])):
+        if now.has(flow.search_box) or not mapwords.took(after, now, box, squeezed(name[:1]), flow):
             raise _Stop("failed", lines.not_typed, "the search box didn't take the first letter")
-        self._type(name[1:])
+        self._type_rest(name, box)
         self._wait(flow.beat_seconds)
         if not shows(row(self._fresh(), box), name):
             raise _Stop("failed", lines.not_typed, "the search box doesn't show the name")
@@ -247,6 +250,7 @@ class _Run:
             self._click(
                 reading, self._close_button(reading, box), "the search panel's close button"
             )
+        self._calculated()
         replacing = ""
         if self.flow.route_set in self.log.facts():
             before = self.log.last(flow.route_line)
@@ -283,8 +287,9 @@ class _Run:
         return presses
 
     def _risky_letter(self, name: str) -> str:
-        """A confirm-grade action on one of the name's keys alone, if any: if the box
-        didn't take the keys after all, a letter must not press it (review of #636)."""
+        """A confirm-grade action on one of the letters' keys alone, if any: if the box
+        didn't take the keys after all, a letter must not press it (review of #636). Only
+        the first letter is typed before the box is seen to have them (#682)."""
         letters = {_TYPED.get(letter, letter) for letter in name.lower()}
         for action in self.keybinds:
             risky = is_confirm_grade(action.name, self.lists) or (
@@ -293,6 +298,19 @@ class _Run:
             if risky and any(k.key in letters and not k.modifiers for k in action.inputs):
                 return action.label or action.name
         return ""
+
+    def _type_rest(self, name: str, box: tuple[Word, ...]) -> None:
+        """The name after its first letter, with a look before each later letter on a
+        risky key: the box must still show what's typed so far (review of #685)."""
+        done = 1
+        for at in range(2, len(name)):
+            if self._risky_letter(name[at]):
+                self._type(name[done:at])
+                self._wait(self.flow.beat_seconds)
+                if not shows(row(self._fresh(), box), name[:at]):
+                    raise _Stop("failed", self.flow.lines.not_typed, "the box lost the keys")
+                done = at
+        self._type(name[done:])
 
     def _press(self, press: Press) -> None:
         if self.cancel.is_set():
@@ -403,27 +421,13 @@ class _Run:
         if not shows(listed, name):  # under RESULTS, not a RECENT list or a marker (#654)
             raise _Stop("failed", lines.not_listed.format(name=name), "not among the results")
 
-    def _marks(self, reading: Reading, box: tuple[Word, ...]) -> list[Word]:
-        """The close marks ("x") on the search box's line, right of where its words were:
-        the box's own x, there once the box has the keys (Ben's PC try, 26 Nov 2026)."""
-        marks = {mark.lower() for mark in self.flow.close_marks}
-        right = max(word.right for word in box)
-        line = row(reading, box).words
-        return [w for w in line if w.text.strip().lower() in marks and w.left > right]
-
-    def _listed(self, reading: Reading, box: tuple[Word, ...]) -> bool:
-        """The panel's list is open under the box: "RECENT" or "ALL RESULTS" in its column,
-        as once the box has the keys (Ben's PC try, 26 Nov 2026)."""
-        close = mapwords.close_under(reading, box, _LISTED)
-        return any(word and close.has(word) for word in (self.flow.recent, self.flow.results))
-
     def _detail(self, reading: Reading, box: tuple[Word, ...]) -> tuple[Word, ...] | None:
         """The chosen place's name as a line of its own just under the box: the panel
         Enter opens for one result (26 Nov 2026), not a row of a results list, nor its
         name inside a description."""
-        if self._listed(reading, box):  # a list's rows aren't the panel
+        if mapwords.listed(reading, box, self.flow):  # a list's rows aren't the panel
             return None
-        for line in mapwords.close_under(reading, box, _LISTED).lines():
+        for line in mapwords.close_under(reading, box, mapwords.LISTED).lines():
             if mapwords.alike(" ".join(w.text for w in line), self.place.name):
                 return line
         return None
@@ -435,37 +439,14 @@ class _Run:
         if not flow.recent or typed or reading.has(flow.no_results):
             return None
         under = column(reading.below(max(w.top + w.height for w in box)), box, reading)
-        return mapwords.under_header(under, flow.recent, flow.results, self.place.name, _LISTED)
-
-    def _took(self, before: Reading, after: Reading, box: tuple[Word, ...], first: str) -> bool:
-        """The first letter landed: a new word on the box's line that starts with it (not
-        a caret read as "I", review of #672), or the RECENT list gone while the panel
-        still shows (text recognition may not read one letter)."""
-        marks = {mark.lower() for mark in self.flow.close_marks}
-        was = {squeezed(w.text) for w in row(before, box).words}
-        for word in row(after, box).words:
-            text = squeezed(word.text)
-            if text and text not in marks and text not in was and text.startswith(first):
-                return True
-        recent = self.flow.recent
-        gone = bool(recent) and before.has(recent) and not after.has(recent)
-        return gone and self._listed(after, box)
+        return mapwords.under_header(
+            under, flow.recent, flow.results, self.place.name, mapwords.LISTED
+        )
 
     def _close_button(self, reading: Reading, box: tuple[Word, ...]) -> tuple[int, int]:
-        """The close button: the x read on the box's line, or where the pack's offset puts
-        it from the box, if text recognition agrees (the offset was measured at 2560x1440;
-        on a 5120x2160 screen the x sat nearer, 26 Nov 2026)."""
-        if marks := self._marks(reading, box):
-            return min(marks, key=lambda word: word.left).middle
-        flow, height = self.flow, reading.height
-        x, y = middle(box)
-        spot = (round(x + flow.close_offset[0] * height), round(y + flow.close_offset[1] * height))
-        reach = flow.close_reach * height
-        marks_said = {mark.lower() for mark in flow.close_marks}
-        for word in reading.words:
-            if word.text.strip().lower() in marks_said and near(word.middle, spot, reach):
-                return spot
-        raise _Stop("failed", flow.lines.stuck, "no close button where the panel has one")
+        if (spot := mapwords.close_spot(reading, box, self.flow)) is None:
+            raise _Stop("failed", self.flow.lines.stuck, "no close button where the panel has one")
+        return spot
 
     def _click(self, reading: Reading, spot: tuple[int, int], what: str) -> None:
         if self.cancel.is_set():
@@ -482,6 +463,19 @@ class _Run:
         self.pressed.append(f"click on {what}")
         self._wait(self.flow.beat_seconds)
 
+    def _calculated(self) -> None:
+        """Waits while the panel works out the fuel to the place: R does nothing till then
+        (Ben's Hurston try, #682: 8 s or more)."""
+        flow, start, seen = self.flow, self.clock(), False
+        while flow.calculating:
+            if mapwords.starts(self._fresh(), flow.calculating):
+                seen = True
+            elif seen or self.clock() >= start + _CALCULATING_STARTS:
+                return
+            if self.clock() >= start + flow.calculating_seconds:
+                raise _Stop("failed", flow.lines.stuck, "the map was still working out fuel")
+            self._wait(flow.read_every)
+
     def _route_line(self, mark: int) -> Logged | None:
         deadline = self.clock() + self.flow.route_seconds
         while True:
@@ -493,7 +487,8 @@ class _Run:
             self._wait(self.flow.read_every)
 
 
-_LISTED = 0.15
+_CALCULATING_STARTS = 1.0
+"""How long after the pick the panel may take to start working out the fuel."""
 """How far under the box, as a fraction of the frame's height, its list starts."""
 _STILL = 0.005
 """How far, as a fraction of the frame's height, the box may move and still be settled:

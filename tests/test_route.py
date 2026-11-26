@@ -8,7 +8,7 @@ found). The log writes what the real one does.
 
 import threading
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import pytest
 
@@ -137,6 +137,10 @@ class Game:
     drawn further left each look before, and a click on it does nothing (Ben's PC try,
     25 Nov 2026)."""
     sliding: int = 0
+    calculates: int = 0
+    picked: bool = False
+    """Looks, once the place is picked on the panel, in which the map still works out the
+    fuel ("CALCULATING..."): R does nothing then (Ben's Hurston try, #682)."""
 
     def __post_init__(self) -> None:
         if self.route_id:
@@ -165,7 +169,7 @@ class Game:
         elif code == code_for("c") and self.map_open:
             self.route_id = ""
         elif code == code_for("r") and self.map_open and self.entered:
-            if self.route_id or not self.fuel:
+            if self.route_id or not self.fuel or (self.calculates and self.picked):
                 return  # the game won't plot over a route, nor without fuel
             self.route_id = self.places.get(self.typed, "")
             if self.route_id:
@@ -194,10 +198,14 @@ class Game:
             on_x = abs(x - self.close_at[0]) < 20 and abs(y - self.close_at[1]) < 20
             if on_name or on_x:  # a click outside the box gives the keys back to the map
                 self.box_has_keys = False
+                self.picked = self.picked or on_name
         return ""
 
     # --- what the screen shows ---
     def read(self) -> Reading:
+        if self.calculates and self.picked:
+            self.calculates -= 1
+            return Reading(WIDTH, HEIGHT, (Word("CALCULATIN@...", 500, 900, 200, 20, 60),), 7)
         if not self.map_open:
             return Reading(WIDTH, HEIGHT, (Word("FUEL", 100, 900, 60, 20, 0),), window=7)
         hint = [] if self.box_has_keys and not self.keeps_hint else ["SEARCH", "LOCATIONS..."]
@@ -254,6 +262,7 @@ def _plot(
     *,
     focus: FakeFocus | None = None,
     name_of: Callable[[str], str | None] = lambda _id: None,
+    flow: RouteFlow = FLOW,
     **kw: object,
 ) -> Plotted:
     sender = FakeKeySender()
@@ -273,7 +282,7 @@ def _plot(
         "clock": _Clock(),
         "name_of": name_of,
     } | kw
-    return plot(Place(name), FLOW, **options)  # type: ignore[arg-type]
+    return plot(Place(name), flow, **options)  # type: ignore[arg-type]
 
 
 def _key_went_down(sender: FakeKeySender, game: Game) -> None:
@@ -706,6 +715,71 @@ def test_a_name_on_a_dangerous_key_is_never_typed() -> None:
     assert done.status == "refused"
     assert done.pressed == []
     assert game.clicks == []
+
+
+def test_a_dangerous_key_past_the_first_letter_waits_for_the_box_and_is_typed() -> None:
+    game = Game()  # Ben's Aberdeen try, #682: Change Fire Mode on "b"
+    keybinds = Keybinds([*KEYBINDS, _bound("v_eject", "v", "spaceship_general")])
+    done = _plot(game, keybinds=keybinds)
+    assert (done.status, done.say) == ("done", "Route set to Levski.")
+    assert "typed Levski" in done.pressed
+
+
+def test_a_dangerous_first_letter_is_said_by_its_label_never_its_id() -> None:
+    eject = replace(_bound("v_eject", "l", "spaceship_general"), label="Eject")
+    done = _plot(Game(), keybinds=Keybinds([*KEYBINDS, eject]))
+    assert done.say == "I can't type Levski: its first letter is your Eject key."
+    unlabelled = Keybinds([*KEYBINDS, _bound("v_eject", "l", "spaceship_general")])
+    assert _plot(Game(), keybinds=unlabelled).say == "I can't type Levski into the map."
+
+
+def test_a_later_letter_on_a_dangerous_key_waits_for_a_look_at_the_box() -> None:
+    game = Game()  # review of #685: the box stops taking keys after the first letter
+    keybinds = Keybinds([*KEYBINDS, _bound("v_eject", "v", "spaceship_general")])
+    real = game.read
+
+    class Reader:
+        def read(self) -> Reading:
+            if game.typed == "l":
+                game.takes_keys = False
+            return real()
+
+    done = _plot(game, keybinds=keybinds, reader=Reader())
+    assert done.detail == "the box lost the keys"
+    assert game.stray == ["e"]  # never the "v"
+
+
+def test_r_waits_while_the_map_works_out_the_fuel() -> None:
+    game = Game(details=True, calculates=3)  # Ben's Hurston try, #682
+    done = _plot(game, flow=replace(FLOW, calculating="calculatin"))
+    assert (done.status, done.say) == ("done", "Route set to Levski.")
+    assert game.calculates == 0
+
+
+def test_r_waits_for_a_fuel_sum_that_starts_a_look_late() -> None:
+    game = Game(details=True, calculates=2)  # review of #685
+    real, late = game.read, [True]
+
+    class Reader:
+        def read(self) -> Reading:
+            if game.picked and late[0]:  # the first look after the pick: not started yet
+                late[0], held, game.calculates = False, game.calculates, 0
+                reading, game.calculates = real(), held
+                return reading
+            return real()
+
+    done = _plot(game, reader=Reader(), flow=replace(FLOW, calculating="calculatin"))
+    assert (done.status, done.say) == ("done", "Route set to Levski.")
+    assert game.calculates == 0
+
+
+def test_a_fuel_sum_that_never_ends_presses_no_r() -> None:
+    game = Game(details=True, calculates=10_000)
+    flow = replace(FLOW, calculating="calculatin", calculating_seconds=2.0)
+    done = _plot(game, flow=flow)
+    assert done.status == "failed"
+    assert "mapui_action_planroute" not in done.pressed
+    assert not game.route_id
 
 
 def test_a_map_that_closed_after_the_first_click_gets_no_letters() -> None:
