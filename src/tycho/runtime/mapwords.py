@@ -65,19 +65,31 @@ def alike(said: str, name: str) -> bool:
         return True
     if len(got) != len(wanted) or sum(c.isalpha() for c in wanted) < 5:
         return False
-    slips = [(a, b) for a, b in zip(got, wanted, strict=True) if a != b]
-    return len(slips) == 1 and all(c.isalpha() for c in slips[0])
+    slips = [i for i, (a, b) in enumerate(zip(got, wanted, strict=True)) if a != b]
+    if len(slips) != 1 or not (got[slips[0]].isalpha() and wanted[slips[0]].isalpha()):
+        return False
+    start = 0
+    for word in squeezed(name).split():  # "Pyro I" is not Pyro V (review of #680)
+        if start <= slips[0] < start + len(word) and set(word) <= set("ivxl"):
+            return False
+        start += len(word)
+    return True
 
 
-def under_header(reading: Reading, header: str, until: str, name: str) -> tuple[Word, ...] | None:
+def under_header(
+    reading: Reading, header: str, until: str, name: str, reach: float
+) -> tuple[Word, ...] | None:
     """The line that is ``name`` in the list under the ``header`` words, before the line
-    that holds ``until`` (run-together words too: "ALLRESULTS"); None if not there."""
+    that holds ``until`` (run-together words too: "ALLRESULTS") and within ``reach`` of
+    the frame's height, should ``until`` go unread; None if not there."""
     found = reading.find(header)
     if found is None:
         return None
     top = max(word.top + word.height for word in found)
     stop = squeezed(until).replace(" ", "")
     for line in sorted(reading.below(top).lines(), key=lambda line: line[0].top):
+        if line[0].top > top + reach * reading.height:
+            return None
         said = " ".join(word.text for word in line)
         if stop and stop in squeezed(said).replace(" ", ""):
             return None

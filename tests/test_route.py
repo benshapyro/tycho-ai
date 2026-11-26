@@ -220,6 +220,7 @@ class Game:
                     Word(text, BOX[0] + (20 if i == 2 else 0), 220 + 35 * i, 90, 20, 40 + i)
                 )
             words.append(Word("AREA18", BOX[0] + 20, 370, 90, 20, 50))
+            words.append(Word("LORVILLE", BOX[0] + 20, 400, 90, 20, 51))
             return Reading(WIDTH, HEIGHT, tuple(words), window=7)
         if self.details and self.entered and self.typed in self.places:
             words.append(Word(self.typed.upper(), BOX[0], 220, 90, 20, 30))  # its panel
@@ -437,6 +438,46 @@ def test_another_place_under_recent_is_not_taken() -> None:
     assert done.status == "failed"
     assert game.clicks == [BOX_MIDDLE]
     assert not game.route_id
+
+
+def test_a_place_listed_far_under_recent_is_not_taken_when_all_results_goes_unread() -> None:
+    game = Game(empties=True, places={"levski": "levski_all-001", "lorville": "lorville-001"})
+    real = game.read
+
+    class Reader:
+        def read(self) -> Reading:
+            reading = real()
+            if not game.entered:
+                return reading
+            kept = [w for w in reading.words if w.text not in ("ALLRESULTS", "LORVILLE")]
+            kept.append(Word("LORVILLE", BOX[0] + 20, 500, 90, 20, 51))  # far down the list
+            return Reading(reading.width, reading.height, tuple(kept), reading.window)
+
+    done = _plot(game, "Lorville", reader=Reader())
+    assert done.status == "failed"
+    assert game.clicks == [BOX_MIDDLE]
+
+
+def test_no_results_is_said_even_with_the_place_under_recent() -> None:
+    game = Game(empties=True)
+    real = game.read
+
+    class Reader:
+        def read(self) -> Reading:
+            reading = real()
+            if not game.entered:
+                return reading
+            nothing = (
+                Word("NO", BOX[0], 470, 40, 20, 60),
+                Word("RESULTS", BOX[0] + 50, 470, 90, 20, 60),
+            )
+            return Reading(
+                reading.width, reading.height, (*reading.words, *nothing), reading.window
+            )
+
+    done = _plot(game, reader=Reader())
+    assert (done.status, done.detail) == ("failed", "the map found nothing")
+    assert game.clicks == [BOX_MIDDLE]
 
 
 def test_the_name_only_inside_a_description_is_not_the_places_panel() -> None:
@@ -858,3 +899,5 @@ def test_one_misread_letter_is_allowed_only_in_longer_names_and_never_a_digit() 
     assert not alike("HURSTOM", "Hurstonx")  # not the same length
     assert not alike("YELA", "Yeli")  # too short to guess
     assert not alike("ORISAW", "Orison")  # two letters off
+    assert not alike("PYRO V", "Pyro I")  # a numbered planet is another place
+    assert not alike("PYRO IV", "Pyro II")

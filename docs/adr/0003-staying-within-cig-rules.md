@@ -133,9 +133,9 @@ Some "power user" automation requests will be declined by design.
 
 **Decision.** This adds to the morning amendment above.
 
-- **The place under RECENT counts as the map's own result**, but only once Enter has emptied the box (its empty words are back on the box's line), and only in the RECENT list, above ALL RESULTS.
+- **The place under RECENT counts as the map's own result**, but only once Enter has emptied the box (its empty words are back on the box's line), only in the RECENT list, above ALL RESULTS and close under its header, and never when the map says it found nothing.
 - **The second click goes on that name**, as on the place's own panel: it keeps the place picked and takes the keys from the box.
-- **One misread letter is allowed** when the map's name is checked, on the place's panel or under RECENT: only in names of five letters or more, and never a digit ("ARC-L2" is not ARC-L1). The route line's id in the log still has to name the place before Tycho says the route is set.
+- **One misread letter is allowed** when the map's name is checked, on the place's panel or under RECENT: only in names of five letters or more, and never a digit or a numeral word ("ARC-L2" is not ARC-L1, "Pyro V" is not Pyro I). The route line's id in the log still has to name the place before Tycho says the route is set.
 
 **Consequences.**
 - At most two clicks, both on the map, with NAV set first and a fresh frame before each, as before.

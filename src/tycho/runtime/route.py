@@ -421,10 +421,11 @@ class _Run:
     def _recent(self, reading: Reading, box: tuple[Word, ...]) -> tuple[Word, ...] | None:
         """The place under RECENT, when Enter picked it and emptied the box: its empty
         words back, no filtered list (Ben's Orison try, 26 Nov 2026)."""
-        if not self.flow.recent or not row(reading, box).has(self.flow.search_box):
+        flow, emptied = self.flow, row(reading, box).has(self.flow.search_box)
+        if not (flow.recent and emptied) or reading.has(flow.no_results):
             return None
         under = column(reading.below(max(w.top + w.height for w in box)), box, reading)
-        return mapwords.under_header(under, self.flow.recent, self.flow.results, self.place.name)
+        return mapwords.under_header(under, flow.recent, flow.results, self.place.name, _LISTED)
 
     def _took(self, before: Reading, after: Reading, box: tuple[Word, ...], first: str) -> bool:
         """The first letter landed: a new word on the box's line that starts with it (not
