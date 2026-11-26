@@ -220,7 +220,7 @@ class _Run:
         self.pressed.append(f"typed {name[:1]}")  # the log shows it, even if the game took it
         self._wait(flow.beat_seconds)
         now = self._fresh()
-        if now.has(flow.search_box) or not self._took(after, now, box):  # no more letters
+        if now.has(flow.search_box) or not self._took(after, now, box, squeezed(name[:1])):
             raise _Stop("failed", lines.not_typed, "the search box didn't take the first letter")
         self._type(name[1:])
         self._wait(flow.beat_seconds)
@@ -394,15 +394,19 @@ class _Run:
         close = Reading(reading.width, reading.height, tuple(near), reading.window)
         return any(word and close.has(word) for word in (self.flow.recent, self.flow.results))
 
-    def _took(self, before: Reading, after: Reading, box: tuple[Word, ...]) -> bool:
-        """The first letter landed: something other than a close mark on the box's line,
-        or the panel's RECENT list gone (text recognition may not read one letter)."""
+    def _took(self, before: Reading, after: Reading, box: tuple[Word, ...], first: str) -> bool:
+        """The first letter landed: a new word on the box's line that starts with it (not
+        a caret read as "I", review of #672), or the RECENT list gone while the panel
+        still shows (text recognition may not read one letter)."""
         marks = {mark.lower() for mark in self.flow.close_marks}
-        line = row(after, box).words
-        if any(w.text.strip() and w.text.strip().lower() not in marks for w in line):
-            return True
+        was = {squeezed(w.text) for w in row(before, box).words}
+        for word in row(after, box).words:
+            text = squeezed(word.text)
+            if text and text not in marks and text not in was and text.startswith(first):
+                return True
         recent = self.flow.recent
-        return bool(recent) and before.has(recent) and not after.has(recent)
+        gone = bool(recent) and before.has(recent) and not after.has(recent)
+        return gone and self._listed(after, box)
 
     def _close_button(self, reading: Reading, box: tuple[Word, ...]) -> tuple[int, int]:
         """The close button: the x read on the box's line, or where the pack's offset puts

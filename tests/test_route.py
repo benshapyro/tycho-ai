@@ -115,6 +115,10 @@ class Game:
     recent: tuple[str, ...] = ()
     """Places in the map's RECENT list, shown under the box before anything is typed."""
     stray: list[str] = field(default_factory=list[str])
+    reads_letters: bool = True
+    """False: text recognition reads nothing on the box's line, only the list under it."""
+    close_at: tuple[int, int] = CLOSE
+    """Where the box's x is drawn, and where a click gives the keys back to the map."""
     keeps_hint: bool = False
     """The clicked box still shows its empty words until a letter lands, as on 24 Nov;
     False: it drops them for its own x once it has the keys (Ben's PC try, 26 Nov)."""
@@ -172,7 +176,7 @@ class Game:
             return ""  # the map is still opening: the click lands on nothing
         if abs(x - BOX_MIDDLE[0]) < 20 and abs(y - BOX_MIDDLE[1]) < 20:
             self.box_has_keys = True
-        elif abs(x - CLOSE[0]) < 20 and abs(y - CLOSE[1]) < 20:
+        elif abs(x - self.close_at[0]) < 20 and abs(y - self.close_at[1]) < 20:
             self.box_has_keys = False
         return ""
 
@@ -181,15 +185,17 @@ class Game:
         if not self.map_open:
             return Reading(WIDTH, HEIGHT, (Word("FUEL", 100, 900, 60, 20, 0),), window=7)
         hint = [] if self.box_has_keys and not self.keeps_hint else ["SEARCH", "LOCATIONS..."]
-        box = self.typed.upper().split() or hint
+        box = (self.typed.upper().split() if self.reads_letters else []) or hint
         left = BOX[0] - 40 * self.sliding
         self.sliding = max(0, self.sliding - 1)
         words = [Word(text, left + 70 * i, BOX[1], 60, BOX[3], 0) for i, text in enumerate(box)]
         if not self.typed:
             for i, place in enumerate(("RECENT", *(p.upper() for p in self.recent))):
                 words.append(Word(place, BOX[0], 220 + 40 * i, 90, 20, 10 + i))
+        elif not self.entered:  # the list filters as letters land
+            words.append(Word("RESULTS", BOX[0], 220, 90, 20, 1))
         if (self.box_has_keys or self.entered) and self.shows_x:
-            words.append(Word("x", CLOSE[0] - 6, CLOSE[1] - 8, 12, 16, 0))
+            words.append(Word("x", self.close_at[0] - 6, self.close_at[1] - 8, 12, 16, 0))
         if self.entered:
             found = self.typed in self.places
             words.append(Word("RESULTS" if found else "NO", BOX[0], 220, 90, 20, 1))
@@ -320,6 +326,62 @@ def test_a_map_that_closed_after_the_click_shows_neither_and_gets_no_letters() -
     assert done.detail == "the map closed before typing"
     assert game.typed == ""
     assert not done.typed
+
+
+def test_a_first_letter_text_recognition_cant_read_still_counts_once_recent_goes() -> None:
+    game = Game(reads_letters=False)  # only the list under the box changes
+    done = _plot(game)
+    assert done.detail == "the search box doesn't show the name"  # Enter still waits
+    assert game.typed == "levski"
+    assert not game.entered
+
+
+def test_a_caret_read_as_i_is_not_a_letter() -> None:
+    game = Game(takes_keys=False)  # review of #672: the box shows a caret, takes nothing
+    real = game.read
+
+    def read() -> Reading:
+        reading = real()
+        if game.stray:  # after the first letter went astray, the caret blinks on
+            caret = Word("I", BOX[0], BOX[1], 8, BOX[3], 0)
+            return Reading(reading.width, reading.height, (*reading.words, caret), 7)
+        return reading
+
+    class Reader:
+        def read(self) -> Reading:
+            return read()
+
+    done = _plot(game, reader=Reader())
+    assert done.detail == "the search box didn't take the first letter"
+    assert game.stray == ["l"]
+
+
+def test_a_map_that_closes_on_the_first_letter_gets_no_more() -> None:
+    game = Game()  # review of #672: no RECENT, but no panel either
+
+    class Closes:
+        def read(self) -> Reading:
+            if game.typed:
+                return Reading(WIDTH, HEIGHT, (Word("FUEL", 100, 900, 60, 20, 0),), window=7)
+            return game.read()
+
+    done = _plot(game, reader=Closes())
+    assert done.detail == "the search box didn't take the first letter"
+    assert game.typed == "l"
+
+
+def test_the_x_read_on_the_box_line_is_clicked_wherever_it_is() -> None:
+    near = (BOX_MIDDLE[0] + 300, BOX_MIDDLE[1])  # nearer than the offset, as at 5120x2160
+    game = Game(close_at=near)
+    assert _plot(game).status == "done"
+    assert game.clicks == [BOX_MIDDLE, near]
+
+
+def test_an_x_off_the_box_line_is_clicked_where_the_offset_puts_it() -> None:
+    game = Game(close_at=(CLOSE[0], CLOSE[1] + 25))  # read a little low, off the line
+    done = _plot(game)
+    assert game.clicks == [BOX_MIDDLE, CLOSE]
+    assert done.status == "failed"  # the click missed the x drawn lower: R isn't pressed
 
 
 def test_a_box_that_never_sits_still_is_never_clicked() -> None:
