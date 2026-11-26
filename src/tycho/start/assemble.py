@@ -16,6 +16,7 @@ from tycho.packs import GameKeys, GamePack, as_run, built_in
 from tycho.ptt.binding import Binding
 from tycho.ptt.conflicts import conflict_warnings
 from tycho.ptt.devices import input_sources
+from tycho.ptt.monitor import PushToTalk
 from tycho.settings import Settings
 from tycho.stt import PARAKEET_V2, PARAKEET_V2_INT8, ModelError, ModelStore, speech_models
 from tycho.stt.choice import device_choice, device_name, gpu_hint
@@ -135,6 +136,7 @@ def build_session(
     reader: ScreenReader | None = None,
     clicker: Clicker | None = None,
     record: FailedRoute | None = None,
+    push_to_talk: PushToTalk | None = None,
     pack: GamePack,
 ) -> Session:
     """The talking loop, wired the way ``tycho run`` wires it, for ``pack``'s game: its
@@ -143,10 +145,11 @@ def build_session(
     for a pack that can look (its ``look`` phrases, #31). ``reader``, ``clicker``: the
     game window's words and clicks, for a pack that plots routes (its ``[route]``, #588);
     ``make_brain`` gets the route's look-up, if the pack gives the brain one (#647).
-    ``record``: told when a route fails on the map (``TYCHO_ROUTE_RECORD``)."""
+    ``record``: told when a route fails on the map (``TYCHO_ROUTE_RECORD``).
+    ``push_to_talk``: the buttons' listener, if the caller keeps it to change them while
+    Tycho runs (#646); otherwise one for ``bindings``."""
     from tycho.input import Presser
     from tycho.lexicon import Lexicon
-    from tycho.ptt.monitor import PushToTalk
     from tycho.runtime import Session
     from tycho.runtime.look import Eyes
 
@@ -163,7 +166,7 @@ def build_session(
     extra = [tool] if tool is not None else []  # keys off: the brain explains the map
     return Session(
         audio=audio,
-        push_to_talk=PushToTalk(bindings, input_sources(*bindings)),
+        push_to_talk=push_to_talk or PushToTalk(bindings, input_sources(*bindings)),
         transcriber=transcriber,
         lexicon=Lexicon.default(pack),
         matcher=matcher,
