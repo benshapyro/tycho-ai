@@ -138,6 +138,7 @@ close_map = "v_starmap"
 search_box = "search locations"      # "SEARCH LOCATIONS..." while the box is empty
 results = "results"                  # "RESULTS (1)" over the list
 no_results = "no results"
+recent = "recent"                    # "RECENT" under the box once it has the keys
 close_marks = ["x", "×"]
 close_offset = [0.307, 0.0]          # the close button, from the box's words, by frame height
 close_reach = 0.02

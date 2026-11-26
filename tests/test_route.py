@@ -64,6 +64,7 @@ FLOW = RouteFlow(
     read_every=0.0,
     settle_seconds=0.0,
     click_seconds=0.0,
+    recent="recent",
 )
 
 
@@ -114,6 +115,9 @@ class Game:
     recent: tuple[str, ...] = ()
     """Places in the map's RECENT list, shown under the box before anything is typed."""
     stray: list[str] = field(default_factory=list[str])
+    keeps_hint: bool = False
+    """The clicked box still shows its empty words until a letter lands, as on 24 Nov;
+    False: it drops them for its own x once it has the keys (Ben's PC try, 26 Nov)."""
     slides: int = 0
     """Looks, after the map opens, in which its panel is still sliding in: the box is
     drawn further left each look before, and a click on it does nothing (Ben's PC try,
@@ -176,7 +180,8 @@ class Game:
     def read(self) -> Reading:
         if not self.map_open:
             return Reading(WIDTH, HEIGHT, (Word("FUEL", 100, 900, 60, 20, 0),), window=7)
-        box = self.typed.upper().split() or ["SEARCH", "LOCATIONS..."]
+        hint = [] if self.box_has_keys and not self.keeps_hint else ["SEARCH", "LOCATIONS..."]
+        box = self.typed.upper().split() or hint
         left = BOX[0] - 40 * self.sliding
         self.sliding = max(0, self.sliding - 1)
         words = [Word(text, left + 70 * i, BOX[1], 60, BOX[3], 0) for i, text in enumerate(box)]
@@ -285,6 +290,36 @@ def test_one_bad_look_while_the_map_settles_is_only_one_look() -> None:
     done = _plot(game, reader=Blinks())
     assert done.status == "done"
     assert game.clicks == [BOX_MIDDLE, CLOSE]
+
+
+def test_a_box_with_the_keys_drops_its_empty_words_and_still_gets_the_name() -> None:
+    game = Game()  # Ben's PC try, 26 Nov 2026: the click took, and the empty words went
+    done = _plot(game)
+    assert done.status == "done"
+    assert game.route_id == "levski_all-001"
+
+
+def test_a_box_that_keeps_its_empty_words_until_a_letter_still_gets_the_name() -> None:
+    game = Game(keeps_hint=True)  # as on 24 Nov
+    assert _plot(game).status == "done"
+
+
+def test_a_map_that_closed_after_the_click_shows_neither_and_gets_no_letters() -> None:
+    game = Game()
+
+    class Closes:
+        looks = 0
+
+        def read(self) -> Reading:
+            self.looks += 1
+            if game.box_has_keys:  # the map closed just after the click
+                return Reading(WIDTH, HEIGHT, (Word("FUEL", 100, 900, 60, 20, 0),), window=7)
+            return game.read()
+
+    done = _plot(game, reader=Closes())
+    assert done.detail == "the map closed before typing"
+    assert game.typed == ""
+    assert not done.typed
 
 
 def test_a_box_that_never_sits_still_is_never_clicked() -> None:

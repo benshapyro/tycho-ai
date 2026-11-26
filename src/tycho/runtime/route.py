@@ -10,9 +10,12 @@ The flow, as the pack declares it (``RouteFlow``):
    already set (``route_set``), or the map's "no route" line (``seated``) since step 1;
 3. once the box sits still in two looks ``settle_seconds`` apart (the map has finished
    opening), click it, in the later frame (the first click), and wait ``click_seconds``;
-4. type the place's name, letter by letter: after the first, the box's empty words must
-   be gone, and after the last, the box's own line must show the name, before Enter
-   (``enter``) is pressed (#654: letters that didn't land could reach the game);
+4. check the map is still open: the box's empty words, or the list a box with the keys
+   shows under it (it drops them, 26 Nov 2026); else nothing is typed. Type the name,
+   letter by letter: after the first, the empty words must be gone and a letter on the
+   box's line or the RECENT list gone, and after the last, the box's own line must
+   show the name, before Enter (``enter``) is pressed (#654: letters that didn't land
+   could reach the game);
 5. read a fresh frame: the RESULTS header under the box, and the chosen place under it
    in the panel's column (a RECENT list doesn't count, #654);
 6. click the panel's close button (the second, last click), found from the search box
@@ -50,6 +53,7 @@ from tycho.input.plan import TAP_SECONDS, Press
 from tycho.keybinds import Keybinds
 from tycho.packs import Safety
 from tycho.packs.routes import RouteFlow
+from tycho.runtime.mapwords import column, middle, near, row, shows
 from tycho.runtime.messages import Status
 from tycho.runtime.planning import Refusal, Steps, plan_request
 from tycho.safety import is_confirm_grade
@@ -207,18 +211,20 @@ class _Run:
             self._press(presses[flow.close_map])
             raise _Stop("refused", lines.on_foot, "the log shows no pilot's seat")
         box, reading = self._settled(box)
-        self._click(reading, _middle(box), "the search box")
-        if not self._fresh().has(flow.search_box):  # the map closed: type nothing
+        self._click(reading, middle(box), "the search box")
+        after = self._fresh()  # a box with the keys drops its empty words (26 Nov 2026)
+        if not after.has(flow.search_box) and not self._listed(after, box):
             raise _Stop("failed", lines.stuck, "the map closed before typing")
         self._wait(flow.click_seconds)  # the box takes keys a moment after the click (#654)
         self._type(name[:1])
         self.pressed.append(f"typed {name[:1]}")  # the log shows it, even if the game took it
         self._wait(flow.beat_seconds)
-        if self._fresh().has(flow.search_box):  # still empty: type no more letters
+        now = self._fresh()
+        if now.has(flow.search_box) or not self._took(after, now, box):  # no more letters
             raise _Stop("failed", lines.not_typed, "the search box didn't take the first letter")
         self._type(name[1:])
         self._wait(flow.beat_seconds)
-        if not _shows(_row(self._fresh(), box), name):
+        if not shows(row(self._fresh(), box), name):
             raise _Stop("failed", lines.not_typed, "the search box doesn't show the name")
         self.pressed[-1] = f"typed {name}"
         self._press(presses[flow.enter])
@@ -347,7 +353,7 @@ class _Run:
             now = reading.find(flow.search_box)
             if now is None:  # missed over the moving map, or gone: look again
                 continue
-            if _near(_middle(now), _middle(box), _STILL * reading.height):
+            if near(middle(now), middle(box), _STILL * reading.height):
                 return now, reading
             box = now
         raise _Stop("failed", flow.lines.no_map, "the map's search box didn't sit still")
@@ -361,25 +367,56 @@ class _Run:
     def _picked(self, reading: Reading, box: tuple[Word, ...]) -> None:
         """The frame shows the map open, with the chosen place among the results."""
         lines, name = self.flow.lines, self.place.name
-        under = _column(reading.below(max(word.top + word.height for word in box)), box, reading)
+        under = column(reading.below(max(word.top + word.height for word in box)), box, reading)
         if reading.has(self.flow.no_results):
             raise _Stop("failed", lines.no_results.format(name=name), "the map found nothing")
         header = under.find(self.flow.results)
         if header is None:
             raise _Stop("failed", lines.stuck, "the frame doesn't show the search results")
         listed = under.below(max(word.top + word.height for word in header))
-        if not _shows(listed, name):  # under RESULTS, not a RECENT list or a marker (#654)
+        if not shows(listed, name):  # under RESULTS, not a RECENT list or a marker (#654)
             raise _Stop("failed", lines.not_listed.format(name=name), "not among the results")
 
+    def _marks(self, reading: Reading, box: tuple[Word, ...]) -> list[Word]:
+        """The close marks ("x") on the search box's line, right of where its words were:
+        the box's own x, there once the box has the keys (Ben's PC try, 26 Nov 2026)."""
+        marks = {mark.lower() for mark in self.flow.close_marks}
+        right = max(word.right for word in box)
+        line = row(reading, box).words
+        return [w for w in line if w.text.strip().lower() in marks and w.left > right]
+
+    def _listed(self, reading: Reading, box: tuple[Word, ...]) -> bool:
+        """The panel's list is open under the box: "RECENT" or "ALL RESULTS" in its column,
+        as once the box has the keys (Ben's PC try, 26 Nov 2026)."""
+        bottom = max(word.top + word.height for word in box)
+        under = column(reading.below(bottom), box, reading)
+        near = [w for w in under.words if w.top <= bottom + _LISTED * reading.height]
+        close = Reading(reading.width, reading.height, tuple(near), reading.window)
+        return any(word and close.has(word) for word in (self.flow.recent, self.flow.results))
+
+    def _took(self, before: Reading, after: Reading, box: tuple[Word, ...]) -> bool:
+        """The first letter landed: something other than a close mark on the box's line,
+        or the panel's RECENT list gone (text recognition may not read one letter)."""
+        marks = {mark.lower() for mark in self.flow.close_marks}
+        line = row(after, box).words
+        if any(w.text.strip() and w.text.strip().lower() not in marks for w in line):
+            return True
+        recent = self.flow.recent
+        return bool(recent) and before.has(recent) and not after.has(recent)
+
     def _close_button(self, reading: Reading, box: tuple[Word, ...]) -> tuple[int, int]:
-        """Where the close button is from the search box, if text recognition agrees."""
+        """The close button: the x read on the box's line, or where the pack's offset puts
+        it from the box, if text recognition agrees (the offset was measured at 2560x1440;
+        on a 5120x2160 screen the x sat nearer, 26 Nov 2026)."""
+        if marks := self._marks(reading, box):
+            return min(marks, key=lambda word: word.left).middle
         flow, height = self.flow, reading.height
-        x, y = _middle(box)
+        x, y = middle(box)
         spot = (round(x + flow.close_offset[0] * height), round(y + flow.close_offset[1] * height))
         reach = flow.close_reach * height
-        marks = {mark.lower() for mark in flow.close_marks}
+        marks_said = {mark.lower() for mark in flow.close_marks}
         for word in reading.words:
-            if word.text.strip().lower() in marks and _near(word.middle, spot, reach):
+            if word.text.strip().lower() in marks_said and near(word.middle, spot, reach):
                 return spot
         raise _Stop("failed", flow.lines.stuck, "no close button where the panel has one")
 
@@ -409,51 +446,11 @@ class _Run:
             self._wait(self.flow.read_every)
 
 
+_LISTED = 0.15
+"""How far under the box, as a fraction of the frame's height, its list starts."""
 _STILL = 0.005
 """How far, as a fraction of the frame's height, the box may move and still be settled:
 a few pixels, as text recognition reads the same words a little differently."""
-
-
-def _middle(words: tuple[Word, ...]) -> tuple[int, int]:
-    left = min(word.left for word in words)
-    right = max(word.right for word in words)
-    top = min(word.top for word in words)
-    bottom = max(word.top + word.height for word in words)
-    return (left + right) // 2, (top + bottom) // 2
-
-
-def _column(reading: Reading, box: tuple[Word, ...], frame: Reading) -> Reading:
-    """Only the words in the search panel's column, under its box: the results list,
-    not a marker on the map with the same name (review of #636)."""
-    left = min(word.left for word in box) - round(0.03 * frame.height)
-    right = max(word.right for word in box) + round(0.35 * frame.height)
-    kept = tuple(w for w in reading.words if left <= w.left and w.right <= right)
-    return Reading(reading.width, reading.height, kept, reading.window)
-
-
-def _row(reading: Reading, box: tuple[Word, ...]) -> Reading:
-    """Only the words on the search box's own line: what's typed in it (#654)."""
-    top = min(word.top for word in box)
-    bottom = max(word.top + word.height for word in box)
-    slack = (bottom - top) // 2
-    across = _column(reading, box, reading)
-    kept = tuple(w for w in across.words if top - slack <= w.middle[1] <= bottom + slack)
-    return Reading(reading.width, reading.height, kept, reading.window)
-
-
-def _shows(reading: Reading, name: str) -> bool:
-    """Whether a line of ``reading`` holds ``name``, compared as squeezed text, so
-    "ARC-L1" read as one word still matches, and a caret read as a letter after the
-    typed name doesn't hide it (review of #655)."""
-    wanted = squeezed(name).replace(" ", "")
-    return bool(wanted) and any(
-        wanted in squeezed(" ".join(w.text for w in line)).replace(" ", "")
-        for line in reading.lines()
-    )
-
-
-def _near(point: tuple[int, int], spot: tuple[int, int], reach: float) -> bool:
-    return abs(point[0] - spot[0]) <= reach and abs(point[1] - spot[1]) <= reach
 
 
 def id_names(route_id: str, name: str) -> bool:
