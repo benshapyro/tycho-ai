@@ -62,6 +62,15 @@ def starts(reading: Reading, start: str) -> bool:
     )
 
 
+def says(reading: Reading, phrase: str) -> bool:
+    """Whether a line read holds ``phrase``, run-together words too ("ANOTHERSYSTEM")."""
+    wanted = squeezed(phrase).replace(" ", "")
+    return bool(wanted) and any(
+        wanted in squeezed(" ".join(w.text for w in line)).replace(" ", "")
+        for line in reading.lines()
+    )
+
+
 def near(point: tuple[int, int], spot: tuple[int, int], reach: float) -> bool:
     return abs(point[0] - spot[0]) <= reach and abs(point[1] - spot[1]) <= reach
 

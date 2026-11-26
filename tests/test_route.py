@@ -144,10 +144,10 @@ class Game:
     (sections too: "STANTON SYSTEM"); a click on the row that is the typed name picks it
     and gives the keys back (#682)."""
     calculates: int = 0
-    picked: bool = False
-    clicked_row: int = -1
     """Looks, once the place is picked on the panel, in which the map still works out the
     fuel ("CALCULATING..."): R does nothing then (Ben's Hurston try, #682)."""
+    picked: bool = False
+    clicked_row: int = -1
 
     def __post_init__(self) -> None:
         if self.route_id:
@@ -518,7 +518,7 @@ def test_a_pick_in_another_system_is_said_and_no_r_pressed() -> None:
             reading = real()
             if not game.picked:
                 return reading
-            said = ("TARGET", "IS", "IN", "ANOTHER", "SYSTEM")
+            said = ("TARGET", "IS", "IN", "ANOTHERSYSTEM")  # run together, as OCR may
             far = tuple(Word(w, 300 + 90 * i, 900, 80, 20, 80) for i, w in enumerate(said))
             return Reading(reading.width, reading.height, reading.words + far, 7)
 

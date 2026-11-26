@@ -328,9 +328,9 @@ class _Run:
             except UnsupportedKey as e:  # NAME only lets through what can be typed
                 raise _Stop("failed", "", str(e)) from e
             self._key(code)
+            self.typed = True
             log.debug("Typed %r into the map's search", letter)
             self._wait(_KEY_GAP)  # a beat with no key down (Port Tressler's doubled T, #682)
-            self.typed = True
 
     def _key(self, code: Code) -> None:
         if self.cancel.is_set():
@@ -460,7 +460,7 @@ class _Run:
         (Ben's Hurston try, #682: 8 s or more)."""
         flow, start, seen = self.flow, self.clock(), False
         while flow.calculating:
-            if (now := self._fresh()).has(flow.other_system) and flow.other_system:
+            if mapwords.says(now := self._fresh(), flow.other_system):
                 said = flow.lines.other_system.format(name=self.place.name)
                 raise _Stop("failed", said, "the map picked a place in another system")
             if mapwords.starts(now, flow.calculating):
