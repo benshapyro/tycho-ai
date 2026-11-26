@@ -16,6 +16,16 @@ class FakeKeySender:
     on_event: Callable[[], None] | None = None
     stuck: set[Code] = field(default_factory=set[Code])
     """Keys whose key-up Windows refuses every time."""
+    players: list[frozenset[Code]] = field(default_factory=list[frozenset[Code]])
+    """The modifiers the player holds, one answer per look; the last repeats (#645)."""
+    looks: int = 0
+    """How many times the presser looked at the modifiers."""
+
+    def held_modifiers(self) -> frozenset[Code]:
+        self.looks += 1
+        if not self.players:
+            return frozenset()
+        return self.players.pop(0) if len(self.players) > 1 else self.players[0]
 
     def down(self, code: Code) -> None:
         self._record("down", code)

@@ -297,7 +297,8 @@ class _Run:
             self.pressed.append(press.label or press.action)
         if not receipt.done:
             status: Status = receipt.outcome if receipt.outcome != "done" else "failed"
-            raise _Stop(status, "", receipt.detail or receipt.outcome)
+            said = receipt.detail if status == "modifier_held" else ""  # "Let go of Ctrl" (#645)
+            raise _Stop(status, said, receipt.detail or receipt.outcome)
         self._wait(self.flow.beat_seconds)
 
     def _type(self, name: str) -> None:
@@ -316,7 +317,8 @@ class _Run:
         receipt = self.presser.press(Press("type", (code,), TAP_SECONDS), self.cancel)
         if not receipt.done:
             status: Status = receipt.outcome if receipt.outcome != "done" else "failed"
-            raise _Stop(status, self.flow.lines.stuck, receipt.detail or receipt.outcome)
+            said = receipt.detail if status == "modifier_held" else self.flow.lines.stuck
+            raise _Stop(status, said, receipt.detail or receipt.outcome)
 
     def _wait(self, seconds: float) -> None:
         if self.cancel.wait(seconds):

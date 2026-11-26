@@ -9,7 +9,7 @@ from collections.abc import Callable
 from ctypes import wintypes
 
 from tycho import win32
-from tycho.input.keys import Code
+from tycho.input.keys import Code, code_for
 
 _INPUT_MOUSE, _INPUT_KEYBOARD = 0, 1
 _KEYEVENTF_EXTENDEDKEY, _KEYEVENTF_KEYUP, _KEYEVENTF_SCANCODE = 0x0001, 0x0002, 0x0008
@@ -31,6 +31,16 @@ CLICK_SECONDS = 0.06
 MOVE_SECONDS = 0.1
 """After the pointer moves, before the button goes down: for the game to see it there."""
 GAME_EXECUTABLE = "StarCitizen.exe"
+_HELD = 0x8000
+# Windows' left and right Shift, Ctrl and Alt (VK_LSHIFT to VK_RMENU), as Tycho's codes.
+_MODIFIER_KEYS = {
+    0xA0: code_for("lshift"),
+    0xA1: code_for("rshift"),
+    0xA2: code_for("lctrl"),
+    0xA3: code_for("rctrl"),
+    0xA4: code_for("lalt"),
+    0xA5: code_for("ralt"),
+}
 
 
 class _KEYBDINPUT(ctypes.Structure):
@@ -87,6 +97,14 @@ class WindowsKeySender:
 
     def up(self, code: Code) -> None:
         self._button(code, up=True)
+
+    def held_modifiers(self) -> frozenset[Code]:
+        """Shift, Ctrl and Alt down now, from the keyboard or sent by a program such as
+        a stick's (JoyToKey): ``GetAsyncKeyState`` sees both (#645)."""
+        user32 = win32.user32()
+        return frozenset(
+            code for vk, code in _MODIFIER_KEYS.items() if user32.GetAsyncKeyState(vk) & _HELD
+        )
 
     def wheel(self, notches: int) -> None:
         event = _INPUT(type=_INPUT_MOUSE)
