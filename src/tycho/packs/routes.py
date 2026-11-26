@@ -12,7 +12,7 @@ game, so it's reviewed like code (ADR 3).
 import re
 import string
 from collections.abc import Collection
-from dataclasses import MISSING, dataclass, fields
+from dataclasses import MISSING, dataclass, fields, replace
 from typing import Protocol, cast
 
 from tycho.text import normalize
@@ -115,6 +115,9 @@ class RouteFlow:
     """After the click on the search box, before the first letter: the box takes keys a
     moment after it's clicked (#654, Ben's PC try)."""
     read_every: float = 0.25
+    recent: str = ""
+    """A word over the list the panel shows once the box has the keys, before anything is
+    typed ("RECENT"): gone once a letter lands (Ben's PC try, 26 Nov 2026)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,7 +144,18 @@ class Route:
 _ACTIONS = ("nav", "open_map", "enter", "clear", "plot", "close_map")
 _WORDS = ("search_box", "results", "no_results", "route_set", "route_line", "seated")
 _KEYS = frozenset(
-    {"say", "places", "close_offset", "close_marks", "close_reach", "lines", "tool", "here", "away"}
+    {
+        "say",
+        "places",
+        "close_offset",
+        "close_marks",
+        "close_reach",
+        "lines",
+        "tool",
+        "here",
+        "away",
+        "recent",
+    }
 )
 _LINES = frozenset(f.name for f in fields(RouteLines))
 _REQUIRED_LINES = frozenset(f.name for f in fields(RouteLines) if f.default is MISSING)
@@ -202,6 +216,10 @@ def read(
         close_reach=float(cast(float, reach)),
         lines=_lines(table.get("lines"), f"{where} lines"),
     )
+    recent = table.get("recent", "")
+    if not isinstance(recent, str):
+        raise ValueError(f"{where}: recent must be some text")
+    flow = replace(flow, recent=" ".join(recent.lower().split()))
     tool = table.get("tool", "")
     if not isinstance(tool, str):
         raise ValueError(f"{where}: tool must be some text")

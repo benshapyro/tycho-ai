@@ -214,7 +214,7 @@ def _table() -> dict[str, object]:
         "places": SC.route.places,
         **{key: getattr(flow, key) for key in ("nav", "open_map", "enter", "clear", "plot")},
         "close_map": flow.close_map,
-        **{key: getattr(flow, key) for key in ("search_box", "results", "no_results")},
+        **{key: getattr(flow, key) for key in ("search_box", "results", "no_results", "recent")},
         **{key: getattr(flow, key) for key in ("route_set", "route_line", "seated")},
         "close_marks": list(flow.close_marks),
         "close_offset": list(flow.close_offset),
