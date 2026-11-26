@@ -19,8 +19,9 @@ The flow, as the pack declares it (``RouteFlow``):
 5. read a fresh frame: the RESULTS header under the box, and the chosen place under it
    in the panel's column (a RECENT list doesn't count, #654);
    or, as Enter can open it straight away (Ben's PC try, 26 Nov 2026), the place's own
-   panel: its name as a line of its own just under the box;
-6. the second, last click, to take the keys from the box: on that panel's name (Ben: it
+   panel: its name as a line of its own just under the box; or, when Enter emptied the
+   box (its empty words back), the place under RECENT (Orison, 26 Nov 2026);
+6. the second, last click, to take the keys from the box: on that place's name (Ben: it
    only needs a click outside the search bar, which also leaves the place chosen), else
    on the results panel's close button, read on the box's line or found by the pack's
    offset, and only if text recognition agrees something is there;
@@ -57,6 +58,7 @@ from tycho.input.plan import TAP_SECONDS, Press
 from tycho.keybinds import Keybinds
 from tycho.packs import Safety
 from tycho.packs.routes import RouteFlow
+from tycho.runtime import mapwords
 from tycho.runtime.mapwords import column, middle, near, row, shows
 from tycho.runtime.messages import Status
 from tycho.runtime.planning import Refusal, Steps, plan_request
@@ -237,6 +239,8 @@ class _Run:
         reading = self._fresh()
         if (title := self._detail(reading, box)) is not None:  # the place's panel opened
             self._click(reading, middle(title), "the place's name in the panel")
+        elif (pick := self._recent(reading, box)) is not None:  # Enter emptied the box
+            self._click(reading, middle(pick), "the place's name under recent")
         else:
             self._picked(reading, box)
             self._click(
@@ -397,18 +401,10 @@ class _Run:
         line = row(reading, box).words
         return [w for w in line if w.text.strip().lower() in marks and w.left > right]
 
-    def _near(self, reading: Reading, box: tuple[Word, ...]) -> Reading:
-        """The words of the search panel's column within ``_LISTED`` of the height under
-        the box."""
-        bottom = max(word.top + word.height for word in box)
-        under = column(reading.below(bottom), box, reading)
-        near = [w for w in under.words if w.top <= bottom + _LISTED * reading.height]
-        return Reading(reading.width, reading.height, tuple(near), reading.window)
-
     def _listed(self, reading: Reading, box: tuple[Word, ...]) -> bool:
         """The panel's list is open under the box: "RECENT" or "ALL RESULTS" in its column,
         as once the box has the keys (Ben's PC try, 26 Nov 2026)."""
-        close = self._near(reading, box)
+        close = mapwords.close_under(reading, box, _LISTED)
         return any(word and close.has(word) for word in (self.flow.recent, self.flow.results))
 
     def _detail(self, reading: Reading, box: tuple[Word, ...]) -> tuple[Word, ...] | None:
@@ -417,11 +413,18 @@ class _Run:
         name inside a description."""
         if self._listed(reading, box):  # a list's rows aren't the panel
             return None
-        wanted = squeezed(self.place.name).replace(" ", "")
-        for line in self._near(reading, box).lines():
-            if squeezed(" ".join(w.text for w in line)).replace(" ", "") == wanted:
+        for line in mapwords.close_under(reading, box, _LISTED).lines():
+            if mapwords.alike(" ".join(w.text for w in line), self.place.name):
                 return line
         return None
+
+    def _recent(self, reading: Reading, box: tuple[Word, ...]) -> tuple[Word, ...] | None:
+        """The place under RECENT, when Enter picked it and emptied the box: its empty
+        words back, no filtered list (Ben's Orison try, 26 Nov 2026)."""
+        if not self.flow.recent or not row(reading, box).has(self.flow.search_box):
+            return None
+        under = column(reading.below(max(w.top + w.height for w in box)), box, reading)
+        return mapwords.under_header(under, self.flow.recent, self.flow.results, self.place.name)
 
     def _took(self, before: Reading, after: Reading, box: tuple[Word, ...], first: str) -> bool:
         """The first letter landed: a new word on the box's line that starts with it (not

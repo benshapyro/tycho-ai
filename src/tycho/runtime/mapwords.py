@@ -22,6 +22,15 @@ def column(reading: Reading, box: tuple[Word, ...], frame: Reading) -> Reading:
     return Reading(reading.width, reading.height, kept, reading.window)
 
 
+def close_under(reading: Reading, box: tuple[Word, ...], share: float) -> Reading:
+    """The words of the search panel's column within ``share`` of the frame's height
+    under the box."""
+    bottom = max(word.top + word.height for word in box)
+    under = column(reading.below(bottom), box, reading)
+    near = [w for w in under.words if w.top <= bottom + share * reading.height]
+    return Reading(reading.width, reading.height, tuple(near), reading.window)
+
+
 def row(reading: Reading, box: tuple[Word, ...]) -> Reading:
     """Only the words on the search box's own line: what's typed in it (#654)."""
     top = min(word.top for word in box)
@@ -45,3 +54,33 @@ def shows(reading: Reading, name: str) -> bool:
 
 def near(point: tuple[int, int], spot: tuple[int, int], reach: float) -> bool:
     return abs(point[0] - spot[0]) <= reach and abs(point[1] - spot[1]) <= reach
+
+
+def alike(said: str, name: str) -> bool:
+    """Whether a line read as ``said`` is ``name``, letting text recognition misread one
+    letter of a name of five letters or more ("ORISOW" is Orison, 26 Nov 2026). Never a
+    digit: "ARC-L2" is not ARC-L1."""
+    got, wanted = squeezed(said).replace(" ", ""), squeezed(name).replace(" ", "")
+    if got == wanted:
+        return True
+    if len(got) != len(wanted) or sum(c.isalpha() for c in wanted) < 5:
+        return False
+    slips = [(a, b) for a, b in zip(got, wanted, strict=True) if a != b]
+    return len(slips) == 1 and all(c.isalpha() for c in slips[0])
+
+
+def under_header(reading: Reading, header: str, until: str, name: str) -> tuple[Word, ...] | None:
+    """The line that is ``name`` in the list under the ``header`` words, before the line
+    that holds ``until`` (run-together words too: "ALLRESULTS"); None if not there."""
+    found = reading.find(header)
+    if found is None:
+        return None
+    top = max(word.top + word.height for word in found)
+    stop = squeezed(until).replace(" ", "")
+    for line in sorted(reading.below(top).lines(), key=lambda line: line[0].top):
+        said = " ".join(word.text for word in line)
+        if stop and stop in squeezed(said).replace(" ", ""):
+            return None
+        if alike(said, name):
+            return line
+    return None
