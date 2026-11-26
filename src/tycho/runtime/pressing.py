@@ -17,6 +17,7 @@ from tycho.runtime.messages import Progress, Status, Trace
 RECEIPT_STATUS: dict[str, Status] = {
     "cancelled": "cancelled",
     "no_focus": "no_focus",
+    "modifier_held": "modifier_held",
     "failed": "failed",
 }
 
@@ -93,6 +94,10 @@ async def press_all(
         if not receipt.done:
             if receipt.sent:
                 progress.pressed.append(press.action)
+            if receipt.outcome == "modifier_held":
+                # Said, in place of any line about pressing it (#645): "Let go of Ctrl
+                # and say it again."
+                progress.say, progress.toggled = receipt.detail, False
             trace.mark("press")
             return RECEIPT_STATUS.get(receipt.outcome, "failed"), receipt.detail
         progress.pressed.append(press.action)

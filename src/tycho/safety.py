@@ -26,7 +26,7 @@ from dataclasses import dataclass
 
 from tycho.commands.matcher import Command
 from tycho.input.plan import pressable_input
-from tycho.keybinds import MODIFIERS, Action, Keybinds, KeyInput
+from tycho.keybinds import MODIFIERS, Action, Keybinds, KeyInput, key_text
 from tycho.packs import Safety
 
 _DANGER_WORDS = (
@@ -87,6 +87,16 @@ def check(
         return Verdict(
             False,
             f"{name} is on {key}, {also}. Give it a key of its own (the recommended keybinds do).",
+        )
+    if keybinds is not None and (clicked := click_clash(action, keybinds)):
+        alone, other = clicked
+        key = pressable_input(action)
+        assert key is not None  # noqa: S101 - a click clash has a key
+        return Verdict(
+            False,
+            f"{name} is on {key_text(key)}, and {key_text(alone)} alone is "
+            f"{other.label or other.name}, which the game can take it for. "
+            "Give it a key of its own.",
         )
     if not confirmed and (command.confirm or is_confirm_grade(action.name, lists)):
         return Verdict(False, f"{name} needs your confirmation", ask=True)
@@ -154,6 +164,20 @@ def key_clash(
         if bound := next((b for b in other.inputs if _pressed_by(key, b)), None):
             return other, bound
     return None
+
+
+def click_clash(action: Action, keybinds: Keybinds) -> tuple[KeyInput, Action] | None:
+    """For an action Tycho would press with a modifier and a mouse button ("lalt+mouse1"),
+    another action on that button alone, with it (#648). The game can read the click
+    without the modifier: "Switch Mining Laser" on Left Alt + Mouse 1 turned the mining
+    laser on, which is Mouse 1 alone. A key on the keyboard is pressed instead when the
+    action has one (``pressable_input``), so this only stops a mouse-only binding."""
+    key = pressable_input(action)
+    if key is None or key.device != "mouse" or not key.modifiers:
+        return None
+    alone = KeyInput(key.key)
+    other = next((o for o in keybinds if o.name != action.name and alone in o.inputs), None)
+    return (alone, other) if other is not None else None
 
 
 def _pressed_by(press: KeyInput, bound: KeyInput) -> bool:

@@ -5,6 +5,12 @@ Rules (AGENTS.md):
   into a chat window or another app. Focus is checked before every tap.
 - Every key that went down is released, in reverse order, in a ``finally``,
   whatever happens: cancellation, lost focus, or an error from Windows.
+- Nothing is pressed while the player holds a Shift, Ctrl or Alt the press doesn't use
+  (#645), one from the keyboard or one a stick button sends: the game would read it
+  with Tycho's key, which can be another action (Right Ctrl + N isn't N). Tycho waits
+  up to ``MODIFIER_WAIT_SECONDS`` for it to be let go, then presses, or presses nothing
+  and says to let go. A modifier the press itself uses that the player already holds
+  is left alone: never pressed or released for them.
 - Waiting is done in small slices, so cancellation takes effect within ~10 ms,
   except that a hold past the game's tap window is never cut short inside it
   (``Press.min_hold_seconds``, at most 0.3 s), so a cancel can't turn it into a tap of
@@ -21,14 +27,37 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
-from tycho.input.keys import Code
+from tycho.input.keys import Code, code_for
 from tycho.input.plan import Press
 
 log = logging.getLogger(__name__)
 
 _SLICE_SECONDS = 0.01
+MODIFIER_WAIT_SECONDS = 1.0
+"""How long a press waits for the player to let go of a modifier it doesn't use (#645)."""
 
-type Outcome = Literal["done", "cancelled", "no_focus", "failed"]
+type Outcome = Literal["done", "cancelled", "no_focus", "modifier_held", "failed"]
+
+_MODIFIER_NAMES = {
+    code_for(name): word
+    for name, word in (
+        ("lctrl", "Ctrl"),
+        ("rctrl", "Ctrl"),
+        ("lshift", "Shift"),
+        ("rshift", "Shift"),
+        ("lalt", "Alt"),
+        ("ralt", "Alt"),
+    )
+}
+MODIFIER_CODES = frozenset(_MODIFIER_NAMES)
+"""Left and right Shift, Ctrl and Alt: the keys that change what another key does."""
+
+
+def let_go_line(held: frozenset[Code]) -> str:
+    """What Tycho says when the player holds ``held`` (#645): "Let go of Ctrl and say it
+    again." """
+    words = sorted({_MODIFIER_NAMES.get(code, "the key") for code in held})
+    return f"Let go of {' and '.join(words)} and say it again."
 
 
 class KeySender(Protocol):
@@ -39,6 +68,11 @@ class KeySender(Protocol):
     def up(self, code: Code) -> None: ...
 
     def wheel(self, notches: int) -> None: ...
+
+    def held_modifiers(self) -> frozenset[Code]:
+        """The Shift, Ctrl and Alt keys down now, whoever pressed them (#645): the
+        player, or a stick's software that sends one."""
+        ...
 
 
 class FocusCheck(Protocol):
@@ -103,6 +137,11 @@ class Presser:
             for tap in range(press.taps):
                 if cancel.is_set():
                     return Receipt(press.action, "cancelled", taps)
+                players = self._players_modifiers(press, cancel)
+                if cancel.is_set():
+                    return Receipt(press.action, "cancelled", taps)
+                if extra := players - set(press.keys):
+                    return Receipt(press.action, "modifier_held", taps, let_go_line(extra))
                 if not self._focus.game_has_focus():
                     return Receipt(press.action, "no_focus", taps, self._unfocused)
                 if tap:  # between taps: a cancel or lost focus here stops the next tap
@@ -110,7 +149,8 @@ class Presser:
                         return Receipt(press.action, "cancelled", taps)
                     if not self._focus.game_has_focus():
                         return Receipt(press.action, "no_focus", taps, self._unfocused)
-                if not self._tap(press, held, cancel, on_down if tap == 0 else None):
+                first = on_down if tap == 0 else None
+                if not self._tap(press, held, cancel, first, players):
                     return Receipt(press.action, "cancelled", taps, interrupted=press.main in held)
                 taps += 1
             return Receipt(press.action, "done", taps)
@@ -125,10 +165,15 @@ class Presser:
         held: list[Code],
         cancel: threading.Event,
         on_down: Callable[[], None] | None = None,
+        players: frozenset[Code] = frozenset(),
     ) -> bool:
-        """One press of the whole chord. Returns False if cancelled part way."""
+        """One press of the whole chord. Returns False if cancelled part way. Modifiers
+        in ``players`` are already held by the player: left alone, so Tycho never lets
+        go of the player's key for them."""
         *modifiers, main = press.keys
         for code in modifiers:
+            if code in players:
+                continue
             self._sender.down(code)
             held.append(code)
         if main.device == "wheel":
@@ -154,6 +199,19 @@ class Presser:
         key-up, so if that fails the ``finally`` still knows to release it."""
         self._sender.up(held[-1])
         held.pop()
+
+    def _players_modifiers(self, press: Press, cancel: threading.Event) -> frozenset[Code]:
+        """The modifiers down before the press, after waiting up to
+        ``MODIFIER_WAIT_SECONDS`` for any the press doesn't use to be let go (#645).
+        Returns early if cancelled."""
+        deadline = self._clock() + MODIFIER_WAIT_SECONDS
+        while True:
+            held = self._sender.held_modifiers() & MODIFIER_CODES
+            if not held - set(press.keys) or cancel.is_set():
+                return held
+            if (left := deadline - self._clock()) <= 0:
+                return held
+            self._sleep(min(_SLICE_SECONDS, left))
 
     def _wait(self, seconds: float, cancel: threading.Event) -> bool:
         """Wait, waking early if cancelled. Returns False if cancelled."""

@@ -272,3 +272,76 @@ def test_the_presser_says_when_the_key_the_game_acts_on_goes_down() -> None:
     )
     assert receipt.outcome == "done"
     assert seen == [2]  # once, just after Left Alt and N went down on the first tap
+
+
+# --- The player's own modifiers (#645) ------------------------------------------------
+
+
+def test_a_press_waits_for_the_player_to_let_go_of_a_modifier() -> None:
+    """Right Ctrl held (a stick button through JoyToKey) and let go a moment later: Tycho
+    waits, then presses N alone, never Right Ctrl + N (landing gear vs. another action)."""
+    rctrl = code_for("rctrl")
+    sender = FakeKeySender(players=[frozenset({rctrl})] * 30 + [frozenset()])
+    presser, clock = _presser(sender)
+    receipt = presser.press(plan(_action("n"), MODES))
+    assert receipt.done
+    assert sender.events == [("down", code_for("n")), ("up", code_for("n"))]
+    assert clock.now >= 0.29  # it waited for the let-go before pressing
+
+
+def test_a_modifier_still_held_after_the_wait_presses_nothing_and_says_so() -> None:
+    sender = FakeKeySender(players=[frozenset({code_for("lshift"), code_for("rctrl")})])
+    presser, clock = _presser(sender)
+    receipt = presser.press(plan(_action("n"), MODES))
+    assert receipt.outcome == "modifier_held"
+    assert receipt.detail == "Let go of Ctrl and Shift and say it again."
+    assert not receipt.sent
+    assert sender.events == []
+    assert clock.now == pytest.approx(1.0)
+
+
+def test_a_modifier_the_press_uses_is_left_to_the_player() -> None:
+    """The player holds Left Alt and Tycho presses Left Alt + N: it goes ahead, and Tycho
+    never sends Left Alt up, which would let go of the player's key for them."""
+    lalt, n = code_for("lalt"), code_for("n")
+    sender = FakeKeySender(players=[frozenset({lalt})])
+    presser, clock = _presser(sender)
+    receipt = presser.press(plan(_action("lalt+n", "tap"), MODES))
+    assert receipt.done
+    assert sender.events == [("down", n), ("up", n)]
+    assert clock.now == pytest.approx(0.06)  # no wait
+
+
+def test_the_other_alt_still_counts_as_held() -> None:
+    sender = FakeKeySender(players=[frozenset({code_for("ralt")})])
+    presser, _ = _presser(sender)
+    receipt = presser.press(plan(_action("lalt+n", "tap"), MODES))
+    assert receipt.outcome == "modifier_held"
+    assert sender.events == []
+
+
+def test_cancelling_while_waiting_for_a_modifier_sends_nothing() -> None:
+    sender = FakeKeySender(players=[frozenset({code_for("lctrl")})])
+    cancel = threading.Event()
+    clock = FakeClock()
+
+    def sleep(seconds: float) -> None:
+        clock.sleep(seconds)
+        if clock.now >= 0.2:
+            cancel.set()
+
+    presser = Presser(sender, FakeFocus(True), sleep=sleep, clock=clock, game="Star Citizen")
+    receipt = presser.press(plan(_action("n"), MODES), cancel)
+    assert receipt.outcome == "cancelled"
+    assert sender.events == []
+
+
+def test_each_tap_of_a_double_tap_checks_the_modifiers() -> None:
+    """Ctrl pressed between the two taps: the second tap isn't sent."""
+    ctrl = frozenset({code_for("lctrl")})
+    sender = FakeKeySender(players=[frozenset(), *[ctrl] * 200])
+    presser, _ = _presser(sender)
+    receipt = presser.press(plan(_action("capslock", "double_tap"), MODES))
+    assert receipt.outcome == "modifier_held"
+    assert receipt.taps_done == 1
+    assert [kind for kind, _ in sender.events] == ["down", "up"]

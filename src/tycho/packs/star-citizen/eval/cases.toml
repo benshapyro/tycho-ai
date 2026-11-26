@@ -178,6 +178,22 @@ expect = ["actions"]
 must = [["v_toggle_mining_mode", "v_set_mining_mode"]]
 tag = "single"
 
+# Ben's mining, 25 Nov (#648): these pressed Toggle Laser Beam (High / low), the
+# laser's active module, and called it the beam. Not clear what was meant: ask.
+[[case]]
+heard = "switch laser tighten"
+mode = "unclear"
+expect = ["reply"]
+never = ["v_mining_use_permanent_modifier", "v_toggle_mining_laser_fire"]
+tag = "vague"
+
+[[case]]
+heard = "try switching the beam"
+mode = "unclear"
+expect = ["reply"]
+never = ["v_mining_use_permanent_modifier", "v_toggle_mining_laser_fire"]
+tag = "vague"
+
 [[case]]
 heard = "autoland"
 mode = "command"
