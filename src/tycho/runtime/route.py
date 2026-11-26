@@ -17,7 +17,9 @@ The flow, as the pack declares it (``RouteFlow``):
    box's line or the RECENT list gone, and after the last, the box's own line must
    show the name, before Enter (``enter``) is pressed (#654: letters that didn't land
    could reach the game);
-5. read a fresh frame: the RESULTS header under the box, and the chosen place under it
+5. the row that is exactly the place under the results, in the player's system's
+   section, if one is read: that's the second click, instead of Enter (#682). Else Enter,
+   then read a fresh frame: the RESULTS header under the box, and the chosen place under it
    in the panel's column (a RECENT list doesn't count, #654);
    or, as Enter can open it straight away (Ben's PC try, 26 Nov 2026), the place's own
    panel: its name as a line of its own just under the box; or, when Enter emptied the
@@ -60,7 +62,7 @@ from tycho.input.plan import TAP_SECONDS, Press
 from tycho.keybinds import Keybinds
 from tycho.packs import Safety
 from tycho.packs.routes import RouteFlow
-from tycho.runtime import mapwords
+from tycho.runtime import mappicks, mapwords
 from tycho.runtime.mapwords import column, id_names, middle, near, row, shows
 from tycho.runtime.messages import Status
 from tycho.runtime.planning import Refusal, Steps, plan_request
@@ -120,6 +122,8 @@ class Place:
     """Where to plot to: its name exactly as the map's search knows it."""
 
     name: str
+    system: str | None = None
+    """The player's star system, if the log shows it: a place in another isn't taken."""
 
 
 @dataclass(slots=True)
@@ -235,21 +239,14 @@ class _Run:
             raise _Stop("failed", lines.not_typed, "the search box didn't take the first letter")
         self._type_rest(name, box)
         self._wait(flow.beat_seconds)
-        if not shows(row(self._fresh(), box), name):
+        if not shows(row(typed := self._fresh(), box), name):
             raise _Stop("failed", lines.not_typed, "the search box doesn't show the name")
         self.pressed[-1] = f"typed {name}"
-        self._press(presses[flow.enter])
-        self._wait(flow.beat_seconds)
-        reading = self._fresh()
-        if (title := self._detail(reading, box)) is not None:  # the place's panel opened
-            self._click(reading, middle(title), "the place's name in the panel")
-        elif (pick := self._recent(reading, box)) is not None:  # Enter emptied the box
-            self._click(reading, middle(pick), "the place's name under recent")
+        place, system = self.place.name, self.place.system
+        if (pick := mappicks.exact(typed, box, flow, place, system)) is not None:  # #682
+            self._click(typed, middle(pick), "the place's name in the results")
         else:
-            self._picked(reading, box)
-            self._click(
-                reading, self._close_button(reading, box), "the search panel's close button"
-            )
+            self._enter(presses[flow.enter], box)
         self._calculated()
         replacing = ""
         if self.flow.route_set in self.log.facts():
@@ -331,8 +328,9 @@ class _Run:
             except UnsupportedKey as e:  # NAME only lets through what can be typed
                 raise _Stop("failed", "", str(e)) from e
             self._key(code)
-            log.debug("Typed %r into the map's search", letter)
             self.typed = True
+            log.debug("Typed %r into the map's search", letter)
+            self._wait(_KEY_GAP)  # a beat with no key down (Port Tressler's doubled T, #682)
 
     def _key(self, code: Code) -> None:
         if self.cancel.is_set():
@@ -421,27 +419,21 @@ class _Run:
         if not shows(listed, name):  # under RESULTS, not a RECENT list or a marker (#654)
             raise _Stop("failed", lines.not_listed.format(name=name), "not among the results")
 
-    def _detail(self, reading: Reading, box: tuple[Word, ...]) -> tuple[Word, ...] | None:
-        """The chosen place's name as a line of its own just under the box: the panel
-        Enter opens for one result (26 Nov 2026), not a row of a results list, nor its
-        name inside a description."""
-        if mapwords.listed(reading, box, self.flow):  # a list's rows aren't the panel
-            return None
-        for line in mapwords.close_under(reading, box, mapwords.LISTED).lines():
-            if mapwords.alike(" ".join(w.text for w in line), self.place.name):
-                return line
-        return None
-
-    def _recent(self, reading: Reading, box: tuple[Word, ...]) -> tuple[Word, ...] | None:
-        """The place under RECENT, when Enter picked it and emptied the box: its empty
-        words back or no words at all, no filtered list (Ben's Orison and Hurston tries)."""
-        flow, typed = self.flow, shows(row(reading, box), self.place.name)
-        if not flow.recent or typed or reading.has(flow.no_results):
-            return None
-        under = column(reading.below(max(w.top + w.height for w in box)), box, reading)
-        return mapwords.under_header(
-            under, flow.recent, flow.results, self.place.name, mapwords.LISTED
-        )
+    def _enter(self, enter: Press, box: tuple[Word, ...]) -> None:
+        """Enter takes the top result: then the place's own panel, the place under RECENT
+        if Enter emptied the box, or the results list with the place in it."""
+        flow, place, system = self.flow, self.place.name, self.place.system
+        self._press(enter)
+        self._wait(flow.beat_seconds)
+        reading = self._fresh()
+        if (title := mappicks.detail(reading, box, flow, place)) is not None:
+            self._click(reading, middle(title), "the place's name in the panel")
+        elif (pick := mappicks.recent(reading, box, flow, place, system)) is not None:
+            self._click(reading, middle(pick), "the place's name under recent")
+        else:
+            self._picked(reading, box)
+            spot = self._close_button(reading, box)
+            self._click(reading, spot, "the search panel's close button")
 
     def _close_button(self, reading: Reading, box: tuple[Word, ...]) -> tuple[int, int]:
         if (spot := mapwords.close_spot(reading, box, self.flow)) is None:
@@ -468,7 +460,10 @@ class _Run:
         (Ben's Hurston try, #682: 8 s or more)."""
         flow, start, seen = self.flow, self.clock(), False
         while flow.calculating:
-            if mapwords.starts(self._fresh(), flow.calculating):
+            if mapwords.says(now := self._fresh(), flow.other_system):
+                said = flow.lines.other_system.format(name=self.place.name)
+                raise _Stop("failed", said, "the map picked a place in another system")
+            if mapwords.starts(now, flow.calculating):
                 seen = True
             elif seen or self.clock() >= start + _CALCULATING_STARTS:
                 return
@@ -487,6 +482,8 @@ class _Run:
             self._wait(self.flow.read_every)
 
 
+_KEY_GAP = 0.03
+"""Between one letter's key coming up and the next one's going down."""
 _CALCULATING_STARTS = 1.0
 """How long after the pick the panel may take to start working out the fuel."""
 """How far under the box, as a fraction of the frame's height, its list starts."""

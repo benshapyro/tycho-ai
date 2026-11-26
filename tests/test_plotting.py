@@ -259,6 +259,7 @@ def _table() -> dict[str, object]:
         "close_map": flow.close_map,
         **{key: getattr(flow, key) for key in ("search_box", "results", "no_results", "recent")},
         "calculating": flow.calculating,
+        "other_system": flow.other_system,
         **{key: getattr(flow, key) for key in ("route_set", "route_line", "seated")},
         "close_marks": list(flow.close_marks),
         "close_offset": list(flow.close_offset),

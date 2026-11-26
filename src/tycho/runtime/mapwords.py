@@ -62,6 +62,15 @@ def starts(reading: Reading, start: str) -> bool:
     )
 
 
+def says(reading: Reading, phrase: str) -> bool:
+    """Whether a line read holds ``phrase``, run-together words too ("ANOTHERSYSTEM")."""
+    wanted = squeezed(phrase).replace(" ", "")
+    return bool(wanted) and any(
+        wanted in squeezed(" ".join(w.text for w in line)).replace(" ", "")
+        for line in reading.lines()
+    )
+
+
 def near(point: tuple[int, int], spot: tuple[int, int], reach: float) -> bool:
     return abs(point[0] - spot[0]) <= reach and abs(point[1] - spot[1]) <= reach
 
@@ -84,28 +93,6 @@ def alike(said: str, name: str) -> bool:
             return False
         start += len(word)
     return True
-
-
-def under_header(
-    reading: Reading, header: str, until: str, name: str, reach: float
-) -> tuple[Word, ...] | None:
-    """The line that is ``name`` in the list under the ``header`` words, before the line
-    that holds ``until`` (run-together words too: "ALLRESULTS") and within ``reach`` of
-    the frame's height, should ``until`` go unread; None if not there."""
-    found = reading.find(header)
-    if found is None:
-        return None
-    top = max(word.top + word.height for word in found)
-    stop = squeezed(until).replace(" ", "")
-    for line in sorted(reading.below(top).lines(), key=lambda line: line[0].top):
-        if line[0].top > top + reach * reading.height:
-            return None
-        said = " ".join(word.text for word in line)
-        if stop and stop in squeezed(said).replace(" ", ""):
-            return None
-        if alike(said, name):
-            return line
-    return None
 
 
 SYSTEM_SUFFIX = re.compile(r"\s*\([^()]*\)\s*$")
