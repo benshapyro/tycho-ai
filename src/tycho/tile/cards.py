@@ -121,6 +121,15 @@ class Card:
         return words, "".join((*values, hero_value))
 
     @property
+    def title_repeats(self) -> bool:
+        """Whether the title only says again what the card shows right by it, so it's
+        left off the card: the same words as the label, or a comparison's two names."""
+        title = self.title.casefold()
+        if self.kind == "compare" and self.hero:
+            return all(name and name.casefold() in title for name in self.hero)
+        return bool(title) and title == self.label.casefold()
+
+    @property
     def tone(self) -> Tone:
         if self.kind == "confirm":
             return "danger"
@@ -183,6 +192,8 @@ def from_tool(arguments: Mapping[str, object]) -> Card:
 _BOTH = re.compile(r"\s*\|\s*|\s+(?:vs\.?|versus)\s+", re.IGNORECASE)
 """What parts a comparison's two figures when Claude puts both in one field."""
 _VERSUS = re.compile(r"\s+(?:vs\.?|versus)\s+", re.IGNORECASE)
+_TOPIC = re.compile(r"[,:]\s+")
+"""What parts a title's topic from the first name: "Cargo, Cutlass Black vs Freelancer"."""
 
 
 def _sides(arguments: Mapping[str, object], rows: tuple[Row, ...]) -> tuple[str, str] | None:
@@ -198,13 +209,15 @@ def _sides(arguments: Mapping[str, object], rows: tuple[Row, ...]) -> tuple[str,
     parts = _VERSUS.split(clean(arguments.get("title"), TITLE * 2))
     if not (joined and rows and len(parts) == 2 and all(parts)):
         return None
-    return clean(parts[0], LABEL), clean(parts[1], LABEL)
+    left = _TOPIC.split(parts[0])[-1]  # "Cargo, Cutlass Black" is the Cutlass Black
+    return clean(left, LABEL), clean(parts[1], LABEL)
 
 
 def _rows(raw: object, *, sides: bool = False) -> list[Row]:
     """The card's rows, cleaned. With ``sides`` (a comparison), a row whose value holds
-    both figures ("46 SCU | 66 SCU", "4-5 vs 4-9") and no detail is split into left and right before
-    it's cut to length, so the right-hand figure isn't lost."""
+    both figures ("46 SCU | 66 SCU", "4-5 vs 4-9") is split into left and right before
+    it's cut to length, so the right-hand figure isn't lost; whatever Claude put where
+    the left figure goes ("Hold capacity") gives way to it."""
     if not isinstance(raw, list):
         return []
     rows: list[Row] = []
@@ -214,7 +227,7 @@ def _rows(raw: object, *, sides: bool = False) -> list[Row]:
         fields = cast(dict[str, object], item)
         text = clean(fields.get("text"), TEXT)
         detail, value = fields.get("detail"), fields.get("value")
-        if sides and not detail and isinstance(value, str) and _BOTH.search(value):
+        if sides and isinstance(value, str) and _BOTH.search(value):
             detail, value = _BOTH.split(value, maxsplit=1)
         if text:
             rows.append(
@@ -245,7 +258,7 @@ TOOL_SCHEMA: Mapping[str, object] = {
         "say": {
             "type": "string",
             "description": "The spoken line: the answer in a sentence, then where the "
-            'rest is ("Two more on the Tile").',
+            'rest is ("Two more on the Tile"). Only promise what the card shows.',
         },
         "kind": {"type": "string", "enum": list(BRAIN_KINDS)},
         "label": {
@@ -301,12 +314,12 @@ Kinds and their rows (text | detail | value):
 - route: exactly two rows, buy then sell (place | "Buy" or "Sell" | price per SCU); \
 hero_label and hero_value for the profit. Only a route and a compare use hero_label \
 and hero_value: leave them empty on every other kind.
-- recipe: what to gather (item | | amount).
-- ship: specs (spec name | | value); title the ship, label its role.
-- fleet: the player's own ships, best first (ship | why | verdict); dim ones that \
+- recipe: what to gather (item | where to get it, in a few words, if you know | amount).
+- ship: specs (spec name | | value), one short figure each; title the ship, label its role.
+- fleet: the player's own ships, best first (ship | why | verdict in a word or two); dim ones that \
 can't do the job.
 - steps: one row per step (step | one short line more, if it helps | ), in order.
-- headlines: news (headline | | date).
+- headlines: news (headline that makes sense alone | | date).
 - compare: two things side by side, such as two ships; hero_label and hero_value \
 name them and nothing else (hero_label "Cutlass Black", hero_value "Freelancer"); rows \
 (what | left's figure | right's figure), one figure in each with its unit ("Cargo" | \

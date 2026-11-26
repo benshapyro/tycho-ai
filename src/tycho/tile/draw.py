@@ -23,22 +23,13 @@ from typing import Literal
 from PIL import Image, ImageDraw
 
 from tycho.tile.board import Shown
-from tycho.tile.cards import SPECS, Card
+from tycho.tile.cards import Card
 from tycho.tile.design import CORE, TYCHO_ACCENT
 from tycho.tile.faces import Face, Font, bundled_draws, font
 from tycho.tile.faces import fit as _fit
 from tycho.tile.faces import text_width as _width
 from tycho.tile.faces import wrap as _wrap
-from tycho.tile.tables import compare, headlines, loadout, ranked, steps
-
-_TABLES = {
-    "list": ranked,
-    "fleet": ranked,
-    "steps": steps,
-    "headlines": headlines,
-    "loadout": loadout,
-    "compare": compare,
-}
+from tycho.tile.tables import TABLES as _TABLES
 
 type Light = Literal["listening", "thinking"] | None
 type Rgba = tuple[int, int, int, int]
@@ -50,6 +41,8 @@ WIDTH = 400
 MAX_CARD = 430
 """The tallest a card may be; a long answer is cut to fit, with an ellipsis."""
 GAP = 10
+UNANSWERED = "Wait, and nothing is pressed."
+"""Under a question: what happens if the player says nothing (ADR 13)."""
 LIGHT = 16
 """The talk light's size, and the space above the cards it sits in."""
 
@@ -91,6 +84,7 @@ class _Pen:
         self.image = Image.new("RGBA", (self.w, round((MAX_CARD + 200) * self.u)), (0, 0, 0, 0))
         self.d = ImageDraw.Draw(self.image)
         self.y = round(14 * self.u)
+        self.foot = round((MAX_CARD - 14) * self.u)
         tone = card.tone
         hc = look.high_contrast
         self.accent = rgba(look.accent)
@@ -144,7 +138,7 @@ class _Pen:
         self.y += self.px(22)
 
     def title(self) -> None:
-        if not self.card.title:
+        if not self.card.title or self.card.title_repeats:
             return
         f = self.font("label", self.px(25))
         for line in _wrap(self.card.title.upper(), f, self.inner, 2, 0.05 * f.size):
@@ -175,28 +169,6 @@ class _Pen:
         )
 
     # The body, by kind.
-
-    def recipe(self) -> None:
-        name_f, value_f = self.font("text", self.px(18)), self.font("number", self.px(18))
-        for row in self.card.rows:
-            top, h = self.y, self.px(28)
-            self.d.rectangle((self.pad, top, self.pad + self.inner, top + h), fill=self.well)
-            value_w = _width(row.value, value_f)
-            room = self.inner - self.px(20) - value_w - self.px(12)
-            self.d.text(
-                (self.pad + self.px(10), top + self.px(4)),
-                _fit(row.text, name_f, room),
-                font=name_f,
-                fill=self.text,
-            )
-            self.d.text(
-                (self.pad + self.inner - self.px(10) - value_w, top + self.px(4)),
-                row.value,
-                font=value_f,
-                fill=self.accent,
-            )
-            self.y += h + self.px(4)
-        self.y += self.px(2)
 
     def route(self) -> None:
         small, place, price = (
@@ -258,30 +230,6 @@ class _Pen:
         self.d.text((self.pad + self.inner - value_w, self.y), value, font=big, fill=self.accent)
         self.y += self.px(42)
 
-    def specs(self) -> None:
-        small, value_f = self.font("label", self.px(12)), self.font("number", self.px(20))
-        col = (self.inner - self.px(5)) / 2
-        h = self.px(48)
-        for i, row in enumerate(self.card.rows):
-            x = self.pad + (i % 2) * (col + self.px(5))
-            top = self.y + (i // 2) * (h + self.px(5))
-            self.d.rectangle((x, top, x + col, top + h), fill=self.well)
-            self.caps(
-                (x + self.px(8), top + self.px(5)),
-                _fit(row.text, small, col - self.px(16), 0.1 * small.size),
-                small,
-                self.dim,
-                0.1,
-            )
-            shown = row.value or row.detail
-            self.d.text(
-                (x + self.px(8), top + self.px(21)),
-                _fit(shown, value_f, col - self.px(16)),
-                font=value_f,
-                fill=self.text,
-            )
-        self.y += math.ceil(len(self.card.rows) / 2) * (h + self.px(5)) + self.px(3)
-
     def words(self, size: int = 18, lines: int = 6) -> None:
         f = self.font("text", self.px(size))
         for paragraph in self.card.body:
@@ -302,18 +250,16 @@ class _Pen:
             self.y += self.px(34)
         hint = rest.strip() or 'Say "confirm" or "cancel".'
         for line in _wrap(hint, f, self.inner - ring - self.px(16), lines=2):
-            self.d.text((x, self.y), line, font=f, fill=self.dim)
+            self.d.text((x, self.y), line, font=f, fill=self.text)
             self.y += self.px(21)
+        self.d.text((x, self.y), UNANSWERED, font=f, fill=self.dim)
+        self.y += self.px(21)
         self.y = max(self.y, self.px(36) + ring) + self.px(4)
 
     def body(self) -> None:
         kind = self.card.kind
-        if kind == "recipe":
-            self.recipe()
-        elif kind == "route":
+        if kind == "route":
             self.route()
-        elif kind == SPECS:
-            self.specs()
         elif kind in _TABLES:
             _TABLES[kind](self)
         elif kind == "confirm":

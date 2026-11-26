@@ -9,9 +9,9 @@ from tycho.packs import STAR_CITIZEN, built_in
 from tycho.tile import Board, Card, Row
 from tycho.tile.cards import ALL_KINDS, BODY, confirm, long_answer, notice
 from tycho.tile.design import CORE, accent_for
-from tycho.tile.draw import MAX_CARD, WIDTH, Look, draw, rgba
+from tycho.tile.draw import MAX_CARD, UNANSWERED, WIDTH, Look, draw, rgba
 from tycho.tile.faces import font, text_width, wrap
-from tycho.tile.tables import bar_lengths, number, shared_unit
+from tycho.tile.tables import bar_lengths, number, shared_unit, snug
 
 SC = built_in(STAR_CITIZEN)
 
@@ -395,12 +395,24 @@ def test_a_list_says_a_shared_unit_once() -> None:
     assert shared_unit(()) == ([], "")
 
 
-def test_many_steps_keep_to_one_line_each_so_the_card_holds_them() -> None:
-    few = tuple(Row(f"Step {i}", "A little more") for i in range(5))
-    bare = tuple(Row(f"Step {i}") for i in range(8))
-    many = tuple(Row(f"Step {i}", "A little more") for i in range(8))
-    assert _tile(Card("steps", rows=many)).size == _tile(Card("steps", rows=bare)).size
-    assert _tile(Card("steps", rows=few)).height > _tile(Card("steps", rows=bare[:5])).height
+def test_steps_drop_their_second_lines_only_when_the_card_cant_hold_them() -> None:
+    """By the room on the card, not a count: eight short steps keep theirs, eight long
+    ones (two lines each) don't, and nothing runs off the foot (#688)."""
+    long = "Open the mobiGlas and pick the vehicle maintenance services app"
+    short = tuple(Row(f"Step {i}", "A little more") for i in range(8))
+    held = tuple(Row(f"{long} {i}", "A little more") for i in range(8))
+    bare = tuple(Row(r.text) for r in held)
+    assert _tile(Card("steps", rows=short)).height > _tile(Card("steps", rows=short[:4])).height
+    assert _near(_tile(Card("steps", rows=short)), CORE.dim) > 0
+    assert _tile(Card("steps", rows=held)).size == _tile(Card("steps", rows=bare)).size
+    assert _tile(Card("steps", rows=held)).height <= MAX_CARD + 30
+
+
+def test_a_steps_second_line_wraps_when_theres_room() -> None:
+    more = "Free manufacturer loadout: longer wait. Paid insured loadout: pay for the parts."
+    one = Card("steps", rows=(Row("Choose a loadout", more),))
+    cut = Card("steps", rows=(Row("Choose a loadout", more[:30]),))
+    assert _tile(one).height > _tile(cut).height
 
 
 def test_a_long_title_wraps_inside_the_card() -> None:
@@ -417,3 +429,70 @@ def test_a_step_shows_its_one_line_more() -> None:
     bare = Card("steps", title="Claim", rows=(Row("Find an ASOP terminal"),))
     told = Card("steps", title="Claim", rows=(Row("Find an ASOP terminal", "In any spaceport"),))
     assert _tile(told).height > _tile(bare).height
+
+
+class _Sized:
+    """As much of a pen as ``snug`` needs: fonts, at twice the size."""
+
+    def font(self, face: Any, size: int) -> Any:
+        return font(face, size)
+
+    def px(self, n: float) -> int:
+        return round(n * 2)
+
+
+def test_a_figure_too_wide_is_drawn_smaller_not_cut() -> None:
+    pen: Any = _Sized()
+    text, f = snug(pen, "100,000 / 91,000", "number", 20, 300)
+    assert text == "100,000 / 91,000"
+    assert f.size < 40
+    assert snug(pen, "72 SCU", "number", 20, 300)[1].size == 40
+    assert snug(pen, "x" * 80, "number", 20, 300)[0].endswith("…")
+
+
+def test_a_spec_with_a_figure_and_more_shows_both() -> None:
+    both = Card("ship", rows=(Row("Crew / cargo", "4 crew", "72 SCU"), Row("Role", "Fighter")))
+    bare = Card("ship", rows=(Row("Crew / cargo", "", "72 SCU"), Row("Role", "Fighter")))
+    assert _tile(both).height > _tile(bare).height
+    assert _near(_tile(both), CORE.dim) > _near(_tile(bare), CORE.dim)
+
+
+def test_a_recipe_shows_where_each_thing_is_from() -> None:
+    told = Card("recipe", rows=(Row("Iron", "CRU L1, ship mining", "0.02 SCU"),))
+    bare = Card("recipe", rows=(Row("Iron", "", "0.02 SCU"),))
+    assert _tile(told).height > _tile(bare).height
+
+
+def test_a_list_whose_values_are_all_the_same_lights_no_best_row() -> None:
+    look = Look(accent="#ff00ff")
+    same = Card("list", rows=(Row("Vuur", value="3.6%"), Row("Adir", value="3.6%")))
+    lit = Card("list", rows=(Row("Vuur", value="3.6%"), Row("Adir", value="3.5%")))
+    assert _near(_tile(same, look), "#ff00ff") < _near(_tile(lit, look), "#ff00ff")
+
+
+def test_a_fleets_wordy_verdict_gives_way_to_the_ships_name() -> None:
+    """The name's side of the card is the same however long the verdict: never cut."""
+    long = Row("Constellation Taurus", "why", "Dogfighting and escort work, mostly")
+    short = Row("Constellation Taurus", "why", "Best")
+    wordy, brief = (_tile(Card("fleet", rows=(r,))) for r in (long, short))
+    side = (0, 0, 190, brief.height)
+    assert wordy.size == brief.size
+    assert wordy.crop(side).tobytes() == brief.crop(side).tobytes()
+
+
+def test_a_title_that_repeats_whats_by_it_is_left_off() -> None:
+    answer = long_answer("Quantum fuel runs down as you jump.")
+    named = long_answer("Quantum fuel runs down as you jump.", "Quantum fuel")
+    assert answer.title_repeats
+    assert not named.title_repeats
+    assert _tile(named).height > _tile(answer).height
+    sides = Card("compare", "M80 vs Arrow", hero=("M80", "Arrow"), rows=(Row("Hull", "1", "2"),))
+    assert sides.title_repeats
+    assert not Card("compare", "Fighters", hero=("M80", "Arrow")).title_repeats
+    assert not Card("list", "Laranite").title_repeats
+
+
+def test_a_question_says_that_waiting_presses_nothing() -> None:
+    card = confirm("Eject? Say confirm.", 5)
+    assert _tile(card, now=0).height >= 90
+    assert UNANSWERED == "Wait, and nothing is pressed."

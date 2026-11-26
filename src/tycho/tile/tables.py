@@ -9,13 +9,14 @@ Bars only ever show numbers the card itself carries: they're the same figures, d
 to compare at a glance, never a gauge Tycho can't read (ADR 16).
 """
 
+import math
 import re
 from collections.abc import Sequence
 from typing import Protocol
 
 from PIL import ImageDraw
 
-from tycho.tile.cards import Card, Row
+from tycho.tile.cards import SPECS, Card, Row
 from tycho.tile.faces import Face, Font
 from tycho.tile.faces import fit as _fit
 from tycho.tile.faces import text_width as _width
@@ -28,8 +29,8 @@ _NUMBER = re.compile(r"^(\D*?)([-\u2212]?)(\d[\d,]*(?:\.\d+)?)\s*([^\d]*)$")
 _WORDS = re.compile(r"[^\W\d_]+")
 UNIT = 3
 """A unit this long ("SCU", "aUEC") is said once in a list, on its first row."""
-DETAILED = 5
-"""The most steps a card shows with their second lines: more would run off its foot."""
+SMALLEST = 13
+"""A figure too wide for its place is drawn smaller, down to this, before it's cut."""
 CLOSE = 0.9
 """Bars that would all be this close to the biggest say nothing: none are drawn."""
 
@@ -42,6 +43,8 @@ class Pen(Protocol):
     pad: int
     inner: int
     y: int
+    foot: int
+    """The lowest a card's last line may reach before the card is cut."""
     accent: Rgba
     text: Rgba
     dim: Rgba
@@ -87,6 +90,17 @@ def _fade(colour: Rgba, alpha: float) -> Rgba:
     return (*colour[:3], round(255 * alpha))
 
 
+def snug(pen: Pen, text: str, face: Face, size: int, room: float) -> tuple[str, Font]:
+    """``text`` in the biggest font up to ``size`` that fits ``room``: a figure is drawn
+    smaller before it's cut, since "91,0…" is no figure at all. Cut only at ``SMALLEST``."""
+    f = pen.font(face, pen.px(size))
+    for smaller in range(size, SMALLEST - 1, -1):
+        f = pen.font(face, pen.px(smaller))
+        if _width(text, f) <= room:
+            return text, f
+    return _fit(text, f, room), f
+
+
 def row_bars(pen: Pen, tops: Sequence[tuple[int, int]], rows: Sequence[Row]) -> None:
     """A list's bars: a thin line along the foot of each row, as long as its value is
     against the biggest. ``tops`` is each row's top and height."""
@@ -117,8 +131,9 @@ def shared_unit(rows: Sequence[Row]) -> tuple[list[str], str]:
 def ranked(pen: Pen) -> None:
     """A list or the player's fleet, best first: each row's name with its value on the
     right and, when it has one, its second line under the name, smaller: where a place
-    is, why a ship fits. The best row is lit; a fleet's rows are numbered; a list's
-    numbers get bars, and a unit they share is said once, under the first."""
+    is, why a ship fits. The best row is lit, unless a list's values are all the same;
+    a fleet's rows are numbered; a list's numbers get bars, and a unit they share is
+    said once, under the first."""
     fleet = pen.card.kind == "fleet"
     name_f, value_f, small_f = (
         pen.font("strong", pen.px(18)),
@@ -131,8 +146,9 @@ def ranked(pen: Pen) -> None:
         values[0] = pen.card.rows[0].value
     h = pen.px(30 if not two_lines else 46 if fleet else 49)  # a list's bar clears its words
     tops: list[tuple[int, int]] = []
+    level = not fleet and len(values) > 1 and len(set(values)) == 1  # all the same: no best
     for i, (row, value) in enumerate(zip(pen.card.rows, values, strict=True)):
-        best = i == 0 and not row.dim
+        best = i == 0 and not row.dim and not level
         top = pen.y
         pen.d.rectangle(
             (pen.pad, top, pen.pad + pen.inner, top + h),
@@ -148,8 +164,13 @@ def ranked(pen: Pen) -> None:
             rank = str(i + 1)
             pen.d.text((x, top + pen.px(5)), rank, font=value_f, fill=_fade(pen.accent, alpha))
             x += value_f.getlength(rank) + pen.px(8)
-        value_w = _width(value, value_f)
         right = pen.pad + pen.inner - pen.px(10)
+        wanted = _width(row.text, name_f) + pen.px(12)
+        shown_f = value_f
+        if fleet:  # a wordy verdict gives way to the ship's name: smaller, then cut
+            room = max(right - x - wanted, pen.inner * 0.34)
+            value, shown_f = snug(pen, value, "number", 19, room)
+        value_w = _width(value, shown_f)
         room = right - value_w - pen.px(12) - x
         pen.d.text((x, top + pen.px(5)), _fit(row.text, name_f, room), font=name_f, fill=text)
         under = right - x
@@ -167,7 +188,7 @@ def ranked(pen: Pen) -> None:
         pen.d.text(
             (right - value_w, top + pen.px(5)),
             value,
-            font=value_f,
+            font=shown_f,
             fill=pen.accent if best else text,
         )
         pen.y += h + pen.px(4)
@@ -219,11 +240,7 @@ def compare(pen: Pen) -> None:
     """Two things side by side: their names on top, then each figure, left against
     right, under its name, with bars growing out from the middle when both are numbers."""
     left, right = pen.card.hero or ("", "")
-    name_f, head, value_f = (
-        pen.font("strong", pen.px(18)),
-        pen.font("label", pen.px(12)),
-        pen.font("number", pen.px(18)),
-    )
+    name_f, head = pen.font("strong", pen.px(18)), pen.font("label", pen.px(12))
     half = pen.inner / 2
     mid = pen.pad + half
     pen.d.text(
@@ -242,11 +259,11 @@ def compare(pen: Pen) -> None:
         spec = _fit(row.text.upper(), head, pen.inner - pen.px(16), 0.1 * head.size)
         spec_w = _width(spec, head, 0.1 * head.size)
         pen.caps((mid - spec_w / 2, top + pen.px(4)), spec, head, pen.dim, 0.1)
-        a = _fit(row.detail, value_f, half - pen.px(16))
-        b = _fit(row.value, value_f, half - pen.px(16))
-        pen.d.text((pen.pad + pen.px(8), top + pen.px(16)), a, font=value_f, fill=pen.text)
-        b_x = pen.pad + pen.inner - pen.px(8) - _width(b, value_f)
-        pen.d.text((b_x, top + pen.px(16)), b, font=value_f, fill=pen.text)
+        a, a_f = snug(pen, row.detail, "number", 18, half - pen.px(16))
+        b, b_f = snug(pen, row.value, "number", 18, half - pen.px(16))
+        pen.d.text((pen.pad + pen.px(8), top + pen.px(16)), a, font=a_f, fill=pen.text)
+        b_x = pen.pad + pen.inner - pen.px(8) - _width(b, b_f)
+        pen.d.text((b_x, top + pen.px(16)), b, font=b_f, fill=pen.text)
         lengths = bar_lengths([row.detail, row.value])
         if lengths is not None:
             reach = half - pen.px(8)
@@ -262,24 +279,38 @@ def compare(pen: Pen) -> None:
 
 
 def steps(pen: Pen) -> None:
-    """Numbered steps, each with its one smaller line under it when it has one and
-    there are few enough steps (``DETAILED``) for the card to hold them all."""
+    """Numbered steps, each with its smaller line under it when it has one: on two lines
+    if the card has the room for every step's, else on one, else not at all, so the
+    last steps never run off the card's foot."""
     f, n, small = (
         pen.font("text", pen.px(18)),
         pen.font("number", pen.px(18)),
         pen.font("text", pen.px(14)),
     )
     gutter = pen.px(26)
-    for i, row in enumerate(pen.card.rows):
+    width = pen.inner - gutter
+    names = [_wrap(row.text, f, width, lines=2) for row in pen.card.rows]
+    details: list[list[str]] = [[] for _ in names]
+    for lines in (2, 1):
+        tried = [
+            _wrap(r.detail, small, width, lines=lines) if r.detail else [] for r in pen.card.rows
+        ]
+        tall = sum(
+            len(a) * pen.px(23) + len(b) * pen.px(18) + pen.px(6)
+            for a, b in zip(names, tried, strict=True)
+        )
+        if pen.y + tall <= pen.foot:
+            details = tried
+            break
+    for i, (name, detail) in enumerate(zip(names, details, strict=True)):
         pen.d.text((pen.pad, pen.y), str(i + 1), font=n, fill=pen.accent)
-        for line in _wrap(row.text, f, pen.inner - gutter, lines=2):
+        for line in name:
             pen.d.text((pen.pad + gutter, pen.y), line, font=f, fill=pen.text)
             pen.y += pen.px(23)
-        if row.detail and len(pen.card.rows) <= DETAILED:
-            detail = _fit(row.detail, small, pen.inner - gutter)
-            pen.d.text((pen.pad + gutter, pen.y - pen.px(1)), detail, font=small, fill=pen.dim)
-            pen.y += pen.px(19)
-        pen.y += pen.px(5)
+        for line in detail:
+            pen.d.text((pen.pad + gutter, pen.y - pen.px(1)), line, font=small, fill=pen.dim)
+            pen.y += pen.px(18)
+        pen.y += pen.px(6)
 
 
 def headlines(pen: Pen) -> None:
@@ -291,3 +322,60 @@ def headlines(pen: Pen) -> None:
             pen.d.text((pen.pad + date_w, pen.y), line, font=f, fill=pen.text)
             pen.y += pen.px(22)
         pen.y += pen.px(5)
+
+
+def recipe(pen: Pen) -> None:
+    """What to gather: each thing with its amount and, when it has one, where it's from
+    on a smaller line or two under it."""
+    name_f, small = pen.font("text", pen.px(18)), pen.font("text", pen.px(14))
+    width = pen.inner - pen.px(20)
+    for row in pen.card.rows:
+        lines = _wrap(row.detail, small, width, lines=2) if row.detail else []
+        top, h = pen.y, pen.px(28) + len(lines) * pen.px(18) + (pen.px(3) if lines else 0)
+        pen.d.rectangle((pen.pad, top, pen.pad + pen.inner, top + h), fill=pen.well)
+        value, value_f = snug(pen, row.value, "number", 18, pen.inner * 0.5)
+        value_w = _width(value, value_f)
+        room = width - value_w - pen.px(12)
+        x = pen.pad + pen.px(10)
+        pen.d.text((x, top + pen.px(4)), _fit(row.text, name_f, room), font=name_f, fill=pen.text)
+        pen.d.text((x + width - value_w, top + pen.px(4)), value, font=value_f, fill=pen.accent)
+        for k, line in enumerate(lines):
+            pen.d.text((x, top + pen.px(27) + k * pen.px(18)), line, font=small, fill=pen.dim)
+        pen.y += h + pen.px(4)
+    pen.y += pen.px(2)
+
+
+def specs(pen: Pen) -> None:
+    """A ship's specs, two to a line: each one's name, small, over its figure. A spec
+    with both a figure and more to say has that on a small line under the figure; one
+    with only words has them where the figure goes."""
+    small, under = pen.font("label", pen.px(12)), pen.font("text", pen.px(13))
+    col = (pen.inner - pen.px(5)) / 2
+    room = col - pen.px(16)
+    both = any(r.value and r.detail for r in pen.card.rows)
+    h = pen.px(64 if both else 48)
+    for i, row in enumerate(pen.card.rows):
+        x = pen.pad + (i % 2) * (col + pen.px(5))
+        top = pen.y + (i // 2) * (h + pen.px(5))
+        pen.d.rectangle((x, top, x + col, top + h), fill=pen.well)
+        name = _fit(row.text, small, room, 0.1 * small.size)
+        pen.caps((x + pen.px(8), top + pen.px(5)), name, small, pen.dim, 0.1)
+        shown, value_f = snug(pen, row.value or row.detail, "number", 20, room)
+        pen.d.text((x + pen.px(8), top + pen.px(21)), shown, font=value_f, fill=pen.text)
+        if row.value and row.detail:
+            more = _fit(row.detail, under, room)
+            pen.d.text((x + pen.px(8), top + pen.px(44)), more, font=under, fill=pen.dim)
+    pen.y += math.ceil(len(pen.card.rows) / 2) * (h + pen.px(5)) + pen.px(3)
+
+
+TABLES = {
+    "list": ranked,
+    "fleet": ranked,
+    "steps": steps,
+    "headlines": headlines,
+    "loadout": loadout,
+    "compare": compare,
+    "recipe": recipe,
+    SPECS: specs,
+}
+"""Each table-like kind's body."""

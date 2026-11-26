@@ -477,3 +477,23 @@ def test_a_comparison_filled_as_asked_keeps_its_names() -> None:
         _call("compare", title="A vs B", rows=rows, hero_label="Cutty", hero_value="Freelancer")
     )
     assert card.hero == ("Cutty", "Freelancer")
+
+
+def test_a_comparison_with_both_figures_in_one_field_and_words_by_it_is_still_split() -> None:
+    """What the brain sent on 26 Nov: a description where the left figure goes, both
+    figures joined in the value, and the topic in front of the first name."""
+    rows = [
+        {"text": "Buy in game", "detail": "New Deal, Lorville", "value": v, "dim": False}
+        for v in ("2.01M aUEC | 2.96M aUEC",)
+    ]
+    card = from_tool(
+        _call(
+            "compare",
+            title="Cargo, Cutlass Black vs Freelancer",
+            rows=rows,
+            hero_label="Cargo, Cutlass Black",
+            hero_value="Freelancer",
+        )
+    )
+    assert card.hero == ("Cutlass Black", "Freelancer")
+    assert card.rows == (Row("Buy in game", "2.01M aUEC", "2.96M aUEC"),)

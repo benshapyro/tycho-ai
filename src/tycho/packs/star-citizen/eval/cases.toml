@@ -1601,6 +1601,22 @@ expect = ["reply"]
 no_card = true
 tag = "tile"
 
+# The player's own ships ranked for a job, and the news: kinds no line asked for
+# until the Tile test of 26 Nov 2026.
+[[case]]
+heard = "rank my ships for hauling cargo"
+mode = "lookup"
+expect = ["reply"]
+fleet = ["Constellation Taurus", "Galaxy", "M80", "Pitbull", "Cutter Rambler"]
+card = ["fleet", "list"]
+tag = "tile"
+
+[[case]]
+heard = "what's the latest star citizen news"
+mode = "lookup"
+expect = ["reply"]
+tag = "tile"
+
 # From Ben's 0.8 PC test, 22 Nov 2026 (#490): long answers spoken with no card.
 [[case]]
 heard = "what's the best route for maximizing gold in Pyro"
