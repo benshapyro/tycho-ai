@@ -14,7 +14,7 @@ from typing import assert_never, cast
 from tycho import settings
 from tycho.desktop import setup
 from tycho.desktop.bridge.commands_page import CommandsPage
-from tycho.desktop.bridge.settings_page import SettingsPage, shown_packs
+from tycho.desktop.bridge.settings_page import PUSH_TO_TALK, SettingsPage, shown_packs
 from tycho.desktop.bridge.state import DEVICES_SECONDS, UNDO_DEPTH, plain_error, setting_choices
 from tycho.packs import STAR_CITIZEN, GamePack, PackError, built_in
 from tycho.settings import Settings, SettingsError
@@ -197,8 +197,9 @@ class SetupPage(SettingsPage, CommandsPage):
         return {"ok": True, "first_run": self._first_run}
 
     def _save_choice(self, name: str, value: object) -> tuple[dict[str, object], Settings | None]:
-        """A setup choice, saved; it applies when Tycho next starts. Also the settings
-        as saved, so the caller needn't read the file again."""
+        """A setup choice, saved; it applies when Tycho next starts, or at once for
+        push-to-talk in a running Tycho (#646). Also the settings as saved, so the caller
+        needn't read the file again."""
         before = getattr(settings.load(self._path), name)
         try:
             current = settings.update({name: value}, self._path)
@@ -206,7 +207,10 @@ class SetupPage(SettingsPage, CommandsPage):
             return {"ok": False, "problem": plain_error(str(e))}, None
         if getattr(current, name) != before:
             self._undo = [*self._undo, (name, before)][-UNDO_DEPTH:]
-        return {"ok": True, "applies": "start" if self._first_run else "restart"}, current
+        if self._first_run:
+            return {"ok": True, "applies": "start"}, current
+        applies = self._listen_to(current) if name in PUSH_TO_TALK else "restart"
+        return {"ok": True, "applies": applies}, current
 
     def _shipped_pack(self, current: Settings) -> GamePack:
         """The chosen game's pack as it ships: its own mode and why, whatever the

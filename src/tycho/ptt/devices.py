@@ -5,8 +5,8 @@ Out of ``app.py`` (#398), so the desktop doesn't import the app to use them.
 
 from collections.abc import Iterable
 
-from tycho.ptt.binding import Binding, DeviceKind
-from tycho.ptt.monitor import InputSource
+from tycho.ptt.binding import Binding, DeviceKind, every_binding
+from tycho.ptt.monitor import InputSource, PushToTalk
 
 
 def describe(binding: Binding) -> str:
@@ -31,6 +31,17 @@ def input_sources(binding: Binding | None, *more: Binding) -> list[InputSource]:
     if binding is None or any(b.kind is DeviceKind.JOYSTICK for b in (binding, *more)):
         sources.append(PollThreadJoysticks())
     return sources
+
+
+def rebind(ptt: PushToTalk, first: str | None, second: str | None) -> bool:
+    """The buttons as saved, chosen again in the app while Tycho runs (#646): it listens
+    to them from the next poll, a stick's opened only if one needs it. False with no
+    first button: nothing to listen to, so the old ones stay."""
+    bindings = every_binding(first, second)
+    if not bindings:
+        return False
+    ptt.rebind(bindings, input_sources(*bindings))
+    return True
 
 
 class PollThreadJoysticks:
