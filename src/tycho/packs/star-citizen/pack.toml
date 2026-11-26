@@ -139,6 +139,7 @@ search_box = "search locations"      # "SEARCH LOCATIONS..." while the box is em
 results = "results"                  # "RESULTS (1)" over the list
 no_results = "no results"
 recent = "recent"                    # "RECENT" under the box once it has the keys
+read_width = 0.5                     # the map check reads the left half: the search panel
 close_marks = ["x", "×"]
 close_offset = [0.307, 0.0]          # the close button, from the box's words, by frame height
 close_reach = 0.02

@@ -220,6 +220,7 @@ def _table() -> dict[str, object]:
         "close_marks": list(flow.close_marks),
         "close_offset": list(flow.close_offset),
         "close_reach": flow.close_reach,
+        "read_width": flow.read_width,
         "lines": lines,
         "tool": SC.route.tool,
         "here": sorted(SC.route.here),
@@ -233,6 +234,7 @@ def _read(table: object, built_in: bool = True, sees: bool = True) -> Route | No
 
 def test_star_citizen_plots_routes_with_its_own_table() -> None:
     assert SC.route is not None
+    assert SC.route.flow.read_width == 0.5  # the map check reads the search panel's half
     assert "plot a route to" in SC.route.say
     assert SC.route.places in BUILT_IN.places
     assert _read(_table()) == SC.route
@@ -246,6 +248,8 @@ def test_star_citizen_plots_routes_with_its_own_table() -> None:
         ({"nav": "Not An Action"}, "must name a keybind action"),
         ({"close_offset": [0.3]}, "close_offset"),
         ({"close_reach": 0}, "close_reach"),
+        ({"read_width": 0}, "read_width"),
+        ({"read_width": 1.5}, "read_width"),
         ({"say": []}, "say"),
         ({"surprise": 1}, "unknown keys"),
     ],
