@@ -70,6 +70,9 @@ class RouteLines:
     elsewhere: str = "The map can't plot a route to {name} from where you are."
     """Said for a place the player put somewhere the map doesn't reach (``Route.away``)."""
     not_typed: str = "The map's search box didn't take what I typed, so I left the map open."
+    risky_first: str = "I can't type {name}: its first letter is your {action} key."
+    """Said when the name's first letter, typed before Tycho can see the box took the
+    keys, would press a confirm-grade action (#682)."""
     confirm: str = "Plot a route to {name}"
     """Asked before plotting a place that was only a guess (#650); "? Say confirm." follows."""
 
@@ -120,6 +123,11 @@ class RouteFlow:
     recent: str = ""
     """A word over the list the panel shows once the box has the keys, before anything is
     typed ("RECENT"): gone once a letter lands (Ben's PC try, 26 Nov 2026)."""
+    calculating: str = ""
+    """A word the map's panel shows while it works out the fuel to the place picked
+    ("CALCULATING..."): R does nothing until it's gone (Ben's Hurston try, #682)."""
+    calculating_seconds: float = 15.0
+    """How long the map may take to work out the fuel before R."""
     read_width: float = 1.0
     """How much of the window, from its left edge, the map check reads: the search panel
     is on the left, and a narrower frame is read sooner, and at full size (#671)."""
@@ -160,6 +168,7 @@ _KEYS = frozenset(
         "here",
         "away",
         "recent",
+        "calculating",
         "read_width",
     }
 )
@@ -225,7 +234,14 @@ def read(
     recent = table.get("recent", "")
     if not isinstance(recent, str):
         raise ValueError(f"{where}: recent must be some text")
-    flow = replace(flow, recent=" ".join(recent.lower().split()))
+    calculating = table.get("calculating", "")
+    if not isinstance(calculating, str):
+        raise ValueError(f"{where}: calculating must be some text")
+    flow = replace(
+        flow,
+        recent=" ".join(recent.lower().split()),
+        calculating=" ".join(calculating.lower().split()),
+    )
     width = table.get("read_width", 1.0)
     if not (_fraction(width) and 0 < cast(float, width) <= 1):
         raise ValueError(f"{where}: read_width must be a share of the window, above 0")
@@ -256,7 +272,8 @@ def _lines(value: object, where: str) -> RouteLines:
         if not (isinstance(line, str) and line.strip() and len(line) <= LINE_LIMIT):
             raise ValueError(f"{where}.{name}: needs a line of up to {LINE_LIMIT} characters")
         parsed = string.Formatter().parse(line)
-        if {field for _, field, _, _ in parsed if field is not None} - {"name"}:
+        held = {"name", "action"} if name == "risky_first" else {"name"}
+        if {field for _, field, _, _ in parsed if field is not None} - held:
             raise ValueError(f"{where}.{name}: a line may hold only {{name}}")
     return RouteLines(**cast(dict[str, str], lines))
 

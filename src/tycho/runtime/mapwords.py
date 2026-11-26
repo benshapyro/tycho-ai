@@ -5,6 +5,7 @@ there (#588): the search box's line and column, and how near two spots are. For
 import re
 
 from tycho.eyes.words import Reading, Word, squeezed
+from tycho.packs.routes import RouteFlow
 
 
 def middle(words: tuple[Word, ...]) -> tuple[int, int]:
@@ -51,6 +52,13 @@ def shows(reading: Reading, name: str) -> bool:
     return bool(wanted) and any(
         wanted in squeezed(" ".join(w.text for w in line)).replace(" ", "")
         for line in reading.lines()
+    )
+
+
+def starts(reading: Reading, start: str) -> bool:
+    """Whether a word read starts with ``start``: "CALCULATIN@..." is "calculatin"."""
+    return bool(start) and any(
+        word.startswith(start) for w in reading.words for word in squeezed(w.text).split()
     )
 
 
@@ -108,6 +116,25 @@ map's search, which only covers the player's system, knows it as "Pyro Gateway" 
 def map_name(name: str) -> str:
     """``name`` as the map's search knows it: without UEX's "(System)" at its end."""
     return SYSTEM_SUFFIX.sub("", name).strip() or name
+
+
+def close_spot(reading: Reading, box: tuple[Word, ...], flow: RouteFlow) -> tuple[int, int] | None:
+    """The search panel's close button: the x read on the box's line right of where its
+    words were (there once the box has the keys, 26 Nov 2026), or where the pack's offset
+    puts it from the box, if text recognition agrees (the offset was measured at
+    2560x1440; on a 5120x2160 screen the x sat nearer). None if neither."""
+    said = {mark.lower() for mark in flow.close_marks}
+    right = max(word.right for word in box)
+    line = [w for w in row(reading, box).words if w.text.strip().lower() in said]
+    if marks := [w for w in line if w.left > right]:
+        return min(marks, key=lambda word: word.left).middle
+    height, (x, y) = reading.height, middle(box)
+    spot = (round(x + flow.close_offset[0] * height), round(y + flow.close_offset[1] * height))
+    reach = flow.close_reach * height
+    for word in reading.words:
+        if word.text.strip().lower() in said and near(word.middle, spot, reach):
+            return spot
+    return None
 
 
 _COMMON = frozenset({"the", "of", "on", "at", "station", "port", "city", "outpost", "base"})
