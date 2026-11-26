@@ -137,6 +137,33 @@ def close_spot(reading: Reading, box: tuple[Word, ...], flow: RouteFlow) -> tupl
     return None
 
 
+LISTED = 0.15
+"""How far under the box, as a fraction of the frame's height, its list starts."""
+
+
+def listed(reading: Reading, box: tuple[Word, ...], flow: RouteFlow) -> bool:
+    """The panel's list is open under the box: "RECENT" or "ALL RESULTS" in its column,
+    as once the box has the keys (Ben's PC try, 26 Nov 2026)."""
+    close = close_under(reading, box, LISTED)
+    return any(word and close.has(word) for word in (flow.recent, flow.results))
+
+
+def took(
+    before: Reading, after: Reading, box: tuple[Word, ...], first: str, flow: RouteFlow
+) -> bool:
+    """The first letter landed: a new word on the box's line that starts with it (not
+    a caret read as "I", review of #672), or the RECENT list gone while the panel still
+    shows (text recognition may not read one letter)."""
+    marks = {mark.lower() for mark in flow.close_marks}
+    was = {squeezed(w.text) for w in row(before, box).words}
+    for word in row(after, box).words:
+        text = squeezed(word.text)
+        if text and text not in marks and text not in was and text.startswith(first):
+            return True
+    gone = bool(flow.recent) and before.has(flow.recent) and not after.has(flow.recent)
+    return gone and listed(after, box, flow)
+
+
 _COMMON = frozenset({"the", "of", "on", "at", "station", "port", "city", "outpost", "base"})
 """Words in a place's name too common to tell the route line's id it's this place."""
 

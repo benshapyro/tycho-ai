@@ -725,15 +725,50 @@ def test_a_dangerous_key_past_the_first_letter_waits_for_the_box_and_is_typed() 
     assert "typed Levski" in done.pressed
 
 
-def test_a_dangerous_first_letter_is_said() -> None:
-    keybinds = Keybinds([*KEYBINDS, _bound("v_eject", "l", "spaceship_general")])
-    done = _plot(Game(), keybinds=keybinds)
-    assert done.say.startswith("I can't type Levski: its first letter is your ")
+def test_a_dangerous_first_letter_is_said_by_its_label_never_its_id() -> None:
+    eject = replace(_bound("v_eject", "l", "spaceship_general"), label="Eject")
+    done = _plot(Game(), keybinds=Keybinds([*KEYBINDS, eject]))
+    assert done.say == "I can't type Levski: its first letter is your Eject key."
+    unlabelled = Keybinds([*KEYBINDS, _bound("v_eject", "l", "spaceship_general")])
+    assert _plot(Game(), keybinds=unlabelled).say == "I can't type Levski into the map."
+
+
+def test_a_later_letter_on_a_dangerous_key_waits_for_a_look_at_the_box() -> None:
+    game = Game()  # review of #685: the box stops taking keys after the first letter
+    keybinds = Keybinds([*KEYBINDS, _bound("v_eject", "v", "spaceship_general")])
+    real = game.read
+
+    class Reader:
+        def read(self) -> Reading:
+            if game.typed == "l":
+                game.takes_keys = False
+            return real()
+
+    done = _plot(game, keybinds=keybinds, reader=Reader())
+    assert done.detail == "the box lost the keys"
+    assert game.stray == ["e"]  # never the "v"
 
 
 def test_r_waits_while_the_map_works_out_the_fuel() -> None:
     game = Game(details=True, calculates=3)  # Ben's Hurston try, #682
     done = _plot(game, flow=replace(FLOW, calculating="calculatin"))
+    assert (done.status, done.say) == ("done", "Route set to Levski.")
+    assert game.calculates == 0
+
+
+def test_r_waits_for_a_fuel_sum_that_starts_a_look_late() -> None:
+    game = Game(details=True, calculates=2)  # review of #685
+    real, late = game.read, [True]
+
+    class Reader:
+        def read(self) -> Reading:
+            if game.picked and late[0]:  # the first look after the pick: not started yet
+                late[0], held, game.calculates = False, game.calculates, 0
+                reading, game.calculates = real(), held
+                return reading
+            return real()
+
+    done = _plot(game, reader=Reader(), flow=replace(FLOW, calculating="calculatin"))
     assert (done.status, done.say) == ("done", "Route set to Levski.")
     assert game.calculates == 0
 

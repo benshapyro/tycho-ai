@@ -274,7 +274,8 @@ def _lines(value: object, where: str) -> RouteLines:
         parsed = string.Formatter().parse(line)
         held = {"name", "action"} if name == "risky_first" else {"name"}
         if {field for _, field, _, _ in parsed if field is not None} - held:
-            raise ValueError(f"{where}.{name}: a line may hold only {{name}}")
+            allowed = " and ".join(f"{{{field}}}" for field in sorted(held))
+            raise ValueError(f"{where}.{name}: a line may hold only {allowed}")
     return RouteLines(**cast(dict[str, str], lines))
 
 
