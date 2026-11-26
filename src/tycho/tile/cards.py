@@ -123,10 +123,15 @@ class Card:
     @property
     def title_repeats(self) -> bool:
         """Whether the title only says again what the card shows right by it, so it's
-        left off the card: the same words as the label, or a comparison's two names."""
+        left off the card: the same words as the label, or a comparison's two names and
+        nothing more ("M80 vs Arrow", not "M80 vs Arrow for racing")."""
         title = self.title.casefold()
         if self.kind == "compare" and self.hero:
-            return all(name and name.casefold() in title for name in self.hero)
+            if not all(name and name.casefold() in title for name in self.hero):
+                return False
+            for name in sorted(self.hero, key=len, reverse=True):
+                title = title.replace(name.casefold(), " ")
+            return not _VERSUS.sub(" ", f" {title} ").strip(" ,.:;-")
         return bool(title) and title == self.label.casefold()
 
     @property
@@ -192,6 +197,9 @@ def from_tool(arguments: Mapping[str, object]) -> Card:
 _BOTH = re.compile(r"\s*\|\s*|\s+(?:vs\.?|versus)\s+", re.IGNORECASE)
 """What parts a comparison's two figures when Claude puts both in one field."""
 _VERSUS = re.compile(r"\s+(?:vs\.?|versus)\s+", re.IGNORECASE)
+_FIGURE = re.compile(r"\D{0,2}\d")
+"""A figure starts with its number, or nearly ("46 SCU", "S4", "$30"); a place with a
+digit in its name ("Area18, ArcCorp", "ARC-L1") doesn't."""
 _TOPIC = re.compile(r"[,:]\s+")
 """What parts a title's topic from the first name: "Cargo, Cutlass Black vs Freelancer"."""
 
@@ -216,8 +224,8 @@ def _sides(arguments: Mapping[str, object], rows: tuple[Row, ...]) -> tuple[str,
 def _rows(raw: object, *, sides: bool = False) -> list[Row]:
     """The card's rows, cleaned. With ``sides`` (a comparison), a row whose value holds
     both figures ("46 SCU | 66 SCU", "4-5 vs 4-9") is split into left and right before
-    it's cut to length, so the right-hand figure isn't lost; whatever Claude put where
-    the left figure goes ("Hold capacity") gives way to it."""
+    it's cut to length, so the right-hand figure isn't lost; words Claude put where
+    the left figure goes ("Hold capacity") give way to it, a figure there doesn't."""
     if not isinstance(raw, list):
         return []
     rows: list[Row] = []
@@ -227,7 +235,8 @@ def _rows(raw: object, *, sides: bool = False) -> list[Row]:
         fields = cast(dict[str, object], item)
         text = clean(fields.get("text"), TEXT)
         detail, value = fields.get("detail"), fields.get("value")
-        if sides and isinstance(value, str) and _BOTH.search(value):
+        told = isinstance(detail, str) and _FIGURE.match(detail.strip()) is not None
+        if sides and not told and isinstance(value, str) and _BOTH.search(value):
             detail, value = _BOTH.split(value, maxsplit=1)
         if text:
             rows.append(

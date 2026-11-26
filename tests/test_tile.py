@@ -497,3 +497,16 @@ def test_a_comparison_with_both_figures_in_one_field_and_words_by_it_is_still_sp
     )
     assert card.hero == ("Cutlass Black", "Freelancer")
     assert card.rows == (Row("Buy in game", "2.01M aUEC", "2.96M aUEC"),)
+
+
+def test_a_comparison_keeps_a_left_figure_the_brain_filled_in() -> None:
+    rows = [{"text": "Guns", "detail": "S4", "value": "S3 vs S2", "dim": False}]
+    card = from_tool(_call("compare", rows=rows, hero_label="A", hero_value="B"))
+    assert card.rows == (Row("Guns", "S4", "S3 vs S2"),)
+
+
+@pytest.mark.parametrize("place", ["Area18, ArcCorp", "ARC-L1 Wide Forest", "HUR-L2"])
+def test_a_place_with_a_digit_in_its_name_isnt_taken_for_the_left_figure(place: str) -> None:
+    rows = [{"text": "Buy", "detail": place, "value": "2.01M aUEC | 2.96M aUEC", "dim": False}]
+    card = from_tool(_call("compare", rows=rows, hero_label="A", hero_value="B"))
+    assert card.rows == (Row("Buy", "2.01M aUEC", "2.96M aUEC"),)
