@@ -69,6 +69,8 @@ KEYS: dict[str, str] = {
 RESTARTS = frozenset({"game"})
 """Settings a change in the app applies by restarting the voice loop (#295): the game's
 keybinds, briefing and look-ups are all loaded at start (ADR 18)."""
+PUSH_TO_TALK = frozenset({"push_to_talk", "push_to_talk_2"})
+"""Chosen with their own control; the running Tycho listens to them at once (#646)."""
 
 
 class SettingsPage(State):
@@ -192,7 +194,9 @@ class SettingsPage(State):
 
     def _applied(self, name: str, value: object) -> dict[str, object]:
         applies: str = settings.rule(name)["applies"]
-        if name in RESTARTS:
+        if name in PUSH_TO_TALK:
+            applies = self._listen_to(settings.load(self._path))
+        elif name in RESTARTS:
             try:
                 if self._restart():
                     applies = "restarting"  # the voice loop starts again with it
@@ -213,6 +217,19 @@ class SettingsPage(State):
             "value": value,
             "applies": applies,
         }
+
+    def _listen_to(self, current: Settings) -> str:
+        """The running Tycho listens to the push-to-talk buttons as saved, both of them
+        (#646): "now", or "restart" if nothing running can."""
+        if current.push_to_talk is None:
+            return "restart"
+        buttons = (current.push_to_talk, current.push_to_talk_2)
+        try:
+            if self._apply("push_to_talk", buttons):
+                return "now"
+        except Exception:
+            log.exception("Couldn't change push-to-talk in the running Tycho")
+        return "restart"
 
     def choose_hangar_file(self) -> dict[str, object]:
         """Pick a hangar export and see what importing it would change (#556). Nothing

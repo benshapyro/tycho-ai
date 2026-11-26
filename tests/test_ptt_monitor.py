@@ -2,6 +2,7 @@ import pytest
 
 from tests.fakes.fake_input import FakeInputSource
 from tycho.ptt.binding import Binding, DeviceKind
+from tycho.ptt.devices import rebind
 from tycho.ptt.monitor import Edge, PushToTalk, capture_binding
 
 SIDE = Binding(DeviceKind.MOUSE, 0x05)
@@ -44,6 +45,47 @@ def test_either_of_two_buttons_holds_push_to_talk() -> None:
     assert ptt.poll() is None
     mouse.held.clear()
     assert ptt.poll() is Edge.RELEASED
+
+
+class _Closing(FakeInputSource):
+    def __init__(self, *held: Binding) -> None:
+        super().__init__(*held)
+        self.closed = 0
+
+    def close(self) -> None:
+        self.closed += 1
+
+
+def test_buttons_chosen_again_are_listened_to_from_the_next_poll() -> None:
+    """#646: a stick button added in the app while Tycho runs works at once, and the old
+    sources are let go on the polling thread (SDL's rule)."""
+    mouse = _Closing()
+    ptt = PushToTalk(SIDE, [mouse])
+    sticks = FakeInputSource(STICK)
+    ptt.rebind([SIDE, STICK], [FakeInputSource(), sticks])
+    assert mouse.closed == 0  # not until the poll, on the poll's thread
+    assert ptt.poll() is Edge.PRESSED
+    assert mouse.closed == 1
+    assert ptt.bindings == (SIDE, STICK)
+    sticks.held.clear()
+    assert ptt.poll() is Edge.RELEASED
+
+
+def test_a_button_held_as_it_is_removed_is_let_go() -> None:
+    mouse = FakeInputSource(SIDE)
+    ptt = PushToTalk([SIDE, STICK], [mouse])
+    assert ptt.poll() is Edge.PRESSED
+    ptt.rebind([STICK], [FakeInputSource()])
+    assert ptt.poll() is Edge.RELEASED  # never stuck listening
+    assert ptt.poll() is None
+
+
+def test_buttons_chosen_again_need_one() -> None:
+    ptt = PushToTalk(SIDE, [FakeInputSource()])
+    with pytest.raises(ValueError, match="at least one button"):
+        ptt.rebind([], [FakeInputSource()])
+    assert not rebind(ptt, None, "joystick:vkb-l:3")  # a second alone: the old one stays
+    assert ptt.bindings == (SIDE,)
 
 
 def test_push_to_talk_needs_a_button() -> None:
