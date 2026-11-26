@@ -55,14 +55,19 @@ def under_header(
     """The line that is ``name`` in the list under the ``header`` words, before the line
     that holds ``until`` (run-together words too: "ALLRESULTS") and within ``reach`` of
     the frame's height, should ``until`` go unread; None if not there. With ``system``,
-    not in another system's section ("NYX SYSTEM")."""
+    not in another system's section ("NYX SYSTEM"), as long as the list has a section for
+    ``system``: the log's last system can be out of date."""
     found = reading.find(header)
     if found is None:
         return None
     top = max(word.top + word.height for word in found)
     stop = squeezed(until).replace(" ", "")
+    lines = sorted(reading.below(top).lines(), key=lambda line: line[0].top)
     here, section = squeezed(system or ""), ""
-    for line in sorted(reading.below(top).lines(), key=lambda line: line[0].top):
+    said_all = {squeezed(" ".join(w.text for w in line)) for line in lines}
+    if here + SECTION not in said_all:  # the log's system may be out of date (review of #686)
+        here = ""
+    for line in lines:
         if line[0].top > top + reach * reading.height:
             return None
         said = " ".join(word.text for word in line)

@@ -496,10 +496,17 @@ def test_the_row_in_the_players_system_is_clicked() -> None:
 
 
 def test_a_place_only_in_another_systems_section_falls_back_to_enter() -> None:
-    game = Game(rows=("NYX SYSTEM", "LEVSKI"))
+    game = Game(rows=("NYX SYSTEM", "LEVSKI", "STANTON SYSTEM", "LEVSKI DEPOT"))
     done = _plot(game, place=Place("Levski", "Stanton"))
     assert game.clicked_row == -1
     assert "ui_textfield_enter" in done.pressed
+
+
+def test_a_system_the_list_has_no_section_for_is_not_trusted() -> None:
+    game = Game(rows=("PYRO SYSTEM", "LEVSKI"))  # review of #686: the log still says Stanton
+    done = _plot(game, place=Place("Levski", "Stanton"))
+    assert done.status == "done"
+    assert game.clicked_row == 1
 
 
 def test_a_pick_in_another_system_is_said_and_no_r_pressed() -> None:
