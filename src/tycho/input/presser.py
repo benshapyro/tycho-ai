@@ -53,6 +53,12 @@ MODIFIER_CODES = frozenset(_MODIFIER_NAMES)
 """Left and right Shift, Ctrl and Alt: the keys that change what another key does."""
 
 
+def _uses(press: Press) -> frozenset[Code]:
+    """The modifiers ``press`` holds for its key. Its main key isn't one of them, even a
+    modifier ("lalt" alone): the player holding that would be let go of by the press."""
+    return frozenset(press.keys[:-1])
+
+
 def let_go_line(held: frozenset[Code]) -> str:
     """What Tycho says when the player holds ``held`` (#645): "Let go of Ctrl and say it
     again." """
@@ -133,6 +139,7 @@ class Presser:
         cancel = cancel or threading.Event()
         held: list[Code] = []
         taps = 0
+        skip = frozenset[Code]()
         try:
             for tap in range(press.taps):
                 if cancel.is_set():
@@ -140,8 +147,13 @@ class Presser:
                 players = self._players_modifiers(press, cancel)
                 if cancel.is_set():
                     return Receipt(press.action, "cancelled", taps)
-                if extra := players - set(press.keys):
+                if extra := players - _uses(press):
                     return Receipt(press.action, "modifier_held", taps, let_go_line(extra))
+                if tap == 0:
+                    # The player's own, found before Tycho pressed anything: a later
+                    # tap can't mistake Tycho's just-released Alt for theirs and send
+                    # its key without it (review of #675).
+                    skip = players
                 if not self._focus.game_has_focus():
                     return Receipt(press.action, "no_focus", taps, self._unfocused)
                 if tap:  # between taps: a cancel or lost focus here stops the next tap
@@ -150,7 +162,7 @@ class Presser:
                     if not self._focus.game_has_focus():
                         return Receipt(press.action, "no_focus", taps, self._unfocused)
                 first = on_down if tap == 0 else None
-                if not self._tap(press, held, cancel, first, players):
+                if not self._tap(press, held, cancel, first, skip):
                     return Receipt(press.action, "cancelled", taps, interrupted=press.main in held)
                 taps += 1
             return Receipt(press.action, "done", taps)
@@ -207,7 +219,7 @@ class Presser:
         deadline = self._clock() + MODIFIER_WAIT_SECONDS
         while True:
             held = self._sender.held_modifiers() & MODIFIER_CODES
-            if not held - set(press.keys) or cancel.is_set():
+            if not held - _uses(press) or cancel.is_set():
                 return held
             if (left := deadline - self._clock()) <= 0:
                 return held

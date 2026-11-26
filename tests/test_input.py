@@ -345,3 +345,24 @@ def test_each_tap_of_a_double_tap_checks_the_modifiers() -> None:
     assert receipt.outcome == "modifier_held"
     assert receipt.taps_done == 1
     assert [kind for kind, _ in sender.events] == ["down", "up"]
+
+
+def test_a_later_tap_still_sends_the_modifier_the_player_wasnt_holding() -> None:
+    """Review of #675: Windows may still report Tycho's own Left Alt as down just after
+    tap 1 let go of it. Tap 2 must send Left Alt again, never a bare N."""
+    lalt, n = code_for("lalt"), code_for("n")
+    sender = FakeKeySender(players=[frozenset(), frozenset({lalt})])
+    presser, _ = _presser(sender)
+    receipt = presser.press(plan(_action("lalt+n", "double_tap"), MODES))
+    assert receipt.done
+    assert sender.events == [("down", lalt), ("down", n), ("up", n), ("up", lalt)] * 2
+
+
+def test_a_modifier_bound_alone_isnt_pressed_while_the_player_holds_it() -> None:
+    """Pressing it would let go of the player's key under their hand."""
+    sender = FakeKeySender(players=[frozenset({code_for("lalt")})])
+    presser, _ = _presser(sender)
+    receipt = presser.press(plan(_action("lalt"), MODES))
+    assert receipt.outcome == "modifier_held"
+    assert receipt.detail == "Let go of Alt and say it again."
+    assert sender.events == []
