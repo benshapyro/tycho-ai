@@ -30,6 +30,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ### Fixed
 - "Open the doors" only opens the doors now: Tycho sometimes unlocked them too. ([#658](https://github.com/benshapyro/tycho-ai/issues/658))
+- "Switch the beam", or mining words Tycho can't place, now get a question instead of a press of the laser's module. ([#648](https://github.com/benshapyro/tycho-ai/issues/648))
 - A question about a route, such as "what's the fastest route to Pyro", gets an answer now, and Tycho no longer opens the star map or plots a route for it. ([#641](https://github.com/benshapyro/tycho-ai/issues/641))
 - A push-to-talk button you choose, add or remove in Tycho's window now works straight away, both the first and the second. Before, the new button did nothing until you restarted Tycho. ([#646](https://github.com/benshapyro/tycho-ai/issues/646))
 - Tycho sometimes answered a question with the single word "unused" (once, for "which blueprints have I got?"). That was the brain filling in a blank. It is never said now: Tycho takes the brain's real answer instead. ([#666](https://github.com/benshapyro/tycho-ai/issues/666))

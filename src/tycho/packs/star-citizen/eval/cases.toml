@@ -2120,3 +2120,20 @@ history_off = true
 never_say = ['Laranite']
 tag = "history"
 # Off: nothing is searched, and Tycho says history is off.
+
+# Mining in play, 25 Nov 2026 (#648): "switch laser tighten" and "try switching the beam"
+# pressed the laser's module (Toggle Laser Beam (High / low)) and called it the beam.
+# Words Tycho can't place get a question, never a mining press.
+[[case]]
+heard = "switch laser tighten"
+mode = "unclear"
+expect = ["reply"]
+never = ["v_mining_use_permanent_modifier", "v_toggle_mining_laser_fire"]
+tag = "unclear"
+
+[[case]]
+heard = "try switching the beam"
+mode = "unclear"
+expect = ["reply"]
+never = ["v_mining_use_permanent_modifier", "v_toggle_mining_laser_fire"]
+tag = "unclear"
