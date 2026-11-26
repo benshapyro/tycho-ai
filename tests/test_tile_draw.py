@@ -10,7 +10,8 @@ from tycho.tile import Board, Card, Row
 from tycho.tile.cards import ALL_KINDS, BODY, confirm, long_answer, notice
 from tycho.tile.design import CORE, accent_for
 from tycho.tile.draw import MAX_CARD, WIDTH, Look, draw, rgba
-from tycho.tile.tables import bar_lengths, number
+from tycho.tile.faces import font, text_width, wrap
+from tycho.tile.tables import bar_lengths, number, shared_unit
 
 SC = built_in(STAR_CITIZEN)
 
@@ -373,3 +374,46 @@ def test_only_a_kept_strip_has_the_pinned_marker() -> None:
     assert fading.crop(right).tobytes() != kept.crop(right).tobytes()
     left = (0, 0, fading.width - 40, fading.height)
     assert fading.crop(left).tobytes() == kept.crop(left).tobytes()
+
+
+def test_a_list_shows_each_rows_second_line() -> None:
+    """The Tile test, 26 Nov 2026: four rows all named "Derelict Outpost", and where each
+    one is was never drawn."""
+    bare = Card("list", title="Hadanite", rows=(Row("Derelict Outpost", "", "3.6%"),))
+    told = Card("list", title="Hadanite", rows=(Row("Derelict Outpost", "Vuur, Pyro", "3.6%"),))
+    assert _tile(told).height > _tile(bare).height
+    assert _near(_tile(told), CORE.dim) > _near(_tile(bare), CORE.dim)
+
+
+def test_a_list_says_a_shared_unit_once() -> None:
+    rows = (Row("A", value="8,500 aUEC/SCU"), Row("B", value="7,700 aUEC/SCU"))
+    assert shared_unit(rows) == (["8,500", "7,700"], "aUEC/SCU")
+    assert shared_unit((Row("A", value="3.6%"), Row("B", value="2.8%"))) == (["3.6%", "2.8%"], "")
+    mixed = (Row("A", value="72 SCU"), Row("B", value="Top pick"))
+    assert shared_unit(mixed) == (["72 SCU", "Top pick"], "")
+    assert shared_unit(rows[:1]) == (["8,500 aUEC/SCU"], "")
+    assert shared_unit(()) == ([], "")
+
+
+def test_many_steps_keep_to_one_line_each_so_the_card_holds_them() -> None:
+    few = tuple(Row(f"Step {i}", "A little more") for i in range(5))
+    bare = tuple(Row(f"Step {i}") for i in range(8))
+    many = tuple(Row(f"Step {i}", "A little more") for i in range(8))
+    assert _tile(Card("steps", rows=many)).size == _tile(Card("steps", rows=bare)).size
+    assert _tile(Card("steps", rows=few)).height > _tile(Card("steps", rows=bare[:5])).height
+
+
+def test_a_long_title_wraps_inside_the_card() -> None:
+    """Its letters are spaced, which the wrapping didn't count: a title ran off the edge."""
+    title = "STARLIGHT SERVICE STATION TO LEVSKI"
+    f = font("label", 50)
+    lines = wrap(title, f, 728, 2, 0.05 * f.size)
+    assert len(lines) == 2
+    assert all(text_width(line, f, 0.05 * f.size) <= 728 for line in lines)
+    assert len(wrap(title, f, 728, 2)) == 1  # without the spacing it "fits", and ran over
+
+
+def test_a_step_shows_its_one_line_more() -> None:
+    bare = Card("steps", title="Claim", rows=(Row("Find an ASOP terminal"),))
+    told = Card("steps", title="Claim", rows=(Row("Find an ASOP terminal", "In any spaceport"),))
+    assert _tile(told).height > _tile(bare).height

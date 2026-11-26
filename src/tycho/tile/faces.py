@@ -110,20 +110,21 @@ def text_width(text: str, f: Font, tracking: float = 0.0) -> float:
     return f.getlength(text) + tracking * max(0, len(text) - 1)
 
 
-def wrap(text: str, f: Font, width: float, lines: int = 99) -> list[str]:
-    """``text`` in lines no wider than ``width``; the last cut with an ellipsis."""
+def wrap(text: str, f: Font, width: float, lines: int = 99, tracking: float = 0.0) -> list[str]:
+    """``text`` in lines no wider than ``width``; the last cut with an ellipsis.
+    ``tracking`` is the space added after each letter, as ``caps`` draws a title."""
     out: list[str] = []
     line = ""
     for word in text.split():
-        while text_width(word, f) > width:  # a word longer than the line: break it
-            cut = max(1, int(len(word) * width / text_width(word, f)) - 1)
+        while text_width(word, f, tracking) > width:  # a word longer than the line: break it
+            cut = max(1, int(len(word) * width / text_width(word, f, tracking)) - 1)
             if line:
                 out.append(line)
                 line = ""
             out.append(word[:cut])
             word = word[cut:]
         candidate = f"{line} {word}".strip()
-        if text_width(candidate, f) <= width:
+        if text_width(candidate, f, tracking) <= width:
             line = candidate
         else:
             out.append(line)
@@ -132,7 +133,7 @@ def wrap(text: str, f: Font, width: float, lines: int = 99) -> list[str]:
         out.append(line)
     if len(out) > lines:
         out = out[:lines]
-        out[-1] = fit(out[-1] + "…", f, width)
+        out[-1] = fit(out[-1] + "…", f, width, tracking)
     return out
 
 

@@ -442,3 +442,36 @@ def test_with_every_kind_the_tool_is_unchanged() -> None:
     """Star Citizen names every kind: its tool, and so its cache, stay as they were."""
     tool = show_card(SC.tile.cards)
     assert (tool["description"], tool["input_schema"]) == (TOOL_DESCRIPTION, TOOL_SCHEMA)
+
+
+def test_a_comparison_with_both_figures_in_one_field_is_put_right() -> None:
+    """The Tile test, 26 Nov 2026: Claude often names the two sides in the title, puts
+    "left | right" in each value and a summary where the names go. Both figures used to
+    be cut to one field's length, and the card drew scrambled."""
+    rows = [
+        {"text": "Cargo", "detail": "", "value": "46 SCU | 66 SCU", "dim": False},
+        {"text": "Buy in game", "detail": "", "value": "2,010,960 | 2,962,575", "dim": False},
+    ]
+    card = from_tool(
+        _call(
+            "compare",
+            title="Cutlass Black vs Freelancer",
+            rows=rows,
+            hero_label="Most cargo",
+            hero_value="Freelancer, 66 SCU",
+        )
+    )
+    assert card.kind == "compare"
+    assert card.hero == ("Cutlass Black", "Freelancer")
+    assert card.rows == (
+        Row("Cargo", "46 SCU", "66 SCU"),
+        Row("Buy in game", "2,010,960", "2,962,575"),
+    )
+
+
+def test_a_comparison_filled_as_asked_keeps_its_names() -> None:
+    rows = [{"text": "Cargo", "detail": "46 SCU", "value": "66 SCU", "dim": False}]
+    card = from_tool(
+        _call("compare", title="A vs B", rows=rows, hero_label="Cutty", hero_value="Freelancer")
+    )
+    assert card.hero == ("Cutty", "Freelancer")

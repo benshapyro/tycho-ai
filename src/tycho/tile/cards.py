@@ -154,9 +154,11 @@ def from_tool(arguments: Mapping[str, object]) -> Card:
     kind = arguments.get("kind")
     if kind not in BRAIN_KINDS:
         raise ValueError(f"{kind!r} isn't a card Claude can show")
-    rows = tuple(_rows(arguments.get("rows")))
-    hero_value = clean(arguments.get("hero_value"), VALUE)
+    rows = tuple(_rows(arguments.get("rows"), sides=kind == "compare"))
+    hero_value = clean(arguments.get("hero_value"), LABEL if kind == "compare" else VALUE)
     hero = (clean(arguments.get("hero_label"), LABEL), hero_value) if hero_value else None
+    if kind == "compare" and (names := _sides(arguments, rows)):
+        hero = names
     body = tuple(p for p in [clean(arguments.get("text"), BODY)] if p)
     if kind == "route" and len(rows) != 2:
         kind = "list"  # a route is a buy and a sell; anything else reads as a list
@@ -178,7 +180,29 @@ def from_tool(arguments: Mapping[str, object]) -> Card:
     )
 
 
-def _rows(raw: object) -> list[Row]:
+_VERSUS = re.compile(r"\s+(?:vs\.?|versus)\s+", re.IGNORECASE)
+
+
+def _sides(arguments: Mapping[str, object], rows: tuple[Row, ...]) -> tuple[str, str] | None:
+    """A comparison's two names from its title ("Cutlass Black vs Freelancer"), when
+    Claude put both figures in each row's value ("46 SCU | 66 SCU") and something else
+    where the names go, as it often does. None when the card is as the kit asks."""
+    raw = arguments.get("rows")
+    given = cast(list[object], raw) if isinstance(raw, list) else []
+    joined = any(
+        isinstance(r, dict) and "|" in str(cast(dict[str, object], r).get("value", ""))
+        for r in given
+    )
+    parts = _VERSUS.split(clean(arguments.get("title"), TITLE * 2))
+    if not (joined and rows and len(parts) == 2 and all(parts)):
+        return None
+    return clean(parts[0], LABEL), clean(parts[1], LABEL)
+
+
+def _rows(raw: object, *, sides: bool = False) -> list[Row]:
+    """The card's rows, cleaned. With ``sides`` (a comparison), a row whose value holds
+    both figures ("46 SCU | 66 SCU") and no detail is split into left and right before
+    it's cut to length, so the right-hand figure isn't lost."""
     if not isinstance(raw, list):
         return []
     rows: list[Row] = []
@@ -187,14 +211,12 @@ def _rows(raw: object) -> list[Row]:
             continue
         fields = cast(dict[str, object], item)
         text = clean(fields.get("text"), TEXT)
+        detail, value = fields.get("detail"), fields.get("value")
+        if sides and not detail and isinstance(value, str) and "|" in value:
+            detail, _, value = value.partition("|")
         if text:
             rows.append(
-                Row(
-                    text,
-                    clean(fields.get("detail"), DETAIL),
-                    clean(fields.get("value"), VALUE),
-                    fields.get("dim") is True,
-                )
+                Row(text, clean(detail, DETAIL), clean(value, VALUE), fields.get("dim") is True)
             )
     return rows
 
@@ -275,16 +297,18 @@ talk or anything you press. Fill the card from look-up results when you have the
 Kinds and their rows (text | detail | value):
 - list: places or items, best first (place | where | price). Mark nothing dim.
 - route: exactly two rows, buy then sell (place | "Buy" or "Sell" | price per SCU); \
-hero_label and hero_value for the profit.
+hero_label and hero_value for the profit. Only a route and a compare use hero_label \
+and hero_value: leave them empty on every other kind.
 - recipe: what to gather (item | | amount).
 - ship: specs (spec name | | value); title the ship, label its role.
 - fleet: the player's own ships, best first (ship | why | verdict); dim ones that \
 can't do the job.
-- steps: one row per step (step | | ), in order.
+- steps: one row per step (step | one short line more, if it helps | ), in order.
 - headlines: news (headline | | date).
 - compare: two things side by side, such as two ships; hero_label and hero_value \
-name them (left, right); rows (what | left's figure | right's figure), each figure \
-with its unit.
+name them and nothing else (hero_label "Cutlass Black", hero_value "Freelancer"); rows \
+(what | left's figure | right's figure), one figure in each with its unit ("Cargo" | \
+"46 SCU" | "66 SCU"), never both in one field.
 - loadout: what something is fitted with, by slot, biggest first (item, with "x2" \
 if there are two | slot, the same for each row in it | size, like "S3").
 - warning: no rows; text holds the exact words ("Keybindings, search lock all doors, \

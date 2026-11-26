@@ -1632,6 +1632,117 @@ expect = ["reply"]
 card = ["list", "route", "recipe", "ship", "fleet", "steps", "headlines", "compare", "loadout"]
 tag = "tile"
 
+# The Tile test of 26 Nov 2026: lines that should and shouldn't show a card, a
+# few from Ben's play on 25 Nov, with the cards the Tile's record saved.
+[[case]]
+heard = "which moons have the most hadanite"
+mode = "lookup"
+expect = ["reply"]
+card = ["list"]
+tag = "tile"
+
+[[case]]
+heard = "what are the specs on the cutlass black"
+mode = "lookup"
+expect = ["reply"]
+card = ["ship"]
+tag = "tile"
+
+[[case]]
+heard = "which of my ships is best for cargo"
+mode = "lookup"
+expect = ["reply"]
+fleet = ["Constellation Taurus", "Galaxy", "M80", "Pitbull", "Cutter Rambler"]
+card = ["fleet", "list"]
+tag = "tile"
+
+[[case]]
+heard = "walk me through claiming my ship at a terminal"
+mode = "coach"
+expect = ["reply"]
+card = ["steps"]
+tag = "tile"
+
+[[case]]
+heard = "compare the M80 and the arrow"
+mode = "lookup"
+expect = ["reply"]
+card = ["compare", "ship", "list"]
+tag = "tile"
+
+[[case]]
+heard = "what should I haul in my constellation from area18"
+mode = "lookup"
+expect = ["reply"]
+fleet = ["Constellation Taurus"]
+flying = "Constellation Taurus"
+card = ["route", "list"]
+tag = "tile"
+
+# Play, 25 Nov: "Can you show that in the tile?" after a spoken answer. Not one of the
+# Tile's own words, so the brain gets it.
+[[case]]
+heard = "can you show that in the tile"
+mode = "chat"
+expect = ["reply"]
+recent = [["where's the best place to sell torite", "Port Tressler pays the most for torite, 8,500 a unit. Orison, New Babbage and Area18 pay 7,700, and Ruin Station in Pyro pays 6,900."]]
+card = ["list"]
+tag = "tile"
+
+# Play, 25 Nov: three questions in one breath. The part with numbers gets the card.
+[[case]]
+heard = "what is savrilium, where do I mine it, and how much does it sell for"
+mode = "lookup"
+expect = ["reply"]
+card = ["list"]
+tag = "tile"
+
+# One fact is one spoken line: no card.
+[[case]]
+heard = "how fast is the arrow"
+mode = "lookup"
+expect = ["reply"]
+no_card = true
+tag = "tile"
+
+[[case]]
+heard = "what's laranite worth at everus harbor"
+mode = "lookup"
+expect = ["reply"]
+no_card = true
+tag = "tile"
+
+[[case]]
+heard = "what system am I in"
+mode = "lookup"
+expect = ["reply"]
+where = ["Entered UEE Jurisdiction", "In the Stanton system"]
+no_card = true
+tag = "tile"
+
+[[case]]
+heard = "can you hear me"
+mode = "chat"
+expect = ["reply"]
+no_card = true
+tag = "tile"
+
+[[case]]
+heard = "guys I'm grabbing a drink, back in five"
+mode = "not_for_tycho"
+expect = ["reply"]
+no_card = true
+tag = "tile"
+
+# A press never comes with a card.
+[[case]]
+heard = "landing gear down and lights on"
+mode = "command"
+expect = ["actions"]
+must = [["v_deploy_landing_system", "v_toggle_landing_system"], ["v_lights", "v_lights_on"]]
+no_card = true
+tag = "tile"
+
 [[case]]
 heard = "make the tile bigger"
 mode = "settings"

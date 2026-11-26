@@ -1301,3 +1301,27 @@ def test_a_key_for_case_fails_a_reply_that_names_no_key() -> None:
     rule = {"expect": ["reply"], "key_for": ["v_attack1_group1"]}
     assert e.grade(_outcome(named_key=False), rule, set()) == "didn't name the player's key"
     assert e.grade(_outcome(named_key=True), rule, set()) == "pass"
+
+
+def test_the_evals_cards_are_saved_as_the_tile_draws_them(tmp_path: Path) -> None:
+    """``--cards``: a picture and a line for each card a case shows, to review with no game."""
+    import json
+
+    from PIL import Image
+
+    _eval()  # puts tools/bench on the path
+    from cards import CardDrawer  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
+
+    from tycho.tile import Card, Row
+
+    drawer = CardDrawer(tmp_path)  # pyright: ignore[reportUnknownVariableType]
+    card = Card("list", title="Best places to sell", rows=(Row("Area18", "ArcCorp", "8,900"),))
+    drawer.save(card, asked="where do I sell laranite", said="Area18. More on the Tile.")
+    drawer.save(Card("steps", title="Refuel", rows=(Row("Land"),)), asked="how", said="Steps.")
+    run = cast(Path, drawer.run)  # pyright: ignore[reportUnknownMemberType]
+    assert [p.name for p in sorted(run.glob("*.png"))] == ["0001-list.png", "0002-steps.png"]
+    with Image.open(run / "0001-list.png") as picture:
+        assert picture.height > 50
+    lines = [json.loads(line) for line in (run / "cards.jsonl").read_text("utf-8").splitlines()]
+    assert [line["asked"] for line in lines] == ["where do I sell laranite", "how"]
+    assert lines[0]["card"]["rows"][0]["detail"] == "ArcCorp"
