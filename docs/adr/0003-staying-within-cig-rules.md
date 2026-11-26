@@ -124,3 +124,18 @@ Some "power user" automation requests will be declined by design.
 
 **Consequences.**
 - If the PC test shows the click on the name doesn't give the keys back, the next try is an empty spot of the panel, with a new amendment.
+
+## Amendment, 26 November 2026 (later): when Enter empties the box
+
+*Status: accepted. The maintainer approved it on 26 November 2026 ("your fix makes sense", [#661](https://github.com/benshapyro/tycho-ai/issues/661)).*
+
+**Context.** In the next test ("Take me to Orison", 5120x2160), Enter picked Orison and emptied the box: its "SEARCH LOCATIONS..." words came back, Orison was first under RECENT, and the whole unfiltered list was under ALL RESULTS. There was no place panel and no "x" that text recognition could read, so Tycho stopped. Text recognition also read the name as "ORISOW".
+
+**Decision.** This adds to the morning amendment above.
+
+- **The place under RECENT counts as the map's own result**, but only once Enter has emptied the box (its empty words are back on the box's line), only in the RECENT list, above ALL RESULTS and close under its header, and never when the map says it found nothing.
+- **The second click goes on that name**, as on the place's own panel: it keeps the place picked and takes the keys from the box.
+- **One misread letter is allowed** when the map's name is checked, on the place's panel or under RECENT: only in names of five letters or more, and never a digit or a numeral word ("ARC-L2" is not ARC-L1, "Pyro V" is not Pyro I). The route line's id in the log still has to name the place before Tycho says the route is set.
+
+**Consequences.**
+- At most two clicks, both on the map, with NAV set first and a fresh frame before each, as before.

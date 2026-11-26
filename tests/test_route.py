@@ -21,6 +21,7 @@ from tycho.input.keys import Code, code_for
 from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.packs import STAR_CITIZEN, as_run, built_in
 from tycho.packs.routes import RouteFlow, RouteLines
+from tycho.runtime.mapwords import alike
 from tycho.runtime.route import Place, Plotted, id_names, plot
 from tycho.situation import Logged
 
@@ -31,6 +32,7 @@ BOX_MIDDLE = (295, 176)  # the middle of both words, as the fake map draws them
 OFFSET = (0.307, 0.0)
 CLOSE = (round(BOX_MIDDLE[0] + OFFSET[0] * HEIGHT), BOX_MIDDLE[1])
 TITLE = (BOX[0] + 45, 230)  # the middle of the place's name on its own panel
+PICKED = (BOX[0] + 65, 300)  # the place's name under RECENT, Enter having emptied the box
 LINES = RouteLines(
     done="Route set to {name}.",
     replacing="Replacing your route to {name}.",
@@ -123,6 +125,10 @@ class Game:
     details: bool = False
     """Enter opens the place's own panel, its name just under the box, and no results list
     or x (Ben's PC try, 26 Nov 2026); a click on that name gives the keys back."""
+    empties: bool = False
+    """Enter picks the place and empties the box: its empty words back, the place under
+    RECENT (read one letter wrong) and the whole list under ALL RESULTS, no x (Ben's
+    Orison try, 26 Nov 2026); a click on the place's name gives the keys back."""
     keeps_hint: bool = False
     """The clicked box still shows its empty words until a letter lands, as on 24 Nov;
     False: it drops them for its own x once it has the keys (Ben's PC try, 26 Nov)."""
@@ -182,6 +188,9 @@ class Game:
             self.box_has_keys = True
         else:
             on_name = self.details and abs(x - TITLE[0]) < 50 and abs(y - TITLE[1]) < 20
+            on_name = on_name or (
+                self.empties and abs(x - PICKED[0]) < 50 and abs(y - PICKED[1]) < 20
+            )
             on_x = abs(x - self.close_at[0]) < 20 and abs(y - self.close_at[1]) < 20
             if on_name or on_x:  # a click outside the box gives the keys back to the map
                 self.box_has_keys = False
@@ -201,6 +210,18 @@ class Game:
                 words.append(Word(place, BOX[0], 220 + 40 * i, 90, 20, 10 + i))
         elif not self.entered:  # the list filters as letters land
             words.append(Word("RESULTS", BOX[0], 220, 90, 20, 1))
+        if self.empties and self.entered and self.typed in self.places:
+            words = [
+                Word(t, BOX[0] + 70 * i, BOX[1], 60, BOX[3], 0)
+                for i, t in enumerate(("SEARCH", "LOCATIONS..."))
+            ]
+            for i, text in enumerate(("RECENT", "STANTON SYSTEM", "LEVSKJ", "ALLRESULTS")):
+                words.append(
+                    Word(text, BOX[0] + (20 if i == 2 else 0), 220 + 35 * i, 90, 20, 40 + i)
+                )
+            words.append(Word("AREA18", BOX[0] + 20, 370, 90, 20, 50))
+            words.append(Word("LORVILLE", BOX[0] + 20, 400, 90, 20, 51))
+            return Reading(WIDTH, HEIGHT, tuple(words), window=7)
         if self.details and self.entered and self.typed in self.places:
             words.append(Word(self.typed.upper(), BOX[0], 220, 90, 20, 30))  # its panel
             words.append(Word("ROUTE", BOX[0], 600, 60, 20, 31))
@@ -401,6 +422,62 @@ def test_the_places_own_panel_after_enter_is_chosen_and_its_name_clicked() -> No
     assert (done.status, done.say) == ("done", "Route set to Levski.")
     assert game.clicks == [BOX_MIDDLE, TITLE]
     assert "click on the place's name in the panel" in done.pressed
+
+
+def test_a_box_enter_emptied_takes_the_place_under_recent_and_clicks_it() -> None:
+    game = Game(empties=True)  # Ben's Orison try, 26 Nov 2026: "ORISOW" under RECENT
+    done = _plot(game)
+    assert (done.status, done.say) == ("done", "Route set to Levski.")
+    assert game.clicks == [BOX_MIDDLE, PICKED]
+    assert "click on the place's name under recent" in done.pressed
+
+
+def test_another_place_under_recent_is_not_taken() -> None:
+    game = Game(empties=True, places={"levski": "levski_all-001", "lorville": "lorville-001"})
+    done = _plot(game, "Lorville")  # RECENT still shows Levski, ALL RESULTS the rest
+    assert done.status == "failed"
+    assert game.clicks == [BOX_MIDDLE]
+    assert not game.route_id
+
+
+def test_a_place_listed_far_under_recent_is_not_taken_when_all_results_goes_unread() -> None:
+    game = Game(empties=True, places={"levski": "levski_all-001", "lorville": "lorville-001"})
+    real = game.read
+
+    class Reader:
+        def read(self) -> Reading:
+            reading = real()
+            if not game.entered:
+                return reading
+            kept = [w for w in reading.words if w.text not in ("ALLRESULTS", "LORVILLE")]
+            kept.append(Word("LORVILLE", BOX[0] + 20, 500, 90, 20, 51))  # far down the list
+            return Reading(reading.width, reading.height, tuple(kept), reading.window)
+
+    done = _plot(game, "Lorville", reader=Reader())
+    assert done.status == "failed"
+    assert game.clicks == [BOX_MIDDLE]
+
+
+def test_no_results_is_said_even_with_the_place_under_recent() -> None:
+    game = Game(empties=True)
+    real = game.read
+
+    class Reader:
+        def read(self) -> Reading:
+            reading = real()
+            if not game.entered:
+                return reading
+            nothing = (
+                Word("NO", BOX[0], 470, 40, 20, 60),
+                Word("RESULTS", BOX[0] + 50, 470, 90, 20, 60),
+            )
+            return Reading(
+                reading.width, reading.height, (*reading.words, *nothing), reading.window
+            )
+
+    done = _plot(game, reader=Reader())
+    assert (done.status, done.detail) == ("failed", "the map found nothing")
+    assert game.clicks == [BOX_MIDDLE]
 
 
 def test_the_name_only_inside_a_description_is_not_the_places_panel() -> None:
@@ -813,3 +890,14 @@ def test_the_reading_process_is_put_away_when_a_route_fails_too() -> None:
     game = _WarmGame()
     assert _plot(game, "Port Tressler").status == "failed"
     assert game.finished == 1
+
+
+def test_one_misread_letter_is_allowed_only_in_longer_names_and_never_a_digit() -> None:
+    assert alike("ORISOW", "Orison")
+    assert alike("Levski", "Levski")
+    assert not alike("ARC-L2", "ARC-L1")  # a digit is another place
+    assert not alike("HURSTOM", "Hurstonx")  # not the same length
+    assert not alike("YELA", "Yeli")  # too short to guess
+    assert not alike("ORISAW", "Orison")  # two letters off
+    assert not alike("PYRO V", "Pyro I")  # a numbered planet is another place
+    assert not alike("PYRO IV", "Pyro II")
