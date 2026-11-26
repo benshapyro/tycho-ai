@@ -66,7 +66,8 @@ from tycho.situation import Logged
 log = logging.getLogger(__name__)
 
 MAX_CLICKS = 2
-"""The search box, then the panel's close button (ADR 3, 24 Nov 2026)."""
+"""The search box, then the place's name on its own panel or else the search panel's
+close button (ADR 3, 24 and 26 Nov 2026)."""
 SETTLE_LOOKS = 4
 """Looks, ``settle_seconds`` apart, for the search box to stop moving as the map opens."""
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9 '.-]{0,39}")
@@ -394,28 +395,28 @@ class _Run:
         line = row(reading, box).words
         return [w for w in line if w.text.strip().lower() in marks and w.left > right]
 
-    def _listed(self, reading: Reading, box: tuple[Word, ...]) -> bool:
-        """The panel's list is open under the box: "RECENT" or "ALL RESULTS" in its column,
-        as once the box has the keys (Ben's PC try, 26 Nov 2026)."""
+    def _near(self, reading: Reading, box: tuple[Word, ...]) -> Reading:
+        """The words of the search panel's column within ``_LISTED`` of the height under
+        the box."""
         bottom = max(word.top + word.height for word in box)
         under = column(reading.below(bottom), box, reading)
         near = [w for w in under.words if w.top <= bottom + _LISTED * reading.height]
-        close = Reading(reading.width, reading.height, tuple(near), reading.window)
+        return Reading(reading.width, reading.height, tuple(near), reading.window)
+
+    def _listed(self, reading: Reading, box: tuple[Word, ...]) -> bool:
+        """The panel's list is open under the box: "RECENT" or "ALL RESULTS" in its column,
+        as once the box has the keys (Ben's PC try, 26 Nov 2026)."""
+        close = self._near(reading, box)
         return any(word and close.has(word) for word in (self.flow.recent, self.flow.results))
 
     def _detail(self, reading: Reading, box: tuple[Word, ...]) -> tuple[Word, ...] | None:
         """The chosen place's name as a line of its own just under the box: the panel
         Enter opens for one result (26 Nov 2026), not a row of a results list, nor its
         name inside a description."""
-        bottom = max(word.top + word.height for word in box)
-        under = column(reading.below(bottom), box, reading)
-        lists = (self.flow.results, self.flow.recent)
-        if any(word and under.has(word) for word in lists):  # a list's rows aren't the panel
+        if self._listed(reading, box):  # a list's rows aren't the panel
             return None
         wanted = squeezed(self.place.name).replace(" ", "")
-        for line in under.lines():
-            if min(w.top for w in line) > bottom + _LISTED * reading.height:
-                continue
+        for line in self._near(reading, box).lines():
             if squeezed(" ".join(w.text for w in line)).replace(" ", "") == wanted:
                 return line
         return None

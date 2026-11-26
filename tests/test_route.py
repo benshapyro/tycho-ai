@@ -413,8 +413,8 @@ def test_the_name_only_inside_a_description_is_not_the_places_panel() -> None:
             return reading
         kept = tuple(w for w in reading.words if w.line != 30)  # no title line
         text = (
-            Word("evolved,", BOX[0], 500, 90, 20, 40),
-            Word("LEVSKI", BOX[0] + 100, 500, 90, 20, 40),
+            Word("evolved,", BOX[0], 230, 90, 20, 40),
+            Word("LEVSKI", BOX[0] + 100, 230, 90, 20, 40),
         )
         return Reading(reading.width, reading.height, (*kept, *text), reading.window)
 
@@ -426,6 +426,23 @@ def test_the_name_only_inside_a_description_is_not_the_places_panel() -> None:
     assert done.detail == "the frame doesn't show the search results"
     assert game.clicks == [BOX_MIDDLE]
     assert not game.route_id
+
+
+def test_recent_far_down_in_a_description_doesnt_hide_the_places_panel() -> None:
+    game = Game(details=True)
+    real = game.read
+
+    class Reader:
+        def read(self) -> Reading:
+            reading = real()
+            if not game.entered:
+                return reading
+            far = Word("recent", BOX[0], 700, 90, 20, 50)  # "...its recent history..."
+            return Reading(reading.width, reading.height, (*reading.words, far), reading.window)
+
+    done = _plot(game, reader=Reader())
+    assert (done.status, done.say) == ("done", "Route set to Levski.")
+    assert game.clicks == [BOX_MIDDLE, TITLE]
 
 
 def test_a_box_that_never_sits_still_is_never_clicked() -> None:
