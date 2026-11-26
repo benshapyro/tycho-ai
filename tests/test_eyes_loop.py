@@ -150,3 +150,14 @@ def test_a_loop_asks_its_child_for_the_packs_share() -> None:
 def test_the_installed_app_starts_the_looping_child(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     assert child.command(1234, loop=True)[1:] == [child.LOOP_FLAG, "1234"]
+
+
+def test_the_crop_keeps_the_left_share_from_the_top_left_corner() -> None:
+    from tycho.eyes.ocr import cropped
+
+    frame = Image.new("RGB", (5120, 2160))
+    frame.putpixel((100, 50), (255, 0, 0))
+    half = cropped(frame, 0.5)
+    assert half.size == (2560, 2160)  # under Windows' reading limit: read at full size
+    assert half.getpixel((100, 50)) == (255, 0, 0)  # the same spot as in the frame
+    assert cropped(frame, 1.0) is frame

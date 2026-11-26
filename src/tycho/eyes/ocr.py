@@ -22,6 +22,14 @@ LANGUAGE = "en-US"
 SECONDS = 3.0
 
 
+def cropped(image: Image.Image, share: float) -> Image.Image:
+    """The left ``share`` of ``image``, from its top-left corner, so a word's box in it is
+    already in the whole frame's pixels."""
+    if share >= 1.0:
+        return image
+    return image.crop((0, 0, max(1, round(image.width * share)), image.height))
+
+
 def read_words(image: Image.Image, share: float = 1.0) -> Reading:
     """The words on ``image``, with their boxes in its pixels: only on its left ``share``
     of it, when that's less than 1 (the star map's search panel, #671). A narrower frame
@@ -36,8 +44,7 @@ def read_words(image: Image.Image, share: float = 1.0) -> Reading:
     if engine is None:
         raise CaptureError("Windows has no English text recognition installed")
     full = image.size
-    if share < 1.0:
-        image = image.crop((0, 0, max(1, round(full[0] * share)), full[1]))
+    image = cropped(image, share)
     width, height = image.size
     largest = int(OcrEngine.max_image_dimension)
     scale = min(1.0, largest / max(width, height))
