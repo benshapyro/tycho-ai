@@ -25,8 +25,11 @@ from tycho.input import Presser
 from tycho.packs import STAR_CITIZEN, as_run, built_in
 from tycho.packs.routes import PlaceError, Route, read
 from tycho.runtime.conversation import would_speak
+from tycho.runtime.mapwords import map_name
 from tycho.runtime.messages import Progress, Result
 from tycho.runtime.plotting import ROUTE, Plotter, RouteTool, asked_place, placed
+from tycho.situation import Logged, Situation
+from tycho.start.assemble import system_of
 
 SC = built_in(STAR_CITIZEN)
 assert SC.route is not None
@@ -43,9 +46,11 @@ class FakePlaces:
     def __init__(self, *names: str, error: Exception | None = None) -> None:
         self.names, self.error = names, error
         self.asked: list[str] = []
+        self.systems: list[str | None] = []
 
-    async def find(self, said: str) -> str | None:
+    async def find(self, said: str, system: str | None = None) -> str | None:
         self.asked.append(said)
+        self.systems.append(system)
         if self.error is not None:
             raise self.error
         guess = {"lefski": "Levski"}.get(said.lower())  # a misheard name it fits
@@ -138,6 +143,41 @@ def test_the_place_is_found_and_the_route_plotted() -> None:
     assert progress.commands == (ROUTE,)
     assert "click on the search box" in progress.pressed
     assert game.route_id == "levski_all-001"
+
+
+def test_a_place_named_with_its_system_is_typed_as_the_map_knows_it() -> None:
+    # UEX names "Pyro Gateway (Stanton)", and "(" can't be typed (#682): the map, which
+    # only searches the player's system, knows it as "Pyro Gateway".
+    game = Game(places={"pyro gateway": "pyro_gateway-001"})
+    places = FakePlaces("Pyro Gateway (Stanton)")
+    plotter = _plotter(game, places, system=lambda: "Stanton")
+    status, _detail, progress = _answer(plotter, "pyro gateway (stanton)")
+    assert (status, progress.say) == ("done", "Route set to Pyro Gateway.")
+    assert "typed Pyro Gateway" in progress.pressed
+    assert places.systems == ["Stanton"]
+
+
+def test_the_players_system_picks_between_same_named_places() -> None:
+    rows = [
+        {"space_station_name": "Pyro Gateway (Nyx)", "star_system_name": "Nyx"},
+        {"space_station_name": "Pyro Gateway (Stanton)", "star_system_name": "Stanton"},
+    ]
+    assert best_place(rows, "pyro gateway", "Stanton") == "Pyro Gateway (Stanton)"
+    assert best_place(rows, "pyro gateway", "nyx") == "Pyro Gateway (Nyx)"
+    assert best_place(rows, "pyro gateway") is not None  # unknown: either, typed the same
+
+
+def test_the_map_name_drops_only_a_system_at_the_end() -> None:
+    assert map_name("Pyro Gateway (Stanton)") == "Pyro Gateway"
+    assert map_name("Levski") == "Levski"
+    assert map_name("(Stanton)") == "(Stanton)"  # never nothing
+
+
+def test_the_players_system_comes_from_what_the_log_shows_now() -> None:
+    here = Logged("system", "In the Nyx system", None, 3, "Nyx")
+    other = Logged("jurisdiction", "In People's Alliance", None, 2, "People's Alliance")
+    assert system_of(Situation(now=(other, here))) == "Nyx"
+    assert system_of(Situation()) is None
 
 
 def test_a_place_tycho_doesnt_know_is_said_and_nothing_is_pressed() -> None:
@@ -366,7 +406,7 @@ def test_with_key_actions_off_no_place_is_looked_up() -> None:
 
 def test_a_slow_list_of_places_says_why_in_the_log() -> None:
     class Slow(FakePlaces):
-        async def find(self, said: str) -> str | None:
+        async def find(self, said: str, system: str | None = None) -> str | None:
             raise TimeoutError
 
     status, detail, _progress = _answer(_plotter(Game(), Slow()), "levski")

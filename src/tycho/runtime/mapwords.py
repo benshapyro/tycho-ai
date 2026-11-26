@@ -2,6 +2,8 @@
 there (#588): the search box's line and column, and how near two spots are. For
 ``runtime.route``."""
 
+import re
+
 from tycho.eyes.words import Reading, Word, squeezed
 
 
@@ -96,3 +98,13 @@ def under_header(
         if alike(said, name):
             return line
     return None
+
+
+SYSTEM_SUFFIX = re.compile(r"\s*\([^()]*\)\s*$")
+"""UEX tells same-named places apart by their system ("Pyro Gateway (Stanton)"): the
+map's search, which only covers the player's system, knows it as "Pyro Gateway" (#682)."""
+
+
+def map_name(name: str) -> str:
+    """``name`` as the map's search knows it: without UEX's "(System)" at its end."""
+    return SYSTEM_SUFFIX.sub("", name).strip() or name

@@ -23,6 +23,7 @@ from tycho.input import Presser
 from tycho.keybinds import Keybinds
 from tycho.packs import Safety
 from tycho.packs.routes import PlaceError, Places, Route
+from tycho.runtime.mapwords import map_name
 from tycho.runtime.messages import Progress, Status
 from tycho.runtime.planning import Questions
 from tycho.runtime.route import Clicker, Place, RouteLog, ScreenReader, plot
@@ -201,6 +202,12 @@ class Plotter:
     ``TYCHO_ROUTE_RECORD`` on (``eyes.record.FrameRecord.failed``)."""
     brain: bool = False
     """The session has a brain, which ``tool`` hands places to."""
+    system: Callable[[], str | None] = lambda: None
+    """The player's star system, if the game's log shows it. Blocking (it reads the log)."""
+
+    async def _system(self) -> str | None:
+        """Where the player is, to pick the right one of two same-named places (#682)."""
+        return await asyncio.to_thread(self.system)
 
     def asked(self, text: str) -> str | None:
         """The place the player asked for a route to, if they did. A new request:
@@ -220,7 +227,9 @@ class Plotter:
         if where in self.route.away:
             return place
         try:
-            name = await asyncio.wait_for(self.places.find(said), PLACES_SECONDS)
+            name = await asyncio.wait_for(
+                self.places.find(said, await self._system()), PLACES_SECONDS
+            )
         except PlaceError, TimeoutError:
             return place  # ``answer`` says the list is missing
         if name is None:
@@ -262,7 +271,9 @@ class Plotter:
             progress.say = lines.elsewhere.format(name=said)
             return "refused", f"{said!r} is {where}"
         try:
-            name = await asyncio.wait_for(self.places.find(said), PLACES_SECONDS)
+            name = await asyncio.wait_for(
+                self.places.find(said, await self._system()), PLACES_SECONDS
+            )
         except (PlaceError, TimeoutError) as e:
             why = str(e) or "it took too long"
             log.warning("No list of places: %s", why)
@@ -281,7 +292,7 @@ class Plotter:
         log.info("Plotting a route to %s", name)
         run = functools.partial(
             plot,
-            Place(name),
+            Place(map_name(name)),
             self.route.flow,
             keybinds=self.keybinds(),
             lists=self.lists,

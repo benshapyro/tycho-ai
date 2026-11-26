@@ -29,9 +29,11 @@ class PlaceError(Exception):
 class Places(Protocol):
     """Where the player may plot to: places' names as the game's map knows them."""
 
-    async def find(self, said: str) -> str | None:
+    async def find(self, said: str, system: str | None = None) -> str | None:
         """The place ``said`` most likely means, by its name on the map; None if none
-        fits. Raises ``PlaceError`` when the list can't be had."""
+        fits. Of places with the same name, the one in ``system`` (the player's, when
+        the log shows it), as the map only searches there (#682). Raises ``PlaceError``
+        when the list can't be had."""
         ...
 
     def guessed(self, said: str, name: str) -> bool:
