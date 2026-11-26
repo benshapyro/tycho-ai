@@ -30,6 +30,7 @@ BOX = (230, 165, 120, 22)  # where "SEARCH LOCATIONS..." is read, as the PC test
 BOX_MIDDLE = (295, 176)  # the middle of both words, as the fake map draws them
 OFFSET = (0.307, 0.0)
 CLOSE = (round(BOX_MIDDLE[0] + OFFSET[0] * HEIGHT), BOX_MIDDLE[1])
+TITLE = (BOX[0] + 45, 230)  # the middle of the place's name on its own panel
 LINES = RouteLines(
     done="Route set to {name}.",
     replacing="Replacing your route to {name}.",
@@ -119,6 +120,9 @@ class Game:
     """False: text recognition reads nothing on the box's line, only the list under it."""
     close_at: tuple[int, int] = CLOSE
     """Where the box's x is drawn, and where a click gives the keys back to the map."""
+    details: bool = False
+    """Enter opens the place's own panel, its name just under the box, and no results list
+    or x (Ben's PC try, 26 Nov 2026); a click on that name gives the keys back."""
     keeps_hint: bool = False
     """The clicked box still shows its empty words until a letter lands, as on 24 Nov;
     False: it drops them for its own x once it has the keys (Ben's PC try, 26 Nov)."""
@@ -176,8 +180,11 @@ class Game:
             return ""  # the map is still opening: the click lands on nothing
         if abs(x - BOX_MIDDLE[0]) < 20 and abs(y - BOX_MIDDLE[1]) < 20:
             self.box_has_keys = True
-        elif abs(x - self.close_at[0]) < 20 and abs(y - self.close_at[1]) < 20:
-            self.box_has_keys = False
+        else:
+            on_name = self.details and abs(x - TITLE[0]) < 50 and abs(y - TITLE[1]) < 20
+            on_x = abs(x - self.close_at[0]) < 20 and abs(y - self.close_at[1]) < 20
+            if on_name or on_x:  # a click outside the box gives the keys back to the map
+                self.box_has_keys = False
         return ""
 
     # --- what the screen shows ---
@@ -194,6 +201,10 @@ class Game:
                 words.append(Word(place, BOX[0], 220 + 40 * i, 90, 20, 10 + i))
         elif not self.entered:  # the list filters as letters land
             words.append(Word("RESULTS", BOX[0], 220, 90, 20, 1))
+        if self.details and self.entered and self.typed in self.places:
+            words.append(Word(self.typed.upper(), BOX[0], 220, 90, 20, 30))  # its panel
+            words.append(Word("ROUTE", BOX[0], 600, 60, 20, 31))
+            return Reading(WIDTH, HEIGHT, tuple(words), window=7)
         if (self.box_has_keys or self.entered) and self.shows_x:
             words.append(Word("x", self.close_at[0] - 6, self.close_at[1] - 8, 12, 16, 0))
         if self.entered:
@@ -382,6 +393,56 @@ def test_an_x_off_the_box_line_is_clicked_where_the_offset_puts_it() -> None:
     done = _plot(game)
     assert game.clicks == [BOX_MIDDLE, CLOSE]
     assert done.status == "failed"  # the click missed the x drawn lower: R isn't pressed
+
+
+def test_the_places_own_panel_after_enter_is_chosen_and_its_name_clicked() -> None:
+    game = Game(details=True)  # Ben's PC try, 26 Nov 2026: no results list, no x
+    done = _plot(game)
+    assert (done.status, done.say) == ("done", "Route set to Levski.")
+    assert game.clicks == [BOX_MIDDLE, TITLE]
+    assert "click on the place's name in the panel" in done.pressed
+
+
+def test_the_name_only_inside_a_description_is_not_the_places_panel() -> None:
+    game = Game(details=True)
+    real = game.read
+
+    def read() -> Reading:
+        reading = real()
+        if not game.entered:
+            return reading
+        kept = tuple(w for w in reading.words if w.line != 30)  # no title line
+        text = (
+            Word("evolved,", BOX[0], 230, 90, 20, 40),
+            Word("LEVSKI", BOX[0] + 100, 230, 90, 20, 40),
+        )
+        return Reading(reading.width, reading.height, (*kept, *text), reading.window)
+
+    class Reader:
+        def read(self) -> Reading:
+            return read()
+
+    done = _plot(game, reader=Reader())
+    assert done.detail == "the frame doesn't show the search results"
+    assert game.clicks == [BOX_MIDDLE]
+    assert not game.route_id
+
+
+def test_recent_far_down_in_a_description_doesnt_hide_the_places_panel() -> None:
+    game = Game(details=True)
+    real = game.read
+
+    class Reader:
+        def read(self) -> Reading:
+            reading = real()
+            if not game.entered:
+                return reading
+            far = Word("recent", BOX[0], 700, 90, 20, 50)  # "...its recent history..."
+            return Reading(reading.width, reading.height, (*reading.words, far), reading.window)
+
+    done = _plot(game, reader=Reader())
+    assert (done.status, done.say) == ("done", "Route set to Levski.")
+    assert game.clicks == [BOX_MIDDLE, TITLE]
 
 
 def test_a_box_that_never_sits_still_is_never_clicked() -> None:

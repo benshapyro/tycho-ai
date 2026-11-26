@@ -109,3 +109,18 @@ Some "power user" automation requests will be declined by design.
 
 **Consequences.**
 - Brain eval cases: "take us to Crusader", "Pona route to Dlevsky" and "a course over to Lorville" use `plot_route` and never say a route is set; "which system am I in" with a home base note never says Stanton.
+
+## Amendment, 26 November 2026: when Enter opens the place's own panel
+
+*Status: accepted. The maintainer approved it on 26 November 2026 ("Yes, click the name", [#661](https://github.com/benshapyro/tycho-ai/issues/661)).*
+
+**Context.** In the 26 November test at 5120x2160, Enter didn't show a results list. It opened the place's own panel straight away: its name ("LEVSKI") on a line of its own under the box, its kind, a description and a "Route" button, with no close button. Tycho stopped there, because the frame didn't show the search results. The maintainer said it only needed a click outside the search bar, then R.
+
+**Decision.** This adds to the close-button amendment above; its other terms stand.
+
+- **The place's own panel counts as the map's own result.** It counts only when the place's whole name is a line of its own just under the box, and no results or recent list is there. The name only inside a description doesn't count.
+- **The second click goes on that name.** It's text the check just read in that frame, it keeps the chosen place picked, and it takes the keys away from the search box. When the panel isn't there, the second click stays on the close button.
+- Still at most two clicks, both on the map, NAV first, and a fresh frame before each.
+
+**Consequences.**
+- If the PC test shows the click on the name doesn't give the keys back, the next try is an empty spot of the panel, with a new amendment.
