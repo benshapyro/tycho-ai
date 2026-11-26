@@ -17,6 +17,7 @@ from tests.test_route import KEYBINDS, Game, _key_went_down  # pyright: ignore[r
 from tests.test_runtime import rig, run
 from tycho.brain import Reply
 from tycho.brain.decisions import BrainRequest, Decision
+from tycho.brain.heard import Heard, hearing
 from tycho.brain.lookups import RECALLED
 from tycho.games import BUILT_IN
 from tycho.games.star_citizen.places import UexPlaces, best_place
@@ -380,6 +381,35 @@ def test_the_route_tool_only_hands_the_place_over() -> None:
     assert tool.take() is None
     assert asyncio.run(tool.run({"place": " "})).is_error
     assert tool.take() is None
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "what's the fastest route to Pyro",  # it opened the star map (#641)
+        "Tycho, how do I get to Levski from here",
+        "fastest way to Area 18",
+        "which route to Lorville is safest",
+    ],
+)
+def test_the_route_tool_plots_nothing_for_a_question(said: str) -> None:
+    tool = RouteTool("Plot a route.")
+    with hearing(Heard(said)):
+        answer = asyncio.run(tool.run({"place": "Pyro"}))
+    assert not answer.is_error  # an answer, not a retry
+    assert "not_plotted" in answer.content
+    assert tool.take() is None
+
+
+@pytest.mark.parametrize(
+    "said",
+    ["take us to Crusader", "can you get me a course over to Lorville", "a route to Levski"],
+)
+def test_the_route_tool_still_hands_over_a_request(said: str) -> None:
+    tool = RouteTool("Plot a route.")
+    with hearing(Heard(said)):
+        asyncio.run(tool.run({"place": "Levski"}))
+    assert tool.take() == "Levski"
 
 
 def test_a_new_request_drops_a_place_handed_over_earlier() -> None:
