@@ -18,8 +18,12 @@ The flow, as the pack declares it (``RouteFlow``):
    could reach the game);
 5. read a fresh frame: the RESULTS header under the box, and the chosen place under it
    in the panel's column (a RECENT list doesn't count, #654);
-6. click the panel's close button (the second, last click), found from the search box
-   by the pack's offset and only if text recognition agrees something is there;
+   or, as Enter can open it straight away (Ben's PC try, 26 Nov 2026), the place's own
+   panel: its name as a line of its own just under the box;
+6. the second, last click, to take the keys from the box: on that panel's name (Ben: it
+   only needs a click outside the search bar, which also leaves the place chosen), else
+   on the results panel's close button, read on the box's line or found by the pack's
+   offset, and only if text recognition agrees something is there;
 7. clear the route (``clear``) if one is set, then plot (``plot``);
 8. wait for the log's route line, and check its id names the chosen place;
 9. close the map (``close_map``).
@@ -230,8 +234,13 @@ class _Run:
         self._press(presses[flow.enter])
         self._wait(flow.beat_seconds)
         reading = self._fresh()
-        self._picked(reading, box)
-        self._click(reading, self._close_button(reading, box), "the search panel's close button")
+        if (title := self._detail(reading, box)) is not None:  # the place's panel opened
+            self._click(reading, middle(title), "the place's name in the panel")
+        else:
+            self._picked(reading, box)
+            self._click(
+                reading, self._close_button(reading, box), "the search panel's close button"
+            )
         replacing = ""
         if self.flow.route_set in self.log.facts():
             before = self.log.last(flow.route_line)
@@ -393,6 +402,23 @@ class _Run:
         near = [w for w in under.words if w.top <= bottom + _LISTED * reading.height]
         close = Reading(reading.width, reading.height, tuple(near), reading.window)
         return any(word and close.has(word) for word in (self.flow.recent, self.flow.results))
+
+    def _detail(self, reading: Reading, box: tuple[Word, ...]) -> tuple[Word, ...] | None:
+        """The chosen place's name as a line of its own just under the box: the panel
+        Enter opens for one result (26 Nov 2026), not a row of a results list, nor its
+        name inside a description."""
+        bottom = max(word.top + word.height for word in box)
+        under = column(reading.below(bottom), box, reading)
+        lists = (self.flow.results, self.flow.recent)
+        if any(word and under.has(word) for word in lists):  # a list's rows aren't the panel
+            return None
+        wanted = squeezed(self.place.name).replace(" ", "")
+        for line in under.lines():
+            if min(w.top for w in line) > bottom + _LISTED * reading.height:
+                continue
+            if squeezed(" ".join(w.text for w in line)).replace(" ", "") == wanted:
+                return line
+        return None
 
     def _took(self, before: Reading, after: Reading, box: tuple[Word, ...], first: str) -> bool:
         """The first letter landed: a new word on the box's line that starts with it (not
