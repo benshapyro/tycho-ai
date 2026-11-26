@@ -432,6 +432,30 @@ def test_a_box_enter_emptied_takes_the_place_under_recent_and_clicks_it() -> Non
     assert "click on the place's name under recent" in done.pressed
 
 
+def test_a_box_enter_left_blank_still_takes_the_place_under_recent() -> None:
+    game = Game(empties=True)  # Ben's Hurston try, 26 Nov 2026: no words in the box at all
+    real = game.read
+
+    class Reader:
+        def read(self) -> Reading:
+            reading = real()
+            if not game.entered:
+                return reading
+            kept = [w for w in reading.words if w.text not in ("SEARCH", "LOCATIONS...")]
+            return Reading(reading.width, reading.height, tuple(kept), reading.window)
+
+    done = _plot(game, reader=Reader())
+    assert (done.status, done.say) == ("done", "Route set to Levski.")
+    assert game.clicks == [BOX_MIDDLE, PICKED]
+
+
+def test_a_map_already_open_is_closed_and_opened_again_not_just_closed() -> None:
+    game = Game(map_open=True)  # Ben's Hurston try, 26 Nov 2026: the map key closed it
+    done = _plot(game)
+    assert (done.status, done.say) == ("done", "Route set to Levski.")
+    assert done.pressed[:3] == ["v_starmap", "v_master_mode_set_nav", "v_starmap"]
+
+
 def test_another_place_under_recent_is_not_taken() -> None:
     game = Game(empties=True, places={"levski": "levski_all-001", "lorville": "lorville-001"})
     done = _plot(game, "Lorville")  # RECENT still shows Levski, ALL RESULTS the rest

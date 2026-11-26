@@ -115,9 +115,11 @@ SOUNDS = (
     (r"y", "i"),
     (r"e", "i"),
     (r"z", "s"),
+    (r"ia", "i"),
 )
 """Letters speech-to-text swaps for one another in a name it doesn't know ("Lewski",
-"Lefsky" for Levski: #647; "Lipsky", "Lepski": Ben's PC try, 25 Nov 2026)."""
+"Lefsky" for Levski: #647; "Lipsky", "Lepski": Ben's PC try, 25 Nov 2026; "Ariel" for
+Arial: #682)."""
 SOUNDS_ALIKE = 0.8
 """How alike, letter for letter, a misheard name and the place's must sound."""
 
@@ -127,7 +129,7 @@ def _sounds_like(rows: list[Mapping[str, Any]], key: str) -> str | None:
     it's alike enough and nothing else is as close. The map's own search still has to
     list it before anything is clicked."""
     heard = _sound(key)
-    if len(heard) < 5:
+    if len(key) < 5:  # as said: "ariel" sounds "aril", still five letters said (#682)
         return None
     scored: dict[str, float] = {}
     for row in rows:

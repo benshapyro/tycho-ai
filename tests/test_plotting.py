@@ -372,6 +372,8 @@ SPACE = [
     {"space_station_name": "Checkmate", "planet_name": "Pyro"},
     {"space_station_name": "Orbituary", "planet_name": "Pyro"},
     {"poi_name": "Lazarus Complex"},
+    {"moon_name": "Arial", "planet_name": "Hurston"},
+    {"moon_name": "Aberdeen", "planet_name": "Hurston"},
 ]
 
 
@@ -388,6 +390,8 @@ SPACE = [
         ("seraphin station", "Seraphim Station"),
         ("everest harbor", "Everus Harbor"),
         ("port tresler", "Port Tressler"),
+        ("Ariel", "Arial"),  # Ben's PC try, 26 Nov 2026 (#682)
+        ("aryal", "Arial"),
         ("sell gold", None),
         ("lev", None),
     ],
