@@ -254,6 +254,16 @@ unbound = ["v_open_all_doors"]
 never_say = ['\bopen(s|ed|ing)?\b(?!/)']
 tag = "chain"
 
+# "Open the doors" never also unlocks them: on 26 Nov 2026 Claude direct pressed unlock
+# too for the case above in 15 of 15 tries (#658).
+[[case]]
+heard = "open the doors for the crew"
+mode = "command"
+expect = ["actions"]
+must = [["v_open_all_doors", "v_toggle_all_doors"]]
+never = ["v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "chain"
+
 [[case]]
 heard = "lower the gear and turn on the lights"
 mode = "command"
@@ -520,10 +530,27 @@ mode = "lookup"
 expect = ["look_up"]
 tag = "question"
 
+# A question about a route is answered, never plotted (#641): the brain handed Pyro to
+# plot_route in 15 of 15 tries on 26 Nov 2026, which opens the star map.
 [[case]]
 heard = "what's the fastest route to Pyro"
 mode = "lookup"
 expect = ["look_up"]
+no_tools = ["plot_route"]
+tag = "question"
+
+[[case]]
+heard = "how do I get to Levski from here"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
+tag = "question"
+
+[[case]]
+heard = "fastest way to Area 18"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
 tag = "question"
 
 [[case]]
@@ -2093,3 +2120,20 @@ history_off = true
 never_say = ['Laranite']
 tag = "history"
 # Off: nothing is searched, and Tycho says history is off.
+
+# Mining in play, 25 Nov 2026 (#648): "switch laser tighten" and "try switching the beam"
+# pressed the laser's module (Toggle Laser Beam (High / low)) and called it the beam.
+# Words Tycho can't place get a question, never a mining press.
+[[case]]
+heard = "switch laser tighten"
+mode = "unclear"
+expect = ["reply"]
+never = ["v_mining_use_permanent_modifier", "v_toggle_mining_laser_fire"]
+tag = "unclear"
+
+[[case]]
+heard = "try switching the beam"
+mode = "unclear"
+expect = ["reply"]
+never = ["v_mining_use_permanent_modifier", "v_toggle_mining_laser_fire"]
+tag = "unclear"

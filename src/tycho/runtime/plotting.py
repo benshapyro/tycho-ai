@@ -16,6 +16,7 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from concurrent.futures import Executor
 from dataclasses import dataclass, field
 
+from tycho.brain.heard import heard
 from tycho.brain.lookups import LookupResult, failure
 from tycho.eyes.words import Reading
 from tycho.input import Presser
@@ -49,9 +50,27 @@ NOT_A_REQUEST = frozenset(
     {"best", "fastest", "quickest", "shortest", "safest", "cheapest", "longest", "nearest"}
     | {"closest", "good", "great", "trade", "trading", "mining", "cargo", "delivery"}
     | {"a", "an", "the", "any", "another", "what", "which", "how", "where", "why", "when"}
+    | {"whats", "hows", "wheres", "is", "are", "does", "should"}
 )
 """First words that make it a question about a route, not a request for one ("best
 route to sell gold": "best" is one letter from "set")."""
+ASKING = NOT_A_REQUEST - {"a", "an", "the"}
+"""First words that make the player's words a question about a route, so the brain's
+``plot_route`` plots nothing (#641): "what's the fastest route to Pyro", "best route to
+sell gold". Not "a" or "the": "a course to Lorville" is still a request for one."""
+
+
+def asks_about(text: str) -> bool:
+    """Whether ``text`` asks about a route rather than for one: its first word after
+    ``FILLER`` is one of ``ASKING``."""
+    words = normalize(text)
+    while words and words[0] in FILLER:
+        words.pop(0)
+    return bool(words) and words[0] in ASKING
+
+
+QUESTION = "The player asked about a route, not for one: answer the question, plot nothing"
+"""What ``plot_route`` tells the brain when the player's words are a question (#641)."""
 
 
 def asked_place(text: str, phrases: Sequence[str]) -> str | None:
@@ -136,6 +155,8 @@ class RouteTool:
         place = " ".join(str(arguments.get("place", "")).split())[:60]
         if not place:
             return failure("name the place")
+        if (now := heard()) is not None and asks_about(now.said):  # a question (#641)
+            return LookupResult(json.dumps({"not_plotted": place, "reply": QUESTION}))
         self.place = place
         said = 'Tycho plots it after your reply and says how it went: reply "On it." only'
         return LookupResult(json.dumps({"handed_over": place, "reply": said}))
