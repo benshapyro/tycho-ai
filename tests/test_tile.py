@@ -510,3 +510,29 @@ def test_a_place_with_a_digit_in_its_name_isnt_taken_for_the_left_figure(place: 
     rows = [{"text": "Buy", "detail": place, "value": "2.01M aUEC | 2.96M aUEC", "dim": False}]
     card = from_tool(_call("compare", rows=rows, hero_label="A", hero_value="B"))
     assert card.rows == (Row("Buy", "2.01M aUEC", "2.96M aUEC"),)
+
+
+def test_a_fleet_ranking_keeps_what_its_for_and_a_game_without_fleets_isnt_told_of_one() -> None:
+    rows = [{"text": "Taurus", "detail": "174 SCU", "value": "Best", "dim": False}]
+    card = from_tool(_call("fleet", rows=rows, hero_label="Best for", hero_value="Hauling"))
+    assert card.hero == ("Best for", "Hauling")
+    assert from_tool(_call("fleet", rows=rows)).hero is None
+    assert "fleet ranking" in str(show_card({"ship", "fleet", "loadout"})["description"])
+    without = str(show_card(set())["description"])
+    assert "fleet" not in without
+    assert "Only a route and a compare use hero_label" in without
+
+
+@pytest.mark.parametrize("empty", ['""', "''", "-", " "])
+def test_a_hero_of_only_quote_marks_is_no_hero(empty: str) -> None:
+    card = from_tool(
+        {
+            "kind": "fleet",
+            "title": "Your ships",
+            "hero_label": empty,
+            "hero_value": empty,
+            "rows": [{"text": "Prospector", "detail": "Mining", "value": "Miner"}],
+        }
+    )
+
+    assert card.hero is None

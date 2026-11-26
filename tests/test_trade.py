@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from tests.fakes.fake_uex import NOW, FakeTradeUex
-from tycho.games.star_citizen.trade import FRESH_SECONDS, Trade, TradeError, hours_ago
+from tycho.games.star_citizen.trade import FRESH_SECONDS, Trade, TradeError, hours_ago, top
 from tycho.games.star_citizen.trade_lookup import CommodityPrices, TradeRoutes, trade_lookups
 from tycho.games.star_citizen.wiki import WikiError
 
@@ -559,3 +559,24 @@ def test_closing_stops_the_fetches_still_on_their_way() -> None:
 
     trade = asyncio.run(ask())
     assert not trade._fetching  # pyright: ignore[reportPrivateUsage]
+
+
+def test_a_price_over_a_day_old_ranks_after_the_fresh_ones() -> None:
+    """The Tile test, 26 November 2026: a six-day-old 9,200 topped this morning's 8,900
+    and was lit as the best place to sell."""
+    now = 1_800_000_000.0
+    hour = 3600
+    rows = [
+        {"name": "old", "price_sell": 9200, "date_modified": now - 143 * hour},
+        {"name": "fresh", "price_sell": 8900, "date_modified": now - 2 * hour},
+        {"name": "undated", "price_sell": 8700},
+        {"name": "day", "price_sell": 8600, "date_modified": now - 24 * hour},
+    ]
+    assert [r["name"] for r in top(rows, "price_sell", now=now)] == [
+        "fresh",
+        "undated",
+        "day",
+        "old",
+    ]
+    buys = [{**r, "price_buy": r["price_sell"]} for r in rows]
+    assert [r["name"] for r in top(buys, "price_buy", cheapest=True, now=now)][-1] == "old"

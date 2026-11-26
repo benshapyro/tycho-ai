@@ -67,6 +67,7 @@ EXAMPLES: dict[str, Card] = {
         "fleet",
         title="Best for mining",
         label="Your fleet · Mining",
+        hero=("Best for", "Mining"),
         rows=(
             Row("Prospector", "Built for it: mining laser, 32 SCU ore", "Mines"),
             Row("Cutlass Black", "Can't mine; can carry ore", "Hauls", dim=True),
