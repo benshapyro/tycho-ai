@@ -180,6 +180,8 @@ def from_tool(arguments: Mapping[str, object]) -> Card:
     )
 
 
+_BOTH = re.compile(r"\s*\|\s*|\s+(?:vs\.?|versus)\s+", re.IGNORECASE)
+"""What parts a comparison's two figures when Claude puts both in one field."""
 _VERSUS = re.compile(r"\s+(?:vs\.?|versus)\s+", re.IGNORECASE)
 
 
@@ -190,7 +192,7 @@ def _sides(arguments: Mapping[str, object], rows: tuple[Row, ...]) -> tuple[str,
     raw = arguments.get("rows")
     given = cast(list[object], raw) if isinstance(raw, list) else []
     joined = any(
-        isinstance(r, dict) and "|" in str(cast(dict[str, object], r).get("value", ""))
+        isinstance(r, dict) and _BOTH.search(str(cast(dict[str, object], r).get("value", "")))
         for r in given
     )
     parts = _VERSUS.split(clean(arguments.get("title"), TITLE * 2))
@@ -201,7 +203,7 @@ def _sides(arguments: Mapping[str, object], rows: tuple[Row, ...]) -> tuple[str,
 
 def _rows(raw: object, *, sides: bool = False) -> list[Row]:
     """The card's rows, cleaned. With ``sides`` (a comparison), a row whose value holds
-    both figures ("46 SCU | 66 SCU") and no detail is split into left and right before
+    both figures ("46 SCU | 66 SCU", "4-5 vs 4-9") and no detail is split into left and right before
     it's cut to length, so the right-hand figure isn't lost."""
     if not isinstance(raw, list):
         return []
@@ -212,8 +214,8 @@ def _rows(raw: object, *, sides: bool = False) -> list[Row]:
         fields = cast(dict[str, object], item)
         text = clean(fields.get("text"), TEXT)
         detail, value = fields.get("detail"), fields.get("value")
-        if sides and not detail and isinstance(value, str) and "|" in value:
-            detail, _, value = value.partition("|")
+        if sides and not detail and isinstance(value, str) and _BOTH.search(value):
+            detail, value = _BOTH.split(value, maxsplit=1)
         if text:
             rows.append(
                 Row(text, clean(detail, DETAIL), clean(value, VALUE), fields.get("dim") is True)

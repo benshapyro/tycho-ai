@@ -451,6 +451,7 @@ def test_a_comparison_with_both_figures_in_one_field_is_put_right() -> None:
     rows = [
         {"text": "Cargo", "detail": "", "value": "46 SCU | 66 SCU", "dim": False},
         {"text": "Buy in game", "detail": "", "value": "2,010,960 | 2,962,575", "dim": False},
+        {"text": "Crew", "detail": "", "value": "3 vs 4-9", "dim": False},
     ]
     card = from_tool(
         _call(
@@ -466,6 +467,7 @@ def test_a_comparison_with_both_figures_in_one_field_is_put_right() -> None:
     assert card.rows == (
         Row("Cargo", "46 SCU", "66 SCU"),
         Row("Buy in game", "2,010,960", "2,962,575"),
+        Row("Crew", "3", "4-9"),
     )
 
 

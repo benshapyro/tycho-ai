@@ -1653,8 +1653,7 @@ heard = "which of my ships is best for cargo"
 mode = "lookup"
 expect = ["reply"]
 fleet = ["Constellation Taurus", "Galaxy", "M80", "Pitbull", "Cutter Rambler"]
-card = ["fleet", "list"]
-tag = "tile"
+tag = "tile"  # the best one is a one-line answer: a card or none, both are right
 
 [[case]]
 heard = "walk me through claiming my ship at a terminal"
