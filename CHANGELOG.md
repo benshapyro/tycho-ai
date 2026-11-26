@@ -29,6 +29,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - Tycho offers "Want me to take a look?" only when your screen could show the answer. For something only a menu shows, like a loadout, it says which screen to open first. ([#566](https://github.com/benshapyro/tycho-ai/issues/566))
 
 ### Fixed
+- Tile cards show more of what Tycho found. A list now shows each row's second line (which system a station is in, where an outpost is), and says a shared unit such as "aUEC/SCU" once so long place names fit. Steps show their one extra line when there are five or fewer. A comparison no longer comes out scrambled when both ships' figures arrive together. A long title wraps onto a second line instead of running off the card's edge.
 - "Open the doors" only opens the doors now: Tycho sometimes unlocked them too. ([#658](https://github.com/benshapyro/tycho-ai/issues/658))
 - "Switch the beam", or mining words Tycho can't place, now get a question instead of a press of the laser's module. ([#648](https://github.com/benshapyro/tycho-ai/issues/648))
 - A question about a route, such as "what's the fastest route to Pyro", gets an answer now, and Tycho no longer opens the star map or plots a route for it. ([#641](https://github.com/benshapyro/tycho-ai/issues/641))

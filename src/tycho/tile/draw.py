@@ -29,9 +29,16 @@ from tycho.tile.faces import Face, Font, bundled_draws, font
 from tycho.tile.faces import fit as _fit
 from tycho.tile.faces import text_width as _width
 from tycho.tile.faces import wrap as _wrap
-from tycho.tile.tables import compare, headlines, loadout, row_bars, steps
+from tycho.tile.tables import compare, headlines, loadout, ranked, steps
 
-_TABLES = {"steps": steps, "headlines": headlines, "loadout": loadout, "compare": compare}
+_TABLES = {
+    "list": ranked,
+    "fleet": ranked,
+    "steps": steps,
+    "headlines": headlines,
+    "loadout": loadout,
+    "compare": compare,
+}
 
 type Light = Literal["listening", "thinking"] | None
 type Rgba = tuple[int, int, int, int]
@@ -140,7 +147,7 @@ class _Pen:
         if not self.card.title:
             return
         f = self.font("label", self.px(25))
-        for line in _wrap(self.card.title.upper(), f, self.inner, lines=2):
+        for line in _wrap(self.card.title.upper(), f, self.inner, 2, 0.05 * f.size):
             self.caps((self.pad, self.y), line, f, self.text, 0.05)
             self.y += self.px(27)
         self.y += self.px(6)
@@ -168,60 +175,6 @@ class _Pen:
         )
 
     # The body, by kind.
-
-    def rows(self) -> None:
-        fleet = self.card.kind == "fleet"
-        best_first = self.card.kind in ("list", "fleet")
-        name_f, value_f, small_f = (
-            self.font("strong", self.px(18)),
-            self.font("number", self.px(19)),
-            self.font("text", self.px(14)),
-        )
-        tops: list[tuple[int, int]] = []
-        for i, row in enumerate(self.card.rows):
-            best = best_first and i == 0 and not row.dim
-            top = self.y
-            h = self.px(30 if not (fleet and row.detail) else 46)
-            fill = rgba(self.look.accent, 0.14) if best else self.well
-            self.d.rectangle((self.pad, top, self.pad + self.inner, top + h), fill=fill)
-            if best:
-                self.d.rectangle(
-                    (self.pad, top, self.pad + self.px(2) - 1, top + h), fill=self.accent
-                )
-            tops.append((top, h))
-            alpha = 0.6 if row.dim else 1.0
-            text = (*self.text[:3], round(255 * alpha))
-            value_c = self.accent if best else (*self.text[:3], round(255 * alpha))
-            x = self.pad + self.px(10)
-            if fleet:
-                rank = str(i + 1)
-                self.d.text(
-                    (x, top + self.px(5)),
-                    rank,
-                    font=value_f,
-                    fill=(*self.accent[:3], round(255 * alpha)),
-                )
-                x += value_f.getlength(rank) + self.px(8)
-            value_w = _width(row.value, value_f)
-            room = self.pad + self.inner - self.px(10) - value_w - self.px(12) - x
-            self.d.text((x, top + self.px(5)), _fit(row.text, name_f, room), font=name_f, fill=text)
-            if fleet and row.detail:
-                self.d.text(
-                    (x, top + self.px(26)),
-                    _fit(row.detail, small_f, room),
-                    font=small_f,
-                    fill=(*self.dim[:3], round(255 * alpha)),
-                )
-            self.d.text(
-                (self.pad + self.inner - self.px(10) - value_w, top + self.px(5)),
-                row.value,
-                font=value_f,
-                fill=value_c,
-            )
-            self.y += h + self.px(4)
-        if not fleet:
-            row_bars(self, tops, self.card.rows)
-        self.y += self.px(2)
 
     def recipe(self) -> None:
         name_f, value_f = self.font("text", self.px(18)), self.font("number", self.px(18))
@@ -355,15 +308,13 @@ class _Pen:
 
     def body(self) -> None:
         kind = self.card.kind
-        if kind in ("list", "fleet"):
-            self.rows()
-        elif kind == "recipe":
+        if kind == "recipe":
             self.recipe()
         elif kind == "route":
             self.route()
         elif kind == SPECS:
             self.specs()
-        elif kind in ("steps", "headlines", "loadout", "compare"):
+        elif kind in _TABLES:
             _TABLES[kind](self)
         elif kind == "confirm":
             self.confirm()

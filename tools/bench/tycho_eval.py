@@ -74,6 +74,7 @@ import anthropic
 import httpx2
 import traces as trace_reader  # pyright: ignore[reportMissingImports]
 from brain_report import GLOBAL_NEVER  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
+from cards import CardDrawer  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
 from pictures import picture  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
 
 from tycho import credentials, logs, paths, safety, settings
@@ -119,6 +120,7 @@ from tycho.runtime.routing import NotUnderstood, Picked, Reserved, from_brain
 from tycho.situation import Logged, Situation, told
 from tycho.spoken_settings import SettingsTool
 from tycho.start.assemble import NO_KEYBINDS, load_commands
+from tycho.tile import Card
 
 PACKS = Path(__file__).resolve().parents[2] / "src" / "tycho" / "packs"
 
@@ -216,6 +218,8 @@ class Outcome:
     card: str = ""
     """The kind of card it showed on the Tile, if any."""
     card_rows: list[str] = field(default_factory=list[str])
+    shown: Card | None = None
+    """The card itself, for ``--cards`` to draw; not written to the results."""
     hosts: list[str] = field(default_factory=list[str])
     """Who served each call through OpenRouter, in order ("Cerebras"), where it said (#267)."""
     named_key: bool | None = None
@@ -695,7 +699,7 @@ async def run_case(
         ):
             outcome.calls += 1  # show_card (or an act after a search) ended its call early
         if decision.card is not None:
-            outcome.card = decision.card.kind
+            outcome.card, outcome.shown = decision.card.kind, decision.card
             outcome.card_rows = [
                 " | ".join(p for p in (r.text, r.detail, r.value) if p) for r in decision.card.rows
             ] + list(decision.card.body)
@@ -964,6 +968,13 @@ def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--no-web", action="store_true", help="don't offer web search")
     parser.add_argument("--no-tile", action="store_true", help="don't offer Tile cards")
     parser.add_argument(
+        "--cards",
+        type=Path,
+        metavar="DIR",
+        help="save each card a case shows as the Tile would draw it, a PNG and a line in "
+        "cards.jsonl, in a new folder under DIR: to review how cards look with no game",
+    )
+    parser.add_argument(
         "--keys-off",
         action="store_true",
         help="run the pack as with key_actions off (advisor mode, #191): a case that "
@@ -1203,6 +1214,7 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
     lexicon = Lexicon.default(pack)
 
     outcomes: list[Outcome] = []
+    drawer = CardDrawer(args.cards) if args.cards else None
     try:
         for rule in rules:
             fleet.ships, fleet.flying = list(rule.get("fleet", [])), str(rule.get("flying", ""))
@@ -1248,6 +1260,8 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
                 outcome.verdict = grade_owned(owned, rule)
             outcomes.append(outcome)
             _print(outcome)
+            if drawer is not None and outcome.shown is not None:
+                drawer.save(outcome.shown, asked=outcome.heard, said=outcome.say)
     finally:
         await brain.close()
         traces.close()
@@ -1267,7 +1281,9 @@ async def run(args: argparse.Namespace, provider: str, model: str) -> Run:
         meta |= {"pack": pack.id, "pack_version": pack.version, "briefing": briefed}
         f.write(json.dumps(meta) + "\n")
         for outcome in outcomes:
-            f.write(json.dumps({**asdict(outcome), "provider": provider, "model": model}) + "\n")
+            line = {**asdict(replace(outcome, shown=None)), "provider": provider, "model": model}
+            del line["shown"]
+            f.write(json.dumps(line) + "\n")
         f.write(json.dumps({"type": "summary", **summary}) + "\n")
     _summary(outcomes, costs, summary)
     return done
