@@ -112,7 +112,7 @@ Some "power user" automation requests will be declined by design.
 
 ## Amendment, 26 November 2026: when Enter opens the place's own panel
 
-*Status: proposed. Waiting for the maintainer's OK ([#661](https://github.com/benshapyro/tycho-ai/issues/661)).*
+*Status: accepted. The maintainer approved it on 26 November 2026 ("Yes, click the name", [#661](https://github.com/benshapyro/tycho-ai/issues/661)).*
 
 **Context.** In the 26 November test at 5120x2160, Enter didn't show a results list. It opened the place's own panel straight away: its name ("LEVSKI") on a line of its own under the box, its kind, a description and a "Route" button, with no close button. Tycho stopped there, because the frame didn't show the search results. The maintainer said it only needed a click outside the search bar, then R.
 
