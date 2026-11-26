@@ -197,6 +197,9 @@ def from_tool(arguments: Mapping[str, object]) -> Card:
 _BOTH = re.compile(r"\s*\|\s*|\s+(?:vs\.?|versus)\s+", re.IGNORECASE)
 """What parts a comparison's two figures when Claude puts both in one field."""
 _VERSUS = re.compile(r"\s+(?:vs\.?|versus)\s+", re.IGNORECASE)
+_FIGURE = re.compile(r"\D{0,2}\d")
+"""A figure starts with its number, or nearly ("46 SCU", "S4", "$30"); a place with a
+digit in its name ("Area18, ArcCorp", "ARC-L1") doesn't."""
 _TOPIC = re.compile(r"[,:]\s+")
 """What parts a title's topic from the first name: "Cargo, Cutlass Black vs Freelancer"."""
 
@@ -232,7 +235,7 @@ def _rows(raw: object, *, sides: bool = False) -> list[Row]:
         fields = cast(dict[str, object], item)
         text = clean(fields.get("text"), TEXT)
         detail, value = fields.get("detail"), fields.get("value")
-        told = isinstance(detail, str) and any(ch.isdigit() for ch in detail)  # a figure
+        told = isinstance(detail, str) and _FIGURE.match(detail.strip()) is not None
         if sides and not told and isinstance(value, str) and _BOTH.search(value):
             detail, value = _BOTH.split(value, maxsplit=1)
         if text:
