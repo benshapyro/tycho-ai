@@ -127,7 +127,7 @@ Some "power user" automation requests will be declined by design.
 
 ## Amendment, 26 November 2026 (later): when Enter empties the box
 
-*Status: proposed. Waiting for the maintainer's OK ([#661](https://github.com/benshapyro/tycho-ai/issues/661)).*
+*Status: accepted. The maintainer approved it on 26 November 2026 ("your fix makes sense", [#661](https://github.com/benshapyro/tycho-ai/issues/661)).*
 
 **Context.** In the next test ("Take me to Orison", 5120x2160), Enter picked Orison and emptied the box: its "SEARCH LOCATIONS..." words came back, Orison was first under RECENT, and the whole unfiltered list was under ALL RESULTS. There was no place panel and no "x" that text recognition could read, so Tycho stopped. Text recognition also read the name as "ORISOW".
 
