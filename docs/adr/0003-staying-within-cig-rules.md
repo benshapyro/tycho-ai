@@ -142,7 +142,7 @@ Some "power user" automation requests will be declined by design.
 
 ## Amendment, 26 November 2026 (evening): click the exact match, not Enter
 
-*Status: proposed. Waiting on the maintainer's choice ([#682](https://github.com/benshapyro/tycho-ai/issues/682)).*
+*Status: accepted. The maintainer chose it on 26 November 2026 ("Click the exact match", [#682](https://github.com/benshapyro/tycho-ai/issues/682)).*
 
 **Context.** In the evening test (5120x2160, Stanton), Enter took the top result twice when it wasn't the place asked for. "MicroTech" picked "MicroTech Logistics Depot S4LD01". "Pyro Gateway" picked the Nyx-side gateway, and the map then said "Target is in another system". Tycho stopped safely both times, but no route was set.
 
