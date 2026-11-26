@@ -21,6 +21,7 @@ from tycho.input.keys import Code, code_for
 from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.packs import STAR_CITIZEN, as_run, built_in
 from tycho.packs.routes import RouteFlow, RouteLines
+from tycho.runtime.mappicks import under_header
 from tycho.runtime.mapwords import alike
 from tycho.runtime.route import Place, Plotted, id_names, plot
 from tycho.situation import Logged
@@ -32,6 +33,7 @@ BOX_MIDDLE = (295, 176)  # the middle of both words, as the fake map draws them
 OFFSET = (0.307, 0.0)
 CLOSE = (round(BOX_MIDDLE[0] + OFFSET[0] * HEIGHT), BOX_MIDDLE[1])
 TITLE = (BOX[0] + 45, 230)  # the middle of the place's name on its own panel
+ROW_TOP, ROW = 260, 40  # the filtered list's rows while typing: where, and how far apart
 PICKED = (BOX[0] + 65, 300)  # the place's name under RECENT, Enter having emptied the box
 LINES = RouteLines(
     done="Route set to {name}.",
@@ -137,8 +139,13 @@ class Game:
     drawn further left each look before, and a click on it does nothing (Ben's PC try,
     25 Nov 2026)."""
     sliding: int = 0
+    rows: tuple[str, ...] = ()
+    """The filtered list's rows under ALL RESULTS while the name is typed, before Enter
+    (sections too: "STANTON SYSTEM"); a click on the row that is the typed name picks it
+    and gives the keys back (#682)."""
     calculates: int = 0
     picked: bool = False
+    clicked_row: int = -1
     """Looks, once the place is picked on the panel, in which the map still works out the
     fuel ("CALCULATING..."): R does nothing then (Ben's Hurston try, #682)."""
 
@@ -196,6 +203,10 @@ class Game:
                 self.empties and abs(x - PICKED[0]) < 50 and abs(y - PICKED[1]) < 20
             )
             on_x = abs(x - self.close_at[0]) < 20 and abs(y - self.close_at[1]) < 20
+            at = round((y - ROW_TOP - 10) / ROW)
+            if self.rows and not self.entered and 0 <= at < len(self.rows):
+                self.clicked_row, self.entered, self.picked = at, True, True
+                self.box_has_keys = self.rows[at] != self.typed.upper()  # another row: no
             if on_name or on_x:  # a click outside the box gives the keys back to the map
                 self.box_has_keys = False
                 self.picked = self.picked or on_name
@@ -218,6 +229,8 @@ class Game:
                 words.append(Word(place, BOX[0], 220 + 40 * i, 90, 20, 10 + i))
         elif not self.entered:  # the list filters as letters land
             words.append(Word("RESULTS", BOX[0], 220, 90, 20, 1))
+            for i, text in enumerate(self.rows):
+                words.append(Word(text, BOX[0] + 20, ROW_TOP + ROW * i, 160, 20, 70 + i))
         if self.empties and self.entered and self.typed in self.places:
             words = [
                 Word(t, BOX[0] + 70 * i, BOX[1], 60, BOX[3], 0)
@@ -282,7 +295,8 @@ def _plot(
         "clock": _Clock(),
         "name_of": name_of,
     } | kw
-    return plot(Place(name), flow, **options)  # type: ignore[arg-type]
+    place = options.pop("place", Place(name))
+    return plot(place, flow, **options)  # type: ignore[arg-type]
 
 
 def _key_went_down(sender: FakeKeySender, game: Game) -> None:
@@ -463,6 +477,49 @@ def test_a_map_already_open_is_closed_and_opened_again_not_just_closed() -> None
     done = _plot(game)
     assert (done.status, done.say) == ("done", "Route set to Levski.")
     assert done.pressed[:3] == ["v_starmap", "v_master_mode_set_nav", "v_starmap"]
+
+
+def test_the_exact_row_is_clicked_instead_of_enter() -> None:
+    game = Game(rows=("STANTON SYSTEM", "LEVSKI DEPOT", "LEVSKI"))  # MicroTech's depot, #682
+    done = _plot(game)
+    assert (done.status, done.say) == ("done", "Route set to Levski.")
+    assert game.clicked_row == 2
+    assert "ui_textfield_enter" not in done.pressed
+    assert "click on the place's name in the results" in done.pressed
+
+
+def test_the_row_in_the_players_system_is_clicked() -> None:
+    game = Game(rows=("NYX SYSTEM", "LEVSKI", "STANTON SYSTEM", "LEVSKI"))  # Pyro Gateway
+    done = _plot(game, "Levski", place=Place("Levski", "Stanton"))
+    assert done.status == "done"
+    assert game.clicked_row == 3
+
+
+def test_a_place_only_in_another_systems_section_falls_back_to_enter() -> None:
+    game = Game(rows=("NYX SYSTEM", "LEVSKI"))
+    done = _plot(game, place=Place("Levski", "Stanton"))
+    assert game.clicked_row == -1
+    assert "ui_textfield_enter" in done.pressed
+
+
+def test_a_pick_in_another_system_is_said_and_no_r_pressed() -> None:
+    game = Game(details=True)  # Ben's Pyro Gateway try, #682: "TARGET IS IN ANOTHER SYSTEM"
+    real = game.read
+
+    class Reader:
+        def read(self) -> Reading:
+            reading = real()
+            if not game.picked:
+                return reading
+            said = ("TARGET", "IS", "IN", "ANOTHER", "SYSTEM")
+            far = tuple(Word(w, 300 + 90 * i, 900, 80, 20, 80) for i, w in enumerate(said))
+            return Reading(reading.width, reading.height, reading.words + far, 7)
+
+    flow = replace(FLOW, calculating="calculatin", other_system="another system")
+    done = _plot(game, reader=Reader(), flow=flow)
+    assert done.status == "failed"
+    assert done.say == "The map picked a Levski in another system, so I left it open for you."
+    assert "mapui_action_planroute" not in done.pressed
 
 
 def test_another_place_under_recent_is_not_taken() -> None:
@@ -999,3 +1056,17 @@ def test_one_misread_letter_is_allowed_only_in_longer_names_and_never_a_digit() 
     assert not alike("ORISAW", "Orison")  # two letters off
     assert not alike("PYRO V", "Pyro I")  # a numbered planet is another place
     assert not alike("PYRO IV", "Pyro II")
+
+
+def test_recent_skips_a_place_in_another_systems_section() -> None:
+    # Ben's Pyro Gateway try, #682: RECENT kept the Nyx-side gateway from his trip.
+    lines = ("RECENT", "NYX SYSTEM", "PYRO GATEWAY", "STANTON SYSTEM", "HURSTON")
+    words = tuple(
+        Word(word, 100 + 80 * j, 100 + 30 * i, 70, 20, i)
+        for i, line in enumerate(lines)
+        for j, word in enumerate(line.split())
+    )
+    reading = Reading(WIDTH, HEIGHT, words, 7)
+    assert under_header(reading, "recent", "results", "Pyro Gateway", 0.5, "Stanton") is None
+    assert under_header(reading, "recent", "results", "Pyro Gateway", 0.5, None) is not None
+    assert under_header(reading, "recent", "results", "Hurston", 0.5, "Stanton") is not None

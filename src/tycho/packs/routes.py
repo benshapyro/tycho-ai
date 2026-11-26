@@ -73,6 +73,7 @@ class RouteLines:
     risky_first: str = "I can't type {name}: its first letter is your {action} key."
     """Said when the name's first letter, typed before Tycho can see the box took the
     keys, would press a confirm-grade action (#682)."""
+    other_system: str = "The map picked a {name} in another system, so I left it open for you."
     confirm: str = "Plot a route to {name}"
     """Asked before plotting a place that was only a guess (#650); "? Say confirm." follows."""
 
@@ -126,6 +127,9 @@ class RouteFlow:
     calculating: str = ""
     """A word the map's panel shows while it works out the fuel to the place picked
     ("CALCULATING..."): R does nothing until it's gone (Ben's Hurston try, #682)."""
+    other_system: str = ""
+    """Words the place's panel shows when it's in another system ("TARGET IS IN ANOTHER
+    SYSTEM"): R can't plot there (#682)."""
     calculating_seconds: float = 15.0
     """How long the map may take to work out the fuel before R."""
     read_width: float = 1.0
@@ -169,6 +173,7 @@ _KEYS = frozenset(
         "away",
         "recent",
         "calculating",
+        "other_system",
         "read_width",
     }
 )
@@ -234,13 +239,14 @@ def read(
     recent = table.get("recent", "")
     if not isinstance(recent, str):
         raise ValueError(f"{where}: recent must be some text")
-    calculating = table.get("calculating", "")
-    if not isinstance(calculating, str):
-        raise ValueError(f"{where}: calculating must be some text")
+    calculating, other = table.get("calculating", ""), table.get("other_system", "")
+    if not (isinstance(calculating, str) and isinstance(other, str)):
+        raise ValueError(f"{where}: calculating and other_system must be some text")
     flow = replace(
         flow,
         recent=" ".join(recent.lower().split()),
         calculating=" ".join(calculating.lower().split()),
+        other_system=" ".join(other.lower().split()),
     )
     width = table.get("read_width", 1.0)
     if not (_fraction(width) and 0 < cast(float, width) <= 1):

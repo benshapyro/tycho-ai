@@ -139,3 +139,18 @@ Some "power user" automation requests will be declined by design.
 
 **Consequences.**
 - At most two clicks, both on the map, with NAV set first and a fresh frame before each, as before.
+
+## Amendment, 26 November 2026 (evening): click the exact match, not Enter
+
+*Status: proposed. Waiting on the maintainer's choice ([#682](https://github.com/benshapyro/tycho-ai/issues/682)).*
+
+**Context.** In the evening test (5120x2160, Stanton), Enter took the top result twice when it wasn't the place asked for. "MicroTech" picked "MicroTech Logistics Depot S4LD01". "Pyro Gateway" picked the Nyx-side gateway, and the map then said "Target is in another system". Tycho stopped safely both times, but no route was set.
+
+**Decision.** This adds to the amendments above.
+
+- **The exact row is clicked instead of Enter.** Once the box shows the whole name, Tycho looks for a row under the results header that is exactly the place's name (one misread letter allowed, as above). The row must be in the player's own system's section ("STANTON SYSTEM") when Game.log says which system that is. The second click goes on that row: it picks the place and takes the keys from the box. Enter is pressed only when no such row is read. Everything after Enter stays as it was.
+- **A place under RECENT counts only in the player's system's section.**
+- **"Target is in another system" ends it.** If the picked place's panel says so, Tycho says so and doesn't press R.
+
+**Consequences.**
+- Still at most two clicks, both on the map, with NAV set first and a fresh frame before each.

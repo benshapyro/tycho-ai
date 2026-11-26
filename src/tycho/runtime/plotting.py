@@ -295,7 +295,7 @@ class Plotter:
         log.info("Plotting a route to %s", name)
         run = functools.partial(
             plot,
-            Place(map_name(name)),
+            Place(map_name(name), await self._system()),
             self.route.flow,
             keybinds=self.keybinds(),
             lists=self.lists,

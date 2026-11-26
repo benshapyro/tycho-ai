@@ -140,6 +140,7 @@ results = "results"                  # "RESULTS (1)" over the list
 no_results = "no results"
 recent = "recent"                    # "RECENT" under the box once it has the keys
 calculating = "calculatin"           # "CALCULATING..." on the panel: R waits (#682)
+other_system = "another system"      # "TARGET IS IN ANOTHER SYSTEM": R can't plot (#682)
 read_width = 0.5                     # the map check reads the left half: the search panel
 close_marks = ["x", "×"]
 close_offset = [0.307, 0.0]          # the close button, from the box's words, by frame height

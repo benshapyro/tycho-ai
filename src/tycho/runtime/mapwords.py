@@ -86,28 +86,6 @@ def alike(said: str, name: str) -> bool:
     return True
 
 
-def under_header(
-    reading: Reading, header: str, until: str, name: str, reach: float
-) -> tuple[Word, ...] | None:
-    """The line that is ``name`` in the list under the ``header`` words, before the line
-    that holds ``until`` (run-together words too: "ALLRESULTS") and within ``reach`` of
-    the frame's height, should ``until`` go unread; None if not there."""
-    found = reading.find(header)
-    if found is None:
-        return None
-    top = max(word.top + word.height for word in found)
-    stop = squeezed(until).replace(" ", "")
-    for line in sorted(reading.below(top).lines(), key=lambda line: line[0].top):
-        if line[0].top > top + reach * reading.height:
-            return None
-        said = " ".join(word.text for word in line)
-        if stop and stop in squeezed(said).replace(" ", ""):
-            return None
-        if alike(said, name):
-            return line
-    return None
-
-
 SYSTEM_SUFFIX = re.compile(r"\s*\([^()]*\)\s*$")
 """UEX tells same-named places apart by their system ("Pyro Gateway (Stanton)"): the
 map's search, which only covers the player's system, knows it as "Pyro Gateway" (#682)."""
