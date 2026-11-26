@@ -17,7 +17,8 @@ from tycho.findings import TYCHO
 from tycho.history import follow, kept
 from tycho.packs import GameDataError, built_in
 from tycho.ptt.binding import Binding, every_binding
-from tycho.ptt.devices import describe, describe_all, input_sources
+from tycho.ptt.devices import describe, describe_all, input_sources, rebind
+from tycho.ptt.monitor import PushToTalk
 from tycho.runtime.messages import Result
 from tycho.runtime.recent import Recent
 from tycho.settings import Settings, SettingsError
@@ -42,6 +43,15 @@ if TYPE_CHECKING:
     from tycho.tile.display import TileDisplay
 
 log = logging.getLogger("tycho")
+
+
+def _rebind(ptt: PushToTalk, value: object) -> None:
+    """The app's push-to-talk buttons, (first, second) as saved, listened to now (#646)."""
+    match value:
+        case (str() as first, str() | None as second) if rebind(ptt, first, second):
+            log.info("Push-to-talk is now %s", describe_all(every_binding(first, second)))
+        case _:
+            raise TypeError(f"expected the push-to-talk buttons, not {value!r}")
 
 
 def _float(value: object) -> float:
@@ -315,6 +325,9 @@ def _start(
         recent.add(result)
         history.record(result)
 
+    # Push-to-talk chosen again in the app listens at once (#646): first or second.
+    ptt = PushToTalk(bindings, input_sources(*bindings))
+    live["push_to_talk"] = lambda v: _rebind(ptt, v)
     with Microphone(device=microphone_device(current.microphone)) as mic:
         log.info("Microphone: %s", mic.name)
         game_state = game_state_for(pack, store)
@@ -339,6 +352,7 @@ def _start(
             reader=WindowsScreenReader(pack.window) if pack.window and pack.route else None,
             clicker=WindowsClicker() if pack.route else None,
             record=_route_record(pack),
+            push_to_talk=ptt,
             pack=pack,
             on_result=ended,
         )

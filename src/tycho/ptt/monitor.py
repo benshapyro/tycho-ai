@@ -1,5 +1,6 @@
 """Device-independent push-to-talk logic, polled from a single thread."""
 
+import threading
 import time
 from collections.abc import Callable, Iterable, Sequence
 from enum import Enum, auto
@@ -38,13 +39,34 @@ class PushToTalk:
             raise ValueError("push-to-talk needs at least one button")
         self._sources = tuple(sources)
         self._held = False
+        self._next: tuple[tuple[Binding, ...], tuple[InputSource, ...]] | None = None
+        """Buttons chosen in the app while Tycho runs (#646), taken up by the next poll."""
+        self._lock = threading.Lock()
 
     @property
     def binding(self) -> Binding:
         """The first button."""
         return self.bindings[0]
 
+    def rebind(self, bindings: Sequence[Binding], sources: Sequence[InputSource]) -> None:
+        """Listen to these buttons from the next poll on (#646): push-to-talk chosen again
+        in the app applies at once. Safe from any thread; the old sources are closed on
+        the polling thread, since SDL must be let go where it was set up. Held across the
+        change, push-to-talk is released unless a new button is held too."""
+        if not bindings:
+            raise ValueError("push-to-talk needs at least one button")
+        with self._lock:
+            self._next = (tuple(bindings), tuple(sources))
+
     def poll(self) -> Edge | None:
+        with self._lock:
+            chosen, self._next = self._next, None
+        if chosen is not None:
+            old, (self.bindings, self._sources) = self._sources, chosen
+            for source in old:
+                close = getattr(source, "close", None)
+                if close is not None:
+                    close()
         held = any(
             source.is_pressed(binding) for binding in self.bindings for source in self._sources
         )

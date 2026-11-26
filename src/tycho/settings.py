@@ -69,12 +69,12 @@ class Settings(BaseModel):
         default=None,
         description="The button you hold while talking to Tycho, e.g. mouse:0x06 for a mouse "
         "side button. Set it by pressing the button in setup.",
-        json_schema_extra=_rule("no", how="run `tycho bind` and press the button"),
+        json_schema_extra=_rule("no", "now", how="run `tycho bind` and press the button"),
     )
     push_to_talk_2: Button = Field(
         default=None,
         description="A second push-to-talk button, held the same way: say, a joystick button.",
-        json_schema_extra=_rule("no", how="run `tycho bind --second` and press the button"),
+        json_schema_extra=_rule("no", "now", how="run `tycho bind --second` and press the button"),
     )
     microphone: str | None = Field(
         default=None,

@@ -216,6 +216,45 @@ def test_on_a_first_run_choices_apply_at_start_and_later_at_restart(path: Path) 
     assert _bridge(path).capture_push_to_talk()["applies"] == "restart"
 
 
+def test_push_to_talk_chosen_while_tycho_runs_is_listened_to_at_once(path: Path) -> None:
+    """#646: a second button saved, removed or put back in the app reaches the running
+    Tycho, with the first, at once; it no longer waits for a restart nobody does."""
+    applied: list[tuple[str, object]] = []
+
+    def apply(name: str, value: object) -> bool:
+        applied.append((name, value))
+        return True
+
+    pc = FakeSetupPC()
+    bridge = _bridge(path, pc, apply=apply)
+    assert bridge.capture_push_to_talk()["applies"] == "now"
+    pc.button = "joystick:vkb-l:3"
+    assert bridge.capture_push_to_talk(True)["applies"] == "now"
+    assert bridge.remove_second_push_to_talk()["applies"] == "now"
+    assert bridge.undo()["applies"] == "now"
+    assert applied == [
+        ("push_to_talk", ("mouse:0x06", None)),
+        ("push_to_talk", ("mouse:0x06", "joystick:vkb-l:3")),
+        ("push_to_talk", ("mouse:0x06", None)),
+        ("push_to_talk", ("mouse:0x06", "joystick:vkb-l:3")),
+    ]
+
+
+def test_push_to_talk_waits_for_a_restart_when_nothing_running_can_take_it(
+    path: Path,
+) -> None:
+    def broken(_name: str, _value: object) -> bool:
+        raise RuntimeError("the loop is stopping")
+
+    def none_running(_name: str, _value: object) -> bool:
+        return False
+
+    assert _bridge(path, apply=none_running).capture_push_to_talk()["applies"] == "restart"
+    assert _bridge(path, apply=broken).capture_push_to_talk()["applies"] == "restart"
+    first_run = _bridge(path, first_run=True, apply=broken)
+    assert first_run.capture_push_to_talk()["applies"] == "start"  # nothing runs yet
+
+
 def test_the_page_learns_whether_this_is_a_first_run(path: Path) -> None:
     assert _bridge(path, first_run=True).about()["first_run"] is True
     assert _bridge(path).about()["first_run"] is False
