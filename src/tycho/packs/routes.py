@@ -118,6 +118,9 @@ class RouteFlow:
     recent: str = ""
     """A word over the list the panel shows once the box has the keys, before anything is
     typed ("RECENT"): gone once a letter lands (Ben's PC try, 26 Nov 2026)."""
+    read_width: float = 1.0
+    """How much of the window, from its left edge, the map check reads: the search panel
+    is on the left, and a narrower frame is read sooner, and at full size (#671)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,6 +158,7 @@ _KEYS = frozenset(
         "here",
         "away",
         "recent",
+        "read_width",
     }
 )
 _LINES = frozenset(f.name for f in fields(RouteLines))
@@ -220,6 +224,10 @@ def read(
     if not isinstance(recent, str):
         raise ValueError(f"{where}: recent must be some text")
     flow = replace(flow, recent=" ".join(recent.lower().split()))
+    width = table.get("read_width", 1.0)
+    if not (_fraction(width) and 0 < cast(float, width) <= 1):
+        raise ValueError(f"{where}: read_width must be a share of the window, above 0")
+    flow = replace(flow, read_width=float(cast(float, width)))
     tool = table.get("tool", "")
     if not isinstance(tool, str):
         raise ValueError(f"{where}: tool must be some text")

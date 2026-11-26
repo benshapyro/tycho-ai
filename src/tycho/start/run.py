@@ -349,7 +349,11 @@ def _start(
             address=address,
             display=display,
             camera=WindowsCamera(pack.window) if pack.window and pack.look else None,
-            reader=WindowsScreenReader(pack.window) if pack.window and pack.route else None,
+            reader=(
+                WindowsScreenReader(pack.window, pack.route.flow.read_width)
+                if pack.window and pack.route
+                else None
+            ),
             clicker=WindowsClicker() if pack.route else None,
             record=_route_record(pack),
             push_to_talk=ptt,

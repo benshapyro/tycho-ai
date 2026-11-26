@@ -61,8 +61,10 @@ class WindowsScreenReader:
     amendment "a local check before a press"). Between ``warm`` and ``finish`` (one
     route), one child reads every look (``eyes.loop``, #661)."""
 
-    def __init__(self, executable: str) -> None:
+    def __init__(self, executable: str, share: float = 1.0) -> None:
         self.executable = executable
+        self.share = share
+        """How much of the window, from its left, each look reads (``read_width``)."""
         self._loop: WordsLoop | None = None
         self._times: list[float] = []
 
@@ -101,7 +103,7 @@ class WindowsScreenReader:
             self._loop.close()
             self._loop = None
         if self._loop is None:
-            self._loop = WordsLoop(window)
+            self._loop = WordsLoop(window, share=self.share)
         return self._loop
 
 

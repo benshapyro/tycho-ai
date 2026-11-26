@@ -55,15 +55,17 @@ NO_PICTURE = 3
 _SIZE = struct.Struct(">II")
 
 
-def command(window: int, words: bool = False, loop: bool = False) -> list[str]:
+def command(window: int, words: bool = False, loop: bool = False, share: float = 1.0) -> list[str]:
     """How to start the child for ``window`` (``words``: to read its words; ``loop``: to
-    read them on request until stdin closes). In the installed app, the terminal
-    program, tycho.exe, whose stdout works even when tycho-app.exe (no terminal) asks."""
+    read them on request until stdin closes, on the left ``share`` of the window only).
+    In the installed app, the terminal program, tycho.exe, whose stdout works even when
+    tycho-app.exe (no terminal) asks."""
+    shared = [f"{share:g}"] if loop and share < 1.0 else []
     if getattr(sys, "frozen", False):
         flag = LOOP_FLAG if loop else READ_FLAG if words else FLAG
-        return [str(Path(sys.executable).with_name("tycho.exe")), flag, str(window)]
+        return [str(Path(sys.executable).with_name("tycho.exe")), flag, str(window), *shared]
     extra = [_LOOP] if loop else [_WORDS] if words else []
-    return [sys.executable, "-m", "tycho.eyes.child", *extra, str(window)]
+    return [sys.executable, "-m", "tycho.eyes.child", *extra, str(window), *shared]
 
 
 Run = Callable[..., "subprocess.CompletedProcess[bytes]"]
@@ -139,13 +141,13 @@ def main_words(
 def main_words_loop(
     argv: Sequence[str],
     frame: Callable[[int], Image.Image] | None = None,
-    words: Callable[[Image.Image], Reading] | None = None,
+    words: Callable[[Image.Image, float], Reading] | None = None,
     stdin: BinaryIO | None = None,
     stdout: BinaryIO | None = None,
 ) -> int:
     """The child: for each line on stdin, read the words on a new frame of the window
-    ``argv[0]`` names and answer on stdout (``ANSWER``, then the words or why not). Never
-    the frame. Ends when stdin closes."""
+    ``argv[0]`` names (only its left share ``argv[1]``, if given) and answer on stdout
+    (``ANSWER``, then the words or why not). Never the frame. Ends when stdin closes."""
     faulthandler.enable()
     if sys.platform == "win32":
         from tycho import win32
@@ -153,6 +155,9 @@ def main_words_loop(
         win32.no_crash_box()
     try:
         window = int(argv[0])
+        share = float(argv[1]) if len(argv) > 1 else 1.0
+        if not 0 < share <= 1:
+            raise ValueError(f"the share {share} isn't above 0 and at most 1")
     except (IndexError, ValueError) as e:
         sys.stderr.write(f"{e}\n")
         return NO_PICTURE
@@ -165,7 +170,7 @@ def main_words_loop(
     asked, out = stdin or sys.stdin.buffer, stdout or sys.stdout.buffer
     while asked.readline():
         try:
-            status, sent = 0, encode(words(frame(window)))
+            status, sent = 0, encode(words(frame(window), share))
         except Exception as e:  # any error says why, and the child carries on
             status, sent = 1, (str(e) or type(e).__name__).encode("utf-8", "replace")
         out.write(ANSWER.pack(status, len(sent)) + sent)

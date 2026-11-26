@@ -105,7 +105,7 @@ def test_the_looping_child_answers_each_line_and_says_why_when_it_cant() -> None
 
     out = io.BytesIO()
     code = child.main_words_loop(
-        ["1234"], frame, lambda _image: READING, io.BytesIO(b"read\nread\n"), out
+        ["1234"], frame, lambda _image, _share: READING, io.BytesIO(b"read\nread\n"), out
     )
     assert code == 0
     sent = out.getvalue()
@@ -116,6 +116,48 @@ def test_the_looping_child_answers_each_line_and_says_why_when_it_cant() -> None
     assert (status, rest[child.ANSWER.size :]) == (1, b"Windows sent no picture")
 
 
+def test_the_looping_child_reads_only_the_share_of_the_window_it_is_given() -> None:
+    shares: list[float] = []
+
+    def words(_image: Image.Image, share: float) -> Reading:
+        shares.append(share)
+        return READING
+
+    def frame(_window: int) -> Image.Image:
+        return Image.new("RGB", (4, 4))
+
+    out = io.BytesIO()
+    assert child.main_words_loop(["1234", "0.5"], frame, words, io.BytesIO(b"read\n"), out) == 0
+    assert child.main_words_loop(["1234"], frame, words, io.BytesIO(b"read\n"), out) == 0
+    assert shares == [0.5, 1.0]
+    for bad in ("0", "2", "half"):
+        code = child.main_words_loop(["1234", bad], frame, words, io.BytesIO(b"read\n"), out)
+        assert code == child.NO_PICTURE
+
+
+def test_a_loop_asks_its_child_for_the_packs_share() -> None:
+    start = _start()
+    loop = WordsLoop(1234, start, share=0.5)
+    try:
+        assert loop.read() == READING
+    finally:
+        loop.close()
+    [args] = start.started
+    assert args[-2:] == ["1234", "0.5"]
+    assert child.command(1234, loop=True)[-1] == "1234"  # the whole window: no share
+
+
 def test_the_installed_app_starts_the_looping_child(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     assert child.command(1234, loop=True)[1:] == [child.LOOP_FLAG, "1234"]
+
+
+def test_the_crop_keeps_the_left_share_from_the_top_left_corner() -> None:
+    from tycho.eyes.ocr import cropped
+
+    frame = Image.new("RGB", (5120, 2160))
+    frame.putpixel((100, 50), (255, 0, 0))
+    half = cropped(frame, 0.5)
+    assert half.size == (2560, 2160)  # under Windows' reading limit: read at full size
+    assert half.getpixel((100, 50)) == (255, 0, 0)  # the same spot as in the frame
+    assert cropped(frame, 1.0) is frame

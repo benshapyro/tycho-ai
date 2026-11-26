@@ -22,8 +22,19 @@ LANGUAGE = "en-US"
 SECONDS = 3.0
 
 
-def read_words(image: Image.Image) -> Reading:
-    """The words on ``image`` (the whole frame), with their boxes in its pixels."""
+def cropped(image: Image.Image, share: float) -> Image.Image:
+    """The left ``share`` of ``image``, from its top-left corner, so a word's box in it is
+    already in the whole frame's pixels."""
+    if share >= 1.0:
+        return image
+    return image.crop((0, 0, max(1, round(image.width * share)), image.height))
+
+
+def read_words(image: Image.Image, share: float = 1.0) -> Reading:
+    """The words on ``image``, with their boxes in its pixels: only on its left ``share``
+    of it, when that's less than 1 (the star map's search panel, #671). A narrower frame
+    is read sooner, and is shrunk less, or not at all: at 5120x2160 the whole frame was
+    read at half size, and "ORISON" came back "ORISOW"."""
     from PIL import Image
     from winrt.windows.globalization import Language
     from winrt.windows.graphics.imaging import BitmapPixelFormat, SoftwareBitmap
@@ -32,6 +43,8 @@ def read_words(image: Image.Image) -> Reading:
     engine = OcrEngine.try_create_from_language(Language(LANGUAGE))
     if engine is None:
         raise CaptureError("Windows has no English text recognition installed")
+    full = image.size
+    image = cropped(image, share)
     width, height = image.size
     largest = int(OcrEngine.max_image_dimension)
     scale = min(1.0, largest / max(width, height))
@@ -64,5 +77,5 @@ def read_words(image: Image.Image) -> Reading:
                 )
             )
             if len(words) >= MAX_WORDS:
-                return Reading(width, height, tuple(words))
-    return Reading(width, height, tuple(words))
+                return Reading(*full, tuple(words))
+    return Reading(*full, tuple(words))

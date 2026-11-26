@@ -43,8 +43,11 @@ type Start = Callable[..., subprocess.Popen[bytes]]
 class WordsLoop:
     """A looping child for ``window``. Blocking. Not thread-safe: one route at a time."""
 
-    def __init__(self, window: int, start: Start = subprocess.Popen) -> None:
+    def __init__(self, window: int, start: Start = subprocess.Popen, share: float = 1.0) -> None:
         self.window = window
+        self.share = share
+        """How much of the window, from its left, the child reads (the pack's
+        ``read_width``)."""
         self._start = start
         self._process: subprocess.Popen[bytes] | None = None
         self._answers: queue.Queue[tuple[int, bytes] | None] = queue.Queue()
@@ -59,7 +62,7 @@ class WordsLoop:
         # A file, not a pipe: it never fills up and blocks the child.
         try:
             process = self._start(
-                child.command(self.window, loop=True),
+                child.command(self.window, loop=True, share=self.share),
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=errors,
