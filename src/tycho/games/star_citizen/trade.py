@@ -53,7 +53,12 @@ PLACE_FIELDS = (
 """Where a place name can match, in order: a place before a single terminal in it
 ("Area 18" is the city, with all its terminals), and a planet before its orbit
 ("Hurston" is the planet and its moons, not just the space around it)."""
-PLACE_ALIASES = {"nb": "new babbage", "a18": "area 18", "grim hex": "grimhex"}
+PLACE_ALIASES = {
+    "nb": "new babbage",
+    "a18": "area 18",
+    "grim hex": "grimhex",
+    "ariel": "arial",  # speech-to-text's spelling of Hurston's moon (#682)
+}
 
 
 class TradeError(Exception):

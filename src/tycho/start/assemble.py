@@ -18,6 +18,7 @@ from tycho.ptt.conflicts import conflict_warnings
 from tycho.ptt.devices import input_sources
 from tycho.ptt.monitor import PushToTalk
 from tycho.settings import Settings
+from tycho.situation import Situation
 from tycho.stt import PARAKEET_V2, PARAKEET_V2_INT8, ModelError, ModelStore, speech_models
 from tycho.stt.choice import device_choice, device_name, gpu_hint
 
@@ -226,7 +227,18 @@ def plotter_for(
         tool,
         address=address,
         record=record,
+        system=lambda: system_of(game_state.situation()),
     )
+
+
+SYSTEM = "system"
+"""The kind of "now" a game state gives the player's star system under (Star Citizen's
+``loglines.SYSTEM``, #656)."""
+
+
+def system_of(situation: Situation) -> str | None:
+    """The star system the game's log says the player is in, if it says (#656, #682)."""
+    return next((now.name for now in situation.now if now.kind == SYSTEM and now.name), None)
 
 
 def game_state_for(pack: GamePack, store: GameKeys | None) -> GameState | None:

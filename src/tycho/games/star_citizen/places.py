@@ -37,6 +37,7 @@ ROUTE_FIELDS = (
     "planet_name",
 )
 """Where a place's name can match, in order: a city before the planet it's on."""
+SYSTEM = "star_system_name"
 
 
 class UexPlaces:
@@ -45,12 +46,12 @@ class UexPlaces:
     def __init__(self, source: WikiSource) -> None:
         self._trade = Trade(source)
 
-    async def find(self, said: str) -> str | None:
+    async def find(self, said: str, system: str | None = None) -> str | None:
         try:
             await self._trade.load()
         except WikiError as e:
             raise PlaceError(f"UEX's list of places: {e}") from e
-        return best_place(self._trade.terminals.values(), said)
+        return best_place(self._trade.terminals.values(), said, system)
 
     def guessed(self, said: str, name: str) -> bool:
         """A guess unless every word said (but filler) is a word of the name, or it's
@@ -75,9 +76,12 @@ class UexPlaces:
         return None
 
 
-def best_place(terminals: Iterable[Mapping[str, Any]], said: str) -> str | None:
+def best_place(
+    terminals: Iterable[Mapping[str, Any]], said: str, system: str | None = None
+) -> str | None:
     """The place ``said`` most likely names: the whole name first, everywhere, then part
-    of a name or a misspelling; the shortest when a few fit ("Lorville" before "Lorville
+    of a name or a misspelling; one in ``system`` first ("Pyro Gateway (Stanton)" in
+    Stanton, #682), then the shortest when a few fit ("Lorville" before "Lorville
     Gates"). None when nothing fits, or more than ``GUESS_AMONG`` do ("Lagrange")."""
     said = PLACE_ALIASES.get(" ".join(normalize(said)), said)
     whole = squash(said)
@@ -85,11 +89,14 @@ def best_place(terminals: Iterable[Mapping[str, Any]], said: str) -> str | None:
     if not key:
         return None
     rows = list(terminals)
+    here = squash(system or "")
     for exact in (True, False):
         for field in ROUTE_FIELDS:
             values = {str(row[field]) for row in rows if row.get(field)}
+            there = {str(r[field]) for r in rows if r.get(field) and _in(r, here)}
             found = sorted(
-                (v for v in values if _fits(key, whole, v, exact=exact)), key=lambda v: (len(v), v)
+                (v for v in values if _fits(key, whole, v, exact=exact)),
+                key=lambda v: (bool(here) and v not in there, len(v), v),
             )
             if len(found) > GUESS_AMONG:
                 log.debug("%r could be %d places", said, len(found))
@@ -108,9 +115,11 @@ SOUNDS = (
     (r"y", "i"),
     (r"e", "i"),
     (r"z", "s"),
+    (r"ia", "i"),
 )
 """Letters speech-to-text swaps for one another in a name it doesn't know ("Lewski",
-"Lefsky" for Levski: #647; "Lipsky", "Lepski": Ben's PC try, 25 Nov 2026)."""
+"Lefsky" for Levski: #647; "Lipsky", "Lepski": Ben's PC try, 25 Nov 2026; "Ariel" for
+Arial: #682)."""
 SOUNDS_ALIKE = 0.8
 """How alike, letter for letter, a misheard name and the place's must sound."""
 
@@ -120,7 +129,7 @@ def _sounds_like(rows: list[Mapping[str, Any]], key: str) -> str | None:
     it's alike enough and nothing else is as close. The map's own search still has to
     list it before anything is clicked."""
     heard = _sound(key)
-    if len(heard) < 5:
+    if len(key) < 5:  # as said: "ariel" sounds "aril", still five letters said (#682)
         return None
     scored: dict[str, float] = {}
     for row in rows:
@@ -134,6 +143,11 @@ def _sounds_like(rows: list[Mapping[str, Any]], key: str) -> str | None:
         log.debug("%r sounds like %s and %s", key, ranked[0][0], ranked[1][0])
         return None
     return ranked[0][0]
+
+
+def _in(row: Mapping[str, Any], system: str) -> bool:
+    """Whether the terminal ``row`` is in ``system`` (squashed: "stanton")."""
+    return bool(system) and squash(str(row.get(SYSTEM) or "")) == system
 
 
 def _sound(text: str) -> str:

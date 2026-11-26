@@ -2,6 +2,8 @@
 there (#588): the search box's line and column, and how near two spots are. For
 ``runtime.route``."""
 
+import re
+
 from tycho.eyes.words import Reading, Word, squeezed
 
 
@@ -96,3 +98,27 @@ def under_header(
         if alike(said, name):
             return line
     return None
+
+
+SYSTEM_SUFFIX = re.compile(r"\s*\([^()]*\)\s*$")
+"""UEX tells same-named places apart by their system ("Pyro Gateway (Stanton)"): the
+map's search, which only covers the player's system, knows it as "Pyro Gateway" (#682)."""
+
+
+def map_name(name: str) -> str:
+    """``name`` as the map's search knows it: without UEX's "(System)" at its end."""
+    return SYSTEM_SUFFIX.sub("", name).strip() or name
+
+
+_COMMON = frozenset({"the", "of", "on", "at", "station", "port", "city", "outpost", "base"})
+"""Words in a place's name too common to tell the route line's id it's this place."""
+
+
+def id_names(route_id: str, name: str) -> bool:
+    """Whether the log's route id ("levski_all-001") names the place ("Levski"): one of
+    the name's own words (not ``_COMMON``, at least 3 letters) is one of the id's.
+    Until Tycho reads the game's own id list, a route it can't match is reported as not
+    checked, never as done (ADR 3, 24 Nov 2026)."""
+    parts = set(re.split(r"[^a-z0-9]+", route_id.lower()))
+    words = [w for w in squeezed(name).split() if len(w) >= 3 and w not in _COMMON]
+    return bool(words) and any(word in parts for word in words)

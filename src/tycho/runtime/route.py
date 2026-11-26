@@ -59,7 +59,7 @@ from tycho.keybinds import Keybinds
 from tycho.packs import Safety
 from tycho.packs.routes import RouteFlow
 from tycho.runtime import mapwords
-from tycho.runtime.mapwords import column, middle, near, row, shows
+from tycho.runtime.mapwords import column, id_names, middle, near, row, shows
 from tycho.runtime.messages import Status
 from tycho.runtime.planning import Refusal, Steps, plan_request
 from tycho.safety import is_confirm_grade
@@ -76,8 +76,6 @@ NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9 '.-]{0,39}")
 """What may be typed: letters, digits, spaces and simple punctuation, at most 40. Never
 Enter in the middle, never a command (ADR 3, 23 Nov 2026)."""
 _TYPED = {" ": "space", "'": "apostrophe", ".": "period", "-": "minus"}
-_COMMON = frozenset({"the", "of", "on", "at", "station", "port", "city", "outpost", "base"})
-"""Words in a place's name too common to tell the route line's id it's this place."""
 
 
 class ScreenReader(Protocol):
@@ -207,6 +205,9 @@ class _Run:
             raise _Stop("refused", lines.bad_name.format(name=name), detail)
         if isinstance(self.reader, Warm):  # starts reading while the map opens (#661)
             self.reader.warm()
+        if self._open_already():  # the map's key would close it (Ben's Hurston try, #682)
+            self._press(presses[flow.close_map])
+            self._wait(flow.settle_seconds)
         mark = self.log.newest()
         self._press(presses[flow.nav])
         self._press(presses[flow.open_map])
@@ -374,6 +375,15 @@ class _Run:
             box = now
         raise _Stop("failed", flow.lines.no_map, "the map's search box didn't sit still")
 
+    def _open_already(self) -> bool:
+        """The map is open before its key is pressed: its search panel's words show."""
+        words = (self.flow.search_box, self.flow.recent, self.flow.results)
+        try:  # no frame: a closed map, which its key opens as ever
+            reading = self.last = self.reader.read()
+        except CaptureError:
+            return False
+        return any(word and reading.has(word) for word in words)
+
     def _seated(self, mark: int) -> bool:
         if self.flow.route_set in self.log.facts():
             return True
@@ -420,9 +430,9 @@ class _Run:
 
     def _recent(self, reading: Reading, box: tuple[Word, ...]) -> tuple[Word, ...] | None:
         """The place under RECENT, when Enter picked it and emptied the box: its empty
-        words back, no filtered list (Ben's Orison try, 26 Nov 2026)."""
-        flow, emptied = self.flow, row(reading, box).has(self.flow.search_box)
-        if not (flow.recent and emptied) or reading.has(flow.no_results):
+        words back or no words at all, no filtered list (Ben's Orison and Hurston tries)."""
+        flow, typed = self.flow, shows(row(reading, box), self.place.name)
+        if not flow.recent or typed or reading.has(flow.no_results):
             return None
         under = column(reading.below(max(w.top + w.height for w in box)), box, reading)
         return mapwords.under_header(under, flow.recent, flow.results, self.place.name, _LISTED)
@@ -488,13 +498,3 @@ _LISTED = 0.15
 _STILL = 0.005
 """How far, as a fraction of the frame's height, the box may move and still be settled:
 a few pixels, as text recognition reads the same words a little differently."""
-
-
-def id_names(route_id: str, name: str) -> bool:
-    """Whether the log's route id ("levski_all-001") names the place ("Levski"): one of
-    the name's own words (not ``_COMMON``, at least 3 letters) is one of the id's.
-    Until Tycho reads the game's own id list, a route it can't match is reported as not
-    checked, never as done (ADR 3, 24 Nov 2026)."""
-    parts = set(re.split(r"[^a-z0-9]+", route_id.lower()))
-    words = [w for w in squeezed(name).split() if len(w) >= 3 and w not in _COMMON]
-    return bool(words) and any(word in parts for word in words)
