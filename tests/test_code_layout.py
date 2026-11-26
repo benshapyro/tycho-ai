@@ -15,7 +15,6 @@ LIMIT = 500
 
 # Files over the limit today, with their length as a ceiling (ADR 19). Shrink, never grow.
 OVER_LIMIT = {
-    "tile/draw.py": 501,
     "brain/openrouter.py": 502,
     "games/star_citizen/items.py": 566,
     "commands/matcher.py": 537,
