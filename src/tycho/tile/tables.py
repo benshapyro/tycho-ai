@@ -146,7 +146,8 @@ def ranked(pen: Pen) -> None:
         values[0] = pen.card.rows[0].value
     h = pen.px(30 if not two_lines else 46 if fleet else 49)  # a list's bar clears its words
     tops: list[tuple[int, int]] = []
-    level = not fleet and len(values) > 1 and len(set(values)) == 1  # all the same: no best
+    given = {r.value for r in pen.card.rows}  # as sent: the first may have lost its unit
+    level = not fleet and len(values) > 1 and len(given) == 1 and "" not in given
     for i, (row, value) in enumerate(zip(pen.card.rows, values, strict=True)):
         best = i == 0 and not row.dim and not level
         top = pen.y

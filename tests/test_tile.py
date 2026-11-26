@@ -497,3 +497,9 @@ def test_a_comparison_with_both_figures_in_one_field_and_words_by_it_is_still_sp
     )
     assert card.hero == ("Cutlass Black", "Freelancer")
     assert card.rows == (Row("Buy in game", "2.01M aUEC", "2.96M aUEC"),)
+
+
+def test_a_comparison_keeps_a_left_figure_the_brain_filled_in() -> None:
+    rows = [{"text": "Guns", "detail": "S4", "value": "S3 vs S2", "dim": False}]
+    card = from_tool(_call("compare", rows=rows, hero_label="A", hero_value="B"))
+    assert card.rows == (Row("Guns", "S4", "S3 vs S2"),)

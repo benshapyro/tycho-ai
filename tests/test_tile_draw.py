@@ -1,5 +1,6 @@
 """Drawing the Tile (ADR 16), checked as pixels: no screen, no window."""
 
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -492,7 +493,28 @@ def test_a_title_that_repeats_whats_by_it_is_left_off() -> None:
     assert not Card("list", "Laranite").title_repeats
 
 
-def test_a_question_says_that_waiting_presses_nothing() -> None:
-    card = confirm("Eject? Say confirm.", 5)
-    assert _tile(card, now=0).height >= 90
+def test_a_question_says_that_waiting_presses_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    card = confirm("Self destruct the ship right now? Say confirm, Commander Ace.", 5)
+    told = _near(_tile(card, now=0), CORE.dim)
+    monkeypatch.setattr("tycho.tile.draw.UNANSWERED", "")
     assert UNANSWERED == "Wait, and nothing is pressed."
+    assert told > _near(_tile(replace(card, seconds=6), now=0), CORE.dim)
+
+
+def test_a_list_with_no_values_or_a_shared_unit_still_knows_its_best_row() -> None:
+    look = Look(accent="#ff00ff")
+
+    def lit(*values: str) -> int:
+        rows = tuple(Row(f"Place {i}", value=v) for i, v in enumerate(values))
+        return _near(_tile(Card("list", rows=rows), look), "#ff00ff", 90)
+
+    assert lit("", "") > lit("3.6%", "3.6%")  # best first, with nothing to compare
+    assert lit("8,500 aUEC/SCU", "8,400 aUEC/SCU") > lit("8,500 aUEC/SCU", "8,500 aUEC/SCU")
+
+
+def test_a_comparisons_title_stays_when_it_says_more_than_the_names() -> None:
+    hero = ("M80", "Arrow")
+    assert Card("compare", "M80 vs Arrow", hero=hero).title_repeats
+    assert Card("compare", "M80 versus Arrow.", hero=hero).title_repeats
+    assert not Card("compare", "M80 vs Arrow for racing", hero=hero).title_repeats
+    assert not Card("compare", "Cargo, M80 vs Arrow", hero=hero).title_repeats
