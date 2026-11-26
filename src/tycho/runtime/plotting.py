@@ -205,6 +205,11 @@ class Plotter:
     system: Callable[[], str | None] = lambda: None
     """The player's star system, if the game's log shows it. Blocking (it reads the log)."""
 
+    async def _find(self, said: str) -> str | None:
+        """The place ``said`` names, in the player's system first: both under the time
+        limit, as reading the system can catch up on the log (review of #683)."""
+        return await self.places.find(said, await self._system())
+
     async def _system(self) -> str | None:
         """Where the player is, to pick the right one of two same-named places (#682)."""
         return await asyncio.to_thread(self.system)
@@ -227,9 +232,7 @@ class Plotter:
         if where in self.route.away:
             return place
         try:
-            name = await asyncio.wait_for(
-                self.places.find(said, await self._system()), PLACES_SECONDS
-            )
+            name = await asyncio.wait_for(self._find(said), PLACES_SECONDS)
         except PlaceError, TimeoutError:
             return place  # ``answer`` says the list is missing
         if name is None:
@@ -271,9 +274,7 @@ class Plotter:
             progress.say = lines.elsewhere.format(name=said)
             return "refused", f"{said!r} is {where}"
         try:
-            name = await asyncio.wait_for(
-                self.places.find(said, await self._system()), PLACES_SECONDS
-            )
+            name = await asyncio.wait_for(self._find(said), PLACES_SECONDS)
         except (PlaceError, TimeoutError) as e:
             why = str(e) or "it took too long"
             log.warning("No list of places: %s", why)
@@ -283,7 +284,9 @@ class Plotter:
             progress.say = lines.unknown_place.format(name=said)
             return "not_understood", f"no place called {said!r}"
         if not sure and self.places.guessed(said, name):  # #650: ask first
-            asking = (lines.confirm.format(name=name).rstrip("?"),)  # "? Say confirm." follows
+            asking = (
+                lines.confirm.format(name=map_name(name)).rstrip("?"),
+            )  # "? Say confirm." follows
             self.asking.name, progress.question = (
                 name,
                 Questions((), asking).question(self.address()),

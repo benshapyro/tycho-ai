@@ -53,7 +53,9 @@ class FakePlaces:
         self.systems.append(system)
         if self.error is not None:
             raise self.error
-        guess = {"lefski": "Levski"}.get(said.lower())  # a misheard name it fits
+        guess = {"lefski": "Levski", "pyro gate": "Pyro Gateway (Stanton)"}.get(
+            said.lower()
+        )  # a misheard name it fits
         return guess or next((n for n in self.names if n.lower() == said.lower()), None)
 
     def guessed(self, said: str, name: str) -> bool:
@@ -595,6 +597,12 @@ def test_after_a_look_the_place_is_dropped() -> None:
 
 
 # --- A guessed place is asked about first (#650) ------------------------------------------
+
+
+def test_a_guessed_place_is_asked_about_by_the_maps_name() -> None:
+    status, _detail, progress = _answer(_plotter(Game()), "pyro gate")  # review of #683
+    assert status == "asking"
+    assert progress.question == "Plot a route to Pyro Gateway? Say confirm."
 
 
 def test_a_guessed_place_is_asked_about_and_nothing_is_pressed() -> None:
