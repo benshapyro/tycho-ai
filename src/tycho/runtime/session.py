@@ -369,7 +369,7 @@ class Session:
             if word == "confirm" or word == "cancel":
                 answer = answered(word, question, self._clock())
                 if isinstance(answer, Question) and answer.route:  # a guessed place (#650)
-                    return await self._plot(answer.route, job, sure=True, rest=answer.rest)
+                    return await self._plot(answer.route, job, sure=True)
                 if isinstance(answer, Answer):
                     progress.commands = answer.commands
                     return progress.result(
@@ -473,17 +473,14 @@ class Session:
         if self._on_result is not None:
             self._on_result(result)
 
-    async def _plot(self, place: str, job: Job, sure: bool = False, rest: bool = False) -> Result:
+    async def _plot(self, place: str, job: Job, sure: bool = False) -> Result:
         """A route (#588). A guessed place is a confirm question first, like any (#650)."""
         plotter, (cancel, trying, progress, request, trace, heard, text) = self._plotter, job
         assert plotter is not None  # noqa: S101 - only called with a plotter
-        status, detail = await plotter.answer(
-            place, self._keys, cancel, trying, progress, sure, rest
-        )
+        status, detail = await plotter.answer(place, self._keys, cancel, trying, progress, sure)
         if status == "asking":
             deadline = self._clock() + self._confirm_seconds
-            asking = plotter.asking
-            self._question = Question(request, (), deadline, route=asking.name, rest=asking.rest)
+            self._question = Question(request, (), deadline, route=plotter.asking.name)
         return progress.result(request, status, trace, heard, text, detail)
 
     def busy(self) -> bool:

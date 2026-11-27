@@ -73,9 +73,6 @@ class Question:
     say: str = ""
     route: str = ""
     """A guessed place to plot on "confirm", in place of the commands (#650)."""
-    rest: bool = False
-    """The route's request asked for more, which wasn't pressed (#728): the route's line
-    on "confirm" asks for the rest again (#732)."""
 
 
 async def ask_brain(

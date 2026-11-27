@@ -235,8 +235,9 @@ class Asking:
 
     name: str = ""
     rest: bool = False
-    """Its request asked for more than the route, which wasn't pressed (#732): the
-    question carries it, so the plot on "confirm" still asks for the rest again."""
+    """Its request asked for more than the route, which wasn't pressed (#732), so the
+    plot on "confirm" still asks for the rest again. Set and read with ``name``: only a
+    confirmed guess reads it, so a later route by phrase never picks it up."""
 
 
 type FailedRoute = Callable[[str, str, Reading | None], None]
@@ -330,17 +331,17 @@ class Plotter:
         trying: bool,
         progress: Progress,
         sure: bool = False,
-        rest: bool = False,
     ) -> tuple[Status, str]:
         """Plot a route to the place ``said`` names, on the ``keys`` thread: how it
         ended and why. ``progress`` gets what was pressed and Tycho's line. Unless
         ``sure`` (confirmed), a guessed place ends "asking" (#650): ``progress.question``
         asks about it (ending with the player's name, #15), ``asking.name`` names
-        it, and nothing is pressed. ``rest``: a confirmed guess's request asked for more
-        than the route (``Asking.rest``, carried by the question, #732)."""
+        it, and nothing is pressed. A confirmed guess still asks for the rest of its
+        request again (``Asking.rest``, #732)."""
         lines = self.route.flow.lines
         progress.commands, progress.by_brain = (ROUTE,), False
-        rest, self.handing.rest = rest or self.handing.rest, False
+        rest, self.handing.rest = self.handing.rest or (sure and self.asking.rest), False
+        self.asking.rest = False
         if trying:  # setup's Try it: nothing is pressed, and a route can't be shown
             progress.say = lines.trying
             return "refused", "routes aren't plotted in Try it"
