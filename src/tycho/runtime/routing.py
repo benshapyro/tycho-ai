@@ -8,7 +8,9 @@ In order, a whole utterance is:
 2. "say that again" (#222);
 3. a reply to a question, "confirm" or "cancel" (ADR 13);
 4. asking Tycho to look at the game window, for the brain with a picture (#31);
-5. a fast-path command, unless it says how things are ("gear's down": ``states``);
+5. a fast-path command, unless it says how things are ("gear's down": ``states``) and
+   isn't a phrase the player wrote that way ("we're landing", #719), or it's said as a
+   question ("lights on?": ``sounds_asked``, #717) and there's a brain to answer it;
 6. otherwise, the brain's, if there is one.
 
 What the session does with 1 to 3 depends on what it last said and asked, so
@@ -19,7 +21,8 @@ from dataclasses import dataclass
 from typing import Literal
 
 from tycho.brain import Decision, Reply, commands_for
-from tycho.commands import Command, CommandMatcher, Defer
+from tycho.brain.unasked import sounds_asked
+from tycho.commands import Command, CommandMatcher, Defer, Match
 from tycho.commands.reserved import (
     CANCEL_WORDS,
     CONFIRM_WORDS,
@@ -128,12 +131,28 @@ def route(
         return Reserved(reply)
     if look:
         return ToBrain("asked to look", look=True) if brain else NotUnderstood(NO_BRAIN_TO_LOOK)
-    match = matcher.match(text) if not states(text) else Defer(text, "states")
+    match = matcher.match(text)
+    if states(text) and not _written_so(text, match):
+        match = Defer(text, "states")
+    elif brain and sounds_asked(text):
+        match = Defer(text, "question")
     if not isinstance(match, Defer):
         if not keys and brain:
             return ToBrain("a built-in command, with key actions off", match.commands)
         return Picked(match.commands)
     return ToBrain(match.reason) if brain else NotUnderstood(match.reason)
+
+
+def _written_so(text: str, match: Match | Defer) -> bool:
+    """Whether ``text`` is exactly one command's phrase that itself says how things are:
+    one the player wrote, such as "it's go time" or "we're landing" for a sequence (#719).
+    No built-in phrase does (``tests/test_session_parts.py``), so "gear's down" still defers."""
+    if isinstance(match, Defer) or len(match.commands) != 1 or match.similarity < 1.0:
+        return False
+    said = normalize(text)
+    return any(
+        states(p) and said[-len(n) :] == n for p in match.commands[0].say if (n := normalize(p))
+    )
 
 
 def from_brain(decision: Decision, matcher: CommandMatcher, lists: Safety) -> Picked | Reply:

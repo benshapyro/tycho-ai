@@ -123,3 +123,49 @@ def test_a_word_that_only_contains_a_name_part_doesnt_name_it() -> None:
 
 def test_no_words_heard_refuse_nothing() -> None:
     assert unasked(None, DOORS) == ""
+
+
+@pytest.mark.parametrize(
+    ("said", "picked"),
+    [
+        ("Computer, lights on", ("v_lights_on",)),
+        ("Taiko, open the doors", DOORS),
+        ("Like I said, lower the gear", GEAR),
+        ("as I said, open the doors", DOORS),
+        ("Make sure the gear is down", GEAR),
+        ("make sure the doors are open", DOORS),
+        ("Once you're ready, lower the gear", GEAR),
+    ],
+)
+def test_requests_refused_by_mistake_are_let_through(said: str, picked: tuple[str, ...]) -> None:
+    """Review of #718 (#719): each was refused as someone else's words, how things are
+    or for later."""
+    assert _why(said, picked) == ""
+
+
+@pytest.mark.parametrize(
+    ("said", "picked"),
+    [
+        ("lights on?", ("v_lights",)),
+        ("Doors open?", ("v_toggle_all_doors",)),
+        ("gear down?", ("v_toggle_landing_system",)),
+    ],
+)
+def test_a_command_said_as_a_question_is_refused(said: str, picked: tuple[str, ...]) -> None:
+    """#717: "lights on?" may ask whether they are; pressing the toggle then turns
+    them off."""
+    assert _why(said, picked) == ANSWER_IN_WORDS
+
+
+@pytest.mark.parametrize(
+    "said",
+    ["can you open the doors?", "open the doors?", "lights on, please?", "make sure they're open?"],
+)
+def test_a_request_with_a_question_mark_is_let_through(said: str) -> None:
+    assert _why(said, ("v_lights_on", "v_open_all_doors")) == ""
+
+
+def test_someone_who_said_it_is_still_refused() -> None:
+    """The let-off for "I said" is only for the player's own words (#719)."""
+    assert _why("I think he said open the doors", DOORS) == SOMEONE_ELSE
+    assert _why("Mike, I said lower your gear", GEAR) == SOMEONE_ELSE
