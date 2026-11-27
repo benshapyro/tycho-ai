@@ -2,6 +2,7 @@
 two look-ups the brain calls."""
 
 import asyncio
+import datetime
 import json
 from typing import Any
 
@@ -166,6 +167,32 @@ def test_prices_list_where_to_sell_highest_and_buy_cheapest() -> None:
     assert best["hours_ago"] > 6  # old enough that Tycho should say so
     assert result["sell_highest"][2]["scu"] == 1784
     assert [b["where"] for b in result["buy_cheapest"]] == ["Lorville"]
+
+
+def test_a_day_old_price_is_listed_after_a_fresh_one_by_the_look_up() -> None:
+    """#688 (36): through ``CommodityPrices``, not only ``top``. The fake's own prices
+    are all over a day old by now, so this one reports some from just now."""
+    from tests.fakes import fake_uex
+
+    class Mixed(FakeTradeUex):
+        async def get(self, path: str, params: Any = None) -> Any:
+            if path != "/commodities_prices":
+                return await super().get(path, params)
+            now = datetime.datetime.now(datetime.UTC).timestamp()
+            return {
+                "status": "ok",
+                "data": [
+                    {
+                        **fake_uex.price(fake_uex.AREA18, sell=9900),
+                        "date_modified": now - 6 * 86400,
+                    },
+                    {**fake_uex.price(fake_uex.GATEWAY, sell=8800), "date_modified": now - 3600},
+                ],
+            }
+
+    prices, *_ = trade_lookups(Mixed())
+    _, result = _run(prices, {"commodity": "laranite", "place": ""})
+    assert [s["where"] for s in result["sell_highest"]] == ["Pyro Gateway", "Area18"]
 
 
 def test_prices_at_one_place() -> None:

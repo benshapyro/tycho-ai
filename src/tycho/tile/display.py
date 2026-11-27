@@ -190,8 +190,11 @@ class TileDisplay:
             said = f"The Tile's {words}: {shown}. Say undo to put it back."
             if name == "tile_screen":  # Windows' name for a screen means nothing to read
                 said = "The Tile shows here now. Say undo to put it back."
+            sample = notice(said)
             with self._lock:
-                self._board.show(notice(said), seconds=SAMPLE_SECONDS)
+                up = self._board.show(sample, seconds=SAMPLE_SECONDS)
+                if up and self._record is not None:  # the sample is a card seen too
+                    self._record.shown(sample, said=said)
 
     # On the window's thread.
 
