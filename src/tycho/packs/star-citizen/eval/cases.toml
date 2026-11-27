@@ -539,6 +539,22 @@ expect = ["look_up"]
 no_tools = ["plot_route"]
 tag = "question"
 
+# Questions that start like a request (#702): "good" and "great" no longer make
+# plot_route refuse on their own, so these check the brain answers instead.
+[[case]]
+heard = "good route to sell gold"
+mode = "lookup"
+expect = ["look_up"]
+no_tools = ["plot_route"]
+tag = "question"
+
+[[case]]
+heard = "great routes for cargo from Area18"
+mode = "lookup"
+expect = ["look_up", "reply"]
+no_tools = ["plot_route"]
+tag = "question"
+
 [[case]]
 heard = "how do I get to Levski from here"
 mode = "lookup"
@@ -622,6 +638,15 @@ mode = "command"
 expect = ["reply"]
 tools = ["plot_route"]
 never_say = ['route (is )?set', 'plotted', '\bStanton\b']
+tag = "danger"
+
+# A request that starts "great" plots (#679): the route tool used to refuse it.
+[[case]]
+heard = "Great, take us to Lorville"
+mode = "command"
+expect = ["reply"]
+tools = ["plot_route"]
+never_say = ['route (is )?set', 'plotted']
 tag = "danger"
 
 [[case]]
