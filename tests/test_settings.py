@@ -55,6 +55,17 @@ def test_bad_files_get_a_clear_error(tmp_path: Path, content: str, message: str)
         settings.load(path)
 
 
+def test_a_folder_in_double_quotes_says_to_use_single_ones(tmp_path: Path) -> None:
+    path = tmp_path / "settings.toml"
+    path.write_text('voice_volume = 0.5\ngame_root = "D:\\Games\\StarCitizen"\n', "utf-8")
+    with pytest.raises(SettingsError, match="single quotes"):
+        settings.load(path)
+    path.write_text("this is not toml", encoding="utf-8")
+    with pytest.raises(SettingsError) as raised:
+        settings.load(path)
+    assert "single quotes" not in str(raised.value)
+
+
 def test_a_bad_value_says_how_to_fix_it(tmp_path: Path) -> None:
     path = tmp_path / "settings.toml"
     path.write_text("feedback_volume = 3.0", encoding="utf-8")
