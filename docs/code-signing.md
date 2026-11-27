@@ -16,7 +16,7 @@ Only a release build is signed: the Build workflow started by hand on `main` wit
 
 Third-party DLLs and Python modules inside the installer aren't signed by Tycho: SignPath Foundation signs a project's own files only. Inno Setup's uninstaller (`unins000.exe`) is also unsigned for now: Inno Setup signs it during compile, which needs a signing tool on the runner.
 
-The two artifact configurations are in `.signpath/artifact-configurations/`; SignPath keeps its own copy, so a change here must be pasted into the SignPath project too. The product name and version on the programs come from `packaging/version_info.py`, and on the installer from `packaging/tycho.iss`.
+The two artifact configurations are in `.signpath/artifact-configurations/`; SignPath keeps its own copy, so a change here must be pasted into the SignPath project too. The product name and version on the programs come from `packaging/version_info.py`, and on the installer from `packaging/tycho.iss`. Every build checks both carry the name Tycho and the build's version, and a pre-release's installer gets Windows' four numbers for its binary version (`0.12.0rc1` is 0.12.0.0) while its product version stays `0.12.0rc1` (#724). A sign run has its own concurrency group, so a merge to main while it waits for approval doesn't cancel it.
 
 ## Settings the workflow needs
 

@@ -2,6 +2,8 @@
 Inno Setup: CI builds it."""
 
 import importlib.util
+import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -108,7 +110,7 @@ def test_the_installer_and_programs_carry_tychos_name_and_version() -> None:
     values = _setup_values()
     info = _version_info()
     assert values["VersionInfoProductName"] == info.PRODUCT == "Tycho"
-    assert values["VersionInfoProductVersion"] == "{#AppVersion}"
+    assert values["VersionInfoProductVersion"] == "{#AppNumericVersion}"
     assert values["VersionInfoProductTextVersion"] == "{#AppVersion}"
     strings = info.strings("0.11.0", "tycho.exe", "Tycho")
     assert strings["ProductName"] == "Tycho"
@@ -117,6 +119,52 @@ def test_the_installer_and_programs_carry_tychos_name_and_version() -> None:
     assert info.numbers("0.11.0") == (0, 11, 0, 0)
     assert info.numbers("0.12.0rc1") == (0, 12, 0, 0)
     assert info.numbers("1.2.3.4.5") == (1, 2, 3, 4)
+
+
+def test_a_pre_release_gives_inno_setup_only_numbers() -> None:
+    """#724: Inno Setup's binary version takes only numbers, so ``0.12.0rc1`` would fail
+    the build; its text version stays the whole version, which SignPath checks."""
+    values = _setup_values()
+    assert values["VersionInfoVersion"] == "{#AppNumericVersion}"
+    assert values["VersionInfoProductVersion"] == "{#AppNumericVersion}"
+    assert values["VersionInfoProductTextVersion"] == "{#AppVersion}"
+    script = SCRIPT.read_text("utf-8")
+    assert "#ifndef AppNumericVersion\n  #define AppNumericVersion AppVersion\n#endif" in script
+    build = (REPO / ".github" / "workflows" / "build.yml").read_text("utf-8")
+    assert '"/DAppNumericVersion=$numeric"' in build
+    assert "python packaging/version_info.py $version" in build
+    done = subprocess.run(  # noqa: S603 - this repo's own script
+        [sys.executable, str(REPO / "packaging" / "version_info.py"), "0.12.0rc1"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert done.stdout.strip() == "0.12.0.0"
+
+
+def test_ci_checks_the_name_and_version_signpath_checks() -> None:
+    """#724: a wrong product name or version fails every build, not a release's signing."""
+    build = (REPO / ".github" / "workflows" / "build.yml").read_text("utf-8")
+    check = build.split("- name: The programs and installer carry Tycho's name and version")[1]
+    check = check.split("- name:")[0]
+    for name in ("tycho.exe", "tycho-app.exe", "TychoSetup-$version.exe"):
+        assert name in check
+    assert '$info.ProductName -ne "Tycho"' in check
+    assert "$info.ProductVersion -ne $version" in check
+
+
+def test_a_merge_to_main_never_cancels_a_signing_run() -> None:
+    """#724: a sign run waits for approvals; it gets its own group, never cancelled."""
+    build = (REPO / ".github" / "workflows" / "build.yml").read_text("utf-8")
+    assert "group: build-${{ github.ref }}${{ inputs.sign && '-sign' || '' }}" in build
+    assert "cancel-in-progress: ${{ !inputs.sign }}" in build
+
+
+def test_signpath_signs_the_installer_by_its_exact_name() -> None:
+    """#724: the installer's configuration names the one file, by the version."""
+    config = (REPO / ".signpath" / "artifact-configurations" / "installer.xml").read_text("utf-8")
+    assert '<pe-file path="TychoSetup-${version}.exe"' in config
+    assert "*" not in config.split("<zip-file>")[1]
 
 
 def test_signpath_checks_the_same_name_the_build_sets() -> None:
