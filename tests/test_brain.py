@@ -800,6 +800,19 @@ def test_a_request_that_isnt_a_how_to_question_is_pressed(said: str) -> None:
     assert picked == RunActions(("v_lights",), "")
 
 
+def test_a_how_to_answer_in_an_empty_act_is_said() -> None:
+    """Review of #713: the answer written as run_actions with no actions (#192) was
+    thrown away for a how-to question, costing a call."""
+    picked = parse_tool_call(
+        "run_actions",
+        {"actions": [], "say": "Right Ctrl plus I."},
+        ACTIONS,
+        (),
+        "how do I open the doors",
+    )
+    assert picked == Reply("Right Ctrl plus I.")
+
+
 def test_a_sequence_for_a_how_to_question_is_never_run() -> None:
     with pytest.raises(BrainError, match="asked how"):
         parse_tool_call(

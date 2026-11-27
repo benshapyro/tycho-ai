@@ -171,8 +171,6 @@ def parse_tool_call(
 ) -> Decision:
     """A tool call from the brain, checked. Raises ``BrainError`` if it can't be used.
     ``said``: the player's words, for a press asked for as a question (``AskedHow``)."""
-    if name in ("run_actions", "run_sequence") and asks_how(said):
-        raise AskedHow(name)
     if not isinstance(arguments, dict):
         raise BrainError(f"{name}: the arguments aren't an object")
     args: dict[str, object] = {str(k): v for k, v in arguments.items()}  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
@@ -188,6 +186,8 @@ def parse_tool_call(
             raise EmptyAct
         if not isinstance(picked, list) or not picked:
             raise BrainError("run_actions: no actions")
+        if asks_how(said):  # something to press, for a how-to question
+            raise AskedHow(name)
         names = tuple(str(a) for a in picked)  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
         if len(names) > MAX_ACTIONS:
             raise BrainError(f"run_actions: {len(names)} actions is too many")
@@ -195,6 +195,8 @@ def parse_tool_call(
             raise UnboundAction(unknown)
         return RunActions(names, _pressing(say))
     if name == "run_sequence":
+        if asks_how(said):
+            raise AskedHow(name)
         sequence = args.get("name")
         if not isinstance(sequence, str) or sequence not in sequences:
             raise BrainError(f"run_sequence: {sequence!r} isn't one of your sequences")
