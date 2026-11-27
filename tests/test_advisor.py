@@ -214,7 +214,7 @@ def test_a_press_the_brain_makes_up_anyway_is_refused() -> None:
     brain._brief(KEYS)  # pyright: ignore[reportPrivateUsage]
     actions = brain._actions  # pyright: ignore[reportPrivateUsage]
     sequences = brain._sequences  # pyright: ignore[reportPrivateUsage]
-    assert (actions, sequences) == (frozenset(), [])
+    assert (dict(actions), sequences) == ({}, [])
 
     async def pick() -> tuple[Decision | None, UnboundAction | None]:
         round_ = Round(Turn(), {}, actions, sequences, 0.0)
