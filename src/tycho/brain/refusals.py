@@ -11,9 +11,11 @@ actions' names), the act is refused and the model is told to answer in words.
 
 A missed press is safer than a wrong one, so the test leans to refusing; requests that
 open like a question ("what about the lights", "how about ...", "why not") are left
-alone."""
+alone, and so is a clear yes to Tycho's own offer ("Want me to lower the gear?" "What
+are you waiting for, do it": #715)."""
 
 import difflib
+import re
 from collections.abc import Collection, Iterable
 
 from tycho.brain.decisions import UnboundAction
@@ -52,27 +54,71 @@ GENERIC = frozenset(
 system am I in" doesn't name ``v_toggle_landing_system`` (review of #712, #714)."""
 
 
+OFFER = re.compile(
+    r"(?:^|[.!?]\s+)(?:(?:do you |would you )?want me to|shall i|should i)\b[^.!?]*\?\s*$",
+    re.IGNORECASE,
+)
+"""Tycho's line ending in an offer to do something: "Want me to lower the gear?"."""
+YES = frozenset(
+    {("do", "it"), ("just", "do", "it"), ("yes",), ("yeah",), ("yep",), ("sure",)}
+    | {("go", "ahead"), ("go", "for", "it"), ("please",), ("yes", "please"), ("hit", "it")}
+    | {("please", "do"), ("do", "it", "then"), ("do", "it", "now"), ("yes", "do", "it")}
+)
+"""The last part of the player's words that says yes to an offer, on its own."""
+
+
+HINT = "\n[Speech-to-text:"
+"""Where the lexicon's note on a misheard word starts (``Corrected.for_brain``)."""
+
+
+def player_said(heard: Heard) -> str:
+    """The player's own words, without the lexicon's note on a misheard word."""
+    return heard.said.partition(HINT)[0]
+
+
+def says_yes_to_offer(heard: Heard) -> bool:
+    """Whether Tycho's last line offered to do something and the player's words end in
+    a clear yes: "what are you waiting for, do it" (#715). Only Tycho's own offer counts,
+    and only a yes that stands alone after a break, so "why would I do it" isn't one."""
+    offer = heard.before.rpartition("said: ")[2] if "said: " in heard.before else ""
+    if not OFFER.search(offer.strip().replace("\u2019", "'")):
+        return False
+    parts = [p for p in re.split(r"[,.!?;:]+", player_said(heard)) if p.strip()]
+    if len(parts) < 2:  # a yes alone doesn't open with a question word: never refused
+        return False
+    return tuple(normalize(parts[-1])) in YES
+
+
 def asked_only(heard: Heard | None, picked: Iterable[str]) -> bool:
     """Whether the words ``heard`` are only a question, so no press answers them.
     ``picked`` are the act's action or sequence names, whose words count as asking for
     them ("what's my atc key, request it" names atc)."""
     if heard is None:
         return False
-    words = normalize(heard.said)
+    words = normalize(player_said(heard))
     while words and words[0] in {"tycho", "hey", "ok", "okay", "so", "and", "um", "uh"}:
         words.pop(0)
     if not words or words[0] not in QUESTION_WORDS or tuple(words[:2]) in NOT_A_QUESTION:
         return False
-    if set(words) & ACTION_WORDS:
+    if set(words) & ACTION_WORDS or says_yes_to_offer(heard):
         return False
+    return not names_any(words, picked)
+
+
+def names_any(words: Iterable[str], picked: Iterable[str]) -> bool:
+    """Whether ``words`` name one of the ``picked`` actions by a part of its name:
+    "flight" names v_flightready, "atc" v_atc_request and "decoys" v_..._decoy_launch (a
+    plural only: "powerful" doesn't name v_power_toggle, review of #718)."""
     named = [
         part
         for name in picked
         for part in name.lower().split("_")
         if len(part) > 2 and part not in GENERIC
     ]
-    # "flight" names v_flightready; "atc" names v_atc_request.
-    return not any(w == n or (len(w) > 3 and w in n) for w in words for n in named)
+    plural = {f"{n}s" for n in named} | {f"{n}es" for n in named}  # "decoys", not "powerful"
+    return any(w == n or (len(w) > 3 and w in n) for w in words for n in named) or bool(
+        plural.intersection(words)
+    )
 
 
 def unbound(error: UnboundAction, actions: Collection[str]) -> LookupResult:

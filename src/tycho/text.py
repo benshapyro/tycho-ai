@@ -17,6 +17,12 @@ _CONTRACTIONS = {
     "let's": "let us",
 }
 _APOSTROPHES = re.compile("['\N{RIGHT SINGLE QUOTATION MARK}]")
+_STATED = re.compile(
+    r"^\W*(?:(?:ok|okay|oh|so|hey|tycho)\W+)*(?:(?:the|my|our)\s+)?"
+    r"(?!(?:let|what|where|how|who|that|there|here)\b)[a-z]+['\N{RIGHT SINGLE QUOTATION MARK}]"
+    r"(?:s|re)\b",
+    re.IGNORECASE,
+)
 _NON_WORD = re.compile(r"[^a-z0-9]+")
 
 
@@ -101,3 +107,10 @@ def clip_spoken(text: str, limit: int) -> str:
     cut = head.rfind(" ", 0, limit)
     body = (head[:cut] if cut > 0 else head[: limit - 1]).rstrip(" ,;:-")  # room for the stop
     return f"{body}." if body else body
+
+
+def states(text: str) -> bool:
+    """Whether ``text`` opens by saying how things are, with "'s" or "'re": "gear's
+    down", "the power's on", "we're in quantum", "he's opening the doors". Not "let's",
+    and not a question ("what's", "where's"). Spoken, these are news, not requests."""
+    return bool(_STATED.match(text))

@@ -2,15 +2,14 @@
 
 A request is up to ``MAX_CALLS`` calls to the model. Each call is a *round*: as each
 tool call in the reply is complete, ``Round.tool_call`` starts its look-up, refuses an
-act that names unbound actions, or returns the act, which ends the request. The
-adapters (``claude``, ``openrouter``) only read their own provider's stream and say
-when a tool call is complete, so the rules live here once:
+act that names unbound actions, or returns the act, which ends the request. Adapters
+only read their own provider's stream and say when a tool call is complete, so:
 
 - only the first act in a reply is pressed;
 - a fleet or settings note (``instant``) in the same reply as an act finishes first,
   for up to ``INSTANT_SECONDS``;
 - nothing presses after a web search or a search of past talk (``unpressed``, ADR 14);
-- a question with nothing in it to do is answered, never pressed (``asked_only``, #708);
+- words that don't ask for the act are answered, never pressed (``unasked``, #708);
 - "Checking." is said only once a reply with look-ups is known not to end in a press.
 
 When tracing is on (``traces``, #282), the round records each call, tool call and
@@ -47,8 +46,9 @@ from tycho.brain.lookups import (
     looked_up,
     run_lookup,
 )
-from tycho.brain.refusals import ANSWER_IN_WORDS, asked_only, unbound
+from tycho.brain.refusals import unbound
 from tycho.brain.traces import Look, Trace, TraceFile
+from tycho.brain.unasked import unasked
 from tycho.text import clip_spoken
 
 log = logging.getLogger(__name__)
@@ -263,10 +263,10 @@ class Round:
             turn.unbound, turn.refused, turn.asked = e, True, False
             self.looking.append((use_id, answered(unbound(e, self._actions))))
             return None
-        if (names := _named(decided)) and asked_only(turn.heard, names):  # #708
-            log.debug("Brain chose to act on a question; not pressing")
+        if (n := _named(decided)) and (why := unasked(turn.heard, n, self._actions)):
+            log.debug("Brain chose to act on words that didn't ask for it; not pressing")
             turn.refused = turn.asked = True
-            self.looking.append((use_id, answered(failure(ANSWER_IN_WORDS))))
+            self.looking.append((use_id, answered(failure(why))))
             return None
         await self._end()
         return decided

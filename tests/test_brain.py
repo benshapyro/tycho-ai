@@ -523,6 +523,43 @@ def test_a_question_refused_last_doesnt_blame_an_unbound_action() -> None:
     assert "isn't one of your bound" not in str(raised.value)
 
 
+GEAR_OFFER = (Exchange("get us ready to land", "said: Nearly there. Want me to lower the gear?"),)
+
+
+def _after_offer(client: _Calls, said: str, recent: tuple[Exchange, ...] = GEAR_OFFER) -> Any:
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), pack=SC)
+    return asyncio.run(brain.decide(BrainRequest(said, KEYBINDS, recent)))
+
+
+@pytest.mark.parametrize(
+    "said", ["what are you waiting for, do it", "why not already? Yes please", "what? Go ahead"]
+)
+def test_a_yes_to_tychos_offer_presses_even_after_a_question_word(said: str) -> None:
+    """#715: after "Want me to lower the gear?", "what are you waiting for, do it" was
+    refused as a question, and the player had to say it again."""
+    client = _Calls(_picks(["v_toggle_landing_system"]))
+    assert _after_offer(client, said) == RunActions(("v_toggle_landing_system",), "Done.")
+
+
+@pytest.mark.parametrize(
+    ("said", "recent"),
+    [
+        ("what's the point of that", GEAR_OFFER),  # no yes
+        ("why would I do it", GEAR_OFFER),  # "do it" inside the question
+        ("what are you waiting for, do it", ()),  # no offer
+        (
+            "what are you waiting for, do it",
+            (Exchange("is the gear down", "said: The gear is up."),),  # not an offer
+        ),
+    ],
+)
+def test_a_question_without_a_yes_to_an_offer_is_still_refused(
+    said: str, recent: tuple[Exchange, ...]
+) -> None:
+    client = _Calls(_picks(["v_toggle_landing_system"]), ([], _final("Okay.")))
+    assert _after_offer(client, said, recent) == Reply("Okay.")
+
+
 def test_an_action_with_nothing_close_bound_is_said_not_pressed() -> None:
     client = _Calls(_picks(["v_xyzzy_qqq"]), ([], _final("There's no key for that.")))
     assert _ask(client) == Reply("There's no key for that.")
@@ -798,6 +835,17 @@ def test_a_press_for_a_how_to_question_is_never_pressed(said: str) -> None:
 def test_a_request_that_isnt_a_how_to_question_is_pressed(said: str) -> None:
     picked = parse_tool_call("run_actions", {"actions": ["v_lights"], "say": ""}, ACTIONS, (), said)
     assert picked == RunActions(("v_lights",), "")
+
+
+@pytest.mark.parametrize(
+    "said", ["how do I open the doors? Just open them", "what key is the gear, put it down"]
+)
+def test_a_how_to_question_then_a_request_is_still_never_pressed(said: str) -> None:
+    """#716, kept on purpose: a how-to question followed by a request in one breath is
+    refused, so the player hears their key and asks again. A missed press is safer than
+    reading the second half as the request (the zero-wrong-presses bar)."""
+    with pytest.raises(BrainError, match="asked how"):
+        parse_tool_call("run_actions", {"actions": ["v_lights"], "say": ""}, ACTIONS, (), said)
 
 
 def test_a_how_to_answer_in_an_empty_act_is_said() -> None:
