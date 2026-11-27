@@ -263,7 +263,7 @@ class Round:
             turn.unbound, turn.refused, turn.asked = e, True, False
             self.looking.append((use_id, answered(unbound(e, self._actions))))
             return None
-        if (names := _named(decided)) and (why := unasked(turn.heard, names)):  # #708
+        if (n := _named(decided)) and (why := unasked(turn.heard, n, self._actions)):
             log.debug("Brain chose to act on words that didn't ask for it; not pressing")
             turn.refused = turn.asked = True
             self.looking.append((use_id, answered(failure(why))))

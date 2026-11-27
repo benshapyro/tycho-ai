@@ -4,11 +4,27 @@ From the trick phrasings eval, 27 Nov 2026: both adapters pressed for 10 to 12 o
 
 import pytest
 
+from tycho.brain.briefing import offered_actions, spoken
 from tycho.brain.decisions import Exchange
 from tycho.brain.heard import Heard
 from tycho.brain.refusals import ANSWER_IN_WORDS
 from tycho.brain.unasked import HOW_THINGS_ARE, NOT_NOW, SOMEONE_ELSE, unasked
+from tycho.commands import CommandMatcher
+from tycho.keybinds import Action, Keybinds, KeyInput
+from tycho.packs import STAR_CITIZEN, built_in
 
+SC = built_in(STAR_CITIZEN)
+MATCHER = CommandMatcher.default(pack=SC)
+KEYBINDS = Keybinds(
+    [
+        Action(name, "spaceship_movement", label, inputs=(KeyInput("n"),))
+        for name, label in [
+            ("v_deploy_landing_system", "Landing System (Deploy)"),
+            ("v_retract_landing_system", "Landing System (Retract)"),
+            ("v_weapon_countermeasure_decoy_launch", "Launch Decoy"),
+        ]
+    ]
+)
 GEAR = ("v_deploy_landing_system",)
 DOORS = ("v_open_all_doors",)
 
@@ -66,6 +82,25 @@ def test_words_that_dont_ask_for_the_act_are_refused(
 )
 def test_a_request_is_let_through(said: str, picked: tuple[str, ...]) -> None:
     assert _why(said, picked) == ""
+
+
+@pytest.mark.parametrize(
+    ("said", "picked"),
+    [
+        ("They're shooting at us, flares", ("v_weapon_countermeasure_decoy_launch",)),
+        ("We're under fire, pop flares", ("v_weapon_countermeasure_decoy_launch",)),
+        ("We're landing, gear down", ("v_deploy_landing_system",)),
+        ("We're on the pad, gear up", ("v_retract_landing_system",)),
+    ],
+)
+def test_a_short_request_in_the_games_words_after_a_break_is_let_through(
+    said: str, picked: tuple[str, ...]
+) -> None:
+    """Review of #718: "flares" and "gear" name no part of the actions' names, so the
+    words players use for an action (its label, the fast path's phrases) count too."""
+    words = spoken(offered_actions(KEYBINDS, MATCHER, SC), MATCHER)
+    assert unasked(Heard(said), picked, words) == ""
+    assert unasked(Heard(said), picked) != ""  # without them, it was refused
 
 
 def test_a_yes_to_tychos_offer_is_let_through() -> None:

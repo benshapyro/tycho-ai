@@ -19,7 +19,8 @@ clear yes to Tycho's own offer (#715). A missed press is safer than a wrong one:
 player says it again."""
 
 import re
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable, Mapping
+from typing import cast
 
 from tycho.brain.heard import Heard
 from tycho.brain.refusals import (
@@ -78,11 +79,18 @@ NOT_NOW = (
 )
 
 
-def unasked(heard: Heard | None, picked: Iterable[str]) -> str:
+def unasked(heard: Heard | None, picked: Iterable[str], words: Collection[str] = ()) -> str:
     """Why the words ``heard`` don't ask for the act that would press ``picked``, as the
-    model hears it, or "" when they do."""
+    model hears it, or "" when they do. ``words``: every offered action, mapped to the
+    words players use for it (``spoken``) when known, so a short request after a break
+    counts ("we're landing, gear down")."""
     if heard is None or says_yes_to_offer(heard):
         return ""
+    picked = tuple(picked)
+    used: Mapping[str, Collection[str]] = {}
+    if isinstance(words, Mapping):
+        used = cast(Mapping[str, Collection[str]], words)
+    known = {w for name in picked for w in used.get(name, ())}
     said = heard.said.strip().replace("\N{RIGHT SINGLE QUOTATION MARK}", "'")
     clauses = [c for c in re.split(r"[,.!?;:]+", said) if normalize(c)]
     if not clauses:
@@ -96,7 +104,7 @@ def unasked(heard: Heard | None, picked: Iterable[str]) -> str:
         return SOMEONE_ELSE
     if first and first[0] != "i" and SAYS.intersection(first[1:6]):
         return SOMEONE_ELSE
-    if ACTION_WORDS.intersection(then) or names_any(then, picked):
+    if ACTION_WORDS.intersection(then) or names_any(then, picked) or known.intersection(then):
         return ""  # "the doors are open, close them"; "it's dark, lights on"
     if first and first[0] in THIRD:
         return SOMEONE_ELSE
