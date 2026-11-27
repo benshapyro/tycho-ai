@@ -63,7 +63,7 @@ The brain eval runs every case through Tycho's real path (the word corrector, th
 
 ### 5. Privacy is designed in, then tested
 
-- Speech recognition runs on the player's PC. Only text leaves, and the README lists [every outside call](../../README.md#what-leaves-your-pc).
+- Speech recognition runs on the player's PC. Only text leaves, and the [privacy policy](../../PRIVACY.md) lists every outside call.
 - Crash reports are opt-in. A report is built from an allowlist, a scrubber drops anything that doesn't fit, and tests plant private values to prove they don't get through ([ADR 4](../adr/0004-built-for-every-player.md), [`crash_reports.py`](../../src/tycho/crash_reports.py)).
 - A review found that the OpenRouter route could be served by a host the README didn't name. The route was pinned to match the promise ([#313](https://github.com/benshapyro/tycho-ai/issues/313)).
 

@@ -5,7 +5,9 @@
 ; For the current user only, so no administrator prompt. Settings, keys, the speech
 ; model and the CUDA libraries live elsewhere (%APPDATA%\tycho, Windows Credential
 ; Manager, %LOCALAPPDATA%\tycho) and are kept when Tycho is uninstalled.
-; Unsigned for now (Ben, 2026-11-02): Windows SmartScreen will warn on first run.
+; Unsigned until SignPath Foundation accepts Tycho (#9): Windows SmartScreen warns on
+; first run. Once accepted, a release build is signed in CI (.github/workflows/build.yml,
+; docs/code-signing.md), and SignPath checks the version details below.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -23,6 +25,17 @@ LicenseFile=..\LICENSE
 ; The credits and the unofficial-fan-project notice (CIG's fankit, ADR 3 and 15). The
 ; build's copy: tools/notices.py writes it with the byte-order mark Inno Setup needs.
 InfoBeforeFile=..\dist\tycho\NOTICE.txt
+; What leaves the player's PC (PRIVACY.md, in short), shown before Tycho first starts:
+; SignPath Foundation's terms ask that the privacy policy be shown during installation
+; (#9). Plain ASCII, so Inno Setup needs no byte-order mark.
+InfoAfterFile=privacy.txt
+; Product name and version on the installer itself: SignPath's signing policy checks
+; them, and they must match tycho.exe's (packaging/version_info.py).
+VersionInfoProductName=Tycho
+VersionInfoVersion={#AppVersion}
+VersionInfoProductVersion={#AppVersion}
+VersionInfoProductTextVersion={#AppVersion}
+VersionInfoDescription=Tycho setup
 DefaultDirName={localappdata}\Programs\Tycho
 DisableDirPage=yes
 DefaultGroupName=Tycho
@@ -60,9 +73,14 @@ Name: "{group}\Tycho"; Filename: "{app}\tycho-app.exe"; IconFilename: "{app}\tyc
 Name: "{group}\Tycho check"; Filename: "{cmd}"; Parameters: "/k ""{app}\tycho.exe"" check"; IconFilename: "{app}\tycho.exe"; Comment: "Check the setup, in plain words"
 Name: "{group}\Uninstall Tycho"; Filename: "{uninstallexe}"
 
+[Tasks]
+; Setup says it changes the PATH, and the player can say no (#9: SignPath Foundation's
+; terms ask that changes to the system are announced). On by default, as before.
+Name: "addtopath"; Description: "Add Tycho to your PATH, so the tycho command works in any terminal"
+
 [Registry]
 ; `tycho` on the user's PATH, so `tycho key set anthropic` works in any terminal.
-Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Check: NeedsAddPath(ExpandConstant('{app}'))
+Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Tasks: addtopath; Check: NeedsAddPath(ExpandConstant('{app}'))
 
 [Run]
 ; Start Tycho: on a first install, its window opens on setup (#146).
