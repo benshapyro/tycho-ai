@@ -17,7 +17,7 @@ import pytest
 from tycho import brain_choice
 from tycho.brain.claude import STRICT, ClaudeBrain
 from tycho.brain.lookups import Lookup
-from tycho.brain.tools import names_listed, tool_specs
+from tycho.brain.tools import NAMES_BUDGET, names_listed, tool_specs
 from tycho.commands import CommandMatcher
 from tycho.games import BUILT_IN
 from tycho.packs import STAR_CITIZEN, Workshop, built_in
@@ -91,11 +91,13 @@ def _sequence_tool(sequences: list[str], lookups: list[Lookup]) -> dict[str, Any
     return cast(dict[str, Any], tool)
 
 
-@pytest.mark.parametrize("count", [40, 300, 2_000])
-def test_a_player_s_many_sequences_still_fit(lookups: list[Lookup], count: int) -> None:
+@pytest.mark.parametrize("times", [1, 10, 60])
+def test_a_player_s_many_sequences_still_fit(lookups: list[Lookup], times: int) -> None:
     # #640: every name went in run_sequence's enum, so a long commands.toml could
     # bring #638 back for that player: every brain request refused.
-    names = [f"my_own_sequence_number_{n:04}" for n in range(count)]
+    name = "my_own_sequence_number_0000"
+    count = times * (NAMES_BUDGET // (len(name) + 4) + 1)  # past the budget, #702
+    names = [f"{name[:-4]}{n:04}" for n in range(count)]
     assert _strict_size(names, lookups) <= STRICT_BUDGET
     assert "run_sequence" in STRICT  # still strict: "say" is always there
     tool = _sequence_tool(names, lookups)
