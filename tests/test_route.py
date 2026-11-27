@@ -488,6 +488,70 @@ def test_the_exact_row_is_clicked_instead_of_enter() -> None:
     assert "click on the place's name in the results" in done.pressed
 
 
+def test_a_route_to_the_planets_number_is_to_the_planet() -> None:
+    game = Game(places={"bloom": "pyro3"})  # Ben's Pyro try, 27 Nov 2026
+    done = _plot(game, "Bloom", name_of={"pyro3": "Bloom"}.get)
+    assert (done.status, done.say) == ("done", "Route set to Bloom.")
+
+
+def test_a_route_to_another_planets_number_is_not_claimed() -> None:
+    game = Game(places={"bloom": "pyro2"})
+    done = _plot(game, "Bloom", name_of={"pyro2": "Monox"}.get)
+    assert (done.status, done.say) == ("failed", LINES.other_place.format(name="Bloom"))
+
+
+def _box_holding(text: str, *under: str) -> Reading:
+    words = [Word(text, BOX[0], BOX[1], 90, BOX[3], 0)]
+    words += [Word(w, BOX[0] + 60 * i, BOX[1] + 30, 50, BOX[3], 1) for i, w in enumerate(under)]
+    return Reading(WIDTH, HEIGHT, tuple(words), 7)
+
+
+def test_a_map_open_with_an_old_name_in_its_box_is_left_alone() -> None:
+    class Reader:  # Ben's Terminus tries, 27 Nov 2026: "TERMINNUS" over NO RESULTS
+        def read(self) -> Reading:
+            return _box_holding("TERMINNUS", "NO", "RESULTS")
+
+    game = Game()
+    done = _plot(game, reader=Reader())
+    assert (done.status, done.say) == ("refused", LINES.box_full)
+    assert done.pressed == []
+
+
+def test_a_map_that_opens_with_an_old_name_in_its_box_says_so() -> None:
+    game = Game()
+    real = game.read
+
+    class Reader:  # closed at first; once open, its box still holds the old name
+        def read(self) -> Reading:
+            reading = real()
+            if not game.map_open:
+                return reading
+            return _box_holding("TERMINNUS", "NO", "RESULTS")
+
+    done = _plot(game, reader=Reader())
+    assert (done.status, done.say) == ("failed", LINES.box_full)
+    assert game.typed == ""
+    assert game.clicks == []
+
+
+def test_a_box_misread_still_picks_the_exact_row() -> None:
+    game = Game(rows=("STANTON SYSTEM", "LEVSKI"))  # "TERMINI-JS" for Terminus, 27 Nov
+    real = game.read
+
+    class Reader:
+        def read(self) -> Reading:
+            reading = real()
+            misread = tuple(
+                replace(w, text="LFVSKJ") if w.text == "LEVSKI" and w.top == BOX[1] else w
+                for w in reading.words
+            )
+            return Reading(reading.width, reading.height, misread, reading.window)
+
+    done = _plot(game, reader=Reader())
+    assert (done.status, done.say) == ("done", "Route set to Levski.")
+    assert game.clicked_row == 1
+
+
 def test_the_row_in_the_players_system_is_clicked() -> None:
     game = Game(rows=("NYX SYSTEM", "LEVSKI", "STANTON SYSTEM", "LEVSKI"))  # Pyro Gateway
     done = _plot(game, "Levski", place=Place("Levski", "Stanton"))
@@ -1018,7 +1082,7 @@ def test_the_name_must_show_in_the_box_before_enter() -> None:
             return read()
 
     done = _plot(game, reader=Reader())
-    assert (done.status, done.say) == ("failed", LINES.not_typed)
+    assert (done.status, done.say) == ("failed", LINES.mistyped.format(name="Levski"))
     assert not game.entered
 
 

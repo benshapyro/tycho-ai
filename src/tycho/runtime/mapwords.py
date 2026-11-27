@@ -234,6 +234,19 @@ _COMMON = frozenset({"the", "of", "on", "at", "station", "port", "city", "outpos
 """Words in a place's name too common to tell the route line's id it's this place."""
 
 
+def open_map(reading: Reading, flow: RouteFlow) -> bool:
+    """The map's search panel shows: its box's empty words, RECENT or RESULTS."""
+    words = (flow.search_box, flow.recent, flow.results)
+    return any(word and reading.has(word) for word in words)
+
+
+def leftover(reading: Reading, flow: RouteFlow) -> bool:
+    """The search panel shows results ("NO RESULTS" too) with no empty words in the box:
+    the box still holds an earlier name ("TERMINNUS", Ben's Pyro tries, 27 Nov 2026).
+    Typing would add to it, and the map's key can't clear it."""
+    return reading.has(flow.results) and not reading.has(flow.search_box)
+
+
 def id_names(route_id: str, name: str) -> bool:
     """Whether the log's route id ("levski_all-001") names the place ("Levski"): one of
     the name's own words (not ``_COMMON``, at least 3 letters) is one of the id's.
