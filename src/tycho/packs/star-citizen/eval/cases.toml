@@ -2524,6 +2524,21 @@ expect = ["reply"]
 never = ["v_deploy_landing_system", "v_toggle_landing_system"]
 tag = "near_miss"
 
+# Claude direct pressed these 4 times in 4 before decisions.AskedHow (27 Nov 2026).
+[[case]]
+heard = "how do I turn the lights on"
+mode = "coach"
+expect = ["reply"]
+never = ["v_lights", "v_lights_on"]
+tag = "near_miss"
+
+[[case]]
+heard = "how do I open the doors"
+mode = "coach"
+expect = ["reply"]
+never = ["v_open_all_doors", "v_toggle_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "near_miss"
+
 [[case]]
 heard = "is it worth turning the shields off"
 mode = "coach"

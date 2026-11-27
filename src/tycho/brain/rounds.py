@@ -30,6 +30,7 @@ from tycho.brain.decisions import (
     BrainRequest,
     Decision,
     EmptyAct,
+    NotAnAct,
     Reply,
     UnboundAction,
     parse_tool_call,
@@ -65,10 +66,7 @@ SECOND_ACT = (
     "Not done: an earlier action in this reply was refused, so {tool} wasn't used. Call "
     "it again on its own if it's still wanted."
 )
-EMPTY_ACT = (
-    "Nothing was pressed or said: run_actions had no actions. Answer the player now, "
-    "in words or with show_card."
-)
+EMPTY_ACT = EmptyAct.answer
 """The result for an empty act with nothing real to say (#666): it isn't an answer."""
 LAST_PICK = "No more look-ups for this request: pick the actions again, or say what you can't do."
 """Instead of LAST_CALL, when the turn holds a refused act (review of #177)."""
@@ -243,14 +241,15 @@ class Round:
             # refused (#176): this one waits for the next call.
             self.looking.append((use_id, answered(failure(SECOND_ACT.format(tool=name)))))
             return None
+        said = turn.heard.said if turn.heard is not None else ""
         try:
-            decided = parse_tool_call(name, arguments, self._actions, self._sequences)
-        except EmptyAct:
-            # Not an answer ("unused", #666): the model hears so and answers next call,
-            # unless this reply's words already did (``said``).
-            log.debug("Brain called run_actions with nothing to press or say")
-            self._empty += 1
-            self.looking.append((use_id, answered(failure(EMPTY_ACT))))
+            decided = parse_tool_call(name, arguments, self._actions, self._sequences, said)
+        except NotAnAct as e:
+            # Not an answer ("unused", #666; "how do I...?"): the model hears so and
+            # answers next call, unless this reply's words already did (``said``).
+            log.debug("Brain's act wasn't one: %s", e)
+            self._empty += isinstance(e, EmptyAct)
+            self.looking.append((use_id, answered(failure(e.answer))))
             return None
         except UnboundAction as e:
             # Not pressed: the model hears why, with the closest bound names, and

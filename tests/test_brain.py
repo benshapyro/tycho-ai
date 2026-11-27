@@ -697,6 +697,45 @@ def test_an_answer_that_starts_like_a_lead_in_is_still_the_answer(answer: str) -
     assert _ask(client, FakeLookup()) == Reply(answer)
 
 
+@pytest.mark.parametrize(
+    "said",
+    [
+        "how do I open the doors",
+        "Tycho, how do I lower the landing gear?",
+        "so how can I turn the lights on",
+        "what key opens the star map",
+        "Which button is the landing gear?",
+        "what\u2019s the key for the lights",
+        "how to turn on the lights",
+    ],
+)
+def test_a_press_for_a_how_to_question_is_never_pressed(said: str) -> None:
+    """27 Nov 2026 eval: for "how do I open the doors" Claude pressed Open All Doors 4
+    times in 4. The model hears why, and its next call's answer is said."""
+    client = _Calls(_picks(["v_lights"]), ([], _final("Right Ctrl plus L.")))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), pack=SC)
+    decided = asyncio.run(brain.decide(BrainRequest(said, KEYBINDS)))
+    assert decided == Reply("Right Ctrl plus L.")
+    (result,) = client.requests[1]["messages"][-1]["content"][:1]
+    assert "asked how to do it" in result["content"]
+
+
+@pytest.mark.parametrize(
+    "said",
+    ["open the doors", "how about the lights", "lights on, how do I look", "key the mic"],
+)
+def test_a_request_that_isnt_a_how_to_question_is_pressed(said: str) -> None:
+    picked = parse_tool_call("run_actions", {"actions": ["v_lights"], "say": ""}, ACTIONS, (), said)
+    assert picked == RunActions(("v_lights",), "")
+
+
+def test_a_sequence_for_a_how_to_question_is_never_run() -> None:
+    with pytest.raises(BrainError, match="asked how"):
+        parse_tool_call(
+            "run_sequence", {"name": "startup", "say": ""}, (), SEQUENCES, "how do I start up"
+        )
+
+
 def test_only_empty_acts_to_the_end_is_an_error_never_unused() -> None:
     client = _Calls(*[_empty_act(use_id=f"toolu_{n}") for n in range(MAX_CALLS)])
     with pytest.raises(BrainError):

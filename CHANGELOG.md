@@ -22,6 +22,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - Tycho turns the game's sound down while it speaks, so you can hear it over engines and combat, then fades it back up. It's the game's own slider in the Windows volume mixer, nothing in the game. Only the game: other programs, like Discord, are left alone, and each of the game's sliders goes back to its own level. On by default, to 30% of where you left it: change it in Settings, under Voice, or say "stop turning the game down" or "game at 20% while you talk". If you move the game's slider yourself while Tycho speaks, yours wins. ([#570](https://github.com/benshapyro/tycho-ai/issues/570))
 
 ### Changed
+- "How do I open the doors?" (or "what key is the landing gear?") now tells you your key and presses nothing. Before, Tycho sometimes opened the doors as well. Say "open the doors" to have it done. ([#712](https://github.com/benshapyro/tycho-ai/pull/712))
 - "How do I ..." answers with more than one step now put the steps on the Tile, so you can follow them while you play. ([#626](https://github.com/benshapyro/tycho-ai/issues/626))
 - Try it is now a button on Home, beside what you last said: say something and see what Tycho would do, with nothing sent to the game. Before, it was only at the end of setup. ([#603](https://github.com/benshapyro/tycho-ai/issues/603))
 - "Shut all the doors" (and "shut all doors", "shut doors") now closes the doors at once, without waiting on the brain. ([#567](https://github.com/benshapyro/tycho-ai/issues/567))
