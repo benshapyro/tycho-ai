@@ -327,7 +327,7 @@ class OpenRouterBrain:
                 messages.append({"role": "tool", "tool_call_id": use_id, "content": result.content})
             if note := last_note(call, turn, self._cards()):
                 messages.append({"role": "user", "content": note})
-        if turn.unbound is not None and turn.refused:
+        if turn.unbound is not None and turn.refused and not turn.asked:
             raise turn.unbound  # the last call too named actions that aren't bound
         raise BrainError(f"still looking things up after {MAX_CALLS} tries")
 

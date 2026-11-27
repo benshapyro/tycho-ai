@@ -701,6 +701,30 @@ asked_without = { mining_lookup = ["stanton", "microtech"] }
 tag = "where"
 
 [[case]]
+heard = "where is there gold to mine"
+mode = "lookup"
+expect = ["reply"]
+where = [
+  "Entered UEE Jurisdiction (logged 45 minutes ago)",
+  "In the Stanton system (logged 45 minutes ago)",
+]
+tools = ["mining_lookup"]
+asked_with = { mining_lookup = ["stanton"] }
+never_say = ['\b(which|what) (star )?system\b']
+tag = "where"
+
+[[case]]
+heard = "where can I sell gold"
+mode = "lookup"
+expect = ["reply"]
+where = [
+  "Entered UEE Jurisdiction (logged 2 hours ago)",
+  "In the Stanton system (logged 2 hours ago)",
+]
+never_say = ['\b(which|what) (star )?system\b', '\bPyro\b', '\bNyx\b']
+tag = "where"
+
+[[case]]
 heard = "I'm in Nick's, where can I mine gold"
 mode = "lookup"
 expect = ["reply"]
@@ -2290,3 +2314,306 @@ mode = "unclear"
 expect = ["reply"]
 never = ["v_mining_use_permanent_modifier", "v_toggle_mining_laser_fire", "v_toggle_mining_laser_type"]
 tag = "unclear"
+
+# --- Near misses for the zero-wrong-presses bar (1.0 hardening, 27 Nov 2026) ----------
+# Words that sound like a command but aren't one, commands with a cheerful opener, and the
+# keys Ben's own binds share with something dangerous. Tagged "near_miss": run them alone
+# with --tag near_miss.
+
+# Route requests the brain hands to plot_route, with an opener (#679 kept "good"/"great"
+# out of plotting.ASKING, so these still plot).
+[[case]]
+heard = "great, take us to Lorville"
+mode = "command"
+expect = ["reply"]
+tools = ["plot_route"]
+never_say = ['route (is )?set', 'plotted']
+tag = "near_miss"
+
+[[case]]
+heard = "good, now get us over to Area 18"
+mode = "command"
+expect = ["reply"]
+tools = ["plot_route"]
+never_say = ['route (is )?set', 'plotted']
+tag = "near_miss"
+
+[[case]]
+heard = "navigate to Everus Harbor"
+mode = "command"
+expect = ["reply"]
+tools = ["plot_route"]
+never_say = ['route (is )?set', 'plotted']
+tag = "near_miss"
+
+# A place in another system: the map only searches the player's own, so no route is
+# said to be set, and nothing jumps.
+[[case]]
+heard = "take us to Ruin Station"
+mode = "command"
+expect = ["reply"]
+where = ["Entered UEE Jurisdiction", "In the Stanton system"]
+never_say = ['route (is )?set', 'plotted']
+tag = "near_miss"
+
+# Route questions whose first words aren't a question word: plotting.ASKING can't refuse
+# them for the brain ("can you" is filler, "tell" isn't a question word), so the brain
+# itself must not plot.
+[[case]]
+heard = "can you tell me the fastest route to Pyro"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
+never = ["v_starmap"]
+tag = "near_miss"
+
+[[case]]
+heard = "tell me the best way to get to Hurston"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
+never = ["v_starmap"]
+tag = "near_miss"
+
+[[case]]
+heard = "do you know how far Pyro is from here"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
+never = ["v_starmap"]
+tag = "near_miss"
+
+[[case]]
+heard = "I wonder if there's a quicker way to Orison"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
+never = ["v_starmap"]
+tag = "near_miss"
+
+[[case]]
+heard = "great, how long is the trip to microTech"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
+never = ["v_starmap"]
+tag = "near_miss"
+
+# "Good"/"great" as chat, not the start of a command.
+[[case]]
+heard = "good morning Tycho"
+mode = "chat"
+expect = ["reply"]
+no_tools = ["plot_route"]
+tag = "near_miss"
+
+[[case]]
+heard = "great, thanks"
+mode = "chat"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "good shot"
+mode = "chat"
+expect = ["reply"]
+never = ["v_weapon_launch_missile", "v_toggle_mining_laser_fire"]
+tag = "near_miss"
+
+[[case]]
+heard = "great, what's next?"
+mode = "chat"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "good, now lower the landing gear"
+mode = "command"
+expect = ["actions"]
+must = [["v_deploy_landing_system", "v_toggle_landing_system"]]
+never = ["v_retract_landing_system"]
+tag = "near_miss"
+
+# Doors and locks (#658: "open the doors" also unlocked them).
+[[case]]
+heard = "unlock the doors"
+mode = "command"
+expect = ["actions"]
+must = [["v_unlock_all_doors", "v_toggle_all_doorlocks"]]
+never = ["v_lock_all_doors", "v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors"]
+tag = "near_miss"
+
+[[case]]
+heard = "are the doors locked?"
+mode = "lookup"
+expect = ["reply"]
+never = ["v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks", "v_toggle_all_doors"]
+tag = "near_miss"
+
+[[case]]
+heard = "close the doors and lock them"
+mode = "command"
+expect = ["actions"]
+must = [["v_close_all_doors", "v_toggle_all_doors"], ["v_lock_all_doors", "v_toggle_all_doorlocks"]]
+never = ["v_unlock_all_doors", "v_open_all_doors"]
+tag = "near_miss"
+
+[[case]]
+heard = "lock it all down"
+mode = "command"
+expect = ["actions", "reply"]
+never = ["v_unlock_all_doors", "v_open_all_doors"]
+tag = "near_miss"
+
+# Raw keys and modifiers: Tycho presses actions, never keys by name. Ben's binds put Eject
+# on Right Alt + Y, Self Destruct and Force Re-spawn on Backspace, and Launch Missiles with
+# Fire Mining Laser on Mouse 1.
+[[case]]
+heard = "press right alt and Y"
+mode = "command"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "hit backspace"
+mode = "command"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "hold control"
+mode = "unclear"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "click mouse one"
+mode = "command"
+expect = ["reply"]
+never = ["v_weapon_launch_missile", "v_toggle_mining_laser_fire"]
+tag = "near_miss"
+
+# The mining laser: its key is shared with Launch Missiles in Ben's binds.
+[[case]]
+heard = "fire the mining laser"
+mode = "command"
+expect = ["actions", "reply"]
+never = ["v_weapon_launch_missile"]
+tag = "near_miss"
+
+[[case]]
+heard = "switch to mining mode"
+mode = "command"
+expect = ["actions"]
+must = [["v_set_mining_mode", "v_toggle_mining_mode"]]
+never = ["v_toggle_mining_laser_fire", "v_toggle_mining_laser_type", "v_mining_use_permanent_modifier"]
+tag = "near_miss"
+
+[[case]]
+heard = "is my mining laser on?"
+mode = "lookup"
+expect = ["reply"]
+never = ["v_toggle_mining_laser_fire", "v_toggle_mining_mode", "v_set_mining_mode"]
+tag = "near_miss"
+
+[[case]]
+heard = "what's the best laser head for quantanium"
+mode = "lookup"
+expect = ["reply", "look_up"]
+never = ["v_toggle_mining_laser_fire", "v_toggle_mining_laser_type", "v_toggle_mining_mode"]
+tag = "near_miss"
+
+# Questions that name an action: answered, never pressed.
+[[case]]
+heard = "what does self destruct do"
+mode = "coach"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "should I eject?"
+mode = "chat"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "what happens if I jettison my cargo"
+mode = "coach"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "how do I lower the landing gear"
+mode = "coach"
+expect = ["reply"]
+never = ["v_deploy_landing_system", "v_toggle_landing_system"]
+tag = "near_miss"
+
+# Claude direct pressed these 4 times in 4 before decisions.AskedHow (27 Nov 2026).
+[[case]]
+heard = "how do I turn the lights on"
+mode = "coach"
+expect = ["reply"]
+never = ["v_lights", "v_lights_on"]
+tag = "near_miss"
+
+[[case]]
+heard = "how do I open the doors"
+mode = "coach"
+expect = ["reply"]
+never = ["v_open_all_doors", "v_toggle_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "near_miss"
+
+[[case]]
+heard = "is it worth turning the shields off"
+mode = "coach"
+expect = ["reply"]
+never = ["v_power_set_shields_off", "v_power_toggle_shields"]
+tag = "near_miss"
+
+[[case]]
+heard = "what key opens the star map"
+mode = "coach"
+expect = ["reply"]
+key_for = ["v_starmap"]
+never = ["v_starmap"]
+no_tools = ["plot_route"]
+tag = "near_miss"
+
+[[case]]
+heard = "can my ship do quantum travel"
+mode = "lookup"
+expect = ["reply", "look_up"]
+never = ["v_toggle_quantum_mode", "v_quantum_travel"]
+tag = "near_miss"
+
+# Questions whose words are generic parts of action names ("system", "mode", "ship"):
+# they don't ask for the action (review of #712, #714).
+[[case]]
+heard = "which mode is my ship in right now"
+mode = "lookup"
+expect = ["reply"]
+never = ["v_master_mode_set_nav", "v_master_mode_set_scm", "v_toggle_mining_mode", "v_set_mining_mode", "v_toggle_scan_mode", "v_set_scan_mode", "v_toggle_quantum_mode"]
+tag = "near_miss"
+
+[[case]]
+heard = "what system has the best gold prices"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
+never = ["v_toggle_landing_system", "v_deploy_landing_system", "v_starmap"]
+tag = "near_miss"
+
+[[case]]
+heard = "what's the state of my ship"
+mode = "lookup"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "which systems can I jump to from here"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
+never = ["v_starmap", "v_toggle_landing_system"]
+tag = "near_miss"

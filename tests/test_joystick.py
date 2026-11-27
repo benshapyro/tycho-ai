@@ -3,11 +3,14 @@
 # The fake stands in for PySDL2's untyped ctypes bindings.
 # pyright: reportUnknownLambdaType=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownVariableType=false, reportAttributeAccessIssue=false
 
+from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
+from tycho import doctor, settings
+from tycho.findings import Finding
 from tycho.ptt import joystick
 from tycho.ptt.binding import Binding, DeviceKind
 
@@ -132,10 +135,6 @@ def test_sticks_that_share_a_guid_are_a_check_finding(
     sdl: FakeSdl, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """#623: two sticks with one GUID are told apart by plug-in order, so can swap."""
-    from collections.abc import Iterator
-
-    from tycho import doctor, settings
-    from tycho.findings import Finding
 
     def game(*_args: object, **_kwargs: object) -> Iterator[Finding]:
         yield from ()
@@ -146,3 +145,32 @@ def test_sticks_that_share_a_guid_are_a_check_finding(
     current = settings.Settings(push_to_talk=f"joystick:{GUID}#2:3")
     found = [f for f in doctor.checks(current, quick=True, ask=False) if f.level == "warn"]
     assert any("USB ID" in f.detail and "plugged in" in f.detail for f in found)
+
+
+def _stick_findings(current: settings.Settings, monkeypatch: pytest.MonkeyPatch) -> list[Finding]:
+    def game(*_args: object, **_kwargs: object) -> Iterator[Finding]:
+        yield from ()
+        return None
+
+    monkeypatch.setattr(doctor, "game_findings", game)
+    found = doctor.checks(current, quick=True, ask=True)
+    return [f for f in found if f.what.endswith("stick")]
+
+
+def test_tycho_check_opens_the_sticks_itself_to_find_twins(
+    sdl: FakeSdl, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Review of #706 (#710): `tycho check` sees the twins through look_at_sticks().
+    current = settings.Settings(push_to_talk=f"joystick:{GUID}#2:2")
+    [finding] = _stick_findings(current, monkeypatch)
+    assert finding.level == "warn"
+    assert "VKB Gladiator" in finding.detail
+    assert sdl.closed == 3  # opened, and every stick let go again
+
+
+def test_tycho_check_goes_on_when_the_sticks_wont_start(
+    sdl: FakeSdl, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sdl, "SDL_Init", lambda _flags: -1)
+    current = settings.Settings(push_to_talk=f"joystick:{GUID}#2:2")
+    assert _stick_findings(current, monkeypatch) == []  # the plain names, no swap note

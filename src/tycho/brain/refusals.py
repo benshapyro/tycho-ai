@@ -44,6 +44,14 @@ ANSWER_IN_WORDS = (
 """The result the model gets for an act refused this way."""
 
 
+GENERIC = frozenset(
+    {"system", "systems", "mode", "state", "level", "group", "set", "all", "view"}
+    | {"reset", "fwd", "back", "next", "prev", "main", "default", "status", "current"}
+)
+"""Parts of action names too common to say the player asked for the action: "what
+system am I in" doesn't name ``v_toggle_landing_system`` (review of #712, #714)."""
+
+
 def asked_only(heard: Heard | None, picked: Iterable[str]) -> bool:
     """Whether the words ``heard`` are only a question, so no press answers them.
     ``picked`` are the act's action or sequence names, whose words count as asking for
@@ -57,7 +65,12 @@ def asked_only(heard: Heard | None, picked: Iterable[str]) -> bool:
         return False
     if set(words) & ACTION_WORDS:
         return False
-    named = [part for name in picked for part in name.lower().split("_") if len(part) > 2]
+    named = [
+        part
+        for name in picked
+        for part in name.lower().split("_")
+        if len(part) > 2 and part not in GENERIC
+    ]
     # "flight" names v_flightready; "atc" names v_atc_request.
     return not any(w == n or (len(w) > 3 and w in n) for w in words for n in named)
 

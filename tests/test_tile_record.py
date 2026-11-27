@@ -230,6 +230,30 @@ def test_closing_ends_the_writer_thread_and_nothing_is_saved_after(tmp_path: Pat
     assert len(_lines(record.run)) == 1
 
 
+def test_a_close_while_a_card_is_being_queued_still_ends_the_writer(tmp_path: Path) -> None:
+    """#709: close on the main thread came between _save's check and its queueing on the
+    window's: the card went in after close looked, and the new writer waited forever."""
+    record = CardRecord(tmp_path, now=Ticks())
+    real = record._queue.put_nowait  # type: ignore[attr-defined]
+    closing: list[threading.Thread] = []
+
+    def put_nowait(job: object) -> None:
+        if not closing:  # close comes now, on another thread, while the card is queued
+            closing.append(threading.Thread(target=record.close))
+            closing[0].start()
+            closing[0].join(0.2)
+        real(job)  # type: ignore[arg-type]
+
+    record._queue.put_nowait = put_nowait  # type: ignore[attr-defined, method-assign]
+    record.shown(SELL)
+    record.drawn(_view(record), Image.new("RGBA", (10, 10)), _look())
+    closing[0].join(5)
+    writer = record._thread  # type: ignore[attr-defined]
+    if writer is not None:
+        writer.join(5)
+        assert not writer.is_alive()
+
+
 def test_making_the_folder_and_pruning_happen_off_the_window_thread(tmp_path: Path) -> None:
     gate = threading.Event()
     record = CardRecord(tmp_path, now=Ticks())

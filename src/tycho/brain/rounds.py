@@ -30,6 +30,7 @@ from tycho.brain.decisions import (
     BrainRequest,
     Decision,
     EmptyAct,
+    NotAnAct,
     Reply,
     RunActions,
     RunSequence,
@@ -68,10 +69,7 @@ SECOND_ACT = (
     "Not done: an earlier action in this reply was refused, so {tool} wasn't used. Call "
     "it again on its own if it's still wanted."
 )
-EMPTY_ACT = (
-    "Nothing was pressed or said: run_actions had no actions. Answer the player now, "
-    "in words or with show_card."
-)
+EMPTY_ACT = EmptyAct.answer
 """The result for an empty act with nothing real to say (#666): it isn't an answer."""
 LAST_PICK = "No more look-ups for this request: pick the actions again, or say what you can't do."
 """Instead of LAST_CALL, when the turn holds a refused act (review of #177)."""
@@ -113,6 +111,7 @@ class Turn:
     """The last act refused for naming unbound actions, for the final error (#167)."""
     refused: bool = False
     """This call's reply held a refused act: its result asks for another pick."""
+    asked: bool = False  # the last refusal was a question's: answer in words (#714)
     looked: bool = False
     """This reply looked something up to answer (no note): its results get ``CARD_NOTE`` (#490)."""
     trace: Trace | None = None
@@ -246,25 +245,27 @@ class Round:
             # refused (#176): this one waits for the next call.
             self.looking.append((use_id, answered(failure(SECOND_ACT.format(tool=name)))))
             return None
+        said = turn.heard.said if turn.heard is not None else ""
         try:
-            decided = parse_tool_call(name, arguments, self._actions, self._sequences)
-        except EmptyAct:
-            # Not an answer ("unused", #666): the model hears so and answers next call,
-            # unless this reply's words already did (``said``).
-            log.debug("Brain called run_actions with nothing to press or say")
-            self._empty += 1
-            self.looking.append((use_id, answered(failure(EMPTY_ACT))))
+            decided = parse_tool_call(name, arguments, self._actions, self._sequences, said)
+        except NotAnAct as e:
+            # Not an answer ("unused", #666; "how do I...?"): the model hears so and
+            # answers next call, unless this reply's words already did (``said``).
+            log.debug("Brain's act wasn't one: %s", e)
+            self._empty += isinstance(e, EmptyAct)
+            turn.asked |= e.question
+            self.looking.append((use_id, answered(failure(e.answer))))
             return None
         except UnboundAction as e:
             # Not pressed: the model hears why, with the closest bound names, and
             # picks again on the next call (#164).
             log.debug("Brain named unbound actions: %s", e.unknown)
-            turn.unbound, turn.refused = e, True
+            turn.unbound, turn.refused, turn.asked = e, True, False
             self.looking.append((use_id, answered(unbound(e, self._actions))))
             return None
         if (names := _named(decided)) and asked_only(turn.heard, names):  # #708
             log.debug("Brain chose to act on a question; not pressing")
-            turn.refused = True
+            turn.refused = turn.asked = True
             self.looking.append((use_id, answered(failure(ANSWER_IN_WORDS))))
             return None
         await self._end()
@@ -415,7 +416,7 @@ def last_note(call: int, turn: Turn, cards: bool = False) -> str | None:
     if cards and turn.looked and not turn.refused:
         notes.append(CARD_NOTE)
     if call == MAX_CALLS - 2:
-        notes.append(LAST_PICK if turn.refused else LAST_CALL)
+        notes.append(LAST_PICK if turn.refused and not turn.asked else LAST_CALL)
     return " ".join(notes) or None
 
 

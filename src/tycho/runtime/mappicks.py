@@ -11,6 +11,7 @@ from tycho.runtime.mapwords import (
     column,
     heading,
     listed,
+    nothing,
     row,
     shows,
 )
@@ -42,7 +43,7 @@ def recent(
     back or no words at all, no filtered list (Ben's Orison and Hurston tries). Only in
     the player's system: RECENT keeps places from other systems (Ben's Nyx-side Pyro
     Gateway, #682)."""
-    if not flow.recent or shows(row(reading, box), name) or reading.has(flow.no_results):
+    if not flow.recent or shows(row(reading, box), name) or nothing(reading, flow):
         return None
     return under_header(_under(reading, box), flow.recent, flow.results, name, LISTED, system)
 
@@ -53,7 +54,7 @@ def exact(
     """The row that is exactly ``name`` among the results the typed name filtered, in the
     player's system's section: Enter would take the top one, "MicroTech Logistics Depot"
     for MicroTech (#682)."""
-    if reading.has(flow.no_results) or (flow.recent and reading.has(flow.recent)):
+    if nothing(reading, flow) or (flow.recent and reading.has(flow.recent)):
         return None
     return under_header(_under(reading, box), flow.results, "", name, ROWS, system)
 

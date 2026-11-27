@@ -14,18 +14,29 @@ _EXTRA = 4
 """How many more letters than the header a run-together word may have ("allresults")."""
 
 
-def heading(reading: Reading, header: str) -> tuple[Word, ...] | None:
+def heading(reading: Reading, header: str, unless: str = "") -> tuple[Word, ...] | None:
     """The words of a list's ``header`` ("results"), as ``Reading.find``; or else one word
     that holds it run together and misread ("ALURESULT$"), no longer than it plus
-    ``_EXTRA`` letters. Only where a list starts: a row is still matched exactly."""
+    ``_EXTRA`` letters, and not holding ``unless`` ("NORESULTS", #704). Only where a list
+    starts: a row is still matched exactly."""
     if (found := reading.find(header)) is not None or not header:
         return found
-    wanted = squeezed(header).replace(" ", "")
+    wanted, never = (squeezed(text).replace(" ", "") for text in (header, unless))
     for word in reading.words:
         said = squeezed(word.text.lower().translate(_MISREAD)).replace(" ", "")
+        if never and never in said:
+            continue
         if wanted in said and len(said) <= len(wanted) + _EXTRA:
             return (word,)
     return None
+
+
+def nothing(reading: Reading, flow: RouteFlow) -> bool:
+    """Whether the frame shows the map's search found nothing: "NO RESULTS", or read as
+    one word ("NORESULTS", #704)."""
+    return bool(flow.no_results) and (
+        reading.has(flow.no_results) or says(reading, flow.no_results)
+    )
 
 
 def middle(words: tuple[Word, ...]) -> tuple[int, int]:
@@ -91,6 +102,24 @@ def says(reading: Reading, phrase: str) -> bool:
     )
 
 
+def at(reading: Reading, spot: tuple[int, int]) -> tuple[str, ...]:
+    """The words read within ``_AT`` of the frame's height of ``spot``, as squeezed text:
+    what a click there would land on, to tell whether it's still there a moment later."""
+    reach = _AT * reading.height
+    return tuple(
+        sorted(
+            squeezed(w.text)
+            for w in reading.words
+            if w.left - reach <= spot[0] <= w.right + reach
+            and w.top - reach <= spot[1] <= w.top + w.height + reach
+        )
+    )
+
+
+_AT = 0.02
+"""How near a click's spot, as a fraction of the frame's height, its words are read."""
+
+
 def near(point: tuple[int, int], spot: tuple[int, int], reach: float) -> bool:
     return abs(point[0] - spot[0]) <= reach and abs(point[1] - spot[1]) <= reach
 
@@ -152,7 +181,9 @@ def listed(reading: Reading, box: tuple[Word, ...], flow: RouteFlow) -> bool:
     """The panel's list is open under the box: "RECENT" or "ALL RESULTS" in its column,
     as once the box has the keys (Ben's PC try, 26 Nov 2026)."""
     close = close_under(reading, box, LISTED)
-    return any(word and heading(close, word) for word in (flow.recent, flow.results))
+    return any(
+        word and heading(close, word, flow.no_results) for word in (flow.recent, flow.results)
+    )
 
 
 def took(

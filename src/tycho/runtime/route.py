@@ -38,8 +38,9 @@ key that clashes with something dangerous, nothing is pressed. Every press and c
 checks the game window is in front. Any step that fails stops the flow there: nothing
 more is pressed, and the map is left open for the player (except on foot, where it's
 closed again, having shown nothing). One request types one name once, and never tries
-again on its own. With ``record`` (``TYCHO_ROUTE_RECORD``, a review tool), a stop after
-the map was opened hands why, and the last check's words, to it (ADR 14, 25 Nov 2026).
+again on its own. With ``record`` (``TYCHO_ROUTE_RECORD``, a review tool), a failure after
+the map was opened hands why, and the last check's words, to it (ADR 14, 25 Nov 2026);
+not a refusal, a cancel or a held modifier, where the map read as it should (#705).
 
 Blocking: the session runs ``plot`` on the key thread. A cancel (push-to-talk pressed
 again) stops it between steps.
@@ -59,7 +60,7 @@ from tycho.eyes.words import Reading, Word, squeezed
 from tycho.input import Presser
 from tycho.input.keys import Code, UnsupportedKey, code_for
 from tycho.input.plan import TAP_SECONDS, Press
-from tycho.keybinds import Keybinds
+from tycho.keybinds import Keybinds, readable
 from tycho.packs import Safety
 from tycho.packs.routes import RouteFlow
 from tycho.runtime import mappicks, mapwords
@@ -207,8 +208,7 @@ class _Run:
             raise _Stop("refused", lines.bad_name.format(name=name), "not a name Tycho may type")
         presses = self._plan()
         if risky := self._risky_letter(name[:1]):  # the rest waits for the box (#682)
-            said = lines.risky_first.format(name=name, action=risky)
-            said = lines.bad_name.format(name=name) if "_" in risky else said  # an id
+            said = lines.risky_first.format(name=name, action=risky)  # words, not an id (#705)
             raise _Stop("refused", said, f"{risky} is on the name's first letter")
         if isinstance(self.reader, Warm):  # starts reading while the map opens (#661)
             self.reader.warm()
@@ -293,7 +293,7 @@ class _Run:
                 bool(action.label) and is_confirm_grade(action.label, self.lists)
             )
             if risky and any(k.key in letters and not k.modifiers for k in action.inputs):
-                return action.label or action.name
+                return action.label or readable(action.name)
         return ""
 
     def _type_rest(self, name: str, box: tuple[Word, ...]) -> None:
@@ -410,9 +410,9 @@ class _Run:
         """The frame shows the map open, with the chosen place among the results."""
         lines, name = self.flow.lines, self.place.name
         under = column(reading.below(max(word.top + word.height for word in box)), box, reading)
-        if reading.has(self.flow.no_results):
+        if mapwords.nothing(reading, self.flow):  # "NORESULTS" too (#704)
             raise _Stop("failed", lines.no_results.format(name=name), "the map found nothing")
-        header = mapwords.heading(under, self.flow.results)  # or misread (#684)
+        header = mapwords.heading(under, self.flow.results, self.flow.no_results)  # #684
         if header is None:
             raise _Stop("failed", lines.stuck, "the frame doesn't show the search results")
         listed = under.below(max(word.top + word.height for word in header))
@@ -445,11 +445,13 @@ class _Run:
             raise _Stop("cancelled", "", "cancelled")
         if self.clicks >= MAX_CLICKS:
             raise _Stop("failed", self.flow.lines.stuck, "no more clicks")
-        said = self.presser.let_go(self.cancel)  # Ctrl + click isn't a click (#678)
+        said, waited = self.presser.letting_go(self.cancel)  # Ctrl + click isn't one (#678)
         if self.cancel.is_set():
             raise _Stop("cancelled", "", "cancelled")
         if said:
             raise _Stop("modifier_held", said, f"a modifier is held for {what}")
+        if waited and mapwords.at(self._fresh(), spot) != mapwords.at(reading, spot):  # #705
+            raise _Stop("failed", self.flow.lines.stuck, f"{what} changed in the wait")
         try:
             why = self.clicker.click(reading.window, (reading.width, reading.height), *spot)
         except OSError as e:  # Windows refused the input

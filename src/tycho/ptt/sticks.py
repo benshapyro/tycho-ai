@@ -48,6 +48,13 @@ def name(device: str) -> str | None:
         return _seen.get(device)
 
 
+def seen() -> tuple[tuple[str, str], ...]:
+    """Every stick at the last look, by id, with its name: what a warning that names a
+    stick depends on, for a cache's key (#710)."""
+    with _lock:
+        return tuple(sorted(_seen.items()))
+
+
 def guid(device: str) -> str:
     """The SDL GUID in a stick's id: "<guid>#2" is the second stick with that GUID."""
     return device.partition("#")[0]

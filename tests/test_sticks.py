@@ -4,12 +4,15 @@ stick bindings, warned about and never pressed (#622)."""
 import xml.etree.ElementTree as ET
 from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import Path
 
 import pytest
 
+from tests.fakes.fake_setup_pc import FakeSetupPC
 from tycho import doctor, settings
 from tycho.brain.briefing import ON_STICK, unbound_commands
 from tycho.commands import Command, CommandMatcher, on_stick
+from tycho.desktop.bridge import Bridge, setup_page
 from tycho.findings import TYCHO, Finding
 from tycho.games.star_citizen.keybinds import (
     apply_profile,
@@ -243,3 +246,32 @@ def test_keyboard_keys_are_unchanged_by_stick_bindings(keybinds: Keybinds) -> No
     assert ping is not None
     assert ping.inputs == (KeyInput("tab"),)
     assert ping.stick_inputs == (StickInput(1, "hat1_up"),)
+
+
+def test_setups_clash_warning_is_looked_at_again_once_the_sticks_are_seen(
+    tmp_path: Path,
+) -> None:
+    # Review of #706 (#710): setup drew before push-to-talk opened the sticks, and kept
+    # "joystick button 12" for the window's lifetime.
+    pc = FakeSetupPC()
+    bridge = Bridge(pc=pc, settings_path=tmp_path / "settings.toml")
+    current = settings.Settings(push_to_talk=f"joystick:{RIGHT}:11")
+    ptt = f"joystick:{RIGHT}:11"
+    pc.clashes = [f"{describe(Binding.parse(ptt))} may be bound in game too"]
+    assert bridge._conflicts(ptt, current) == ["joystick button 12 may be bound in game too"]  # pyright: ignore[reportPrivateUsage]
+    sticks.saw({RIGHT: "VKBsim Gladiator EVO R"})
+    pc.clashes = [f"{describe(Binding.parse(ptt))} may be bound in game too"]
+    assert bridge._conflicts(ptt, current) == [  # pyright: ignore[reportPrivateUsage]
+        "VKBsim Gladiator EVO R button 12 may be bound in game too"
+    ]
+    assert pc.calls.count("conflicts") == 2
+    bridge._conflicts(ptt, current)  # pyright: ignore[reportPrivateUsage]
+    assert pc.calls.count("conflicts") == 2  # still kept while nothing changed
+
+
+def test_setup_notes_a_push_to_talk_stick_with_a_twin() -> None:
+    sticks.saw({LEFT: "VKBsim Gladiator EVO L", f"{LEFT}#2": "VKBsim Gladiator EVO R"})
+    [note] = setup_page._stick_notes(f"joystick:{LEFT}#2:11")  # pyright: ignore[reportPrivateUsage]
+    assert "VKBsim Gladiator EVO L and VKBsim Gladiator EVO R" in note
+    assert setup_page._stick_notes(f"joystick:{RIGHT}:11") == []  # pyright: ignore[reportPrivateUsage]
+    assert setup_page._stick_notes(None) == []  # pyright: ignore[reportPrivateUsage]

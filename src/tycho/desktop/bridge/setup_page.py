@@ -230,7 +230,10 @@ class SetupPage(SettingsPage, CommandsPage):
         return cast(setup.Game, self._cached("game", key, lambda: setup.game(current, self._pc)))
 
     def _conflicts(self, ptt: str, current: Settings) -> list[str]:
-        key = (ptt, current.game, current.game_channel, str(current.game_root))
+        from tycho.ptt import sticks
+
+        # The text names the stick once Tycho has seen it plugged in (#710).
+        key = (ptt, current.game, current.game_channel, str(current.game_root), sticks.seen())
         found = self._cached("conflicts", key, lambda: self._pc.conflicts(ptt, current))
         return list(cast(list[str], found))
 

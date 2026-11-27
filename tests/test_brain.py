@@ -487,6 +487,42 @@ def test_a_question_is_never_pressed_however_often_it_picks() -> None:
         _asked(client, "what's coming in the next patch")
 
 
+def test_a_generic_name_part_doesnt_name_the_action() -> None:
+    """Review of #712 (#714): "system" in v_toggle_landing_system let "what system am I
+    in" press the landing gear."""
+    client = _Calls(_picks(["v_toggle_landing_system"]), ([], _final("Stanton.")))
+    assert _asked(client, "what system am I in") == Reply("Stanton.")
+    client = _Calls(_picks(["v_toggle_landing_system"]))
+    decided = _asked(client, "where's my landing gear")  # "landing" still names it
+    assert decided == RunActions(("v_toggle_landing_system",), "Done.")
+
+
+def test_a_question_refused_before_the_last_call_is_told_to_answer_not_pick() -> None:
+    """Review of #712 (#714): the last call after a question's refusal said "pick the
+    actions again", against "answer in words"."""
+    client = _Calls(
+        _picks(["v_toggle_landing_system"]),
+        _picks(["v_toggle_landing_system"], "toolu_2"),
+        ([], _final("Not announced yet.")),
+    )
+    assert _asked(client, "what's coming in the next patch") == Reply("Not announced yet.")
+    notes = [c["text"] for c in client.requests[2]["messages"][-1]["content"] if "text" in c]
+    assert LAST_CALL in notes
+    assert LAST_PICK not in notes
+
+
+def test_a_question_refused_last_doesnt_blame_an_unbound_action() -> None:
+    """Review of #712 (#714): an unbound pick, then picks for a question, ended in
+    "isn't one of your bound actions"."""
+    client = _Calls(
+        _picks(["v_unbound"]),
+        *[_picks(["v_toggle_landing_system"], f"toolu_{n}") for n in range(2, MAX_CALLS + 1)],
+    )
+    with pytest.raises(BrainError) as raised:
+        _asked(client, "what's coming in the next patch")
+    assert "isn't one of your bound" not in str(raised.value)
+
+
 def test_an_action_with_nothing_close_bound_is_said_not_pressed() -> None:
     client = _Calls(_picks(["v_xyzzy_qqq"]), ([], _final("There's no key for that.")))
     assert _ask(client) == Reply("There's no key for that.")
@@ -730,6 +766,58 @@ def test_an_empty_act_after_a_lead_in_isnt_answered_with_the_lead_in(lead_in: st
 def test_an_answer_that_starts_like_a_lead_in_is_still_the_answer(answer: str) -> None:
     client = _Calls(_empty_act(answer))
     assert _ask(client, FakeLookup()) == Reply(answer)
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "how do I open the doors",
+        "Tycho, how do I lower the landing gear?",
+        "so how can I turn the lights on",
+        "what key opens the star map",
+        "Which button is the landing gear?",
+        "what\u2019s the key for the lights",
+        "how to turn on the lights",
+    ],
+)
+def test_a_press_for_a_how_to_question_is_never_pressed(said: str) -> None:
+    """27 Nov 2026 eval: for "how do I open the doors" Claude pressed Open All Doors 4
+    times in 4. The model hears why, and its next call's answer is said."""
+    client = _Calls(_picks(["v_lights"]), ([], _final("Right Ctrl plus L.")))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), pack=SC)
+    decided = asyncio.run(brain.decide(BrainRequest(said, KEYBINDS)))
+    assert decided == Reply("Right Ctrl plus L.")
+    (result,) = client.requests[1]["messages"][-1]["content"][:1]
+    assert "asked how to do it" in result["content"]
+
+
+@pytest.mark.parametrize(
+    "said",
+    ["open the doors", "how about the lights", "lights on, how do I look", "key the mic"],
+)
+def test_a_request_that_isnt_a_how_to_question_is_pressed(said: str) -> None:
+    picked = parse_tool_call("run_actions", {"actions": ["v_lights"], "say": ""}, ACTIONS, (), said)
+    assert picked == RunActions(("v_lights",), "")
+
+
+def test_a_how_to_answer_in_an_empty_act_is_said() -> None:
+    """Review of #713: the answer written as run_actions with no actions (#192) was
+    thrown away for a how-to question, costing a call."""
+    picked = parse_tool_call(
+        "run_actions",
+        {"actions": [], "say": "Right Ctrl plus I."},
+        ACTIONS,
+        (),
+        "how do I open the doors",
+    )
+    assert picked == Reply("Right Ctrl plus I.")
+
+
+def test_a_sequence_for_a_how_to_question_is_never_run() -> None:
+    with pytest.raises(BrainError, match="asked how"):
+        parse_tool_call(
+            "run_sequence", {"name": "startup", "say": ""}, (), SEQUENCES, "how do I start up"
+        )
 
 
 def test_only_empty_acts_to_the_end_is_an_error_never_unused() -> None:
