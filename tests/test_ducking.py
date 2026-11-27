@@ -450,6 +450,31 @@ def test_a_slider_the_player_moves_mid_fade_is_not_written_over(tmp_path: Path) 
     assert not (tmp_path / "ducked.json").exists()
 
 
+def test_one_failed_read_mid_fade_still_puts_the_game_back(tmp_path: Path) -> None:
+    """#698's review: a read that fails once between fade steps used to end the fade up,
+    and the game stayed down until Tycho next spoke."""
+    reads = 0
+
+    class Blip(FakeGameVolume):
+        def get(self) -> Levels:
+            nonlocal reads
+            reads += 1
+            if reads == 8:  # partway up: 1 + 4 reads down, then 1 + 2 up
+                raise OSError("audio device changed")
+            return super().get()
+
+    volume = Blip(0.8)
+
+    async def go() -> None:  # the line outlasts the fade down: one raise, after it
+        await Ducking(FakeSpeaker(seconds=0.2), _ducker(volume, tmp_path)).speak("Hi.")
+        await _settle()
+
+    asyncio.run(go())
+    assert reads >= 8
+    assert volume.level == pytest.approx(0.8)
+    assert not (tmp_path / "ducked.json").exists()
+
+
 def test_a_crash_is_put_right_slider_by_slider(tmp_path: Path) -> None:
     (tmp_path / "ducked.json").write_text('{"levels": {"a": 0.9, "b": 0.0}}', "utf-8")
     volume = FakeGameVolume(sliders={"a": 0.27, "b": 0.0})

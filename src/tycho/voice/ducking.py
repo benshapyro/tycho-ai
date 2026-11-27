@@ -236,8 +236,10 @@ class Ducker:
         steps = max(1, round(seconds / STEP_SECONDS))
         for step in range(1, steps + 1):
             if step > 1:
+                # An empty read (the game closed, or one failed read) isn't a move: the
+                # step goes on, and the set below says whether the game's still there.
                 now = await self._get()
-                if not now or not self._unmoved(now):
+                if now and not self._unmoved(now):
                     return False
                 if self._original is not None:  # only the sliders still Tycho's
                     end = {n: v for n, v in end.items() if n in self._original}
