@@ -107,7 +107,11 @@ def _ink(f: Font, ch: str) -> bytes:
 
 
 def text_width(text: str, f: Font, tracking: float = 0.0) -> float:
-    return f.getlength(text) + tracking * max(0, len(text) - 1)
+    """How wide ``text`` is drawn. With ``tracking``, as ``caps`` draws it: letter by
+    letter, so with no kerning between them (#688, 11)."""
+    if not tracking:
+        return f.getlength(text)
+    return sum(f.getlength(ch) for ch in text) + tracking * max(0, len(text) - 1)
 
 
 def wrap(text: str, f: Font, width: float, lines: int = 99, tracking: float = 0.0) -> list[str]:

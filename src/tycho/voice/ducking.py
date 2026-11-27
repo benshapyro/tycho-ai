@@ -13,7 +13,8 @@ The rules, each tested against ``GameVolume``'s fake:
   remembers an app's level after it closes, so a level that couldn't be put back (the
   game had closed) waits on disk for the next chance.
 - **The player's own change wins.** If a slider isn't where Tycho left it, the player
-  moved it: Tycho forgets that slider's saved level and leaves theirs.
+  moved it: Tycho forgets that slider's saved level and leaves theirs. That's checked
+  between a fade's steps too, so a move mid-fade isn't written over (#694).
 - **Fades,** so nothing clicks: ``DOWN_SECONDS`` down, ``UP_SECONDS`` back up. Lines
   close together (the filler, then the answer) keep it down for ``HOLD_SECONDS`` between.
 - **Never in the way.** The line never waits for the fade, and a mixer that fails is
@@ -230,9 +231,16 @@ class Ducker:
         until: Callable[[], bool] = lambda: False,
     ) -> bool:
         """Move each slider in ``end`` from ``start`` to there in steps. Whether they got
-        there: it stops early if the game goes, or between steps once ``until`` is true."""
+        there: it stops early if the game goes, or between steps once ``until`` is true.
+        A slider the player moves mid-fade is left where they put it (#694)."""
         steps = max(1, round(seconds / STEP_SECONDS))
         for step in range(1, steps + 1):
+            if step > 1:
+                now = await self._get()
+                if not now or not self._unmoved(now):
+                    return False
+                if self._original is not None:  # only the sliders still Tycho's
+                    end = {n: v for n, v in end.items() if n in self._original}
             levels = {
                 n: start.get(n, v) + (v - start.get(n, v)) * step / steps for n, v in end.items()
             }

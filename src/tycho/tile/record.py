@@ -13,8 +13,9 @@ reply even with ``keep_transcripts`` off: never ask a player to turn it on witho
 telling them that. Nothing here leaves the PC. The card's text is untrusted (the brain
 wrote it): it is only written as JSON data, never run or shown as markup.
 
-The window's thread finds what's new (``drawn``, inside the display's lock); saving is
-on a thread of its own, so a slow disk never holds up a frame.
+The window's thread finds what's new (``drawn``, inside the display's lock); saving,
+making the run's folder and deleting old runs are on a thread of its own, so a slow
+disk never holds up a frame.
 """
 
 import json
@@ -49,6 +50,9 @@ WAITING = 20
 BACKDROP = (24, 26, 30, 255)
 """Behind the see-through Tile in the picture: about as dark as a cockpit."""
 
+type _Job = tuple[str, Image.Image, dict[str, object]]
+"""A card to save: its file's name in this run's folder, the picture, and its line."""
+
 
 def enabled() -> bool:
     """Whether ``TYCHO_TILE_RECORD`` asks for a record ("1", "true", "yes", "on")."""
@@ -82,8 +86,9 @@ class CardRecord:
         self._pending: list[tuple[Card, str, str, bool, datetime]] = []
         """Cards put up and not drawn yet: the card itself (matched by identity), what
         was asked, what was said, whether it was pinned, and when."""
-        self._queue: queue.Queue[tuple[Path, Image.Image, dict[str, object]]] = queue.Queue(WAITING)
+        self._queue: queue.Queue[_Job | None] = queue.Queue(WAITING)
         self._thread: threading.Thread | None = None
+        self._closed = False
 
     @property
     def run(self) -> Path | None:
@@ -105,10 +110,20 @@ class CardRecord:
         self._pending = []
 
     def close(self, timeout: float = 2.0) -> None:
-        """Give what's waiting a moment to be saved, as Tycho stops."""
+        """Give what's waiting a moment to be saved, as Tycho stops, then end the
+        writer's thread. A restart (picking a game) builds a new record, so the old
+        thread must not be left waiting. Nothing is saved after this."""
+        self._closed = True
+        thread = self._thread
+        if thread is None:
+            return
         deadline = time.monotonic() + timeout
-        while self._queue.unfinished_tasks and time.monotonic() < deadline:
-            time.sleep(0.02)
+        try:  # None ends the thread, after every card already waiting is written
+            self._queue.put(None, timeout=timeout)
+        except queue.Full:
+            log.debug("The Tile's record didn't finish saving in time")
+            return
+        thread.join(max(deadline - time.monotonic(), 0.0))
 
     # Inside the display's lock.
 
@@ -119,14 +134,9 @@ class CardRecord:
         image: Image.Image,
         look: Look,
     ) -> None:
-        if self._count >= self._limit:
+        if self._closed or self._count >= self._limit:
             return
         card, asked, said, pinned, at = entry
-        try:
-            run = self._start()
-        except OSError:
-            log.debug("Couldn't make the Tile's record folder", exc_info=True)
-            return
         self._count += 1
         name = f"{self._count:04d}-{card.kind}.png"
         line: dict[str, object] = {
@@ -152,9 +162,9 @@ class CardRecord:
                 "accent": look.accent,
             },
         }
-        job = (run / name, image.copy(), line)
+        job = (name, image.copy(), line)
         if not self._background:
-            write(*job)
+            self._write(job)
             return
         try:
             self._queue.put_nowait(job)
@@ -164,6 +174,16 @@ class CardRecord:
         if self._thread is None:
             self._thread = threading.Thread(target=self._writer, name="tile-record", daemon=True)
             self._thread.start()
+
+    # On the record's own thread (or the caller's, with ``background=False``): making
+    # the folder and deleting old runs touch the disk, so never inside the lock.
+
+    def _write(self, job: _Job) -> None:
+        name, image, line = job
+        try:
+            write(self._start() / name, image, line)
+        except Exception:  # a full disk mustn't stop the Tile
+            log.debug("Couldn't save a Tile card", exc_info=True)
 
     def _start(self) -> Path:
         """This run's folder, made the first time, with older runs over ``runs`` gone."""
@@ -184,15 +204,13 @@ class CardRecord:
         log.info("Saving the Tile's cards to %s", run)
         return run
 
-    # On the record's own thread.
-
     def _writer(self) -> None:
         while True:
             job = self._queue.get()
             try:
-                write(*job)
-            except Exception:  # a full disk mustn't stop the Tile
-                log.debug("Couldn't save a Tile card", exc_info=True)
+                if job is None:
+                    return
+                self._write(job)
             finally:
                 self._queue.task_done()
 

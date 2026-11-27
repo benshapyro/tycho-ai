@@ -528,3 +528,61 @@ def test_a_fleet_is_numbered_and_lit_only_when_it_says_what_its_ranked_for() -> 
     plain = _tile(Card("fleet", rows=rows), look)
     assert ranked.size == plain.size
     assert _near(ranked, "#ff00ff", 90) > _near(plain, "#ff00ff", 90) + 100
+
+
+def test_a_list_draws_a_shared_unit_once() -> None:
+    """#688 (13): as drawn, not only what ``shared_unit`` returns."""
+
+    def ink(unit_b: str) -> int:
+        rows = (
+            Row("Everus Harbor", "Hurston", "8,500 aUEC/SCU"),
+            Row("Area18 TDD", "ArcCorp", f"7,700 {unit_b}"),
+        )
+        return _near(_tile(Card("list", rows=rows)), CORE.text) + _near(
+            _tile(Card("list", rows=rows)), CORE.dim
+        )
+
+    assert ink("aUEC/SCU") < ink("aUEC/SCX")  # one unit said once, not one per row
+
+
+def test_a_comparison_says_a_unit_both_figures_share_once() -> None:
+    """#688 (1): "6,840,000 aUEC" and "24,250,000 aUEC" crowded the middle."""
+
+    def card(right: str) -> Card:
+        rows = (Row("Buy in game", "6,840,000 aUEC", right),)
+        return Card("compare", hero=("Hammerhead", "Idris"), rows=rows)
+
+    shared, apart = _tile(card("24,250,000 aUEC")), _tile(card("24,250,000 aUEX"))
+    assert shared.size == apart.size
+    assert _near(shared, CORE.text) < _near(apart, CORE.text)
+
+
+def test_a_routes_long_place_names_wrap_rather_than_lose_their_end() -> None:
+    """#688 (4): "Starlight Service S…" though the title had it in full."""
+
+    def route(buy: str, sell: str) -> Card:
+        return Card(
+            "route", title="Agricium", rows=(Row(buy, "Buy", "2,600"), Row(sell, "Sell", "2,900"))
+        )
+
+    short = _tile(route("Lorville", "Area18"))
+    long = _tile(route("Starlight Service Station", "Rayari Deltana Research Outpost"))
+    assert long.height > short.height
+    assert _tile(route("", "")).height == _tile(route("A", "B")).height
+
+
+def test_one_line_rows_give_their_bars_room_under_the_name() -> None:
+    """#688 (6): the bar sat on the name's baseline and read as an underline."""
+    spread = (Row("A", value="3,048"), Row("B", value="1,500"), Row("C", value="900"))
+    close = (Row("A", value="3,048"), Row("B", value="3,012"), Row("C", value="2,990"))
+    assert _tile(Card("list", rows=spread)).height > _tile(Card("list", rows=close)).height
+
+
+def test_spaced_letters_are_measured_as_caps_draws_them() -> None:
+    """#688 (11): one letter at a time, so with no kerning between them."""
+    f = font("label", 25)
+    text = "AVATAR WAVY TYPE"
+    tracking = 0.05 * f.size
+    drawn = sum(f.getlength(ch) for ch in text) + tracking * (len(text) - 1)
+    assert text_width(text, f, tracking) == pytest.approx(drawn)
+    assert text_width(text, f) == f.getlength(text)
