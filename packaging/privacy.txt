@@ -1,0 +1,27 @@
+What leaves your PC
+
+Tycho runs on your PC. The Tycho project runs no servers of its own and
+receives nothing about you or how you use it. There are no analytics.
+
+- Your voice never leaves your PC: speech is turned into text here.
+- What you say, as text, goes to Claude (Anthropic, or OpenRouter if you
+  choose it), and only once you store a key for it. With it go your
+  keybinds, commands, memory notes and the last few requests.
+- What Tycho says, as text, goes to ElevenLabs, only once you store a key.
+- Web search sends a short query to OpenRouter and Perplexity, or to
+  Anthropic. Off with web_search = false.
+- Questions about trade, items and blueprints send the names you ask about
+  to UEX Corp and the Star Citizen Wiki API. Their ship lists, and the speech
+  model from Hugging Face, are downloaded to your PC.
+- GitHub is asked whether a newer Tycho is out. Off with
+  check_for_updates = false.
+- Off until you say yes, in setup or later:
+  crash reports to Sentry (crash_reports), a picture of the game window
+  when you ask Tycho to look (look_at_screen), and keeping a history of
+  your conversations on your PC (keep_history).
+
+Your settings are in %APPDATA%\tycho\settings.toml, and in Tycho's window
+under Settings, Privacy. Your API keys stay in Windows Credential Manager.
+
+The full privacy policy, service by service, with each service's own
+policy: https://github.com/benshapyro/tycho-ai/blob/main/PRIVACY.md

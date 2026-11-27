@@ -10,11 +10,23 @@
 #   LGPL): joysticks need only SDL2.dll, which is zlib (#79).
 # - Development and benchmark packages.
 
+import importlib.util
+from importlib.metadata import version as package_version
 from pathlib import PurePath
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 ROOT = PurePath(SPECPATH).parent  # noqa: F821 - PyInstaller defines SPECPATH
+
+# The product name and version on both programs, which SignPath checks before it signs
+# (#9). Loaded by path: `import packaging` would find the PyPI package.
+_spec = importlib.util.spec_from_file_location(
+    "tycho_version_info", str(ROOT / "packaging" / "version_info.py")
+)
+assert _spec is not None and _spec.loader is not None
+version_info = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(version_info)
+VERSION = package_version("tycho-ai")
 
 datas = [
     # Package metadata isn't bundled unless asked for. onnx-asr reads its own version
@@ -95,6 +107,7 @@ exe = EXE(  # noqa: F821
     [],
     exclude_binaries=True,
     name="tycho",
+    version=version_info.version_info(VERSION, "tycho.exe", "Tycho (terminal)"),
     console=True,  # for the terminal: `tycho check`, `tycho bind`, and agents
     upx=False,  # UPX-packed executables are flagged by antivirus more often
 )
@@ -104,6 +117,7 @@ app = EXE(  # noqa: F821
     [],
     exclude_binaries=True,
     name="tycho-app",
+    version=version_info.version_info(VERSION, "tycho-app.exe", "Tycho"),
     console=False,  # the Start menu's Tycho: the tray icon and the window, no terminal (#146)
     upx=False,
 )

@@ -39,6 +39,12 @@ sha256sum <folder>/TychoSetup-<version>.exe
 
 The file name must carry the new version. Use the installer from the merge commit's own run: its commit is the one the tag will point to.
 
+**Once Tycho is signed** (the `SIGNPATH_ORGANIZATION_ID` variable is set: `gh variable list`), take a signed installer instead: start Build by hand on `main` with signing, while `main` is still at the merge commit, and ask the maintainer to approve its two requests in SignPath (the programs, then the installer). Download that run's `tycho-installer`, and check `Get-AuthenticodeSignature` says `Valid` before hashing it. See `docs/code-signing.md`.
+
+```
+gh workflow run build.yml --ref main -f sign=true
+```
+
 ## 4. Draft the release
 
 Start from the version's section in `CHANGELOG.md`: it lists what changed, in players' words, with links. If something merged since the last release is missing from it, add it there too. The notes then expand it for a reader who has never heard of Tycho.
@@ -47,6 +53,7 @@ Write the notes for players, not developers. Assume the reader has never heard o
 
 - what's new since the last release, by what a player notices, most noticeable first; fixes and work behind the scenes go last, in a line or two;
 - how to install (link the README's Install section; SmartScreen's **More info**, then **Run anyway**, while the installer is unsigned);
+- a **Code signing policy** line linking the README's [Code signing policy](https://github.com/benshapyro/tycho-ai#code-signing-policy) (SignPath Foundation asks that the term appears on each release page);
 - known limits;
 - the SHA-256 line, `SHA-256 of \`TychoSetup-<version>.exe\`: \`<hash>\``, which the `tycho-setup` skill checks against;
 - the unofficial-fan-project notice from `NOTICE`.

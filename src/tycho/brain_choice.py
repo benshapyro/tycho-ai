@@ -111,7 +111,7 @@ def load_brain(
 
 PLAYER_HOSTS = ("anthropic",)
 """Who serves a player's OpenRouter brain: Anthropic only, never Bedrock or Vertex, so
-"What leaves your PC" in the README holds (#313). No fallback: if OpenRouter's Anthropic
+the privacy policy (PRIVACY.md) holds (#313). No fallback: if OpenRouter's Anthropic
 route is down, a request fails, as Claude direct would."""
 
 

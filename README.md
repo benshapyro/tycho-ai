@@ -52,7 +52,7 @@ flowchart LR
 ## Install
 
 1. **Download** `TychoSetup-<version>.exe` from the [latest release](https://github.com/benshapyro/tycho-ai/releases/latest).
-2. **Run it.** Tycho isn't code-signed yet, so Windows SmartScreen says it's from an unknown publisher: choose **More info**, then **Run anyway**. To check the file first, each release lists the installer's SHA-256; `Get-FileHash TychoSetup-<version>.exe` in PowerShell shows yours, and the two should match. It installs for you only, with no administrator prompt.
+2. **Run it.** Tycho isn't code-signed yet (see the [code signing policy](#code-signing-policy)), so Windows SmartScreen says it's from an unknown publisher: choose **More info**, then **Run anyway**. To check the file first, each release lists the installer's SHA-256; `Get-FileHash TychoSetup-<version>.exe` in PowerShell shows yours, and the two should match. It installs for you only, with no administrator prompt.
 3. **Follow Tycho's window.** It opens by itself and walks you through five steps: your game, your keys (you can skip them and add them later), your push-to-talk button, microphone and voice, what leaves your PC, and a first thing to try.
 4. **Press Start, switch to the game, and talk.** The first start downloads the speech model (0.7 GB), once.
 
@@ -132,26 +132,7 @@ In short:
 - **Only text is sent, and only to services you gave a key for:** what you said goes to Claude, and what Tycho says goes to ElevenLabs. The one exception is a picture of the game window, only if you turned looking on and only when you ask Tycho to look.
 - **Tycho counts and tracks nothing about how you use it.** Crash reports are sent only if you say yes.
 
-The full list:
-
-| Service | What it receives | When |
-|---|---|---|
-| Anthropic (Claude) | What you said (as text); your bound actions with their keys, your commands and sequences; and your last few requests with what Tycho did, if they were in the last 30 seconds | Requests the built-in commands don't handle, plus one warm-up request when Tycho starts |
-| Anthropic or OpenRouter (whichever runs the brain) | Your memory notes: short notes about you, for every game and for the game you're playing. Facts you mention about how you play are kept as you say them; anything else only when you ask Tycho to remember it. They're kept on your PC in `memory.toml` files you can read and edit, and on the Memory page | With each request to the brain, unless memory is off (`memory = false`, or say "turn memory off"). Never in crash reports |
-| Anthropic or OpenRouter (whichever runs the brain) | In Star Citizen, the blueprints you own: item names only, kept from the game's log (each blueprint a mission gives you, and once from your older logs) and from what you tell Tycho. They're kept on your PC in `blueprints.toml`, which you can read and edit, and on the Memory page | Only inside the answer when you ask about blueprints, unless memory is off. Never in crash reports |
-| Anthropic or OpenRouter (whichever runs the brain) | Parts of your past conversations: a few short matching lines of what you and Tycho said, kept on your PC for 30 days | Only with history on (`keep_history`, asked once in setup; off unless you say yes), and only when you ask about earlier talk ("what was yesterday's route?"). Never in crash reports |
-| OpenRouter, instead of Anthropic | The same as Anthropic (Claude) above. OpenRouter forwards it to Anthropic, who runs the model, so both receive it | Only with `brain_provider = "openrouter"`, instead of sending it to Anthropic directly |
-| ElevenLabs | The text Tycho speaks; at start, which voice you chose, to check your key can use it | When Tycho speaks, and once when it starts |
-| The key's own provider (Anthropic, OpenRouter or ElevenLabs) | A key you store, to check it works | When you store it, and when you run `tycho check` |
-| Star Citizen Wiki API, UEX Corp | Nothing about you: Tycho downloads their ship lists | On first run, and when a new patch goes live |
-| OpenRouter and Perplexity (web search, with an OpenRouter key) | A short search query Claude writes from your question. OpenRouter passes it to Perplexity's search and the results to Claude on Anthropic, and asks both to keep nothing | Questions about news, upcoming patches, events and new ships, and where something is or how to do something when Tycho's look-ups don't cover it; off with `web_search = false`. Any website; `web_search_open = false` keeps it to the Star Citizen sites. Whenever you've stored an OpenRouter key, whichever runs the brain |
-| Anthropic (web search, with only an Anthropic key) | The same search query | The same questions. The Star Citizen sites first; when they have no clear answer, any website, and Anthropic reads up to two of the pages it finds (never Reddit's pages, only its search snippets); `web_search_open = false` keeps it to the Star Citizen sites |
-| UEX Corp | Which commodity or trading place you asked about | Trade questions |
-| Star Citizen Wiki API | The item, blueprint or mission giver names you ask about | Weapon, armor, component, crafting and blueprint questions |
-| GitHub | Nothing about you: Tycho asks whether a newer version is out | When Tycho starts and when its window opens, off with `check_for_updates = false`; and when you press **Check for updates** |
-| Hugging Face | Nothing about you: Tycho downloads its speech model | Once, the first time Tycho starts |
-| Sentry (crash reports) | Only if you said yes: the kind of error and where in Tycho's own code it happened, Tycho's version, the Windows version, the game and the brain provider. Never what you or Tycho said, your keys, your name, your files or folders, or anything that identifies you or your PC | The next time Tycho starts after a crash. Saying no deletes any report still waiting |
-| Anthropic (Claude), or OpenRouter instead | A picture of the game's own window (never the desktop or another window), with your question. Never saved or logged | Only if you said yes to looking (`look_at_screen`, off until you do), and only when you ask Tycho to look ("take a look") or say yes when it offers. You hear a camera click each time |
+The full list, service by service, and how to turn each one off, is Tycho's [privacy policy](PRIVACY.md).
 
 ## Set up with an AI agent
 
@@ -203,6 +184,18 @@ These are plans, not promises. Each links its issue.
 ## Credits
 
 Speech recognition uses NVIDIA's [Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) model (CC-BY-4.0), via [onnx-asr](https://github.com/istupakov/onnx-asr). Ship and vehicle data comes from the [Star Citizen Wiki API](https://api.star-citizen.wiki), downloaded to your PC once per patch; its in-game prices are reported by players to [UEX Corp](https://uexcorp.space), which also lists the ships still in concept and provides the commodity prices and trade routes. Web search answers can draw on [starcitizen.tools](https://starcitizen.tools) (CC BY-SA 4.0). The window and the Tile use the Saira and Share Tech Mono fonts (SIL Open Font License). `tycho credits` shows these in the app, and the installer includes them.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+Tycho is applying to SignPath Foundation for this; until it is accepted, the installer is unsigned and Windows SmartScreen warns about it ([Install](#install) says what to do). Once accepted, each release's `tycho.exe`, `tycho-app.exe` and `TychoSetup-<version>.exe` are signed. They are built by GitHub Actions from this repository's `main` branch ([build.yml](.github/workflows/build.yml)), and only files built from Tycho's own source are signed; the third-party libraries inside the installer ship as their authors released them. How it works: [docs/code-signing.md](docs/code-signing.md).
+
+**Team roles**
+- Committers and reviewers: [Ben Shapiro (@benshapyro)](https://github.com/benshapyro), the maintainer. Every change reaches `main` through a pull request that passes CI and an automated review; a pull request from anyone else is reviewed by the maintainer before it merges.
+- Approvers: [Ben Shapiro (@benshapyro)](https://github.com/benshapyro). Every signing request is approved by hand.
+
+**Privacy policy:** what Tycho sends, to whom, and how to turn each off is in [PRIVACY.md](PRIVACY.md). Nothing is sent to the Tycho project itself; each outside service's own privacy policy is linked there.
 
 ## Licence
 
