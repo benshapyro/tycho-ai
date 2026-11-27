@@ -22,7 +22,7 @@ from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.packs import STAR_CITIZEN, as_run, built_in
 from tycho.packs.routes import RouteFlow, RouteLines
 from tycho.runtime.mappicks import under_header
-from tycho.runtime.mapwords import alike
+from tycho.runtime.mapwords import alike, heading
 from tycho.runtime.route import Place, Plotted, id_names, plot
 from tycho.situation import Logged
 
@@ -1098,3 +1098,33 @@ def test_a_modifier_held_at_a_click_clicks_nothing_and_says_to_let_go() -> None:
     assert (done.status, done.say) == ("modifier_held", "Let go of Ctrl and say it again.")
     assert game.clicks == []
     assert not game.route_id
+
+
+def _lines(*lines: str) -> Reading:
+    words = tuple(
+        Word(word, 100 + 80 * j, 100 + 30 * i, 70, 20, i)
+        for i, line in enumerate(lines)
+        for j, word in enumerate(line.split())
+    )
+    return Reading(WIDTH, HEIGHT, words, 7)
+
+
+def test_a_misread_results_header_still_heads_the_list() -> None:
+    # Ben's Hurston try, #682: text recognition read "ALL RESULTS" as "ALURESULT$" (#684).
+    reading = _lines("ALURESULT$", "STANTON SYSTEM", "HURSTON")
+    assert under_header(reading, "results", "", "Hurston", 0.5, "Stanton") is not None
+    assert (
+        under_header(
+            _lines("RECENT", "ALURESULT$", "HURSTON"), "recent", "results", "Hurston", 0.5, None
+        )
+        is None
+    )
+
+
+def test_a_header_is_only_matched_loosely_in_one_short_word() -> None:
+    assert heading(_lines("ALL RESULTS (2)"), "results") is not None
+    assert heading(_lines("ALLRE5ULTS"), "results") is not None
+    assert heading(_lines("RESULT"), "results") is None  # a letter short
+    assert heading(_lines("NORESULTSWEREFOUNDHERE"), "results") is None  # too long to be it
+    assert heading(_lines("HURSTON"), "results") is None
+    assert heading(_lines("ANYTHING"), "") is None
