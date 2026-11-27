@@ -80,6 +80,8 @@ class RouteLines:
         "The map's search box still has text in it. Clear it with its x, then ask again."
     )
     """Said when the box holds an earlier name, which typing would add to (27 Nov 2026)."""
+    not_cleared: str = "I couldn't clear the map's search box, so I left the map open."
+    """Said when a click on the box's own x didn't empty it (review of #734)."""
     risky_first: str = "I can't type {name}: its first letter is your {action} key."
     """Said when the name's first letter, typed before Tycho can see the box took the
     keys, would press a confirm-grade action (#682)."""

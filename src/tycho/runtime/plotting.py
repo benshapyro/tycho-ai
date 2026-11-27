@@ -24,10 +24,11 @@ from tycho.input import Presser
 from tycho.keybinds import Keybinds
 from tycho.packs import Safety
 from tycho.packs.routes import PlaceError, Places, Route
+from tycho.runtime.mapports import Clicker, RouteLog, ScreenReader
 from tycho.runtime.mapwords import map_name
 from tycho.runtime.messages import Progress, Status
 from tycho.runtime.planning import Questions
-from tycho.runtime.route import Clicker, Place, RouteLog, ScreenReader, plot
+from tycho.runtime.route import Place, plot
 from tycho.text import normalize, similarity
 
 log = logging.getLogger(__name__)

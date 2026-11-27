@@ -40,8 +40,8 @@ if TYPE_CHECKING:
         Transcriber,
     )
     from tycho.runtime.callouts import Callouts
+    from tycho.runtime.mapports import Clicker, ScreenReader
     from tycho.runtime.plotting import FailedRoute, Plotter
-    from tycho.runtime.route import Clicker, ScreenReader
     from tycho.stt.parakeet import ParakeetTranscriber
 
 log = logging.getLogger("tycho")
@@ -206,8 +206,8 @@ def plotter_for(
     """Plotting a route on the game's map (#588), for a pack with a ``[route]`` table
     whose game state reads the log lines the flow needs."""
     from tycho.games import BUILT_IN
+    from tycho.runtime.mapports import RouteLog
     from tycho.runtime.plotting import Plotter, RouteTool
-    from tycho.runtime.route import RouteLog
 
     route = pack.route
     if route is None or reader is None or clicker is None or not isinstance(game_state, RouteLog):

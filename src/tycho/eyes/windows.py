@@ -55,7 +55,7 @@ class WindowsCamera:
 
 class WindowsScreenReader:
     """Reads the words on ``executable``'s window, for the route flow's local check
-    (#588). Satisfies ``runtime.route.ScreenReader`` and ``runtime.route.Warm``.
+    (#588). Satisfies ``runtime.mapports.ScreenReader`` and ``runtime.mapports.Warm``.
     Blocking: called off the event loop. No camera sound: the frame never leaves the
     child process, and the words are only compared with what Tycho chose (ADR 14's
     amendment "a local check before a press"). Between ``warm`` and ``finish`` (one
