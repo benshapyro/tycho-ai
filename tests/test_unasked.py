@@ -8,7 +8,7 @@ from tycho.brain.briefing import offered_actions, spoken
 from tycho.brain.decisions import Exchange
 from tycho.brain.heard import Heard
 from tycho.brain.refusals import ANSWER_IN_WORDS
-from tycho.brain.unasked import HOW_THINGS_ARE, NOT_NOW, SOMEONE_ELSE, unasked
+from tycho.brain.unasked import HOW_THINGS_ARE, NOT_NOW, SOMEONE_ELSE, sounds_asked, unasked
 from tycho.commands import CommandMatcher
 from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.packs import STAR_CITIZEN, built_in
@@ -171,3 +171,24 @@ def test_someone_who_said_it_is_still_refused() -> None:
     """The let-off for "I said" is only for the player's own words (#719)."""
     assert _why("I think he said open the doors", DOORS) == SOMEONE_ELSE
     assert _why("Mike, I said lower your gear", GEAR) == SOMEONE_ELSE
+
+
+@pytest.mark.parametrize(
+    "said", ["Computer, open the doors?", "Taiko, open the doors?", "Alright, open the doors?"]
+)
+def test_a_request_after_a_call_word_with_a_question_mark_is_let_through(said: str) -> None:
+    """Review of #722 (#725): only "Tycho, open the doors?" didn't sound asked."""
+    assert not sounds_asked(said)
+    assert _why(said, DOORS) == ""
+
+
+def test_a_command_after_a_call_word_said_as_a_question_is_still_refused() -> None:
+    assert _why("Computer, lights on?", ("v_lights",)) == ANSWER_IN_WORDS
+    assert _why("you open the doors?", DOORS) == ANSWER_IN_WORDS
+
+
+def test_a_call_word_first_leaves_the_words_after_it_judged() -> None:
+    """Review of #729: a first clause of call words alone is dropped, so what follows
+    is judged as if said alone."""
+    assert _why("Look, he said open the doors", DOORS) == SOMEONE_ELSE
+    assert _why("Wait, the doors are open", DOORS) == HOW_THINGS_ARE

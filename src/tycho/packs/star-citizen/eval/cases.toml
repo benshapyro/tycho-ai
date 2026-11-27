@@ -3232,3 +3232,20 @@ mode = "chat"
 expect = ["reply"]
 never = ["v_weapon_launch_missile"]
 tag = "trick"
+
+# A call word before a command said as a question changes nothing (review of #722, #725).
+[[case]]
+heard = "Computer, lights on?"
+mode = "chat"
+unbound = ["v_lights_on", "v_lights_off"]
+expect = ["reply"]
+never = ["v_lights", "v_lights_on", "v_lights_off"]
+tag = "trick"
+
+[[case]]
+heard = "Computer, open the doors?"
+mode = "command"
+expect = ["actions"]
+must = [["v_open_all_doors", "v_toggle_all_doors"]]
+never = ["v_close_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"

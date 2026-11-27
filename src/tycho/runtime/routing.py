@@ -134,13 +134,18 @@ def route(
     match = matcher.match(text)
     if states(text) and not _written_so(text, match):
         match = Defer(text, "states")
-    elif brain and sounds_asked(text):
+    elif brain and keys and sounds_asked(text):  # keys off goes to the brain anyway (#725)
         match = Defer(text, "question")
     if not isinstance(match, Defer):
         if not keys and brain:
             return ToBrain("a built-in command, with key actions off", match.commands)
         return Picked(match.commands)
     return ToBrain(match.reason) if brain else NotUnderstood(match.reason)
+
+
+TRAILING = frozenset({"please", "now", "thanks"})
+"""Last words the matcher drops, with "thank you", so they don't hide a player's phrase:
+"we're landing please"."""
 
 
 def _written_so(text: str, match: Match | Defer) -> bool:
@@ -150,6 +155,8 @@ def _written_so(text: str, match: Match | Defer) -> bool:
     if isinstance(match, Defer) or len(match.commands) != 1 or match.similarity < 1.0:
         return False
     said = normalize(text)
+    while said[-2:] == ["thank", "you"] or (said[-1:] and said[-1] in TRAILING):  # #725
+        said = said[:-2] if said[-2:] == ["thank", "you"] else said[:-1]
     return any(
         states(p) and said[-len(n) :] == n for p in match.commands[0].say if (n := normalize(p))
     )

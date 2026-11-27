@@ -46,6 +46,8 @@ NOT_A_NAME = FILLER | {
 }
 """Words that can open a request with a comma after them, so aren't a name: with the
 ways speech-to-text spells "Tycho", and "computer" (#719)."""
+TALKED_TO = frozenset({"you", "guys", "everyone", "all"})
+"""``NOT_A_NAME`` words that can open a question too: "you open the doors?"."""
 NAMED = re.compile(r"^\W*(?:(?:hey|ok|okay|oh|so|and)\W+)*([A-Z][A-Za-z'-]*)\s*,")
 """A capitalised word and a comma first: someone the player is talking to."""
 THIRD = frozenset({"he", "hes", "she", "shes", "they", "someone", "somebody", "everybody"})
@@ -112,6 +114,8 @@ def unasked(heard: Heard | None, picked: Iterable[str], words: Collection[str] =
     known = {w for name in picked for w in used.get(name, ())}
     said = player_said(heard).strip().replace("\N{RIGHT SINGLE QUOTATION MARK}", "'")
     clauses = [c for c in re.split(r"[,.!?;:]+", said) if normalize(c)]
+    while len(clauses) > 1 and NOT_A_NAME.issuperset(normalize(clauses[0])):
+        clauses = clauses[1:]  # "Computer, lights on?" is "lights on?" (#725)
     if not clauses:
         return ""
     first = _opening(normalize(clauses[0]))
@@ -145,7 +149,11 @@ def sounds_asked(said: str) -> bool:
     if not said.rstrip().endswith("?"):
         return False
     words = _opening(normalize(said))
-    if not words or "please" in words or words[0] in ACTION_WORDS:
+    if "please" in words:
+        return False
+    while len(words) > 1 and words[0] in NOT_A_NAME - TALKED_TO:  # "Computer, ..." (#725)
+        words = words[1:]
+    if not words or words[0] in ACTION_WORDS:
         return False
     return not _opens(words, REQUEST | ASKS_FOR | ASKS_NOW)
 

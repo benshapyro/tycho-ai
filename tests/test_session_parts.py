@@ -373,7 +373,12 @@ def test_a_players_own_stated_phrase_takes_the_fast_path(tmp_path: Path) -> None
         "utf-8",
     )
     matcher = CommandMatcher.default(mine, pack=SC)
-    for said in ("it's go time", "Tycho, we're landing"):
+    for said in (
+        "it's go time",
+        "Tycho, we're landing",
+        "we're landing please",
+        "it's go time, thank you",
+    ):
         picked = route(said, matcher)
         assert isinstance(picked, Picked), said
         assert [c.id for c in picked.commands] == ["go_time"]
@@ -399,8 +404,18 @@ def test_without_a_brain_a_command_said_as_a_question_is_still_pressed() -> None
         "could you lower the gear?",
         "open the doors?",
         "lights on, please?",
+        "please lights on?",
+        "Tycho, please lights on?",
         "let's lower the gear?",
     ],
 )
 def test_a_polite_request_with_a_question_mark_keeps_the_fast_path(text: str) -> None:
     assert isinstance(route(text, MATCHER), Picked)
+
+
+def test_with_key_actions_off_a_command_said_as_a_question_keeps_its_match() -> None:
+    """Review of #722 (#725): the brain gets the player's keys for it (#386), and the
+    gate's reason if the brain fails."""
+    routed = route("lights on?", MATCHER, keys=False)
+    assert isinstance(routed, ToBrain)
+    assert routed.matched
