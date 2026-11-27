@@ -395,8 +395,10 @@ class Session:
             picked = await self._asker.ask(corrected.for_brain, keys, seen)
             trace.mark("brain")
             plain = seen is None and isinstance(picked, Reply) and not picked.looked_up
-            if self._plotter is not None and (place := self._plotter.handed(plain)):  # #647
-                return await self._plot(place, job)
+            if self._plotter is not None:  # #647; never "On it." for a dropped route (#728)
+                place, picked = self._plotter.handed(plain, picked, text)
+                if place:
+                    return await self._plot(place, job)
             if isinstance(picked, Reply):
                 progress.answered(picked.text, picked.card, picked.looked_up)
                 return progress.result(request, "replied", trace, heard, text)

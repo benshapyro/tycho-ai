@@ -1979,7 +1979,7 @@ def test_nothing_is_pressed_after_a_place_is_handed_to_the_route_tool() -> None:
     """#721: "take us to Ruin Station" handed the place over, then pressed flight ready
     and asked ATC for clearance. Tycho plots the route after the reply, so nothing else
     is pressed, in the next reply or the same one."""
-    from tycho.brain.lookups import HANDED_OVER
+    from tycho.brain.lookups import ACT_HELD
     from tycho.runtime.plotting import RouteTool
 
     act = _tool_stop("run_actions", {"actions": ["v_toggle_landing_system"], "say": "Go."})
@@ -1992,5 +1992,5 @@ def test_nothing_is_pressed_after_a_place_is_handed_to_the_route_tool() -> None:
         route = RouteTool("Plot a route.")
         lookups = cast(Any, (route,))
         brain = ClaudeBrain(MATCHER, client=cast(Any, calls), lookups=lookups, pack=SC)
-        assert asyncio.run(brain.decide(request)) == Reply(HANDED_OVER)
+        assert asyncio.run(brain.decide(request)) == Reply(ACT_HELD)
         assert route.take() == "Ruin Station"  # still plotted, by Tycho
