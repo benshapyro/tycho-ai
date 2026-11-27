@@ -270,6 +270,8 @@ class Round:
             return final_reply(text, credits, stopped)
         if not self._empty or self._empty != len(self.looking) or not spoken(text):
             return None
+        if _LEAD_IN.match(spoken(text)):
+            return None  # "Let me check your blueprints." isn't the answer (#669)
         try:
             return final_reply(text, credits, stopped)
         except BrainError:
@@ -478,6 +480,15 @@ def fitted(reply: str, credits: Sequence[str]) -> Reply:
         return answer
     room = SPOKEN_LIMIT - (len(answer.text) - len(reply))
     return credited(Reply(clip_spoken(reply, room)), credits)
+
+
+_LEAD_IN = re.compile(
+    r"(let me|i['\u2019]ll (check|look|see|find|pull)|i will (check|look)|checking|one (moment|sec)"
+    r"|just a (moment|sec)|hold on|give me a)\b[^.!?…,]{0,40}[.!?…]*$",
+    re.IGNORECASE,
+)
+"""Words that only say an answer is coming, in one short sentence with no comma: never
+the answer (#669). "Looking at your fleet, none can mine." is an answer."""
 
 
 def spoken(text: str) -> str:
