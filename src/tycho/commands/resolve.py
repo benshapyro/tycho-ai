@@ -28,3 +28,11 @@ def resolve(command: Command, keybinds: Keybinds) -> Resolved:
         if action is not None and action.bound:
             return Resolved(command, action, fallback=position > 0)
     return Resolved(command, None)
+
+
+def on_stick(command: Command, keybinds: Keybinds) -> Action | None:
+    """For a command with no key: its first action that's bound on the player's stick
+    instead (#622). Tycho never presses that; it says it's on the stick."""
+    if resolve(command, keybinds).action is not None:
+        return None
+    return next((a for n in command.actions if (a := keybinds.on_stick(n)) is not None), None)

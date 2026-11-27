@@ -12,6 +12,7 @@ from dataclasses import dataclass
 MODIFIERS = frozenset({"lalt", "ralt", "lctrl", "rctrl", "lshift", "rshift"})
 _MOUSE_PREFIXES = ("mouse", "mwheel", "maxis")
 _DEVICE_PREFIX = re.compile(r"^(kb|mo)\d+_")
+_BUTTON = re.compile(r"button(\d+)")
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +52,23 @@ class KeyInput:
 
 
 @dataclass(frozen=True, slots=True)
+class StickInput:
+    """One input on a joystick, as the game numbers them (#622): the stick (1, 2...) and
+    the input on it ("button12", "hat1_up", "x"). Tycho never presses one: it's kept to
+    warn when push-to-talk is on it too, and to say an action is on the player's stick."""
+
+    stick: int
+    input: str
+
+    @property
+    def button(self) -> int | None:
+        """The button's number, counted from 1 as the game does; None for anything else
+        (an axis, a hat, a button held with another)."""
+        match = _BUTTON.fullmatch(self.input)
+        return int(match.group(1)) if match else None
+
+
+@dataclass(frozen=True, slots=True)
 class Action:
     name: str
     actionmap: str
@@ -64,6 +82,8 @@ class Action:
     """The player changed this binding from the game's default."""
     multi_tap: int = 0
     """Presses needed, from a multiTap attribute; 0 when the binding doesn't say."""
+    stick_inputs: tuple[StickInput, ...] = ()
+    """Its joystick inputs (#622). Never pressed: ``inputs`` are all Tycho presses."""
 
     @property
     def bound(self) -> bool:
@@ -96,12 +116,19 @@ class ActivationMode:
 
 
 class Keybinds:
-    """Every action and its effective key, looked up by name, plus the game's activation modes."""
+    """Every action and its effective key, looked up by name, plus the game's activation
+    modes and the sticks the game numbers."""
 
     def __init__(
-        self, actions: Iterable[Action], modes: Mapping[str, ActivationMode] | None = None
+        self,
+        actions: Iterable[Action],
+        modes: Mapping[str, ActivationMode] | None = None,
+        sticks: Mapping[int, str] | None = None,
     ) -> None:
         self.modes: dict[str, ActivationMode] = dict(modes or {})
+        self.sticks: dict[int, str] = dict(sticks or {})
+        """The game's name for each stick it numbers (``StickInput.stick``), as its own
+        file writes it: "VKBsim Gladiator EVO R {0200231D-0000-0000-0000-504944564944}"."""
         self._by_name: dict[str, list[Action]] = {}
         for action in actions:
             self._by_name.setdefault(action.name, []).append(action)
@@ -110,6 +137,14 @@ class Keybinds:
         """An action by name. Some appear in several groups; a bound copy wins."""
         copies = self._by_name.get(name, [])
         return next((a for a in copies if a.bound), copies[0] if copies else None)
+
+    def on_stick(self, name: str) -> Action | None:
+        """The action, if it's bound on a stick and has no key Tycho can press in any
+        group (#622): so Tycho says it's on the stick rather than unbound."""
+        copies = self._by_name.get(name, [])
+        if any(a.bound for a in copies):
+            return None
+        return next((a for a in copies if a.stick_inputs), None)
 
     def __iter__(self) -> Iterator[Action]:
         return (a for copies in self._by_name.values() for a in copies)

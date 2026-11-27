@@ -71,7 +71,7 @@ def test_setup_shows_what_is_chosen_and_what_is_missing(path: Path) -> None:
         "name": "Star Citizen",
     }
     assert "PTU" in state["channels"]  # type: ignore[operator]
-    assert state["push_to_talk"] == {"set": False, "name": "", "conflicts": []}
+    assert state["push_to_talk"] == {"set": False, "name": "", "conflicts": [], "notes": []}
     assert state["microphone"] == {"setting": "", "devices": ["Headset, MME", "Desk mic, MME"]}
     assert state["ready"] is False
 
@@ -143,6 +143,7 @@ def test_a_second_push_to_talk_button_is_chosen_and_removed(path: Path) -> None:
         "set": True,
         "name": "Mouse side (forward)",  # the stand-in names every button so
         "conflicts": [],
+        "notes": [],
     }
     assert bridge.remove_second_push_to_talk()["ok"] is True
     assert settings.load(path).push_to_talk_2 is None

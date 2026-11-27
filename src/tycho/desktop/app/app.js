@@ -216,7 +216,7 @@
         <div class="ptt"><span class="key num" id="pttName">${esc(s.push_to_talk.name || "None yet")}</span>
           <button class="btn primary frame" type="button" id="capture">${s.push_to_talk.set ? "Choose another button" : "Choose a button"}</button></div>
         ${s.push_to_talk.set ? "" : `<p class="note">Tycho can't start without one, but you can choose it later.</p>`}
-        ${s.push_to_talk.conflicts.map((c) => `<p class="warn-line">${esc(c)}</p>`).join("")}
+        ${[...s.push_to_talk.conflicts, ...s.push_to_talk.notes].map((c) => `<p class="warn-line">${esc(c)}</p>`).join("")}
         ${s.push_to_talk.set ? secondPtt(s.push_to_talk_2) : ""}</div>`;
       const mic = `<div class="card frame"><h3>Microphone</h3>
         ${micSelect(s.microphone)}
@@ -416,7 +416,7 @@
         <div class="ptt"><span class="key num" id="ptt2Name">${esc(p.name || "None")}</span>
           <button class="btn frame" type="button" id="capture2">${p.set ? "Choose another" : "Add a second button"}</button>
           ${p.set ? `<button class="btn frame" type="button" id="remove2">Remove</button>` : ""}</div>
-        ${p.conflicts.map((c) => `<p class="warn-line">${esc(c)}</p>`).join("")}`;
+        ${[...p.conflicts, ...p.notes].map((c) => `<p class="warn-line">${esc(c)}</p>`).join("")}`;
   function bindSecondPtt() {
     $("#capture2")?.addEventListener("click", () => capture($("#capture2"), $("#ptt2Name"), true));
     $("#remove2")?.addEventListener("click", async () => {

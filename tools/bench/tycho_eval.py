@@ -107,7 +107,7 @@ from tycho.history import Entry, History, HistoryFolder, session_id
 from tycho.history.tool import HistoryLookup
 from tycho.input import NotPressable, UnsupportedKey, plan
 from tycho.input.plan import pressable_input
-from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput, key_text
+from tycho.keybinds import Action, ActivationMode, Keybinds, KeyInput, StickInput, key_text
 from tycho.knowledge.web import WebSearch
 from tycho.lexicon import Lexicon
 from tycho.memory import Memory, NoteFile, Scope
@@ -900,8 +900,9 @@ def load_keybinds(path: Path) -> tuple[Keybinds, str, str]:
             raise SystemExit(refused)
         actions = [
             Action(
-                **{k: v for k, v in entry.items() if k != "inputs"},
+                **{k: v for k, v in entry.items() if k not in ("inputs", "stick_inputs")},
                 inputs=tuple(KeyInput(key, tuple(mods)) for key, *mods in _inputs(entry)),
+                stick_inputs=tuple(StickInput(**s) for s in entry.get("stick_inputs", ())),
             )
             for entry in data["actions"]
         ]

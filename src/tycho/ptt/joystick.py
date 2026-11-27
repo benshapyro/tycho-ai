@@ -16,6 +16,7 @@ import logging
 import warnings
 from typing import Any
 
+from tycho.ptt import sticks
 from tycho.ptt.binding import Binding, DeviceKind
 
 with warnings.catch_warnings():  # "Using SDL2 binaries from pysdl2-dll": expected, not news
@@ -38,7 +39,8 @@ class JoystickSource:
 
     A joystick is identified by its SDL GUID, which is stable across reconnects.
     Identical sticks share a GUID, so duplicates get ``#2``, ``#3`` in connection
-    order. Configuring them with distinct USB IDs (VKB's tool can) avoids that.
+    order. Configuring them with distinct USB IDs (VKB's tool can) avoids that; each
+    look is recorded in ``tycho.ptt.sticks``, which says so when it sees a pair (#623).
     """
 
     def __init__(self) -> None:
@@ -70,8 +72,9 @@ class JoystickSource:
         )
 
     def describe(self, binding: Binding) -> str:
-        name = self.names.get(binding.device or "", "Joystick")
-        return f"{name} button {binding.code + 1}"
+        from tycho.ptt.devices import describe
+
+        return describe(binding)
 
     def close(self) -> None:
         for stick in self._sticks.values():
@@ -105,6 +108,7 @@ class JoystickSource:
             self._sticks[device] = stick
             name = sdl2.SDL_JoystickName(stick)
             self.names[device] = name.decode("utf-8", "replace") if name else "Joystick"
+        sticks.saw(self.names)
 
 
 def _guid(stick: Any) -> str:

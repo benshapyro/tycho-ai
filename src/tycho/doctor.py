@@ -23,9 +23,10 @@ from tycho.commands import CommandFileError, CommandMatcher
 from tycho.findings import TYCHO, Finding, key_finding
 from tycho.games import fleet_findings, game_findings
 from tycho.packs import YOU_TURNED_THEM_OFF, GameKeys, GamePack, PackError, as_run, built_in
+from tycho.ptt import sticks
 from tycho.ptt.binding import DeviceKind, every_binding
 from tycho.ptt.conflicts import conflict_warnings
-from tycho.ptt.devices import describe, describe_all
+from tycho.ptt.devices import describe, describe_all, look_at_sticks
 from tycho.settings import Settings
 from tycho.stt import (
     PARAKEET_V2,
@@ -113,7 +114,9 @@ def diagnose(current: Settings, *, quick: bool = False) -> Iterator[Finding]:
 
 def checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Finding]:
     """``ask``: a missing game folder may be asked for in the terminal. Never from the
-    app window, whose thread mustn't wait on a question nobody can see."""
+    app window, whose thread mustn't wait on a question nobody can see. Only with
+    ``ask`` does the check open the sticks itself: in the app window the running
+    Tycho's push-to-talk has them open, and has already looked."""
     yield Finding("ok", "Settings", str(paths.settings_file()))
     for name in settings.unknown_keys():
         yield Finding("warn", "Settings", UNKNOWN_SETTING.format(name=name))
@@ -131,11 +134,12 @@ def checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Finding
             "fail", "Push-to-talk", f"not chosen yet. Run: {TYCHO} bind", fix=f"{TYCHO} bind"
         )
     else:
-        yield Finding(
-            "ok",
-            "Push-to-talk",
-            describe_all(every_binding(current.push_to_talk, current.push_to_talk_2)),
-        )
+        buttons = every_binding(current.push_to_talk, current.push_to_talk_2)
+        if ask and any(b.kind is DeviceKind.JOYSTICK for b in buttons):
+            look_at_sticks()  # their names, and any pair that can swap (#623)
+        yield Finding("ok", "Push-to-talk", describe_all(buttons))
+        for note in dict.fromkeys(n for b in buttons if (n := sticks.swap_note(b))):
+            yield Finding("warn", "Push-to-talk stick", note, fix=sticks.SWAP_HELP)
 
     if not quick:
         yield microphone_finding(current)
@@ -186,17 +190,13 @@ def checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Finding
 
     bindings = every_binding(current.push_to_talk, current.push_to_talk_2)
     if bindings and store is not None:
-        # One line per button (#629): a mouse button's clear check isn't lost behind a
-        # stick button's "not checked".
+        # One line per button (#629): a mouse button's clear check isn't lost behind
+        # another's warning. A stick button is checked too (#622).
         for b in bindings:
             name = f"{describe(b)}: " if len(bindings) > 1 else ""
             if warnings := conflict_warnings(b, store):
                 for warning in warnings:
                     yield Finding("warn", "Push-to-talk conflict", warning)
-            elif b.kind is DeviceKind.JOYSTICK:
-                yield Finding(
-                    "ok", "Push-to-talk conflict", f"{name}joystick buttons aren't checked yet"
-                )
             else:
                 yield Finding("ok", "Push-to-talk conflict", f"{name}not bound to anything in game")
 

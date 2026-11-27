@@ -106,6 +106,9 @@ def actions_command(current: Settings, words: list[str]) -> int:
     ]
     for action in found[:MAX_ACTIONS_SHOWN]:
         keys = ", ".join(str(k) for k in action.inputs) or "no key"
+        if not action.inputs and action.stick_inputs:  # bound, just not on a key (#622)
+            on = ", ".join(f"stick {s.stick} {s.input}" for s in action.stick_inputs)
+            keys = f"on your stick only ({on}): give it a key for Tycho to press it"
         print(f"{action.name}  |  {action.label or '(no label)'}  |  {keys}  |  {action.actionmap}")
     if len(found) > MAX_ACTIONS_SHOWN:
         print(f"... and {len(found) - MAX_ACTIONS_SHOWN} more: add a word to narrow it down.")

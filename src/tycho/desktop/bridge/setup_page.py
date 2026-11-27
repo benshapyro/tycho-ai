@@ -63,11 +63,13 @@ class SetupPage(SettingsPage, CommandsPage):
                 "set": ptt is not None,
                 "name": self._pc.name(ptt) if ptt else "",
                 "conflicts": self._conflicts(ptt, current) if ptt else [],
+                "notes": _stick_notes(ptt),
             },
             "push_to_talk_2": {  # held the same way, say a stick button too (#621)
                 "set": ptt_2 is not None,
                 "name": self._pc.name(ptt_2) if ptt_2 else "",
                 "conflicts": self._conflicts(ptt_2, current) if ptt_2 else [],
+                "notes": _stick_notes(ptt_2),
             },
             "microphone": {"setting": current.microphone or "", "devices": self._devices()},
             "keys": keys,
@@ -338,3 +340,15 @@ def _leaves(pack: GamePack, current: Settings) -> list[dict[str, str]]:
         }
     )
     return rows
+
+
+def _stick_notes(ptt: str | None) -> list[str]:
+    """Setup's note when the push-to-talk stick has an identical twin that can take its
+    place after a replug or restart (#623): from the sticks Tycho last saw."""
+    from tycho.ptt import sticks
+    from tycho.ptt.binding import Binding
+
+    if not ptt:
+        return []
+    note = sticks.swap_note(Binding.parse(ptt))
+    return [note] if note else []

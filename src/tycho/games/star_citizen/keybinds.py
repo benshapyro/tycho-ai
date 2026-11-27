@@ -4,22 +4,32 @@ The defaults live in Data.p4k (Data\\Libs\\Config\\defaultProfile.xml, as CryXml
 The player's changes live in actionmaps.xml, which lists only what they rebound,
 per device: "kb1_" keyboard, "mo1_" mouse, "js1_"... joysticks, "gp1_" gamepad.
 
-Tycho presses keyboard keys and mouse buttons, so only those inputs are kept.
-Keyboard and mouse share one slot per action: a keyboard rebind replaces the
-default mouse button too, and the other way round (seen in game: binding Right
+Tycho presses keyboard keys and mouse buttons, so only those are an action's
+``inputs``. Keyboard and mouse share one slot per action: a keyboard rebind replaces
+the default mouse button too, and the other way round (seen in game: binding Right
 Alt+Q to quantum engage took it off left click). Rebinding an action on a
 joystick leaves its keyboard key in place.
+
+Joystick inputs are kept apart, as ``stick_inputs``, and never pressed (#622): to warn
+when push-to-talk is on a stick button bound in game, and to say an action is on the
+player's stick rather than unbound. Each stick has its own slot: a "js2_" rebind
+replaces only stick 2's. The default profile's joystick inputs are taken as stick 1's,
+once actionmaps.xml names a stick.
+actionmaps.xml's ``<options type="joystick" instance="N" Product="...">`` names each.
 """
 
+import re
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Mapping
 from dataclasses import replace
 
 from tycho.games.star_citizen.localization import resolve
-from tycho.keybinds import Action, ActivationMode, KeyInput
+from tycho.keybinds import Action, ActivationMode, KeyInput, StickInput
 
 DEFAULTS_P4K_PATH = r"Data\Libs\Config\defaultProfile.xml"
 _PRESSABLE_DEVICES = {"kb": "keyboard", "mo": "mouse"}
+_STICK = re.compile(r"js(\d+)_(.*)", re.DOTALL)
+_DEFAULT_STICK = 1
 
 
 def parse_defaults(root: ET.Element, strings: Mapping[str, str]) -> list[Action]:
@@ -39,6 +49,10 @@ def parse_defaults(root: ET.Element, strings: Mapping[str, str]) -> list[Action]
                 if child is not None:
                     activation = activation or child.get("activationMode", "")
                     multi_tap = multi_tap or _int(child.get("multiTap"))
+            sticks = (
+                _stick_input(f"js{_DEFAULT_STICK}_{text}")
+                for text in _default_inputs(element, "joystick")
+            )
             actions.append(
                 Action(
                     name=element.get("name", ""),
@@ -47,6 +61,7 @@ def parse_defaults(root: ET.Element, strings: Mapping[str, str]) -> list[Action]
                     inputs=tuple(inputs),
                     activation=activation,
                     multi_tap=multi_tap,
+                    stick_inputs=tuple(s for s in sticks if s is not None),
                 )
             )
     return actions
@@ -76,13 +91,19 @@ def apply_profile(defaults: Iterable[Action], profile: ET.Element) -> list[Actio
     rebinds: dict[tuple[str, str], list[KeyInput]] = {}
     activations: dict[tuple[str, str], str] = {}
     multi_taps: dict[tuple[str, str], int] = {}
+    stick_rebinds: dict[tuple[str, str], dict[int, list[StickInput]]] = {}
     for actionmap in profile.iter("actionmap"):
         for action in actionmap.iter("action"):
             key = (actionmap.get("name", ""), action.get("name", ""))
             for rebind in action.iter("rebind"):
                 text = rebind.get("input", "")
+                if match := _STICK.fullmatch(text):  # never pressed: kept apart (#622)
+                    slot = stick_rebinds.setdefault(key, {}).setdefault(int(match[1]), [])
+                    if (stick := _stick_input(text)) is not None:  # "js1_ " clears it
+                        slot.append(stick)
+                    continue
                 if text[:2] not in _PRESSABLE_DEVICES:
-                    continue  # joystick or gamepad
+                    continue  # gamepad
                 slot = rebinds.setdefault(key, [])  # a blank rebind ("kb1_ ") clears it
                 if (parsed := KeyInput.parse(text)) is not None:
                     slot.append(parsed)
@@ -91,9 +112,16 @@ def apply_profile(defaults: Iterable[Action], profile: ET.Element) -> list[Actio
                 if taps := _int(rebind.get("multiTap")):
                     multi_taps[key] = taps
 
+    if not parse_sticks(profile):  # no stick the game knows of (review of #706)
+        defaults = without_sticks(defaults)
     result: list[Action] = []
     for action in defaults:
         key = (action.actionmap, action.name)
+        if key in stick_rebinds:
+            changed = stick_rebinds[key]
+            kept = tuple(s for s in action.stick_inputs if s.stick not in changed)
+            new = tuple(s for inputs in changed.values() for s in inputs)
+            action = replace(action, stick_inputs=kept + new)
         if key not in rebinds:
             result.append(action)
             continue
@@ -104,6 +132,33 @@ def apply_profile(defaults: Iterable[Action], profile: ET.Element) -> list[Actio
             replace(action, inputs=inputs, activation=mode, multi_tap=taps, customized=True)
         )
     return result
+
+
+def without_sticks(actions: Iterable[Action]) -> list[Action]:
+    """``actions`` without the default profile's stick inputs: for a player whose
+    actionmaps.xml names no stick, or who has none, so a keyboard-only player isn't told
+    an action is "on your stick" (review of #706)."""
+    return [replace(a, stick_inputs=()) if a.stick_inputs else a for a in actions]
+
+
+def parse_sticks(profile: ET.Element) -> dict[int, str]:
+    """The sticks actionmaps.xml numbers, by number: the game's name for each, with the
+    device's ID in braces ("VKBsim Gladiator EVO R {0200231D-0000-...}")."""
+    sticks: dict[int, str] = {}
+    for options in profile.iter("options"):
+        if options.get("type") != "joystick":
+            continue
+        if (number := _int(options.get("instance"))) > 0:
+            sticks[number] = (options.get("Product") or "").strip()
+    return sticks
+
+
+def _stick_input(text: str) -> StickInput | None:
+    """ "js2_button12" as stick 2's button12; None for a cleared one ("js1_ ")."""
+    match = _STICK.fullmatch(text.strip())
+    if match is None or not match[2].strip():
+        return None
+    return StickInput(int(match[1]), match[2].strip().lower())
 
 
 def _int(text: str | None) -> int:

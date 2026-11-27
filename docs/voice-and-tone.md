@@ -51,7 +51,7 @@ Worked through on 15 November 2026 (Tycho 0.7.0 plus the 0.8 changes so far).
 | **The window's pages** | `desktop/app/app.js`, `index.html`, and the bridge modules in `desktop/bridge/` | Fixed here: the Commands search box. Setup's game step: fixed in the onboarding work (#364). The Tile's preview card: fixed in #422. |
 | **The tray** | `desktop/menu.py`, `desktop/tray.py`, `desktop/shell.py` | Fine. |
 | **The Tile's own cards** (questions, warnings, notices) | `tile/cards.py`, `tile/display.py`, `start/run.py` | Fine. |
-| **`tycho check`** | `doctor.py`, `findings.py`, `brain_choice.py`, `voice/choice.py`, `stt/choice.py`, `ptt/conflicts.py`, and the game's part in `games/star_citizen/checks.py` | Fixed here: the focus check names the chosen game, and is skipped where Tycho presses nothing. |
+| **`tycho check`** | `doctor.py`, `findings.py`, `brain_choice.py`, `voice/choice.py`, `stt/choice.py`, `ptt/conflicts.py`, `ptt/sticks.py`, and the game's part in `games/star_citizen/checks.py` | Fixed here: the focus check names the chosen game, and is skipped where Tycho presses nothing. |
 | **The command line** (`tycho --help`, `key`, `bind`, `model`, `gpu`, `actions`, `sounds`, `credits`) | `cli/`, `credentials.py`, `start/run.py` | Fine. `--help` and `credits` call Tycho a Star Citizen co-pilot: the product's description, the maintainer's to change. |
 | **Start-up and download messages** | `start/`, `stt/models.py`, `stt/cuda.py`, `audio/microphone.py`, `runtime/instance.py` | Fine. |
 | **The player's own files** (comments Tycho writes into `commands.toml`, `fleet.toml`, `settings.toml`) and what's wrong in them | `desktop/commands.py`, `commands/matcher.py`, `settings.py`, `games/star_citizen/fleet.py` | Fine. |

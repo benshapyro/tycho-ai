@@ -16,6 +16,7 @@ from tycho.doctor import start_update_check
 from tycho.findings import TYCHO
 from tycho.history import follow, kept
 from tycho.packs import GameDataError, built_in
+from tycho.ptt import sticks
 from tycho.ptt.binding import Binding, every_binding
 from tycho.ptt.devices import describe, describe_all, input_sources, rebind
 from tycho.ptt.monitor import PushToTalk
@@ -452,6 +453,8 @@ def bind_command(current: Settings, *, second: bool = False) -> Settings | None:
     path = settings.save(updated)
     which = "Your second push-to-talk button" if second else "Push-to-talk"
     print(f"{which} is now {describe(found)}. Saved to {path}")
+    if note := sticks.swap_note(found):  # a twin stick can take its place (#623)
+        print(note)
     return updated
 
 
