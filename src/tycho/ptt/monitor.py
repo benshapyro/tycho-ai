@@ -1,5 +1,6 @@
 """Device-independent push-to-talk logic, polled from a single thread."""
 
+import logging
 import threading
 import time
 from collections.abc import Callable, Iterable, Sequence
@@ -7,6 +8,8 @@ from enum import Enum, auto
 from typing import Protocol
 
 from tycho.ptt.binding import Binding
+
+log = logging.getLogger("tycho")
 
 
 class InputSource(Protocol):
@@ -42,6 +45,8 @@ class PushToTalk:
         self._next: tuple[tuple[Binding, ...], tuple[InputSource, ...]] | None = None
         """Buttons chosen in the app while Tycho runs (#646), taken up by the next poll."""
         self._lock = threading.Lock()
+        self._failing: set[int] = set()
+        """Sources whose last read raised, by id: logged once, until one works (#676)."""
 
     @property
     def binding(self) -> Binding:
@@ -63,17 +68,42 @@ class PushToTalk:
             chosen, self._next = self._next, None
         if chosen is not None:
             old, (self.bindings, self._sources) = self._sources, chosen
+            self._failing.clear()
             for source in old:
-                close = getattr(source, "close", None)
-                if close is not None:
-                    close()
-        held = any(
-            source.is_pressed(binding) for binding in self.bindings for source in self._sources
-        )
+                _close(source)
+        held = any(self._holds(source) for source in self._sources)
         if held == self._held:
             return None
         self._held = held
         return Edge.PRESSED if held else Edge.RELEASED
+
+    def _holds(self, source: InputSource) -> bool:
+        """Whether one of the buttons is held on ``source``. A source that can't be read
+        (SDL won't start, its DLL is missing) counts as nothing held, so a mouse button
+        let go is still a release (#676); it's logged once until it reads again."""
+        try:
+            held = any(source.is_pressed(binding) for binding in self.bindings)
+        except Exception:
+            if id(source) not in self._failing:
+                self._failing.add(id(source))
+                log.exception("Reading push-to-talk from %s failed", type(source).__name__)
+            return False
+        if id(source) in self._failing:
+            self._failing.discard(id(source))
+            log.info("Push-to-talk from %s is working again", type(source).__name__)
+        return held
+
+
+def _close(source: InputSource) -> None:
+    """Let a source go. One that fails to close is logged, and the rest still close
+    (#676)."""
+    close = getattr(source, "close", None)
+    if close is None:
+        return
+    try:
+        close()
+    except Exception:
+        log.exception("Closing push-to-talk's %s failed", type(source).__name__)
 
 
 def capture_binding(

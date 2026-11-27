@@ -158,6 +158,10 @@ def parse_tool_call(
                 return Reply(_ON_THE_TILE.sub("", say).strip() or say)
             raise BrainError(f"show_card: {e}") from e
         if not say:
+            if isinstance(written := args.get("say"), str) and written.strip():
+                # A placeholder line ("unused") on a good card (#669): the card shows,
+                # with a short line, rather than the error sound and no card.
+                return Reply(CARD_LINE, card)
             raise BrainError("show_card: nothing to say")
         return Reply(say, card)
     raise BrainError(f"unknown tool {name!r}")
@@ -166,14 +170,12 @@ def parse_tool_call(
 PLACEHOLDERS = frozenset(
     {
         "unused",
-        "none",
         "n/a",
         "na",
         "null",
         "nil",
         "empty",
         "placeholder",
-        "nothing",
         "no action",
         "no actions",
         "tbd",
@@ -183,7 +185,12 @@ PLACEHOLDERS = frozenset(
     }
 )
 """What a model writes in a ``say`` it has to fill but has nothing for (#666): never
-spoken. The acts are strict (#639), so ``say`` is always there, even when empty."""
+spoken. The acts are strict (#639), so ``say`` is always there, even when empty. Not
+"none" or "nothing": those can be the answer ("which of my ships can mine?", #669)."""
+
+CARD_LINE = "It's on the Tile."
+"""What's said for a card whose ``say`` was a placeholder (#669). ``show_card`` is only
+offered while the Tile is on, so the card is there to read."""
 
 
 def line(say: object) -> str:

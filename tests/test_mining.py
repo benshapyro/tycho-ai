@@ -294,3 +294,44 @@ def test_a_fetch_out_of_time_carries_on_and_is_kept(monkeypatch: pytest.MonkeyPa
 def _chances(result: Any) -> dict[str, float]:
     places = json.loads(result.content)["places"]
     return {p["name"]: p["chance_percent"] for p in places if "chance_percent" in p}
+
+
+def test_with_no_time_left_for_details_they_are_still_fetched_for_next_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#669: when finding the locations used up all of ``DETAILS_SECONDS``, every
+    detail fetch was cancelled before its first step, so nothing was kept either."""
+    monkeypatch.setattr(mining, "DETAILS_SECONDS", 0.0)
+    wiki = _Slow()
+    lookup = MiningLookup(wiki)
+    asked = {"resource": "quantainium", "place": ""}
+
+    async def go() -> tuple[Any, Any]:
+        await lookup.prepare()
+        first = await lookup.run(asked)
+        await asyncio.sleep(0.1)  # the fetches it started finish after it answered
+        return first, await lookup.run(asked)
+
+    first, again = asyncio.run(go())
+    assert _chances(first) == {}
+    assert _chances(again) == {"Akiro Cluster": 5.0, "Lyria": 3.0, "Aberdeen": 0.1}
+    details = [path for path, _ in wiki.calls if path.startswith("/api/locations/")]
+    assert sorted(details) == sorted(set(details))  # each once: the second ask reused them
+
+
+class _SlowAndFailing(_Slow):
+    """Aberdeen is slow, and Lyria fails."""
+
+    async def get(self, path: str, params: Mapping[str, str | int] | None = None) -> Any:
+        if path.endswith("/lyria"):
+            raise WikiError("429 Too Many Requests")
+        return await super().get(path, params)
+
+
+def test_the_slow_note_counts_only_the_places_with_a_chance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#669: a place that failed was counted as having its chance."""
+    monkeypatch.setattr(mining, "DETAILS_SECONDS", 0.05)
+    result = _run(MiningLookup(_SlowAndFailing(aberdeen=5.0)), resource="quantainium")
+    assert "chances for 1 of 3 places" in result["note"]
