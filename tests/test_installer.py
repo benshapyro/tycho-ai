@@ -149,8 +149,8 @@ def test_ci_checks_the_name_and_version_signpath_checks() -> None:
     check = check.split("- name:")[0]
     for name in ("tycho.exe", "tycho-app.exe", "TychoSetup-$version.exe"):
         assert name in check
-    assert '$info.ProductName -ne "Tycho"' in check
-    assert "$info.ProductVersion -ne $version" in check
+    assert '$name -ne "Tycho"' in check
+    assert "$product -ne $version" in check
 
 
 def test_a_merge_to_main_never_cancels_a_signing_run() -> None:

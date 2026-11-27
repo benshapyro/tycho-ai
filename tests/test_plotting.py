@@ -702,7 +702,8 @@ def test_a_guessed_route_still_asks_for_the_rest_after_confirm() -> None:
 
 
 def test_the_rest_isnt_carried_to_a_later_route() -> None:
-    """#732: the rest goes with its question, never to the next "plot a route to X"."""
+    """#732: the rest goes with its question, never to the next "plot a route to X". A
+    guard: it passed before the fix too."""
     (_asked, _cancelled, again, plotted), _game = _handed_then(
         "lefski",
         ACT_HELD,
