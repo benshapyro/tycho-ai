@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 
 from tycho.brain.decisions import Reply
 from tycho.brain.heard import heard
-from tycho.brain.lookups import HANDED_OVER, ROUTE_DROPPED, LookupResult, failure
+from tycho.brain.lookups import ACT_HELD, HANDED_OVER, ROUTE_DROPPED, LookupResult, failure
 from tycho.eyes.words import Reading
 from tycho.input import Presser
 from tycho.keybinds import Keybinds
@@ -311,9 +311,10 @@ class Plotter:
         look (ADR 14), a web search (ADR 15) or a search of past talk. With it, what the
         brain ``picked``, but never "On it." for a dropped route (#728)."""
         place = self.tool.take() if self.tool is not None else None
-        refused = picked == Reply(HANDED_OVER)  # an act after the route wasn't pressed
+        refused = picked == Reply(ACT_HELD)  # an act after the route wasn't pressed
         if place is None or not plain:
-            return None, Reply(ROUTE_DROPPED) if place and refused else picked
+            on_it = picked in (Reply(HANDED_OVER), Reply(ACT_HELD))
+            return None, Reply(ROUTE_DROPPED) if place and on_it else picked
         self.handing.rest = refused and bool(JOINED & set(normalize(said)))
         return place, picked
 

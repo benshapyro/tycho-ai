@@ -95,8 +95,11 @@ NO_PRESS_AFTER_RECALL = (
     "That's from an earlier talk, so I won't press it again. Ask for it now if you want it."
 )
 HANDED_OVER = "On it."
-"""The brain's reply for an act after it handed a route over (#721): Tycho plots the
-route and says how it went, so these words are never spoken."""
+"""What ``plot_route`` tells the brain to reply (#647): Tycho plots the route and says
+how it went, so these words are never spoken."""
+ACT_HELD = "On it: just the route."
+"""The reply instead of an act after the brain handed a route over (#721). Its own words,
+so the route and the trace know an act was held (#728). Never spoken either."""
 ROUTE_DROPPED = "I don't plot a route after a look or a look-up. Ask for the route on its own."
 """Said instead of ``HANDED_OVER`` when the route was dropped (#728): nothing was done."""
 CUT_SHORT = "That answer ran too long for me. Ask me for part of it."
@@ -104,7 +107,7 @@ CUT_SHORT = "That answer ran too long for me. Ask me for part of it."
 STOPPED = {
     NO_PRESS_AFTER_SEARCH: "act after a web search; not pressed",
     NO_PRESS_AFTER_RECALL: "act after a search of past conversations; not pressed",
-    HANDED_OVER: "act after a route hand-over; not pressed",  # #728
+    ACT_HELD: "act after a route hand-over; not pressed",  # #728
     CUT_SHORT: "cut off at the output limit",
 }
 """Why a reply stopped, for its trace."""

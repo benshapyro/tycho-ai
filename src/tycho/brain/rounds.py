@@ -38,8 +38,8 @@ from tycho.brain.decisions import (
 )
 from tycho.brain.heard import Heard, hearing
 from tycho.brain.lookups import (
+    ACT_HELD,
     CUT_SHORT,
-    HANDED_OVER,
     LOOKUP_SECONDS,
     NO_PRESS_AFTER_RECALL,
     NO_PRESS_AFTER_SEARCH,
@@ -371,7 +371,7 @@ def unpressed(turn: Turn, decided: Decision) -> Reply | None:
         return None
     log.warning("The brain chose to act after a search or a route; not pressing")
     stopped = NO_PRESS_AFTER_SEARCH if turn.searched else NO_PRESS_AFTER_RECALL
-    return Reply(stopped if turn.searched or turn.recalled else HANDED_OVER)
+    return Reply(stopped if turn.searched or turn.recalled else ACT_HELD)
 
 
 def noted(decided: Decision, turn: Turn) -> Decision:

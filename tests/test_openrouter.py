@@ -591,7 +591,7 @@ def test_nothing_is_pressed_after_a_place_is_handed_to_the_route_tool() -> None:
     ``plot_route`` is never pressed."""
     from typing import cast
 
-    from tycho.brain.lookups import HANDED_OVER
+    from tycho.brain.lookups import ACT_HELD
     from tycho.runtime.plotting import RouteTool
 
     request = BrainRequest("take us to Ruin Station", KEYBINDS)
@@ -601,7 +601,7 @@ def test_nothing_is_pressed_after_a_place_is_handed_to_the_route_tool() -> None:
         tool_call("run_actions", GEAR, use_id="call_2"),
     )
     route = RouteTool("Plot a route.")
-    assert asyncio.run(_brain(later, cast(FakeLookup, route)).decide(request)) == Reply(HANDED_OVER)
+    assert asyncio.run(_brain(later, cast(FakeLookup, route)).decide(request)) == Reply(ACT_HELD)
     assert route.take() == "Ruin Station"
     both = FakeChat(
         [
@@ -611,4 +611,4 @@ def test_nothing_is_pressed_after_a_place_is_handed_to_the_route_tool() -> None:
         ]
     )
     route = RouteTool("Plot a route.")
-    assert asyncio.run(_brain(both, cast(FakeLookup, route)).decide(request)) == Reply(HANDED_OVER)
+    assert asyncio.run(_brain(both, cast(FakeLookup, route)).decide(request)) == Reply(ACT_HELD)
