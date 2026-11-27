@@ -2,9 +2,29 @@
 acts (``run_sequence``, ``run_actions``) and the look-ups. ``show_card`` is the Tile's
 (``tile.cards``)."""
 
+import json
 from collections.abc import Iterable
 
 from tycho.brain.lookups import Lookup
+
+NAMES_BUDGET = 1_000
+"""The most JSON ``run_sequence``'s list of names may be, in characters. The acts are
+strict, and Anthropic refuses every request when their grammar is too large (#638); a
+player's own sequences go in that list, and nothing caps how many they write (#640).
+Past this, the name is any text: the briefing lists the sequences, and
+``decisions.parse_tool_call`` still runs only one of them, so a wrong name presses
+nothing."""
+
+
+def names_listed(sequences: list[str]) -> bool:
+    """Whether ``run_sequence`` lists the sequences' names (``NAMES_BUDGET``)."""
+    return len(json.dumps(sequences)) <= NAMES_BUDGET
+
+
+def _sequence_name(sequences: list[str]) -> dict[str, object]:
+    if names_listed(sequences):
+        return {"type": "string", "enum": sequences or [""]}
+    return {"type": "string", "description": "A sequence's name, exactly as listed."}
 
 
 def tool_specs(
@@ -29,7 +49,7 @@ def tool_specs(
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "enum": sequences or [""]},
+                    "name": _sequence_name(sequences),
                     "say": {"type": "string", "description": "A short spoken line."},
                 },
                 "required": ["name", "say"],

@@ -55,10 +55,20 @@ NOT_A_REQUEST = frozenset(
 )
 """First words that make it a question about a route, not a request for one ("best
 route to sell gold": "best" is one letter from "set")."""
-ASKING = NOT_A_REQUEST - {"a", "an", "the"}
+ASKING = frozenset(
+    {"best", "fastest", "quickest", "shortest", "safest", "cheapest", "longest", "nearest"}
+    | {"closest", "trade", "trading", "mining", "cargo", "delivery", "any"}
+    | {"what", "which", "how", "where", "why", "when", "whats", "hows", "wheres"}
+    | {"is", "are", "does", "should"}
+)
 """First words that make the player's words a question about a route, so the brain's
 ``plot_route`` plots nothing (#641): "what's the fastest route to Pyro", "best route to
-sell gold". Not "a" or "the": "a course to Lorville" is still a request for one."""
+sell gold", "trade route to Area 18" (a look-up's). Question and superlative words, not
+all of ``NOT_A_REQUEST``: "Great, take us to Lorville", "another route to Levski" and "a
+course to Lorville" still ask for one (#679). "Any" stays: "any route to Pyro?" is a
+question, and a missed plot is safer than a map opened for one."""
+LEADING = ("how", "about")
+"""Words before a request that leave it one: "how about a route to Levski" (#679)."""
 
 
 def asks_about(text: str) -> bool:
@@ -67,6 +77,8 @@ def asks_about(text: str) -> bool:
     words = normalize(text)
     while words and words[0] in FILLER:
         words.pop(0)
+    if tuple(words[: len(LEADING)]) == LEADING:
+        words = words[len(LEADING) :]
     return bool(words) and words[0] in ASKING
 
 
@@ -204,6 +216,10 @@ class Plotter:
     """The session has a brain, which ``tool`` hands places to."""
     system: Callable[[], str | None] = lambda: None
     """The player's star system, if the game's log shows it. Blocking (it reads the log)."""
+
+    async def close(self) -> None:
+        """Let go of the places' connections, when the session closes (#644)."""
+        await self.places.close()
 
     async def _find(self, said: str) -> str | None:
         """The place ``said`` names, in the player's system first: both under the time

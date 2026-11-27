@@ -275,12 +275,10 @@ class Session:
             if warming is not None:
                 warming.cancel()
                 await asyncio.gather(warming, return_exceptions=True)
-        if self._brain is not None:
-            with contextlib.suppress(Exception):
-                await self._brain.close()
-        if self._speaker is not None:
-            with contextlib.suppress(Exception):
-                await self._speaker.close()
+        for part in (self._brain, self._speaker, self._plotter):  # #644: the plotter's places
+            if part is not None:
+                with contextlib.suppress(Exception):
+                    await part.close()
         # The key worker returns within ~10 ms of a cancel, having let go of every key.
         await asyncio.to_thread(self._keys.shutdown, True)
         self._stt.shutdown(wait=False, cancel_futures=True)
