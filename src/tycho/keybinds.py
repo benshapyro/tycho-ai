@@ -148,3 +148,13 @@ def _key_name(key: str) -> str:
 
 
 _NAMES = {"esc": "Esc", "pgup": "Page Up", "pgdn": "Page Down", "ins": "Insert", "del": "Delete"}
+
+
+def readable(action: str) -> str:
+    """An action with no label in the game's files, as words (#465):
+    "v_toggle_landing_system" is "Toggle landing system", not the raw id."""
+    words = action.replace("-", "_").split("_")
+    if len(words) > 1 and len(words[0]) == 1:  # a one-letter group, such as "v_"
+        words = words[1:]
+    said = " ".join(word for word in words if word)
+    return said[:1].upper() + said[1:] if said else action

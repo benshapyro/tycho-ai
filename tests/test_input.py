@@ -289,6 +289,21 @@ def test_a_press_waits_for_the_player_to_let_go_of_a_modifier() -> None:
     assert clock.now >= 0.29  # it waited for the let-go before pressing
 
 
+def test_a_click_waits_for_the_player_to_let_go_of_a_modifier() -> None:
+    """#678: the route's clicks get the same check as its presses."""
+    sender = FakeKeySender(players=[frozenset({code_for("lctrl")})] * 30 + [frozenset()])
+    presser, clock = _presser(sender)
+    assert presser.let_go() == ""
+    assert clock.now >= 0.29
+    still = FakeKeySender(players=[frozenset({code_for("rshift")})])
+    presser, clock = _presser(still)
+    assert presser.let_go() == "Let go of Shift and say it again."
+    assert clock.now == pytest.approx(1.0)
+    assert still.events == []
+    presser, _ = _presser(FakeKeySender())
+    assert presser.let_go() == ""
+
+
 def test_a_modifier_still_held_after_the_wait_presses_nothing_and_says_so() -> None:
     sender = FakeKeySender(players=[frozenset({code_for("lshift"), code_for("rctrl")})])
     presser, clock = _presser(sender)
