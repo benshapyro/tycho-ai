@@ -29,6 +29,7 @@ from tycho.brain.refusals import (
     QUESTION_WORDS,
     asked_only,
     names_any,
+    player_said,
     says_yes_to_offer,
 )
 from tycho.text import normalize, states
@@ -91,7 +92,7 @@ def unasked(heard: Heard | None, picked: Iterable[str], words: Collection[str] =
     if isinstance(words, Mapping):
         used = cast(Mapping[str, Collection[str]], words)
     known = {w for name in picked for w in used.get(name, ())}
-    said = heard.said.strip().replace("\N{RIGHT SINGLE QUOTATION MARK}", "'")
+    said = player_said(heard).strip().replace("\N{RIGHT SINGLE QUOTATION MARK}", "'")
     clauses = [c for c in re.split(r"[,.!?;:]+", said) if normalize(c)]
     if not clauses:
         return ""

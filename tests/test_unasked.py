@@ -108,5 +108,18 @@ def test_a_yes_to_tychos_offer_is_let_through() -> None:
     assert _why("is that even a question, do it", DOORS, before) == ""
 
 
+def test_a_yes_to_an_offer_with_a_misheard_word_note_is_let_through() -> None:
+    """Review of #718: the lexicon's note ends the words, so the yes wasn't last."""
+    before = "said: Want me to lower the gear?"
+    said = "what are you waiting for, do it\n[Speech-to-text: 'deer' may be 'gear'.]"
+    assert _why(said, GEAR, before) == ""
+
+
+def test_a_word_that_only_contains_a_name_part_doesnt_name_it() -> None:
+    """Review of #718: "powerful" named v_power_toggle, letting a question press it."""
+    assert _why("what's the most powerful ship", ("v_power_toggle",)) == ANSWER_IN_WORDS
+    assert _why("where are my decoys", ("v_weapon_countermeasure_decoy_launch",)) == ""
+
+
 def test_no_words_heard_refuse_nothing() -> None:
     assert unasked(None, DOORS) == ""

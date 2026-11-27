@@ -67,6 +67,15 @@ YES = frozenset(
 """The last part of the player's words that says yes to an offer, on its own."""
 
 
+HINT = "\n[Speech-to-text:"
+"""Where the lexicon's note on a misheard word starts (``Corrected.for_brain``)."""
+
+
+def player_said(heard: Heard) -> str:
+    """The player's own words, without the lexicon's note on a misheard word."""
+    return heard.said.partition(HINT)[0]
+
+
 def says_yes_to_offer(heard: Heard) -> bool:
     """Whether Tycho's last line offered to do something and the player's words end in
     a clear yes: "what are you waiting for, do it" (#715). Only Tycho's own offer counts,
@@ -74,7 +83,7 @@ def says_yes_to_offer(heard: Heard) -> bool:
     offer = heard.before.rpartition("said: ")[2] if "said: " in heard.before else ""
     if not OFFER.search(offer.strip().replace("\u2019", "'")):
         return False
-    parts = [p for p in re.split(r"[,.!?;:]+", heard.said) if p.strip()]
+    parts = [p for p in re.split(r"[,.!?;:]+", player_said(heard)) if p.strip()]
     if len(parts) < 2:  # a yes alone doesn't open with a question word: never refused
         return False
     return tuple(normalize(parts[-1])) in YES
@@ -86,7 +95,7 @@ def asked_only(heard: Heard | None, picked: Iterable[str]) -> bool:
     them ("what's my atc key, request it" names atc)."""
     if heard is None:
         return False
-    words = normalize(heard.said)
+    words = normalize(player_said(heard))
     while words and words[0] in {"tycho", "hey", "ok", "okay", "so", "and", "um", "uh"}:
         words.pop(0)
     if not words or words[0] not in QUESTION_WORDS or tuple(words[:2]) in NOT_A_QUESTION:
@@ -98,15 +107,17 @@ def asked_only(heard: Heard | None, picked: Iterable[str]) -> bool:
 
 def names_any(words: Iterable[str], picked: Iterable[str]) -> bool:
     """Whether ``words`` name one of the ``picked`` actions by a part of its name:
-    "flight" names v_flightready, "atc" v_atc_request and "decoys" v_..._decoy_launch."""
+    "flight" names v_flightready, "atc" v_atc_request and "decoys" v_..._decoy_launch (a
+    plural only: "powerful" doesn't name v_power_toggle, review of #718)."""
     named = [
         part
         for name in picked
         for part in name.lower().split("_")
         if len(part) > 2 and part not in GENERIC
     ]
-    return any(
-        w == n or (len(w) > 3 and w in n) or (len(n) > 3 and n in w) for w in words for n in named
+    plural = {f"{n}s" for n in named} | {f"{n}es" for n in named}  # "decoys", not "powerful"
+    return any(w == n or (len(w) > 3 and w in n) for w in words for n in named) or bool(
+        plural.intersection(words)
     )
 
 
