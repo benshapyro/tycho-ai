@@ -22,7 +22,7 @@ from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.packs import STAR_CITIZEN, as_run, built_in
 from tycho.packs.routes import RouteFlow, RouteLines
 from tycho.runtime.mappicks import under_header
-from tycho.runtime.mapwords import alike, heading
+from tycho.runtime.mapwords import alike, heading, shows_alike
 from tycho.runtime.route import Place, Plotted, id_names, plot
 from tycho.situation import Logged
 
@@ -793,13 +793,30 @@ def test_the_id_names_the_place(route_id: str, name: str, named: bool) -> None:
 
 
 def test_a_name_on_a_dangerous_key_is_never_typed() -> None:
-    # If the box didn't take the keys after all, "l" would eject.
-    game = Game()
+    # If the box didn't take the keys after all, "l" would eject. A box that still shows
+    # its empty words after the click gives no sign it has them (#682).
+    game = Game(keeps_hint=True, shows_x=False)
+    real = game.read
+
+    class Reader:  # no RECENT list either: nothing shows the box has the keys
+        def read(self) -> Reading:
+            reading = real()
+            kept = tuple(w for w in reading.words if w.text != "RECENT")
+            return Reading(reading.width, reading.height, kept, reading.window)
+
+    keybinds = Keybinds([*KEYBINDS, _bound("v_eject", "l", "spaceship_general")])
+    done = _plot(game, keybinds=keybinds, reader=Reader())
+    assert done.status == "refused"
+    assert not any(p.startswith("typed") for p in done.pressed)
+    assert game.typed == ""
+    assert game.stray == []
+
+
+def test_a_dangerous_first_letter_is_typed_once_the_box_shows_it_has_the_keys() -> None:
+    game = Game()  # "Bloom" with Change Fire Mode on B (Ben's Pyro try, 27 Nov 2026)
     keybinds = Keybinds([*KEYBINDS, _bound("v_eject", "l", "spaceship_general")])
     done = _plot(game, keybinds=keybinds)
-    assert done.status == "refused"
-    assert done.pressed == []
-    assert game.clicks == []
+    assert (done.status, done.say) == ("done", "Route set to Levski.")
 
 
 def test_a_dangerous_key_past_the_first_letter_waits_for_the_box_and_is_typed() -> None:
@@ -811,12 +828,14 @@ def test_a_dangerous_key_past_the_first_letter_waits_for_the_box_and_is_typed() 
 
 
 def test_a_dangerous_first_letter_is_said_by_its_label_never_its_id() -> None:
+    def unsure() -> Game:  # the box keeps its empty words: no sign it has the keys
+        return Game(keeps_hint=True, shows_x=False, recent=())
+
     eject = replace(_bound("v_eject", "l", "spaceship_general"), label="Eject")
-    done = _plot(Game(), keybinds=Keybinds([*KEYBINDS, eject]))
-    assert done.say == "I can't type Levski: its first letter is your Eject key."
+    said = "I can't type Levski: its first letter is your Eject key."
+    assert _plot(unsure(), keybinds=Keybinds([*KEYBINDS, eject])).say == said
     unlabelled = Keybinds([*KEYBINDS, _bound("v_eject", "l", "spaceship_general")])
-    said = "I can't type Levski: its first letter is your Eject key."  # in words (#705)
-    assert _plot(Game(), keybinds=unlabelled).say == said
+    assert _plot(unsure(), keybinds=unlabelled).say == said  # in words (#705)
 
 
 def test_a_later_letter_on_a_dangerous_key_waits_for_a_look_at_the_box() -> None:
@@ -1222,3 +1241,26 @@ def test_a_click_aimed_before_a_modifier_wait_looks_again_first() -> None:
         "the search panel's close button changed in the wait",
     )
     assert game.clicks == [BOX_MIDDLE]
+
+
+def test_a_box_read_one_letter_wrong_still_shows_the_name() -> None:
+    game = Game()  # Ben's Pyro try, 27 Nov 2026: Orbituary in the box read "ORBITUARV"
+    real = game.read
+
+    class Reader:
+        def read(self) -> Reading:
+            reading = real()
+            misread = tuple(
+                replace(w, text="LEVSKJ") if w.text == "LEVSKI" and w.top == BOX[1] else w
+                for w in reading.words
+            )
+            return Reading(reading.width, reading.height, misread, reading.window)
+
+    done = _plot(game, reader=Reader())
+    assert (done.status, done.say) == ("done", "Route set to Levski.")
+
+
+@pytest.mark.parametrize("read", ["LEVSK", "LEVSK1", "LAVSKJ"])
+def test_a_box_short_a_letter_or_a_digit_off_does_not_show_the_name(read: str) -> None:
+    box = (Word(read, BOX[0], BOX[1], 60, BOX[3], 0),)
+    assert not shows_alike(Reading(WIDTH, HEIGHT, box, 7), "Levski")

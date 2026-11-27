@@ -207,9 +207,7 @@ class _Run:
         if not NAME.fullmatch(name):
             raise _Stop("refused", lines.bad_name.format(name=name), "not a name Tycho may type")
         presses = self._plan()
-        if risky := self._risky_letter(name[:1]):  # the rest waits for the box (#682)
-            said = lines.risky_first.format(name=name, action=risky)  # words, not an id (#705)
-            raise _Stop("refused", said, f"{risky} is on the name's first letter")
+        risky = self._risky_letter(name[:1])  # typed only once the box shows it has the keys
         if isinstance(self.reader, Warm):  # starts reading while the map opens (#661)
             self.reader.warm()
         if self._open_already():  # the map's key would close it (Ben's Hurston try, #682)
@@ -230,6 +228,9 @@ class _Run:
         after = self._fresh()  # a box with the keys drops its empty words (26 Nov 2026)
         if not after.has(flow.search_box) and not mapwords.listed(after, box, flow):
             raise _Stop("failed", lines.stuck, "the map closed before typing")
+        if risky and not mapwords.focused(after, box, flow):  # "Bloom" with B bound (#682)
+            said = lines.risky_first.format(name=name, action=risky)  # words, not an id (#705)
+            raise _Stop("refused", said, f"{risky} is on the name's first letter")
         self._wait(flow.click_seconds)  # the box takes keys a moment after the click (#654)
         self._type(name[:1])
         self.pressed.append(f"typed {name[:1]}")  # the log shows it, even if the game took it
@@ -239,7 +240,7 @@ class _Run:
             raise _Stop("failed", lines.not_typed, "the search box didn't take the first letter")
         self._type_rest(name, box)
         self._wait(flow.beat_seconds)
-        if not shows(row(typed := self._fresh(), box), name):
+        if not mapwords.shows_alike(row(typed := self._fresh(), box), name):  # ORBITUARV
             raise _Stop("failed", lines.not_typed, "the search box doesn't show the name")
         self.pressed[-1] = f"typed {name}"
         place, system = self.place.name, self.place.system
@@ -285,8 +286,8 @@ class _Run:
 
     def _risky_letter(self, name: str) -> str:
         """A confirm-grade action on one of the letters' keys alone, if any: if the box
-        didn't take the keys after all, a letter must not press it (review of #636). Only
-        the first letter is typed before the box is seen to have them (#682)."""
+        didn't take the keys after all, a letter must not press it (review of #636). The
+        first letter is typed only once the box shows it has them (#682)."""
         letters = {_TYPED.get(letter, letter) for letter in name.lower()}
         for action in self.keybinds:
             risky = is_confirm_grade(action.name, self.lists) or (
