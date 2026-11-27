@@ -66,8 +66,13 @@ YES_OR_NO = frozenset(
 """Openings of a yes-or-no question. Not "can you" or "can we", which ask for things."""
 ASKS_FOR = frozenset({("can", "i", "get"), ("could", "i", "get"), ("can", "i", "have")})
 """Yes-or-no openings that ask for something: "can I get the lights on"."""
-LET_OFF = frozenset({("if", "you"), ("when", "you"), ("once", "you")})
-"""Later-words that ask politely: "once you're ready, lower the gear" (#719)."""
+POLITE = frozenset({("if", "you"), ("when", "you"), ("once", "you")})
+LET_OFF = frozenset(
+    {("can",), ("could",), ("are", "ready"), ("get", "a", "chance"), ("have", "a", "chance")}
+    | {("dont", "mind"), ("would",), ("like",), ("want",), ("please",)}
+)
+"""What follows ``POLITE`` when it asks now: "once you're ready, lower the gear", "if you
+can, ..." (#719). Not "once you get a lock, fire missiles", which is for later."""
 ASKS_NOW = frozenset({("make", "sure"), ("ensure",)})
 """Openings that ask for how things should be: "make sure the gear is down" (#719)."""
 REQUEST = frozenset(
@@ -111,7 +116,7 @@ def unasked(heard: Heard | None, picked: Iterable[str], words: Collection[str] =
         return ""
     first = _opening(normalize(clauses[0]))
     then = [w for c in clauses[1:] for w in normalize(c)]
-    if first and first[0] in LATER and first[:2] not in LET_OFF:
+    if first and first[0] in LATER and not (first[:2] in POLITE and _opens(first[2:], LET_OFF)):
         # "if you can, lower the gear" asks politely; "when should I..." is a question.
         return ANSWER_IN_WORDS if first[1:2] and first[1] in ASKING else NOT_NOW
     if (name := NAMED.match(said)) and name.group(1).lower() not in NOT_A_NAME:

@@ -3224,3 +3224,11 @@ expect = ["actions"]
 must = [["v_deploy_landing_system", "v_toggle_landing_system"]]
 never = ["v_retract_landing_system"]
 tag = "trick"
+
+# ...but "once you" with something to wait for is still for later (review of #722).
+[[case]]
+heard = "once you get a lock, fire missiles"
+mode = "chat"
+expect = ["reply"]
+never = ["v_weapon_launch_missile"]
+tag = "trick"
