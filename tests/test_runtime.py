@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable, Coroutine
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -1371,7 +1371,9 @@ def test_a_modifier_and_a_click_on_a_bound_button_is_refused() -> None:
     """#648: Switch Mining Laser on Left Alt + Mouse 1 turned the laser on, Mouse 1
     alone. Refused, with what to do, before anything is pressed."""
     switch = _laser("lalt+mouse1")
-    fire = _action("v_toggle_mining_laser_fire", "mouse1", actionmap="spaceship_mining")
+    fire = replace(
+        _action("v_toggle_mining_laser_fire", "mouse1", actionmap="spaceship_mining"), label=""
+    )
     verdict = safety.check(
         Command("x", (), ("v_toggle_mining_laser_type",)),
         switch,
@@ -1382,8 +1384,24 @@ def test_a_modifier_and_a_click_on_a_bound_button_is_refused() -> None:
     assert not verdict.ask  # "confirm" can't make the click land right
     assert verdict.reason == (
         "Switch Mining Laser is on Left Alt + Mouse 1, and Mouse 1 alone is "
-        "v_toggle_mining_laser_fire, which the game can take it for. Give it a key of its own."
+        "Toggle mining laser fire, which the game can take it for. Give it a key of its own."
+    )  # words, not the action's id (#678)
+
+
+def test_a_key_clash_names_an_unlabelled_action_in_words() -> None:
+    """#678: an action without a label in the game's files is named in words."""
+    gear = replace(_action("v_toggle_landing_system", "n"), label="")
+    eject = replace(_action("v_eject", "n"), label="")
+    verdict = safety.check(
+        Command("x", (), ("v_toggle_landing_system",)),
+        gear,
+        Keybinds([gear, eject]),
+        lists=SC.safety,
     )
+    assert not verdict.allowed
+    assert "v_" not in verdict.reason
+    assert "Toggle landing system is on" in verdict.reason
+    assert "which is also Eject" in verdict.reason
 
 
 @pytest.mark.parametrize(

@@ -45,6 +45,10 @@ class Places(Protocol):
         """The name of the place a log's route id is to, if the list knows it."""
         ...
 
+    async def close(self) -> None:
+        """Let go of any connection it holds, when the session closes (#644)."""
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class RouteLines:
