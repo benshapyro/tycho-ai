@@ -149,9 +149,11 @@ def sounds_asked(said: str) -> bool:
     if not said.rstrip().endswith("?"):
         return False
     words = _opening(normalize(said))
+    if "please" in words:
+        return False
     while len(words) > 1 and words[0] in NOT_A_NAME - TALKED_TO:  # "Computer, ..." (#725)
         words = words[1:]
-    if not words or "please" in words or words[0] in ACTION_WORDS:
+    if not words or words[0] in ACTION_WORDS:
         return False
     return not _opens(words, REQUEST | ASKS_FOR | ASKS_NOW)
 

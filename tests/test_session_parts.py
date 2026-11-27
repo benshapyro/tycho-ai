@@ -404,6 +404,8 @@ def test_without_a_brain_a_command_said_as_a_question_is_still_pressed() -> None
         "could you lower the gear?",
         "open the doors?",
         "lights on, please?",
+        "please lights on?",
+        "Tycho, please lights on?",
         "let's lower the gear?",
     ],
 )

@@ -185,3 +185,10 @@ def test_a_request_after_a_call_word_with_a_question_mark_is_let_through(said: s
 def test_a_command_after_a_call_word_said_as_a_question_is_still_refused() -> None:
     assert _why("Computer, lights on?", ("v_lights",)) == ANSWER_IN_WORDS
     assert _why("you open the doors?", DOORS) == ANSWER_IN_WORDS
+
+
+def test_a_call_word_first_leaves_the_words_after_it_judged() -> None:
+    """Review of #729: a first clause of call words alone is dropped, so what follows
+    is judged as if said alone."""
+    assert _why("Look, he said open the doors", DOORS) == SOMEONE_ELSE
+    assert _why("Wait, the doors are open", DOORS) == HOW_THINGS_ARE
