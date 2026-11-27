@@ -202,6 +202,34 @@ def took(
     return gone and listed(after, box, flow)
 
 
+def focused(reading: Reading, box: tuple[Word, ...], flow: RouteFlow) -> bool:
+    """The clicked box shows it has the keys: its empty words gone, and the RECENT or
+    results list open under it, or its own x on its line (Ben's PC tries, 26 Nov 2026).
+    A box that still shows its empty words may not have them."""
+    if reading.has(flow.search_box):
+        return False
+    said = {mark.lower() for mark in flow.close_marks}
+    right = max(word.right for word in box)
+    x = any(w.text.strip().lower() in said and w.left > right for w in row(reading, box).words)
+    return x or listed(reading, box, flow)
+
+
+def shows_alike(reading: Reading, name: str, flow: RouteFlow) -> bool:
+    """``shows``, letting text recognition misread one letter as ``alike`` does: the box
+    read "ORBITUARV" with Orbituary typed in it (Ben's Pyro try, 27 Nov 2026). The box's
+    own x is left out, so "LEVSK" and its x never pass for "levski" (review of #726)."""
+    if shows(reading, name):
+        return True
+    wanted = len(squeezed(name).replace(" ", ""))
+    marks = {mark.lower() for mark in flow.close_marks}
+    for line in reading.lines():
+        kept = (w.text for w in line if w.text.strip().lower() not in marks)
+        said = squeezed(" ".join(kept)).replace(" ", "")
+        if any(alike(said[at : at + wanted], name) for at in range(len(said) - wanted + 1)):
+            return True
+    return False
+
+
 _COMMON = frozenset({"the", "of", "on", "at", "station", "port", "city", "outpost", "base"})
 """Words in a place's name too common to tell the route line's id it's this place."""
 
