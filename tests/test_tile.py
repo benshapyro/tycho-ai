@@ -505,6 +505,16 @@ def test_a_comparison_keeps_a_left_figure_the_brain_filled_in() -> None:
     assert card.rows == (Row("Guns", "S4", "S3 vs S2"),)
 
 
+def test_a_comparison_whose_left_figures_are_filled_keeps_its_own_names() -> None:
+    """#688 (12): a "vs" in a value whose left figure is already there isn't a sign the
+    brain put the names in the title, so the card's own names stay."""
+    rows = [{"text": "Guns", "detail": "S4", "value": "S3 vs S2", "dim": False}]
+    card = from_tool(
+        _call("compare", title="Arrow vs M80", rows=rows, hero_label="Arrow", hero_value="M50")
+    )
+    assert card.hero == ("Arrow", "M50")
+
+
 @pytest.mark.parametrize("place", ["Area18, ArcCorp", "ARC-L1 Wide Forest", "HUR-L2"])
 def test_a_place_with_a_digit_in_its_name_isnt_taken_for_the_left_figure(place: str) -> None:
     rows = [{"text": "Buy", "detail": place, "value": "2.01M aUEC | 2.96M aUEC", "dim": False}]

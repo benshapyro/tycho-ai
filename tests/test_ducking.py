@@ -24,8 +24,20 @@ def _ducker(volume: FakeGameVolume, tmp_path: Path, **options: object) -> Ducker
 
 
 async def _settle() -> None:
-    """Long enough for any fade to finish (they run off the event loop, then go on)."""
-    await asyncio.sleep(0.15)
+    """Until every fade has finished: they run as tasks of their own, so a fixed wait
+    raced them on a slow runner (#694)."""
+    for _ in range(5):  # a line just made a task of its own: let it start its fade
+        await asyncio.sleep(0)
+    for _ in range(100):
+        fades = [t for t in asyncio.all_tasks() if _a_fade(t)]
+        if not fades:
+            return
+        await asyncio.wait(fades, timeout=5)
+    raise AssertionError("the fades never finished")
+
+
+def _a_fade(task: asyncio.Task[Any]) -> bool:
+    return getattr(task.get_coro(), "__qualname__", "").startswith("Ducker.")
 
 
 def test_the_game_goes_down_while_tycho_speaks_and_back_after(tmp_path: Path) -> None:
@@ -413,6 +425,53 @@ def test_a_slider_the_player_moves_stays_and_the_others_go_back(tmp_path: Path) 
 
     asyncio.run(go())
     assert volume.sliders == {"speakers": pytest.approx(1.0), "headset": 0.05}
+    assert not (tmp_path / "ducked.json").exists()
+
+
+def test_a_slider_the_player_moves_mid_fade_is_not_written_over(tmp_path: Path) -> None:
+    """#694: the player moved a slider while the fade down was still going."""
+    volume = FakeGameVolume(sliders={"speakers": 1.0, "headset": 0.5})
+    steps = 0
+
+    async def step(_seconds: float) -> None:
+        nonlocal steps
+        steps += 1
+        if steps == 2:  # partway down
+            volume.sliders["headset"] = 0.05  # the player, in Windows' mixer
+        await asyncio.sleep(0)
+
+    async def go() -> None:
+        ducker = Ducker(volume, tmp_path / "ducked.json", sleep=step)
+        await Ducking(FakeSpeaker(), ducker).speak("Hi.")
+        await _settle()
+
+    asyncio.run(go())
+    assert volume.sliders == {"speakers": pytest.approx(1.0), "headset": 0.05}
+    assert not (tmp_path / "ducked.json").exists()
+
+
+def test_one_failed_read_mid_fade_still_puts_the_game_back(tmp_path: Path) -> None:
+    """#698's review: a read that fails once between fade steps used to end the fade up,
+    and the game stayed down until Tycho next spoke."""
+    reads = 0
+
+    class Blip(FakeGameVolume):
+        def get(self) -> Levels:
+            nonlocal reads
+            reads += 1
+            if reads == 8:  # partway up: 1 + 4 reads down, then 1 + 2 up
+                raise OSError("audio device changed")
+            return super().get()
+
+    volume = Blip(0.8)
+
+    async def go() -> None:  # the line outlasts the fade down: one raise, after it
+        await Ducking(FakeSpeaker(seconds=0.2), _ducker(volume, tmp_path)).speak("Hi.")
+        await _settle()
+
+    asyncio.run(go())
+    assert reads >= 8
+    assert volume.level == pytest.approx(0.8)
     assert not (tmp_path / "ducked.json").exists()
 
 

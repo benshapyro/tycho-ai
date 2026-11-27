@@ -178,20 +178,25 @@ class _Pen:
         )
         arrow_w = self.px(26)
         leg_w = (self.inner - arrow_w) / 2
-        h = self.px(70)
-        for i, row in enumerate(self.card.rows[:2]):
+        legs = self.card.rows[:2]
+        # A long place goes onto a second line rather than lose its end (#688, 4).
+        names = [_wrap(r.text, place, leg_w - self.px(16), lines=2) for r in legs]
+        more = self.px(21) * (max([1, *map(len, names)]) - 1)
+        h = self.px(70) + more
+        for i, (row, name) in enumerate(zip(legs, names, strict=True)):
             x = self.pad + i * (leg_w + arrow_w)
             self.d.rectangle((x, self.y, x + leg_w, self.y + h), fill=self.well)
             word = "Sell" if i else "Buy"
             self.caps((x + self.px(8), self.y + self.px(6)), word, small, self.dim, 0.1)
+            for j, line in enumerate(name):
+                self.d.text(
+                    (x + self.px(8), self.y + self.px(23 + 21 * j)),
+                    line,
+                    font=place,
+                    fill=self.text,
+                )
             self.d.text(
-                (x + self.px(8), self.y + self.px(23)),
-                _fit(row.text, place, leg_w - self.px(16)),
-                font=place,
-                fill=self.text,
-            )
-            self.d.text(
-                (x + self.px(8), self.y + self.px(46)),
+                (x + self.px(8), self.y + self.px(46) + more),
                 _fit(row.value, price, leg_w - self.px(16)),
                 font=price,
                 fill=self.text,
@@ -222,7 +227,7 @@ class _Pen:
         value_w = _width(value, big)
         self.caps(
             (self.pad, self.y + self.px(16)),
-            _fit(label, small, self.inner - value_w - self.px(12)),
+            _fit(label.upper(), small, self.inner - value_w - self.px(12), 0.08 * small.size),
             small,
             self.dim,
             0.08,
@@ -245,7 +250,8 @@ class _Pen:
         x = self.pad + ring + self.px(16)
         question = self.card.body[0] if self.card.body else ""
         asked, _, rest = question.partition("?")
-        for line in _wrap((asked + "?").upper(), big, self.inner - ring - self.px(16), lines=2):
+        room = self.inner - ring - self.px(16)
+        for line in _wrap((asked + "?").upper(), big, room, lines=2, tracking=0.06 * big.size):
             self.caps((x, self.y), line, big, self.text, 0.06)
             self.y += self.px(34)
         hint = rest.strip() or 'Say "confirm" or "cancel".'

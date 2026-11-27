@@ -146,7 +146,10 @@ def ranked(pen: Pen) -> None:
     values, unit = ([r.value for r in pen.card.rows], "") if fleet else shared_unit(pen.card.rows)
     if unit and not two_lines:  # nowhere under the first value: it keeps its unit
         values[0] = pen.card.rows[0].value
-    h = pen.px(30 if not two_lines else 46 if fleet else 49)  # a list's bar clears its words
+    bars = not fleet and bar_lengths([r.value for r in pen.card.rows]) is not None
+    # A list's bar clears its words: one-line rows get room under the name, so the bar
+    # isn't read as an underline (#688, 6).
+    h = pen.px(46 if fleet else 49) if two_lines else pen.px(38 if bars else 30)
     tops: list[tuple[int, int]] = []
     given = {r.value for r in pen.card.rows}  # as sent: the first may have lost its unit
     level = not fleet and len(values) > 1 and len(given) == 1 and "" not in given
@@ -259,11 +262,15 @@ def compare(pen: Pen) -> None:
     for row in pen.card.rows:
         top = pen.y
         pen.d.rectangle((pen.pad, top, pen.pad + pen.inner, top + h), fill=pen.well)
-        spec = _fit(row.text.upper(), head, pen.inner - pen.px(16), 0.1 * head.size)
+        # A unit both figures share ("aUEC") goes with the spec, once: the figures need
+        # the room, and long ones met in the middle (#688, 1).
+        (left_value, right_value), unit = shared_unit((Row("", value=row.detail), row))
+        label = f"{row.text} · {unit}" if unit else row.text
+        spec = _fit(label.upper(), head, pen.inner - pen.px(16), 0.1 * head.size)
         spec_w = _width(spec, head, 0.1 * head.size)
         pen.caps((mid - spec_w / 2, top + pen.px(4)), spec, head, pen.dim, 0.1)
-        a, a_f = snug(pen, row.detail, "number", 18, half - pen.px(16))
-        b, b_f = snug(pen, row.value, "number", 18, half - pen.px(16))
+        a, a_f = snug(pen, left_value, "number", 18, half - pen.px(16))
+        b, b_f = snug(pen, right_value, "number", 18, half - pen.px(16))
         pen.d.text((pen.pad + pen.px(8), top + pen.px(16)), a, font=a_f, fill=pen.text)
         b_x = pen.pad + pen.inner - pen.px(8) - _width(b, b_f)
         pen.d.text((b_x, top + pen.px(16)), b, font=b_f, fill=pen.text)
@@ -361,7 +368,7 @@ def specs(pen: Pen) -> None:
         x = pen.pad + (i % 2) * (col + pen.px(5))
         top = pen.y + (i // 2) * (h + pen.px(5))
         pen.d.rectangle((x, top, x + col, top + h), fill=pen.well)
-        name = _fit(row.text, small, room, 0.1 * small.size)
+        name = _fit(row.text.upper(), small, room, 0.1 * small.size)
         pen.caps((x + pen.px(8), top + pen.px(5)), name, small, pen.dim, 0.1)
         shown, value_f = snug(pen, row.value or row.detail, "number", 20, room)
         pen.d.text((x + pen.px(8), top + pen.px(21)), shown, font=value_f, fill=pen.text)

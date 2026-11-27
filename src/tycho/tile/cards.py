@@ -211,15 +211,20 @@ def _sides(arguments: Mapping[str, object], rows: tuple[Row, ...]) -> tuple[str,
     where the names go, as it often does. None when the card is as the kit asks."""
     raw = arguments.get("rows")
     given = cast(list[object], raw) if isinstance(raw, list) else []
-    joined = any(
-        isinstance(r, dict) and _BOTH.search(str(cast(dict[str, object], r).get("value", "")))
-        for r in given
-    )
+    joined = any(isinstance(r, dict) and _joined(cast(dict[str, object], r)) for r in given)
     parts = _VERSUS.split(clean(arguments.get("title"), TITLE * 2))
     if not (joined and rows and len(parts) == 2 and all(parts)):
         return None
     left = _TOPIC.split(parts[0])[-1]  # "Cargo, Cutlass Black" is the Cutlass Black
     return clean(left, LABEL), clean(parts[1], LABEL)
+
+
+def _joined(fields: Mapping[str, object]) -> bool:
+    """Whether a comparison's row holds both figures in its value, to split: not when
+    the left figure is already where it goes ("S4", with "S3 vs S2")."""
+    detail, value = fields.get("detail"), fields.get("value")
+    told = isinstance(detail, str) and _FIGURE.match(detail.strip()) is not None
+    return not told and isinstance(value, str) and _BOTH.search(value) is not None
 
 
 def _rows(raw: object, *, sides: bool = False) -> list[Row]:
@@ -236,8 +241,7 @@ def _rows(raw: object, *, sides: bool = False) -> list[Row]:
         fields = cast(dict[str, object], item)
         text = clean(fields.get("text"), TEXT)
         detail, value = fields.get("detail"), fields.get("value")
-        told = isinstance(detail, str) and _FIGURE.match(detail.strip()) is not None
-        if sides and not told and isinstance(value, str) and _BOTH.search(value):
+        if sides and isinstance(value, str) and _joined(fields):
             detail, value = _BOTH.split(value, maxsplit=1)
         if text:
             rows.append(
