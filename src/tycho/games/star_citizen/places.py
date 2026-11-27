@@ -11,7 +11,7 @@ and planets. A shop's terminal, an orbit or a whole system isn't one.
 
 import logging
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from typing import Any
 
 from tycho.games.star_citizen.trade import (
@@ -43,8 +43,12 @@ SYSTEM = "star_system_name"
 class UexPlaces:
     """``packs.routes.Places`` over UEX's terminal list, fetched once when first asked."""
 
-    def __init__(self, source: WikiSource) -> None:
+    def __init__(
+        self, source: WikiSource, closing: Callable[[], Awaitable[None]] | None = None
+    ) -> None:
         self._trade = Trade(source)
+        self._closing = closing
+        """Closes ``source``'s connections, if it has any (#644)."""
 
     async def find(self, said: str, system: str | None = None) -> str | None:
         try:
@@ -75,14 +79,20 @@ class UexPlaces:
                     return str(value)
         return None
 
+    async def close(self) -> None:
+        closing, self._closing = self._closing, None
+        if closing is not None:
+            await closing()
+
 
 def best_place(
     terminals: Iterable[Mapping[str, Any]], said: str, system: str | None = None
 ) -> str | None:
     """The place ``said`` most likely names: the whole name first, everywhere, then part
-    of a name or a misspelling; one in ``system`` first ("Pyro Gateway (Stanton)" in
-    Stanton, #682), then the shortest when a few fit ("Lorville" before "Lorville
-    Gates"). None when nothing fits, or more than ``GUESS_AMONG`` do ("Lagrange")."""
+    of a name or a misspelling; one in ``system`` first, of any kind ("Pyro Gateway
+    (Stanton)" in Stanton, #682; a station there before a city elsewhere, #684), then the
+    kinds' order, then the shortest when a few fit ("Lorville" before "Lorville Gates").
+    None when nothing fits, or more than ``GUESS_AMONG`` do ("Lagrange")."""
     said = PLACE_ALIASES.get(" ".join(normalize(said)), said)
     whole = squash(said)
     key = squash(" ".join(w for w in normalize(said) if w not in FILLER)) or whole
@@ -91,6 +101,7 @@ def best_place(
     rows = list(terminals)
     here = squash(system or "")
     for exact in (True, False):
+        first: str | None = None  # the best match outside the player's system
         for field in ROUTE_FIELDS:
             values = {str(row[field]) for row in rows if row.get(field)}
             there = {str(r[field]) for r in rows if r.get(field) and _in(r, here)}
@@ -99,10 +110,15 @@ def best_place(
                 key=lambda v: (bool(here) and v not in there, len(v), v),
             )
             if len(found) > GUESS_AMONG:
-                log.debug("%r could be %d places", said, len(found))
-                return None
-            if found:
-                return found[0]
+                if first is None:
+                    log.debug("%r could be %d places", said, len(found))
+                    return None
+                continue  # too many here to guess among: the match before stands
+            if found and (not here or found[0] in there):
+                return found[0]  # in the player's system, whatever its kind (#684)
+            first = first or (found[0] if found else None)
+        if first is not None:
+            return first
     return _sounds_like(rows, key)
 
 

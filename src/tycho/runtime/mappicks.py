@@ -4,7 +4,16 @@ text recognition read; for ``runtime.route``."""
 
 from tycho.eyes.words import Reading, Word, squeezed
 from tycho.packs.routes import RouteFlow
-from tycho.runtime.mapwords import LISTED, alike, close_under, column, listed, row, shows
+from tycho.runtime.mapwords import (
+    LISTED,
+    alike,
+    close_under,
+    column,
+    heading,
+    listed,
+    row,
+    shows,
+)
 
 Line = tuple[Word, ...] | None
 """A line of words read, or None where there's none."""
@@ -57,7 +66,7 @@ def under_header(
     the frame's height, should ``until`` go unread; None if not there. With ``system``,
     not in another system's section ("NYX SYSTEM"), as long as the list has a section for
     ``system``: the log's last system can be out of date."""
-    found = reading.find(header)
+    found = heading(reading, header)  # "ALURESULT$" too (#684)
     if found is None:
         return None
     top = max(word.top + word.height for word in found)
@@ -71,7 +80,10 @@ def under_header(
         if line[0].top > top + reach * reading.height:
             return None
         said = " ".join(word.text for word in line)
-        if stop and stop in squeezed(said).replace(" ", ""):
+        if stop and (
+            stop in squeezed(said).replace(" ", "")
+            or heading(Reading(reading.width, reading.height, line), until)  # #684
+        ):
             return None
         if squeezed(said).endswith(SECTION):
             section = squeezed(said).removesuffix(SECTION).strip()

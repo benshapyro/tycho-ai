@@ -26,7 +26,7 @@ from dataclasses import dataclass
 
 from tycho.commands.matcher import Command
 from tycho.input.plan import pressable_input
-from tycho.keybinds import MODIFIERS, Action, Keybinds, KeyInput, key_text
+from tycho.keybinds import MODIFIERS, Action, Keybinds, KeyInput, key_text, readable
 from tycho.packs import Safety
 
 _DANGER_WORDS = (
@@ -69,7 +69,7 @@ def check(
         # First, whatever asks (#191): no command, sequence, brain pick or "confirm"
         # gets a key pressed in advisor mode. Not a question: confirming can't change it.
         return Verdict(False, lists.keys_off)
-    name = action.label or action.name
+    name = action.label or readable(action.name)
     if missing := [fact for fact in command.requires if fact not in facts]:
         return Verdict(False, "; ".join(lists.facts.get(fact, fact) for fact in missing))
     if keybinds is not None and (
@@ -77,7 +77,7 @@ def check(
     ):
         risky, bound = clash
         key = pressable_input(action)
-        danger = risky.label or risky.name
+        danger = risky.label or readable(risky.name)  # words, not an id (#678)
         # Name the key that clashes: for "ralt+x", Eject may be on "ralt" alone (#208).
         also = (
             f"which is also {danger}"
@@ -95,7 +95,7 @@ def check(
         return Verdict(
             False,
             f"{name} is on {key_text(key)}, and {key_text(alone)} alone is "
-            f"{other.label or other.name}, which the game can take it for. "
+            f"{other.label or readable(other.name)}, which the game can take it for. "
             "Give it a key of its own.",
         )
     if not confirmed and (command.confirm or is_confirm_grade(action.name, lists)):
@@ -171,7 +171,9 @@ def click_clash(action: Action, keybinds: Keybinds) -> tuple[KeyInput, Action] |
     another action on that button alone, with it (#648). The game can read the click
     without the modifier: "Switch Mining Laser" on Left Alt + Mouse 1 turned the mining
     laser on, which is Mouse 1 alone. A key on the keyboard is pressed instead when the
-    action has one (``pressable_input``), so this only stops a mouse-only binding."""
+    action has one (``pressable_input``), so this only stops a mouse-only binding. A
+    modifier and the wheel is refused the same way: nobody has checked in game that the
+    wheel chord lands right, so the safer choice stands (#678)."""
     key = pressable_input(action)
     if key is None or key.device != "mouse" or not key.modifiers:
         return None
