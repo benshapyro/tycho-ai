@@ -9,6 +9,7 @@ imported: the PyPI package of that name wins), and by tests/test_installer.py.
 """
 
 import re
+import sys
 
 PRODUCT = "Tycho"
 COPYRIGHT = "Copyright 2026 Ben Shapiro and Tycho contributors"
@@ -70,3 +71,7 @@ def version_info(version: str, filename: str, description: str) -> object:
             VarFileInfo([VarStruct("Translation", [0x0409, 1200])]),
         ],
     )
+
+
+if __name__ == "__main__":  # the build's numeric version for Inno Setup (#724)
+    print(".".join(str(n) for n in numbers(sys.argv[1])))

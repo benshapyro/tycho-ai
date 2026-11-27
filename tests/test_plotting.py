@@ -671,6 +671,51 @@ def test_a_route_says_when_the_rest_of_the_request_wasnt_done(
     assert game.route_id == "levski_all-001"
 
 
+def _handed_then(place: str, reply: str, *said: str) -> tuple[list[Result], Game]:
+    """``_handed`` for a request and what the player says after it, as ``_session``."""
+    game, tool = Game(), RouteTool("Plot a route.")
+
+    async def scenario() -> list[Result]:
+        brain = HandingBrain(tool, place, (), reply)
+        r = rig(*said, plotter=_plotter(game, tool=tool, brain=True), brain=brain)
+        results: list[Result] = []
+        for _ in said:
+            r.say()
+            if (result := await r.session.idle()) is not None:
+                results.append(result)
+        await r.session.close()
+        return results
+
+    return run(scenario), game
+
+
+def test_a_guessed_route_still_asks_for_the_rest_after_confirm() -> None:
+    """#732: the rest of a request whose place was a guess (#650) was forgotten by the
+    "confirm" that plotted it."""
+    (asked, plotted), game = _handed_then(
+        "lefski", ACT_HELD, "take us to lefski and lower the gear", "confirm"
+    )
+    assert asked.status == "asking"
+    done = LINES.done.format(name="Levski")
+    assert (plotted.status, plotted.say) == ("done", f"{done} {REST}")
+    assert game.route_id == "levski_all-001"
+
+
+def test_the_rest_isnt_carried_to_a_later_route() -> None:
+    """#732: the rest goes with its question, never to the next "plot a route to X". A
+    guard: it passed before the fix too."""
+    (_asked, _cancelled, again, plotted), _game = _handed_then(
+        "lefski",
+        ACT_HELD,
+        "take us to lefski and lower the gear",
+        "cancel",
+        "plot a route to lefski",
+        "confirm",
+    )
+    assert again.status == "asking"
+    assert (plotted.status, plotted.say) == ("done", LINES.done.format(name="Levski"))
+
+
 def test_a_route_dropped_after_a_look_up_says_so() -> None:
     result, game = _handed("take me where we went yesterday", "Levski", RECALLED, reply=ACT_HELD)
     assert result is not None
@@ -747,9 +792,10 @@ def test_the_route_tool_hands_over_only_a_place_it_takes(
     assert (tool.take() is not None) is hands
 
 
-def test_a_trace_says_why_nothing_was_pressed_after_a_route() -> None:
-    assert STOPPED[ACT_HELD] == "act after a route hand-over; not pressed"  # #728
-    assert HANDED_OVER not in STOPPED  # "On it." as told: nothing was held (review of #731)
+def test_on_it_as_told_has_no_reason_to_stop() -> None:
+    """Review of #731: "On it." as told held nothing. The trace for a held act is in
+    tests/test_traces.py (#732)."""
+    assert HANDED_OVER not in STOPPED
 
 
 # --- A guessed place is asked about first (#650) ------------------------------------------

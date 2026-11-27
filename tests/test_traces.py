@@ -116,6 +116,45 @@ def test_a_call_that_ends_with_its_usage_has_no_output_chars(tmp_path: Path) -> 
     assert call["tokens"]["output"] == 8
 
 
+def _route_then_gear() -> tuple[Any, Any]:
+    """Claude's two calls for #721: ``plot_route``, then an act in the next call."""
+    act = claude_fakes._tool_stop("run_actions", openrouter_fakes.GEAR)
+    plot = claude_fakes._tool_stop("plot_route", {"place": "Ruin Station"}, "toolu_0")
+    waits = SimpleNamespace(
+        content=[plot.content_block], stop_reason="tool_use", usage=claude_fakes._final("").usage
+    )
+    return ([plot], waits), ([act], None)
+
+
+def test_a_trace_says_why_nothing_was_pressed_after_a_route(tmp_path: Path) -> None:
+    """#728, from the review of #731: the trace's ``stopped`` line says the act after
+    ``plot_route`` wasn't pressed, for Claude and OpenRouter alike."""
+    from tycho.brain.lookups import ACT_HELD
+    from tycho.runtime.plotting import RouteTool
+
+    request = BrainRequest("take us to Ruin Station and lower the gear", KEYBINDS)
+    claude_traces = TraceFile(tmp_path / "claude" / FILE)
+    route = RouteTool("Plot a route.")
+    claude = _claude(
+        claude_fakes._Calls(*_route_then_gear()), claude_traces, cast(FakeLookup, route)
+    )
+    assert asyncio.run(claude.decide(request)) == Reply(ACT_HELD)
+    open_traces = TraceFile(tmp_path / "openrouter" / FILE)
+    chat = FakeChat(
+        [*tool_call("plot_route", {"place": "Ruin Station"}), *openrouter_fakes.finished()],
+        tool_call("run_actions", openrouter_fakes.GEAR, use_id="call_2"),
+    )
+    route = RouteTool("Plot a route.")
+    brain = openrouter_fakes._brain(chat, cast(FakeLookup, route), traces=open_traces)
+    assert asyncio.run(brain.decide(request)) == Reply(ACT_HELD)
+    for traces in (claude_traces, open_traces):
+        (line,) = _lines(traces)
+        assert line["stopped"] == "act after a route hand-over; not pressed"
+        assert line["decided"] == {"say": ACT_HELD}
+        tools = [t["name"] for call in line["calls"] for t in call["tools"]]
+        assert tools[:1] == ["plot_route"]
+
+
 def test_a_failed_request_is_traced_too(tmp_path: Path) -> None:
     traces = TraceFile(tmp_path / FILE)
     client = claude_fakes._Client([], claude_fakes._final("", stop_reason="end_turn"))

@@ -28,9 +28,12 @@ on:
 permissions:
   contents: read
 
+# A sign run waits for two approvals in SignPath: it gets a group of its own and is never
+# cancelled, so a merge to main meanwhile neither stops it nor is stopped by it (#724).
+# GitHub keeps one waiting run per group: a third sign run replaces a waiting second.
 concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
+  group: build-${{ github.ref }}${{ inputs.sign && '-sign' || '' }}
+  cancel-in-progress: ${{ !inputs.sign }}
 
 jobs:
   installer:
@@ -118,7 +121,15 @@ jobs:
       - name: The version, for the installer and SignPath
         id: version
         shell: pwsh
-        run: '"version=$((uv version --short).Trim())" >> $env:GITHUB_OUTPUT'
+        run: |
+          $version = (uv version --short).Trim()
+          "version=$version" >> $env:GITHUB_OUTPUT
+          # Windows' four numbers (0.12.0rc1 is 0.12.0.0): Inno Setup takes only numbers
+          # for the installer's binary version (#724).
+          $numeric = uv run --no-sync python packaging/version_info.py $version
+          if ($LASTEXITCODE -ne 0) { throw "no numeric version for $version" }
+          $numeric = $numeric.Trim()
+          "numeric=$numeric" >> $env:GITHUB_OUTPUT
 
       # Signing, part 1: Tycho's own programs, so the installer carries signed copies.
       - name: Upload the programs to sign
@@ -163,9 +174,26 @@ jobs:
         run: |
           choco install innosetup --version=6.7.1 -y --no-progress
           $version = "${{ steps.version.outputs.version }}"
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Qp "/DAppVersion=$version" packaging\tycho.iss
+          $numeric = "${{ steps.version.outputs.numeric }}"
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Qp "/DAppVersion=$version" "/DAppNumericVersion=$numeric" packaging\tycho.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
           Get-ChildItem dist\TychoSetup-*.exe | ForEach-Object { "{0}: {1:N0} MB" -f $_.Name, ($_.Length / 1MB) }
+
+      # SignPath refuses a file whose product name or version isn't what its policy
+      # checks: caught here on every build, not first by a refused release (#724).
+      # Inno Setup pads the installer's values with spaces to its stub's fixed length,
+      # so trailing spaces are dropped; the length is shown for the first signed run.
+      - name: The programs and installer carry Tycho's name and version
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          foreach ($file in "dist\tycho\tycho.exe", "dist\tycho\tycho-app.exe", "dist\TychoSetup-$version.exe") {
+            $info = (Get-Item $file).VersionInfo
+            $name, $product = "$($info.ProductName)".TrimEnd(), "$($info.ProductVersion)".TrimEnd()
+            "{0}: '{1}' '{2}' ({3} and {4} characters as stored)" -f $file, $name, $product, "$($info.ProductName)".Length, "$($info.ProductVersion)".Length
+            if ($name -ne "Tycho") { throw "$file's product name is '$name'" }
+            if ($product -ne $version) { throw "$file's product version is '$product', not $version" }
+          }
 
       # Signing, part 2: the installer.
       - name: Upload the installer to sign

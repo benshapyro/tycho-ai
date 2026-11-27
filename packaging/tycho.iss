@@ -2,6 +2,9 @@
 ;
 ;   iscc /DAppVersion=0.4.0 packaging\tycho.iss
 ;
+; A pre-release also passes its four numbers (0.12.0rc1 is /DAppNumericVersion=0.12.0.0,
+; from packaging/version_info.py): Inno Setup's binary version takes only numbers.
+;
 ; For the current user only, so no administrator prompt. Settings, keys, the speech
 ; model and the CUDA libraries live elsewhere (%APPDATA%\tycho, Windows Credential
 ; Manager, %LOCALAPPDATA%\tycho) and are kept when Tycho is uninstalled.
@@ -11,6 +14,9 @@
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
+#endif
+#ifndef AppNumericVersion
+  #define AppNumericVersion AppVersion
 #endif
 
 [Setup]
@@ -32,8 +38,8 @@ InfoAfterFile=privacy.txt
 ; Product name and version on the installer itself: SignPath's signing policy checks
 ; them, and they must match tycho.exe's (packaging/version_info.py).
 VersionInfoProductName=Tycho
-VersionInfoVersion={#AppVersion}
-VersionInfoProductVersion={#AppVersion}
+VersionInfoVersion={#AppNumericVersion}
+VersionInfoProductVersion={#AppNumericVersion}
 VersionInfoProductTextVersion={#AppVersion}
 VersionInfoDescription=Tycho setup
 DefaultDirName={localappdata}\Programs\Tycho

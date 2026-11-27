@@ -234,6 +234,10 @@ class Asking:
     question (ADR 13), which plots it on "confirm"."""
 
     name: str = ""
+    rest: bool = False
+    """Its request asked for more than the route, which wasn't pressed (#732), so the
+    plot on "confirm" still asks for the rest again. Set and read with ``name``: only a
+    confirmed guess reads it, so a later route by phrase never picks it up."""
 
 
 type FailedRoute = Callable[[str, str, Reading | None], None]
@@ -332,10 +336,12 @@ class Plotter:
         ended and why. ``progress`` gets what was pressed and Tycho's line. Unless
         ``sure`` (confirmed), a guessed place ends "asking" (#650): ``progress.question``
         asks about it (ending with the player's name, #15), ``asking.name`` names
-        it, and nothing is pressed."""
+        it, and nothing is pressed. A confirmed guess still asks for the rest of its
+        request again (``Asking.rest``, #732)."""
         lines = self.route.flow.lines
         progress.commands, progress.by_brain = (ROUTE,), False
-        rest, self.handing.rest = self.handing.rest, False
+        rest, self.handing.rest = self.handing.rest or (sure and self.asking.rest), False
+        self.asking.rest = False
         if trying:  # setup's Try it: nothing is pressed, and a route can't be shown
             progress.say = lines.trying
             return "refused", "routes aren't plotted in Try it"
@@ -360,8 +366,9 @@ class Plotter:
             asking = (
                 lines.confirm.format(name=map_name(name)).rstrip("?"),
             )  # "? Say confirm." follows
-            self.asking.name, progress.question = (
+            self.asking.name, self.asking.rest, progress.question = (
                 name,
+                rest,
                 Questions((), asking).question(self.address()),
             )
             return "asking", f"{said!r} may be {name}"
