@@ -248,6 +248,27 @@ def leftover(reading: Reading, flow: RouteFlow) -> bool:
     return shown and not reading.has(flow.search_box)
 
 
+def old_name(reading: Reading, flow: RouteFlow) -> tuple[Word, ...] | None:
+    """The box's words when it holds an earlier name (``leftover``): the nearest line
+    above the results header, left of its right end ("TERMINNUS" over NO RESULTS)."""
+    if not leftover(reading, flow) or (header := reading.find(flow.results)) is None:
+        return None
+    top, right = min(w.top for w in header), max(w.right for w in header)
+    tall = max(w.height for w in header)
+    above = [
+        line
+        for line in reading.lines()
+        if all(w.top + w.height <= top for w in line)
+        and top - max(w.top + w.height for w in line) <= 3 * tall
+        and min(w.left for w in line) < right
+    ]
+    if not above:
+        return None
+    marks = {mark.lower() for mark in flow.close_marks}  # the box's own x isn't its text
+    line = max(above, key=lambda line: max(w.top for w in line))
+    return tuple(w for w in line if w.text.strip().lower() not in marks) or None
+
+
 def as_long(reading: Reading, name: str, flow: RouteFlow) -> bool:
     """The box's line holds at least as many letters as ``name``: read wrong, maybe
     ("TERMINI-JS"), but none dropped, which could have reached the game (#654)."""

@@ -154,3 +154,19 @@ Some "power user" automation requests will be declined by design.
 
 **Consequences.**
 - Still at most two clicks, both on the map, with NAV set first and a fresh frame before each.
+
+## Amendment, 27 November 2026: clear a wrong name with the box's x, once
+
+*Status: proposed. On 27 November 2026 the maintainer chose to have Tycho clear a wrong name with the box's x and type it again once ("Yes, clear and retype once", [#682](https://github.com/benshapyro/tycho-ai/issues/682)). This text waits for his OK, because it needs two more clicks, not one: the x, then the box again.*
+
+**Context.** In the 27 November Pyro test, Tycho sent each letter of "Terminus" once, but the game showed "TERMIINUS" one time and "TERMINNUS" another. Port Tressler had the same problem before that. The cause isn't known, and a slower key rhythm is only a guess. The box also keeps its text after the map closes, so a wrong name blocks the next try too. Backspace can't clear it: some players bind it to dangerous actions, such as the maintainer's Self Destruct.
+
+**Decision.** This adds to the amendments above.
+
+- **Once per request, two more clicks.** If the box shows the name wrong after typing, Tycho clicks the box's own x, then clicks the box again and types the name once more. If the map opens with an earlier name still in the box, Tycho clicks the x first, then goes on as usual. A request clears the box once at most, so it has four clicks at most.
+- **The x is found the same way as the close button.** That means the x read on the box's line, right of its text, or the pack's offset from the box, only where text recognition also reads something. If no x is read, nothing is clicked, and Tycho asks the player to clear the box.
+- **The box must show its empty words after the click.** If the x click doesn't empty the box, Tycho stops there and says so.
+- **The exact row needs every letter.** The exact row can stand in for the box check only when the box line holds at least as many letters as the name. A box that dropped a letter never picks a row, because the dropped letter may have reached the game.
+
+**Consequences.**
+- At most four clicks per request, all on the map, with NAV set first and a fresh frame before each. Clearing happens once at most, and only on the box's own x.

@@ -31,8 +31,9 @@ Every key goes through the safety gate (``plan_request``), so with key actions o
 key that clashes with something dangerous, nothing is pressed. Every press and click
 checks the game window is in front. Any step that fails stops the flow there: nothing
 more is pressed, and the map is left open for the player (except on foot, where it's
-closed again, having shown nothing). One request types one name once, and never tries
-again on its own. With ``record`` (``TYCHO_ROUTE_RECORD``, a review tool), a failure after
+closed again, having shown nothing). A box showing the name wrong, or an earlier name,
+is emptied with its own x and typed in once more, once a request (ADR 3, 27 Nov 2026).
+With ``record`` (``TYCHO_ROUTE_RECORD``, a review tool), a failure after
 the map was opened hands why, and the last check's words, to it (ADR 14, 25 Nov 2026);
 not a refusal, a cancel or a held modifier, where the map read as it should (#705).
 
@@ -46,7 +47,6 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
 
 from tycho.commands import Command
 from tycho.eyes import CaptureError
@@ -58,6 +58,7 @@ from tycho.keybinds import Keybinds, readable
 from tycho.packs import Safety
 from tycho.packs.routes import RouteFlow
 from tycho.runtime import mappicks, mapwords
+from tycho.runtime.mapports import Clicker, RouteLog, ScreenReader, Warm
 from tycho.runtime.mapwords import column, id_names, middle, near, row, shows
 from tycho.runtime.messages import Status
 from tycho.runtime.planning import Refusal, Steps, plan_request
@@ -69,47 +70,14 @@ log = logging.getLogger(__name__)
 MAX_CLICKS = 2
 """The search box, then the place's name on its own panel or else the search panel's
 close button (ADR 3, 24 and 26 Nov 2026)."""
+CLEAR_CLICKS = 2
+"""Once a request, the box's own x to empty it, then the box again (ADR 3, 27 Nov 2026)."""
 SETTLE_LOOKS = 4
 """Looks, ``settle_seconds`` apart, for the search box to stop moving as the map opens."""
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9 '.-]{0,39}")
 """What may be typed: letters, digits, spaces and simple punctuation, at most 40. Never
 Enter in the middle, never a command (ADR 3, 23 Nov 2026)."""
 _TYPED = {" ": "space", "'": "apostrophe", ".": "period", "-": "minus"}
-
-
-class ScreenReader(Protocol):
-    """The words on one fresh frame of the game window, read on the PC (``eyes.words``).
-    Blocking. Raises ``CaptureError`` with why, if there's no frame."""
-
-    def read(self) -> Reading: ...
-
-
-@runtime_checkable
-class Warm(Protocol):
-    """A reader that can get ready before the map opens, and be put away after: one
-    route's looks then share one reading process (``eyes.loop``, #661). Blocking."""
-
-    def warm(self) -> None: ...
-
-    def finish(self) -> None: ...
-
-
-class Clicker(Protocol):
-    """One left click at a spot in a frame of ``window`` (``frame`` is its size), only if
-    that window is in front and the frame's size. Blocking. "" if it clicked, else why not."""
-
-    def click(self, window: int, frame: tuple[int, int], x: int, y: int) -> str: ...
-
-
-@runtime_checkable
-class RouteLog(Protocol):
-    """What the route flow reads from the game's log (``GameLog``). Blocking."""
-
-    def facts(self) -> frozenset[str]: ...
-
-    def last(self, kind: str) -> Logged | None: ...
-
-    def newest(self) -> int: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,12 +163,15 @@ class _Run:
     """The map's key was pressed: a failure from here on is the map's to record."""
     last: Reading | None = None
     """The last frame's words, for the record."""
+    presses: dict[str, Press] = field(default_factory=dict[str, Press])
+    cleared: bool = False
+    """The box's x was clicked to empty it: two more clicks, once (ADR 3, 27 Nov 2026)."""
 
     def steps(self, name_of: Callable[[str], str | None]) -> str:
         flow, lines, name = self.flow, self.flow.lines, self.place.name
         if not NAME.fullmatch(name):
             raise _Stop("refused", lines.bad_name.format(name=name), "not a name Tycho may type")
-        presses = self._plan()
+        presses = self.presses = self._plan()
         risky = self._risky_letter(name[:1])  # typed only once the box shows it has the keys
         if isinstance(self.reader, Warm):  # starts reading while the map opens (#661)
             self.reader.warm()
@@ -212,34 +183,20 @@ class _Run:
         self._press(presses[flow.open_map])
         self.opened = True
         box, reading = self._map_open(mark)
-        if box is None:
-            said = lines.box_full if mapwords.leftover(reading, flow) else lines.no_map
-            raise _Stop("failed", said, "no frame showed the map's search box")
+        kept = mapwords.old_name(reading, flow) if box is None else None  # "TERMINNUS"
+        if box is None and kept is None:
+            raise _Stop("failed", lines.no_map, "no frame showed the map's search box")
         if not self._seated(mark):
             self._press(presses[flow.close_map])
             raise _Stop("refused", lines.on_foot, "the log shows no pilot's seat")
+        if box is None:  # the box keeps an earlier name: its x empties it (27 Nov 2026)
+            box, reading = self._cleared(reading, kept or (), lines.box_full)
         box, reading = self._settled(box)
-        self._click(reading, middle(box), "the search box")
-        after = self._fresh()  # a box with the keys drops its empty words (26 Nov 2026)
-        if not after.has(flow.search_box) and not mapwords.listed(after, box, flow):
-            raise _Stop("failed", lines.stuck, "the map closed before typing")
-        self._wait(flow.click_seconds)  # the box takes keys a moment after the click (#654)
-        if risky and not mapwords.focused(self._fresh(), box, flow):  # "Bloom" with B (#682)
-            self._press(presses[flow.close_map])
-            said = lines.risky_first.format(name=name, action=risky)  # words, not an id (#705)
-            raise _Stop("refused", said, f"{risky} is on the name's first letter")
-        self._type(name[:1])
-        self.pressed.append(f"typed {name[:1]}")  # the log shows it, even if the game took it
-        self._wait(flow.beat_seconds)
-        now = self._fresh()
-        if now.has(flow.search_box) or not mapwords.took(after, now, box, squeezed(name[:1]), flow):
-            raise _Stop("failed", lines.not_typed, "the search box didn't take the first letter")
-        self._type_rest(name, box)
-        self._wait(flow.beat_seconds)
-        boxed = row(typed := self._fresh(), box)  # the exact row passes "TERMINI-JS" (27 Nov)
-        whole = mapwords.as_long(boxed, name, flow)  # "LEVKI": a letter lost, maybe to the game
-        pick = mappicks.exact(typed, box, flow, name, self.place.system) if whole else None
-        if pick is None and not mapwords.shows_alike(boxed, name, flow):
+        typed, pick = self._typed_in(box, reading, risky)
+        if typed is None:  # the game doubled a letter ("TERMIINUS"): clear, retype once
+            box, reading = self._cleared(self.last, box, None)
+            typed, pick = self._typed_in(box, reading, risky)
+        if typed is None:
             said = lines.mistyped.format(name=name)
             raise _Stop("failed", said, "the search box doesn't show the name")
         self.pressed[-1] = f"typed {name}"
@@ -391,14 +348,11 @@ class _Run:
         raise _Stop("failed", flow.lines.no_map, "the map's search box didn't sit still")
 
     def _open_already(self) -> bool:
-        """The map is open before its key is pressed: its search panel's words show. One
-        whose box still holds text (Ben's Terminus tries, 27 Nov 2026) can't be typed in."""
+        """The map is open before its key is pressed: its search panel's words show."""
         try:  # no frame: a closed map, which its key opens as ever
             reading = self.last = self.reader.read()
         except CaptureError:
             return False
-        if mapwords.leftover(reading, self.flow):
-            raise _Stop("refused", self.flow.lines.box_full, "the search box holds text")
         return mapwords.open_map(reading, self.flow)
 
     def _seated(self, mark: int) -> bool:
@@ -419,6 +373,51 @@ class _Run:
         listed = under.below(max(word.top + word.height for word in header))
         if not shows(listed, name):  # under RESULTS, not a RECENT list or a marker (#654)
             raise _Stop("failed", lines.not_listed.format(name=name), "not among the results")
+
+    def _typed_in(
+        self, box: tuple[Word, ...], reading: Reading, risky: str
+    ) -> tuple[Reading | None, mappicks.Line]:
+        """Click the box and type the name; the frame after, and the exact row in it if
+        any. No frame when the box doesn't show the name (a letter doubled or lost)."""
+        flow, lines, name = self.flow, self.flow.lines, self.place.name
+        self._click(reading, middle(box), "the search box")
+        after = self._fresh()  # a box with the keys drops its empty words (26 Nov 2026)
+        if not after.has(flow.search_box) and not mapwords.listed(after, box, flow):
+            raise _Stop("failed", lines.stuck, "the map closed before typing")
+        self._wait(flow.click_seconds)  # the box takes keys a moment after the click (#654)
+        if risky and not mapwords.focused(self._fresh(), box, flow):  # "Bloom" with B (#682)
+            self._press(self.presses[flow.close_map])
+            said = lines.risky_first.format(name=name, action=risky)  # words, not an id (#705)
+            raise _Stop("refused", said, f"{risky} is on the name's first letter")
+        self._type(name[:1])
+        self.pressed.append(f"typed {name[:1]}")  # the log shows it, even if the game took it
+        self._wait(flow.beat_seconds)
+        now = self._fresh()
+        if now.has(flow.search_box) or not mapwords.took(after, now, box, squeezed(name[:1]), flow):
+            raise _Stop("failed", lines.not_typed, "the search box didn't take the first letter")
+        self._type_rest(name, box)
+        self._wait(flow.beat_seconds)
+        boxed = row(typed := self._fresh(), box)  # the exact row passes "TERMINI-JS" (27 Nov)
+        whole = mapwords.as_long(boxed, name, flow)  # "LEVKI": a letter lost, maybe to the game
+        pick = mappicks.exact(typed, box, flow, name, self.place.system) if whole else None
+        if pick is None and not mapwords.shows_alike(boxed, name, flow):
+            return None, None
+        return typed, pick
+
+    def _cleared(
+        self, reading: Reading | None, box: tuple[Word, ...], said: str | None
+    ) -> tuple[tuple[Word, ...], Reading]:
+        """Click the box's own x to empty it, once a request (Ben, 27 Nov 2026): then the
+        box and the frame that shows its empty words. ``said``: the line if it can't."""
+        said = said or self.flow.lines.mistyped.format(name=self.place.name)
+        spot = mapwords.close_spot(reading, box, self.flow) if reading and box else None
+        if self.cleared or spot is None or reading is None:
+            raise _Stop("failed", said, "the search box holds the wrong text")
+        self.cleared = True
+        self._click(reading, spot, "the search box's x, to clear it")
+        if (empty := (now := self._fresh()).find(self.flow.search_box)) is None:
+            raise _Stop("failed", said, "the search box's x didn't empty it")
+        return empty, now
 
     def _enter(self, enter: Press, box: tuple[Word, ...]) -> None:
         """Enter takes the top result: then the place's own panel, the place under RECENT
@@ -444,7 +443,7 @@ class _Run:
     def _click(self, reading: Reading, spot: tuple[int, int], what: str) -> None:
         if self.cancel.is_set():
             raise _Stop("cancelled", "", "cancelled")
-        if self.clicks >= MAX_CLICKS:
+        if self.clicks >= MAX_CLICKS + (CLEAR_CLICKS if self.cleared else 0):
             raise _Stop("failed", self.flow.lines.stuck, "no more clicks")
         said, waited = self.presser.letting_go(self.cancel)  # Ctrl + click isn't one (#678)
         if self.cancel.is_set():

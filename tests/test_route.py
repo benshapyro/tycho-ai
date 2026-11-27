@@ -149,6 +149,10 @@ class Game:
     fuel ("CALCULATING..."): R does nothing then (Ben's Hurston try, #682)."""
     picked: bool = False
     clicked_row: int = -1
+    doubles: str = ""
+    """Letters the game types twice, each once, as it did "TERMIINUS" (27 Nov 2026)."""
+    kept: str = ""
+    """A name the box still holds when the map opens; its x empties it (27 Nov 2026)."""
 
     def __post_init__(self) -> None:
         if self.route_id:
@@ -158,7 +162,9 @@ class Game:
     def key(self, code: Code) -> None:
         if self.box_has_keys and code in LETTERS:  # the box takes every letter, R and C too
             if self.takes_keys:
-                self.typed += LETTERS[code]
+                letter = LETTERS[code]
+                self.typed += letter * (2 if letter in self.doubles else 1)
+                self.doubles = self.doubles.replace(letter, "", 1)
             else:
                 self.stray.append(LETTERS[code])
             return
@@ -170,7 +176,8 @@ class Game:
             self.nav = True
         elif what == "map":
             self.map_open = not self.map_open
-            self.box_has_keys, self.typed, self.entered = False, "", False
+            self.box_has_keys, self.entered = False, False
+            self.typed = self.kept if self.map_open else ""
             self.sliding = self.slides if self.map_open else 0
             if self.map_open and self.seated and not self.route_id and not self.log_quiet:
                 self._log(loglines.NO_ROUTE_ON_MAP)
@@ -208,6 +215,8 @@ class Game:
             if self.rows and not self.entered and 0 <= at < len(self.rows):
                 self.clicked_row, self.entered, self.picked = at, True, True
                 self.box_has_keys = self.rows[at] != self.typed.upper()  # another row: no
+            if on_x and self.typed and not self.entered:  # the box's x empties it
+                self.typed = self.kept = ""
             if on_name or on_x:  # a click outside the box gives the keys back to the map
                 self.box_has_keys = False
                 self.picked = self.picked or on_name
@@ -248,7 +257,7 @@ class Game:
             words.append(Word(self.typed.upper(), BOX[0], 220, 90, 20, 30))  # its panel
             words.append(Word("ROUTE", BOX[0], 600, 60, 20, 31))
             return Reading(WIDTH, HEIGHT, tuple(words), window=7)
-        if (self.box_has_keys or self.entered) and self.shows_x:
+        if (self.box_has_keys or self.entered or self.typed) and self.shows_x:
             words.append(Word("x", self.close_at[0] - 6, self.close_at[1] - 8, 12, 16, 0))
         if self.entered:
             found = self.typed in self.places
@@ -508,14 +517,12 @@ def _box_holding(text: str, *under: str) -> Reading:
 
 
 def test_a_map_open_with_an_old_name_in_its_box_is_left_alone() -> None:
-    class Reader:  # Ben's Terminus tries, 27 Nov 2026: "TERMINNUS" over NO RESULTS
-        def read(self) -> Reading:
-            return _box_holding("TERMINNUS", "NO", "RESULTS")
-
-    game = Game()
-    done = _plot(game, reader=Reader())
-    assert (done.status, done.say) == ("refused", LINES.box_full)
-    assert done.pressed == []
+    game = Game(kept="levsski", shows_x=False, map_open=True)  # no x read to clear it
+    game.typed = game.kept
+    done = _plot(game)
+    assert (done.status, done.say) == ("failed", LINES.box_full)
+    assert game.clicks == []
+    assert game.typed == "levsski"
 
 
 def test_a_map_that_opens_with_an_old_name_in_its_box_says_so() -> None:
@@ -533,6 +540,37 @@ def test_a_map_that_opens_with_an_old_name_in_its_box_says_so() -> None:
     assert (done.status, done.say) == ("failed", LINES.box_full)
     assert game.typed == ""
     assert game.clicks == []
+
+
+def test_a_doubled_letter_is_cleared_with_the_box_x_and_typed_again() -> None:
+    game = Game(doubles="s")  # "LEVSSKI", as the game typed "TERMIINUS" (27 Nov 2026)
+    done = _plot(game)
+    assert (done.status, done.say) == ("done", "Route set to Levski.")
+    assert game.clicks == [BOX_MIDDLE, CLOSE, BOX_MIDDLE, CLOSE]
+    assert "click on the search box's x, to clear it" in done.pressed
+
+
+def test_a_name_typed_wrong_twice_is_left_for_the_player() -> None:
+    game = Game(doubles="ss")  # Ben: clear and retype once, no more
+    done = _plot(game)
+    assert (done.status, done.say) == ("failed", LINES.mistyped.format(name="Levski"))
+    assert game.clicks == [BOX_MIDDLE, CLOSE, BOX_MIDDLE]
+    assert not game.entered
+
+
+def test_an_old_name_in_the_box_is_cleared_first() -> None:
+    game = Game(kept="levsski")  # the last try's "TERMINNUS", still there (27 Nov 2026)
+    done = _plot(game)
+    assert (done.status, done.say) == ("done", "Route set to Levski.")
+    assert game.clicks == [CLOSE, BOX_MIDDLE, CLOSE]
+
+
+def test_an_old_name_without_a_readable_x_is_left_for_the_player() -> None:
+    game = Game(kept="levsski", shows_x=False)
+    done = _plot(game)
+    assert (done.status, done.say) == ("failed", LINES.box_full)
+    assert game.clicks == []
+    assert game.typed == "levsski"
 
 
 def test_a_box_misread_still_picks_the_exact_row() -> None:
