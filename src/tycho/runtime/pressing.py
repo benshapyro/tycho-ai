@@ -12,6 +12,7 @@ from collections.abc import Awaitable, Callable
 from concurrent.futures import Executor
 
 from tycho.input import Press, Presser
+from tycho.keybinds import readable
 from tycho.runtime.messages import Progress, Status, Trace
 
 RECEIPT_STATUS: dict[str, Status] = {
@@ -37,16 +38,6 @@ def _shown(press: Press) -> str:
     """ "Landing System (N)": the action in the game's words, and the player's key."""
     name = press.label or readable(press.action)
     return f"{name} ({press.key})" if press.key else name
-
-
-def readable(action: str) -> str:
-    """An action with no label in the game's files, as words (#465):
-    "v_toggle_landing_system" is "Toggle landing system", not the raw id."""
-    words = action.replace("-", "_").split("_")
-    if len(words) > 1 and len(words[0]) == 1:  # a one-letter group, such as "v_"
-        words = words[1:]
-    said = " ".join(word for word in words if word)
-    return said[:1].upper() + said[1:] if said else action
 
 
 async def press_all(

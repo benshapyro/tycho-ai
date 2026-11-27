@@ -1077,3 +1077,24 @@ def test_recent_skips_a_place_in_another_systems_section() -> None:
     assert under_header(reading, "recent", "results", "Pyro Gateway", 0.5, "Stanton") is None
     assert under_header(reading, "recent", "results", "Pyro Gateway", 0.5, None) is not None
     assert under_header(reading, "recent", "results", "Hurston", 0.5, "Stanton") is not None
+
+
+def test_a_modifier_held_at_a_click_clicks_nothing_and_says_to_let_go() -> None:
+    """#678: the map's clicks went out as Ctrl + click while the player held Ctrl."""
+    game = Game()
+    sender = FakeKeySender()
+    sender.on_event = lambda: _key_went_down(sender, game)
+    clock = FakeClock()
+    presser = Presser(sender, FakeFocus(True), sleep=clock.sleep, clock=clock, game="SC")
+
+    class HeldAtClick:
+        def press(self, press: object, cancel: threading.Event | None = None) -> object:
+            return presser.press(press, cancel)  # type: ignore[arg-type]
+
+        def let_go(self, cancel: threading.Event | None = None) -> str:
+            return "Let go of Ctrl and say it again."
+
+    done = _plot(game, presser=HeldAtClick())
+    assert (done.status, done.say) == ("modifier_held", "Let go of Ctrl and say it again.")
+    assert game.clicks == []
+    assert not game.route_id
