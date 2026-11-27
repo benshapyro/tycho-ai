@@ -7,6 +7,7 @@ import threading
 import time
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -258,6 +259,16 @@ def test_a_brain_request_carries_where_the_log_says_the_player_is() -> None:
     _conversation("where can I mine gold", brain=brain, game_state=game_state)
     assert len(brain.asked) == 1
     assert "In the Nyx system" in brain.asked[0].where
+
+
+def test_a_brain_request_says_how_old_an_old_where_line_is() -> None:
+    """#707: the age #659 adds reaches the brain through the session too."""
+    game_state = FakeGameState()
+    old = datetime.now(UTC) - timedelta(minutes=45)
+    game_state.now = (Logged("system", "In the Stanton system", old, 1, "Stanton"),)
+    brain = FakeBrain(Reply("Try Aberdeen."))
+    _conversation("where can I mine gold", brain=brain, game_state=game_state)
+    assert "In the Stanton system (logged 45 minutes ago)" in brain.asked[0].where
 
 
 def test_eject_asks_first_and_presses_nothing() -> None:

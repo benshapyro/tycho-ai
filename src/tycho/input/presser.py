@@ -219,8 +219,16 @@ class Presser:
         Shift, Ctrl or Alt, waiting up to ``MODIFIER_WAIT_SECONDS`` as a press does; else
         what Tycho says ("Let go of Ctrl and say it again."). The game would read Ctrl +
         click."""
+        return self.letting_go(cancel)[0]
+
+    def letting_go(self, cancel: threading.Event | None = None) -> tuple[str, bool]:
+        """``let_go``'s line, and whether a modifier was down at the first look, so the
+        wait may have taken a moment: a click aimed from a frame read before it should
+        look again (#705)."""
+        if not self._sender.held_modifiers() & MODIFIER_CODES:
+            return "", False
         held = self._players_modifiers(_CLICK, cancel or threading.Event())
-        return let_go_line(held) if held else ""
+        return (let_go_line(held) if held else ""), True
 
     def _players_modifiers(self, press: Press, cancel: threading.Event) -> frozenset[Code]:
         """The modifiers down before the press, after waiting up to

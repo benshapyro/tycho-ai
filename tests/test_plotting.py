@@ -185,6 +185,20 @@ def test_the_players_system_wins_across_kinds_of_place() -> None:
     assert best_place(rows, "twin name", "Nyx") == "Twin Name (Pyro)"  # neither is there
 
 
+def test_one_of_too_many_matches_in_the_players_system_still_wins() -> None:
+    # #704: a kind with more than GUESS_AMONG matches, one of them here, beat a city
+    # elsewhere that matched first.
+    rows = [{"city_name": "Ridge Point", "star_system_name": "Pyro"}]
+    rows += [
+        {"outpost_name": f"Ridge {n}", "star_system_name": "Pyro"}
+        for n in ("Alpha", "Beta", "Gamma", "Delta")
+    ]
+    rows.append({"outpost_name": "Ridge Echo", "star_system_name": "Stanton"})
+    assert best_place(rows, "ridge", "Stanton") == "Ridge Echo"
+    assert best_place(rows, "ridge", "Pyro") == "Ridge Point"
+    assert best_place(rows, "ridge") == "Ridge Point"  # no system: the kinds' order
+
+
 def test_the_map_name_drops_only_a_system_at_the_end() -> None:
     assert map_name("Pyro Gateway (Stanton)") == "Pyro Gateway"
     assert map_name("Levski") == "Levski"

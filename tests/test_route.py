@@ -555,6 +555,27 @@ def test_a_place_listed_far_under_recent_is_not_taken_when_all_results_goes_unre
     assert game.clicks == [BOX_MIDDLE]
 
 
+def test_no_results_read_as_one_word_is_still_no_results() -> None:
+    # Review of #699 (#704): "NORESULTS" passed for the results header, and the player
+    # heard "The map didn't list" instead of why.
+    game = Game()
+    real = game.read
+
+    class Reader:
+        def read(self) -> Reading:
+            reading = real()
+            words = [w for w in reading.words if w.text not in ("NO", "RESULTS")]
+            if len(words) < len(reading.words):
+                words.append(Word("NORESULTS", BOX[0], 220, 120, 20, 1))
+            return Reading(reading.width, reading.height, tuple(words), reading.window)
+
+    done = _plot(game, "Port Tressler", reader=Reader())
+    assert done.say == "The map can't find Port Tressler. It only searches the system you're in."
+    assert game.clicks == [BOX_MIDDLE]
+    assert heading(_lines("NORESULTS"), "results", "no results") is None
+    assert heading(_lines("NORESULTS"), "results") is not None  # as before, with no "unless"
+
+
 def test_no_results_is_said_even_with_the_place_under_recent() -> None:
     game = Game(empties=True)
     real = game.read
@@ -794,7 +815,8 @@ def test_a_dangerous_first_letter_is_said_by_its_label_never_its_id() -> None:
     done = _plot(Game(), keybinds=Keybinds([*KEYBINDS, eject]))
     assert done.say == "I can't type Levski: its first letter is your Eject key."
     unlabelled = Keybinds([*KEYBINDS, _bound("v_eject", "l", "spaceship_general")])
-    assert _plot(Game(), keybinds=unlabelled).say == "I can't type Levski into the map."
+    said = "I can't type Levski: its first letter is your Eject key."  # in words (#705)
+    assert _plot(Game(), keybinds=unlabelled).say == said
 
 
 def test_a_later_letter_on_a_dangerous_key_waits_for_a_look_at_the_box() -> None:
@@ -1091,8 +1113,8 @@ def test_a_modifier_held_at_a_click_clicks_nothing_and_says_to_let_go() -> None:
         def press(self, press: object, cancel: threading.Event | None = None) -> object:
             return presser.press(press, cancel)  # type: ignore[arg-type]
 
-        def let_go(self, cancel: threading.Event | None = None) -> str:
-            return "Let go of Ctrl and say it again."
+        def letting_go(self, cancel: threading.Event | None = None) -> tuple[str, bool]:
+            return "Let go of Ctrl and say it again.", True
 
     done = _plot(game, presser=HeldAtClick())
     assert (done.status, done.say) == ("modifier_held", "Let go of Ctrl and say it again.")
@@ -1128,3 +1150,75 @@ def test_a_header_is_only_matched_loosely_in_one_short_word() -> None:
     assert heading(_lines("NORESULTSWEREFOUNDHERE"), "results") is None  # too long to be it
     assert heading(_lines("HURSTON"), "results") is None
     assert heading(_lines("ANYTHING"), "") is None
+
+
+class _HeldAtClicks(FakeKeySender):
+    """The player holds Ctrl for ``looks`` looks once ``when`` holds (the map is open:
+    Tycho is about to click, #705); ``then`` runs at the first, as the panel may change
+    in that wait."""
+
+    def __init__(
+        self,
+        game: Game,
+        looks: int,
+        then: Callable[[], None] = lambda: None,
+        when: Callable[[], bool] | None = None,
+    ) -> None:
+        super().__init__()
+        self.left, self.then, self.waiting = looks, then, False
+        self.when = when or (lambda: game.map_open)
+        self.on_event = lambda: _key_went_down(self, game)
+
+    def held_modifiers(self) -> frozenset[Code]:
+        self.looks += 1
+        if self.left <= 0 or not self.when():
+            return frozenset()
+        if not self.waiting:
+            self.waiting = True
+            self.then()
+        self.left -= 1
+        return frozenset({code_for("lctrl")})
+
+
+def _plot_held(game: Game, sender: FakeKeySender, cancel: threading.Event | None = None) -> Plotted:
+    clock = FakeClock()
+    presser = Presser(sender, FakeFocus(True), sleep=clock.sleep, clock=clock, game="SC")
+    return _plot(game, presser=presser, cancel=cancel or threading.Event())
+
+
+def test_ctrl_let_go_in_time_at_a_click_still_plots_with_a_real_presser() -> None:
+    game = Game()  # review of #700: end to end, Ctrl down only when the click comes
+    done = _plot_held(game, _HeldAtClicks(game, looks=3))
+    assert (done.status, done.say) == ("done", "Route set to Levski.")
+    assert game.clicks == [BOX_MIDDLE, CLOSE]
+
+
+def test_ctrl_held_through_the_wait_at_a_click_clicks_nothing() -> None:
+    game = Game()
+    done = _plot_held(game, _HeldAtClicks(game, looks=1000))
+    assert (done.status, done.say) == ("modifier_held", "Let go of Ctrl and say it again.")
+    assert game.clicks == []
+
+
+def test_a_cancel_while_waiting_for_ctrl_clicks_nothing() -> None:
+    game, cancel = Game(), threading.Event()
+    done = _plot_held(game, _HeldAtClicks(game, looks=1000, then=cancel.set), cancel=cancel)
+    assert done.status == "cancelled"
+    assert game.clicks == []
+
+
+def test_a_click_aimed_before_a_modifier_wait_looks_again_first() -> None:
+    # Review of #700: the panel moved while Tycho waited for Ctrl to be let go, and the
+    # click was aimed from the frame read before the wait.
+    game = Game()
+
+    def moved() -> None:
+        game.close_at = (CLOSE[0] + 200, CLOSE[1] + 100)
+
+    sender = _HeldAtClicks(game, looks=3, then=moved, when=lambda: game.entered)
+    done = _plot_held(game, sender)
+    assert (done.status, done.detail) == (
+        "failed",
+        "the search panel's close button changed in the wait",
+    )
+    assert game.clicks == [BOX_MIDDLE]
