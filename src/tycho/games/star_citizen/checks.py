@@ -18,8 +18,11 @@ from tycho.settings import Settings
 
 def find_install(current: Settings) -> GameInstall:
     roots = search_roots()
-    if current.game_root is not None:
-        roots = (current.game_root, *roots)
+    if (given := current.game_root) is not None:
+        # Any level will do, as when setup asks: LIVE itself, StarCitizen or Roberts
+        # Space Industries. "...\StarCitizen\LIVE" in the file was looked for as
+        # "...\LIVE\LIVE" and never found.
+        roots = (root_from(given, current.game_channel) or given, *roots)
     return GameInstall.find(current.game_channel, roots=roots)
 
 
