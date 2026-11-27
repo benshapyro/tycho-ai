@@ -9,7 +9,7 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 ## [Unreleased]
 
 ### Fixed
-- Plotting a route to a place whose first letter is one of your keybinds ("Bloom" with Change Fire Mode on B) works once the map's search box shows it has the keys, and a name the screen reader misreads by one letter in the box ("ORBITUARV") no longer stops the route. ([#682](https://github.com/benshapyro/tycho-ai/issues/682))
+- Plotting a route to a place whose first letter is one of your keybinds ("Bloom" with Change Fire Mode on B) works once the map's search box shows it has the keys, and a name Tycho's text recognition misreads by one letter in the box ("ORBITUARV") no longer stops the route. ([#682](https://github.com/benshapyro/tycho-ai/issues/682))
 
 ### Changed
 - The installer now shows what leaves your PC, in short, before Tycho first starts, and asks whether to add Tycho to your PATH (ticked, as before). The full list is Tycho's new [privacy policy](PRIVACY.md). Getting ready for a signed installer, through SignPath Foundation. ([#9](https://github.com/benshapyro/tycho-ai/issues/9))

@@ -214,14 +214,17 @@ def focused(reading: Reading, box: tuple[Word, ...], flow: RouteFlow) -> bool:
     return x or listed(reading, box, flow)
 
 
-def shows_alike(reading: Reading, name: str) -> bool:
+def shows_alike(reading: Reading, name: str, flow: RouteFlow) -> bool:
     """``shows``, letting text recognition misread one letter as ``alike`` does: the box
-    read "ORBITUARV" with Orbituary typed in it (Ben's Pyro try, 27 Nov 2026)."""
+    read "ORBITUARV" with Orbituary typed in it (Ben's Pyro try, 27 Nov 2026). The box's
+    own x is left out, so "LEVSK" and its x never pass for "levski" (review of #726)."""
     if shows(reading, name):
         return True
     wanted = len(squeezed(name).replace(" ", ""))
+    marks = {mark.lower() for mark in flow.close_marks}
     for line in reading.lines():
-        said = squeezed(" ".join(w.text for w in line)).replace(" ", "")
+        kept = (w.text for w in line if w.text.strip().lower() not in marks)
+        said = squeezed(" ".join(kept)).replace(" ", "")
         if any(alike(said[at : at + wanted], name) for at in range(len(said) - wanted + 1)):
             return True
     return False

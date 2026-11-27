@@ -22,7 +22,7 @@ from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.packs import STAR_CITIZEN, as_run, built_in
 from tycho.packs.routes import RouteFlow, RouteLines
 from tycho.runtime.mappicks import under_header
-from tycho.runtime.mapwords import alike, heading, shows_alike
+from tycho.runtime.mapwords import alike, focused, heading, shows_alike
 from tycho.runtime.route import Place, Plotted, id_names, plot
 from tycho.situation import Logged
 
@@ -810,6 +810,14 @@ def test_a_name_on_a_dangerous_key_is_never_typed() -> None:
     assert not any(p.startswith("typed") for p in done.pressed)
     assert game.typed == ""
     assert game.stray == []
+    assert not game.map_open  # closed again, as the on-foot refusal does (review of #726)
+
+
+def test_a_box_without_its_empty_words_but_no_x_or_list_gives_no_sign_it_has_the_keys() -> None:
+    box = (Word("LEVSKI", BOX[0], BOX[1], 60, BOX[3], 0),)  # the empty words gone, no x
+    assert not focused(Reading(WIDTH, HEIGHT, box, 7), box, FLOW)
+    x = Word("x", BOX[0] + 80, BOX[1], 8, BOX[3], 0)
+    assert focused(Reading(WIDTH, HEIGHT, (*box, x), 7), box, FLOW)
 
 
 def test_a_dangerous_first_letter_is_typed_once_the_box_shows_it_has_the_keys() -> None:
@@ -1262,5 +1270,5 @@ def test_a_box_read_one_letter_wrong_still_shows_the_name() -> None:
 
 @pytest.mark.parametrize("read", ["LEVSK", "LEVSK1", "LAVSKJ"])
 def test_a_box_short_a_letter_or_a_digit_off_does_not_show_the_name(read: str) -> None:
-    box = (Word(read, BOX[0], BOX[1], 60, BOX[3], 0),)
-    assert not shows_alike(Reading(WIDTH, HEIGHT, box, 7), "Levski")
+    box = (Word(read, BOX[0], BOX[1], 60, BOX[3], 0), Word("x", BOX[0] + 80, BOX[1], 8, BOX[3], 0))
+    assert not shows_alike(Reading(WIDTH, HEIGHT, box, 7), "Levski", FLOW)  # x left out
