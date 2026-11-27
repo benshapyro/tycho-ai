@@ -49,7 +49,9 @@ log = logging.getLogger("tycho")
 def _rebind(ptt: PushToTalk, value: object) -> None:
     """The app's push-to-talk buttons, (first, second) as saved, listened to now (#646)."""
     match value:
-        case (str() as first, str() | None as second) if rebind(ptt, first, second):
+        case (str() as first, str() | None as second):
+            if not rebind(ptt, first, second):
+                raise ValueError("push-to-talk needs a first button")
             log.info("Push-to-talk is now %s", describe_all(every_binding(first, second)))
         case _:
             raise TypeError(f"expected the push-to-talk buttons, not {value!r}")

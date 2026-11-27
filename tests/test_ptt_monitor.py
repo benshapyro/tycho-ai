@@ -4,6 +4,7 @@ from tests.fakes.fake_input import FakeInputSource
 from tycho.ptt.binding import Binding, DeviceKind
 from tycho.ptt.devices import rebind
 from tycho.ptt.monitor import Edge, PushToTalk, capture_binding
+from tycho.start import run as start_run
 
 SIDE = Binding(DeviceKind.MOUSE, 0x05)
 LEFT = Binding(DeviceKind.MOUSE, 0x01)
@@ -85,6 +86,86 @@ def test_buttons_chosen_again_need_one() -> None:
     with pytest.raises(ValueError, match="at least one button"):
         ptt.rebind([], [FakeInputSource()])
     assert not rebind(ptt, None, "joystick:vkb-l:3")  # a second alone: the old one stays
+    assert ptt.bindings == (SIDE,)
+
+
+class _Broken(FakeInputSource):
+    """A stick source SDL won't start for: every read raises."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.reads = 0
+
+    def is_pressed(self, binding: Binding) -> bool:
+        self.reads += 1
+        raise OSError("SDL2.dll not found")
+
+    def close(self) -> None:
+        raise OSError("SDL was never set up")
+
+
+def test_a_stick_that_cant_be_read_doesnt_keep_tycho_listening(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """#676: the mouse button was seen, but once it was let go the stick's read raised,
+    so the release never came and Tycho kept listening."""
+    mouse, sticks = FakeInputSource(SIDE), _Broken()
+    ptt = PushToTalk([SIDE, STICK], [mouse, sticks])
+    assert ptt.poll() is Edge.PRESSED
+    mouse.held.clear()
+    assert ptt.poll() is Edge.RELEASED
+    assert ptt.poll() is None
+    assert sticks.reads == 1  # then left alone for RETRY_SECONDS
+    failed = [r for r in caplog.records if "Reading push-to-talk" in r.getMessage()]
+    assert len(failed) == 1  # once, not every 5 ms
+
+
+def test_a_stick_that_cant_be_read_is_tried_again_each_second() -> None:
+    """Review of #697: SDL was set up again on every 5 ms poll for the whole session."""
+    now = [0.0]
+    mouse, sticks = FakeInputSource(), _Broken()
+    ptt = PushToTalk([SIDE, STICK], [mouse, sticks], clock=lambda: now[0])
+    for _ in range(100):
+        ptt.poll()
+        now[0] += 0.005
+    assert sticks.reads == 1  # 0.5 s of polls: one try
+    now[0] += 0.6
+    ptt.poll()
+    assert sticks.reads == 2
+
+
+def test_a_source_that_fails_to_close_doesnt_keep_the_others_open(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    broken, mouse = _Broken(), _Closing()
+    ptt = PushToTalk(SIDE, [broken, mouse])
+    ptt.rebind([SIDE], [FakeInputSource(SIDE)])
+    assert ptt.poll() is Edge.PRESSED
+    assert mouse.closed == 1
+    assert any("Closing push-to-talk" in r.getMessage() for r in caplog.records)
+
+
+def test_the_apps_buttons_are_listened_to_as_saved(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#676 item 2: the app's (first, second) reaches the running push-to-talk, a
+    second of None is only the first, and anything else is refused, not guessed at."""
+
+    def sources(*_bindings: Binding) -> list[FakeInputSource]:
+        return [FakeInputSource(SIDE)]
+
+    monkeypatch.setattr("tycho.ptt.devices.input_sources", sources)
+    rebind_ = start_run._rebind  # pyright: ignore[reportPrivateUsage]
+    ptt = PushToTalk(LEFT, [FakeInputSource()])
+    rebind_(ptt, ("mouse:0x05", "joystick:vkb-right:4"))
+    assert ptt.poll() is Edge.PRESSED
+    assert ptt.bindings == (SIDE, STICK)
+    rebind_(ptt, ("mouse:0x05", None))
+    ptt.poll()
+    assert ptt.bindings == (SIDE,)
+    for wrong in ("mouse:0x05", None, (5, None), ("mouse:0x05",)):
+        with pytest.raises(TypeError, match="push-to-talk buttons"):
+            rebind_(ptt, wrong)
+    with pytest.raises(ValueError, match="first button"):
+        rebind_(ptt, ("", "mouse:0x05"))
     assert ptt.bindings == (SIDE,)
 
 

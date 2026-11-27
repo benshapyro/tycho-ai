@@ -146,6 +146,7 @@ class MiningLookup:
             log.warning("Mining look-up failed: %s", e)
             return failure(f"the Star Citizen Wiki API didn't answer ({e}); answer without it")
         late = sum(isinstance(a, TimeoutError) for a in answers)
+        missing = sum(isinstance(a, BaseException) for a in answers)
         if all(isinstance(a, BaseException) for a in answers) and answers and not late:
             first = next(a for a in answers if isinstance(a, BaseException))
             log.warning("Mining look-up failed: %s", first)
@@ -164,7 +165,7 @@ class MiningLookup:
         }
         if late:
             body["note"] = (
-                f"the Wiki was slow: chances for {len(looked) - late} of {len(looked)} "
+                f"the Wiki was slow: chances for {len(looked) - missing} of {len(looked)} "
                 "places; the others are listed without one"
             )
         elif len(locations) >= PAGE:
@@ -241,8 +242,11 @@ async def _by(
     tasks = [asyncio.ensure_future(f) for f in fetches]
     if not tasks:
         return []
-    left = max(0.0, deadline - asyncio.get_running_loop().time())
     try:
+        # Each fetch starts before the deadline counts (#669): with no time left, one
+        # cancelled before its first step would never fetch, or keep it for the next ask.
+        await asyncio.sleep(0)
+        left = max(0.0, deadline - asyncio.get_running_loop().time())
         _, late = await asyncio.wait(tasks, timeout=left)
     except asyncio.CancelledError:
         for task in tasks:
