@@ -6,6 +6,7 @@ version = 1
 # The button you hold while talking to Tycho, e.g. mouse:0x06 for a mouse side button. Set it by pressing the button in setup.
 push_to_talk = "mouse:0x06"
 
+# push_to_talk_2 = (not set). A second push-to-talk button, held the same way: say, a joystick button.
 # Microphone name or number. Empty means the Windows default.
 microphone = "Headset Microphone (USB Audio)"
 
