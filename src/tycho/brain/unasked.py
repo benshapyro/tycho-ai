@@ -11,7 +11,8 @@ checks the player's own words, as ``refusals.asked_only`` does for questions (#7
 - passing on someone's words: "he said ...", "the tutorial says ...";
 - saying how things are: "the doors are open", "we're in quantum", "he's opening...";
 - something for later: "if ...", "once ...", "when ...": Tycho never waits to act;
-- a yes-or-no question: "is ...", "can I ...", "should we ...".
+- a yes-or-no question: "is ...", "can I ...", "should we ...", or words said as one:
+  "lights on?" may ask whether they are (#717).
 
 A request after a break still presses ("the doors are open, close them"), except after
 "if", "once" or "when", where the part after the break is what to do later. So does a
@@ -40,9 +41,11 @@ NOT_A_NAME = FILLER | {
     *("yes", "yeah", "yep", "no", "now", "right", "alright", "copy", "roger", "sure", "cool"),
     *("good", "great", "nice", "perfect", "thanks", "quick", "actually", "also", "first"),
     *("then", "next", "finally", "please", "fine", "wait", "listen", "look", "sorry", "damn"),
-    *("shit", "crap", "ah", "hmm", "whoa", "go", "guys", "everyone", "all", "you"),
+    *("shit", "crap", "ah", "hmm", "whoa", "go", "guys", "everyone", "all", "you", "like"),
+    *("computer", "taiko", "tyco", "tiko", "tyko", "teko", "psycho", "tycoe"),
 }
-"""Words that can open a request with a comma after them, so aren't a name."""
+"""Words that can open a request with a comma after them, so aren't a name: with the
+ways speech-to-text spells "Tycho", and "computer" (#719)."""
 NAMED = re.compile(r"^\W*(?:(?:hey|ok|okay|oh|so|and)\W+)*([A-Z][A-Za-z'-]*)\s*,")
 """A capitalised word and a comma first: someone the player is talking to."""
 THIRD = frozenset({"he", "hes", "she", "shes", "they", "someone", "somebody", "everybody"})
@@ -63,6 +66,21 @@ YES_OR_NO = frozenset(
 """Openings of a yes-or-no question. Not "can you" or "can we", which ask for things."""
 ASKS_FOR = frozenset({("can", "i", "get"), ("could", "i", "get"), ("can", "i", "have")})
 """Yes-or-no openings that ask for something: "can I get the lights on"."""
+POLITE = frozenset({("if", "you"), ("when", "you"), ("once", "you")})
+LET_OFF = frozenset(
+    {("can",), ("could",), ("are", "ready"), ("get", "a", "chance"), ("have", "a", "chance")}
+    | {("dont", "mind"), ("would",), ("like",), ("want",), ("please",)}
+)
+"""What follows ``POLITE`` when it asks now: "once you're ready, lower the gear", "if you
+can, ..." (#719). Not "once you get a lock, fire missiles", which is for later."""
+ASKS_NOW = frozenset({("make", "sure"), ("ensure",)})
+"""Openings that ask for how things should be: "make sure the gear is down" (#719)."""
+REQUEST = frozenset(
+    {("can", "you"), ("could", "you"), ("would", "you"), ("will", "you"), ("can", "we")}
+    | {("could", "we"), ("lets",), ("let", "us"), ("how", "about"), ("what", "about")}
+)
+"""Openings that ask for something even said with a question mark: "can you open the
+doors?". Speech-to-text writes "?" after these too."""
 ASKING = frozenset({"should", "do", "does", "did", "is", "can", "will", "would", "are"})
 """A word after "when" that makes it a question, not something for later."""
 
@@ -98,23 +116,49 @@ def unasked(heard: Heard | None, picked: Iterable[str], words: Collection[str] =
         return ""
     first = _opening(normalize(clauses[0]))
     then = [w for c in clauses[1:] for w in normalize(c)]
-    if first and first[0] in LATER and first[:2] not in {("if", "you"), ("when", "you")}:
+    if first and first[0] in LATER and not (first[:2] in POLITE and _opens(first[2:], LET_OFF)):
         # "if you can, lower the gear" asks politely; "when should I..." is a question.
         return ANSWER_IN_WORDS if first[1:2] and first[1] in ASKING else NOT_NOW
     if (name := NAMED.match(said)) and name.group(1).lower() not in NOT_A_NAME:
         return SOMEONE_ELSE
-    if first and first[0] != "i" and SAYS.intersection(first[1:6]):
+    if _passes_on(first):
         return SOMEONE_ELSE
     if ACTION_WORDS.intersection(then) or names_any(then, picked) or known.intersection(then):
         return ""  # "the doors are open, close them"; "it's dark, lights on"
     if first and first[0] in THIRD:
         return SOMEONE_ELSE
     stated = states(clauses[0]) or BE.intersection(first[1:4])
-    if first and first[0] not in QUESTION_WORDS | BE and stated:
+    if first and first[0] not in QUESTION_WORDS | BE and stated and not _opens(first, ASKS_NOW):
         return HOW_THINGS_ARE
-    if first[:3] not in ASKS_FOR and any(first[: len(o)] == o for o in YES_OR_NO):
+    if first[:3] not in ASKS_FOR and _opens(first, YES_OR_NO):
         return ANSWER_IN_WORDS
-    return ANSWER_IN_WORDS if asked_only(heard, picked) else ""
+    if asked_only(heard, picked) or sounds_asked(said):
+        return ANSWER_IN_WORDS
+    return ""
+
+
+def sounds_asked(said: str) -> bool:
+    """Whether ``said`` ends in "?" without asking for anything (#717): "lights on?" or
+    "doors open?" may ask whether they are, and pressing a toggle then does the
+    opposite. "Can you open the doors?", "open the doors?" (a request word first) and
+    "lights on, please?" ask for something."""
+    if not said.rstrip().endswith("?"):
+        return False
+    words = _opening(normalize(said))
+    if not words or "please" in words or words[0] in ACTION_WORDS:
+        return False
+    return not _opens(words, REQUEST | ASKS_FOR | ASKS_NOW)
+
+
+def _passes_on(first: tuple[str, ...]) -> bool:
+    """Whether the first words pass on someone else's: "my buddy says lower the gear",
+    but not "I said lower the gear" or "like I said, lower the gear" (#719). "I think
+    he said ..." is someone else's."""
+    return any(w in SAYS and first[k - 1] != "i" for k, w in enumerate(first[1:6], start=1))
+
+
+def _opens(words: tuple[str, ...], openings: Collection[tuple[str, ...]]) -> bool:
+    return any(words[: len(o)] == o for o in openings)
 
 
 def _opening(words: list[str]) -> tuple[str, ...]:

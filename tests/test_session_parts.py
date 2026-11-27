@@ -1,6 +1,7 @@
 """Routing and planning, the pure parts the session and the brain eval share (#55)."""
 
 import dataclasses
+from pathlib import Path
 
 import pytest
 
@@ -32,6 +33,7 @@ from tycho.runtime.routing import (
     route,
     tile_command,
 )
+from tycho.text import states
 
 SC = built_in(STAR_CITIZEN)
 
@@ -352,4 +354,53 @@ def test_words_that_say_how_things_are_go_to_the_brain(text: str) -> None:
     "text", ["gear down", "let's lower the gear", "target whoever's shooting at us"]
 )
 def test_a_request_with_an_apostrophe_still_takes_the_fast_path(text: str) -> None:
+    assert isinstance(route(text, MATCHER), Picked)
+
+
+def test_no_built_in_phrase_says_how_things_are() -> None:
+    """``routing._written_so`` lets a stated phrase take the fast path only when its
+    command was written that way, so no built-in phrase may be (#719)."""
+    assert [p for c in MATCHER.commands for p in c.say if states(p)] == []
+
+
+def test_a_players_own_stated_phrase_takes_the_fast_path(tmp_path: Path) -> None:
+    """#719: "it's go time" in the player's own commands.toml went to the brain, which
+    refused it as how things are, so the player's phrase never ran."""
+    mine = tmp_path / "commands.toml"
+    mine.write_text(
+        '[[command]]\nid = "go_time"\nsay = ["it\'s go time", "we\'re landing"]\n'
+        'actions = ["v_deploy_landing_system"]\n',
+        "utf-8",
+    )
+    matcher = CommandMatcher.default(mine, pack=SC)
+    for said in ("it's go time", "Tycho, we're landing"):
+        picked = route(said, matcher)
+        assert isinstance(picked, Picked), said
+        assert [c.id for c in picked.commands] == ["go_time"]
+    assert isinstance(route("gear's down", matcher), ToBrain)
+
+
+@pytest.mark.parametrize("text", ["lights on?", "Doors open?", "gear down?", "okay, lights on?"])
+def test_a_command_said_as_a_question_goes_to_the_brain(text: str) -> None:
+    """#717: "lights on?" may ask whether they are; where only the toggle is bound,
+    pressing it turned them off."""
+    assert isinstance(route(text, MATCHER), ToBrain)
+
+
+def test_without_a_brain_a_command_said_as_a_question_is_still_pressed() -> None:
+    """There's nothing else to ask, and "lights on?" was pressed before #717."""
+    assert isinstance(route("lights on?", MATCHER, brain=False), Picked)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "can you open the doors?",
+        "could you lower the gear?",
+        "open the doors?",
+        "lights on, please?",
+        "let's lower the gear?",
+    ],
+)
+def test_a_polite_request_with_a_question_mark_keeps_the_fast_path(text: str) -> None:
     assert isinstance(route(text, MATCHER), Picked)

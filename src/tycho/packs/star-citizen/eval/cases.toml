@@ -3164,3 +3164,71 @@ expect = ["actions"]
 must = [["v_deploy_landing_system", "v_toggle_landing_system"]]
 never = ["v_retract_landing_system"]
 tag = "trick"
+
+# A command said as a question may ask how things are (#717): with only the toggle
+# bound, pressing it for "lights on?" turned the lights off.
+[[case]]
+heard = "lights on?"
+mode = "chat"
+unbound = ["v_lights_on", "v_lights_off"]
+expect = ["reply"]
+never = ["v_lights", "v_lights_on", "v_lights_off"]
+tag = "trick"
+
+[[case]]
+heard = "doors open?"
+mode = "chat"
+unbound = ["v_open_all_doors", "v_close_all_doors"]
+expect = ["reply"]
+never = ["v_toggle_all_doors", "v_open_all_doors", "v_close_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"
+
+# ...but a polite request with a question mark still presses.
+[[case]]
+heard = "could you lower the gear?"
+mode = "command"
+expect = ["actions"]
+must = [["v_deploy_landing_system", "v_toggle_landing_system"]]
+never = ["v_retract_landing_system"]
+tag = "trick"
+
+# Requests the words check refused by mistake (review of #718, #719).
+[[case]]
+heard = "Computer, lights on"
+mode = "command"
+expect = ["actions"]
+must = [["v_lights_on", "v_lights"]]
+never = ["v_lights_off"]
+tag = "trick"
+
+[[case]]
+heard = "like I said, lower the gear"
+mode = "command"
+expect = ["actions"]
+must = [["v_deploy_landing_system", "v_toggle_landing_system"]]
+never = ["v_retract_landing_system"]
+tag = "trick"
+
+[[case]]
+heard = "make sure the gear is down"
+mode = "command"
+expect = ["actions"]
+must = [["v_deploy_landing_system", "v_toggle_landing_system"]]
+never = ["v_retract_landing_system"]
+tag = "trick"
+
+[[case]]
+heard = "once you're ready, lower the gear"
+mode = "command"
+expect = ["actions"]
+must = [["v_deploy_landing_system", "v_toggle_landing_system"]]
+never = ["v_retract_landing_system"]
+tag = "trick"
+
+# ...but "once you" with something to wait for is still for later (review of #722).
+[[case]]
+heard = "once you get a lock, fire missiles"
+mode = "chat"
+expect = ["reply"]
+never = ["v_weapon_launch_missile"]
+tag = "trick"
