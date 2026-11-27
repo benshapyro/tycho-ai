@@ -7,6 +7,26 @@ import re
 from tycho.eyes.words import Reading, Word, squeezed
 from tycho.packs.routes import RouteFlow
 
+_MISREAD = str.maketrans({"$": "s", "5": "s", "0": "o", "1": "l", "|": "l"})
+"""Letters text recognition reads as marks or digits in a header ("ALURESULT$" for "ALL
+RESULTS" on Ben's Hurston try, #684)."""
+_EXTRA = 4
+"""How many more letters than the header a run-together word may have ("allresults")."""
+
+
+def heading(reading: Reading, header: str) -> tuple[Word, ...] | None:
+    """The words of a list's ``header`` ("results"), as ``Reading.find``; or else one word
+    that holds it run together and misread ("ALURESULT$"), no longer than it plus
+    ``_EXTRA`` letters. Only where a list starts: a row is still matched exactly."""
+    if (found := reading.find(header)) is not None or not header:
+        return found
+    wanted = squeezed(header).replace(" ", "")
+    for word in reading.words:
+        said = squeezed(word.text.lower().translate(_MISREAD)).replace(" ", "")
+        if wanted in said and len(said) <= len(wanted) + _EXTRA:
+            return (word,)
+    return None
+
 
 def middle(words: tuple[Word, ...]) -> tuple[int, int]:
     left = min(word.left for word in words)
@@ -132,7 +152,7 @@ def listed(reading: Reading, box: tuple[Word, ...], flow: RouteFlow) -> bool:
     """The panel's list is open under the box: "RECENT" or "ALL RESULTS" in its column,
     as once the box has the keys (Ben's PC try, 26 Nov 2026)."""
     close = close_under(reading, box, LISTED)
-    return any(word and close.has(word) for word in (flow.recent, flow.results))
+    return any(word and heading(close, word) for word in (flow.recent, flow.results))
 
 
 def took(

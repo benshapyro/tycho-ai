@@ -47,6 +47,7 @@ class FakePlaces:
         self.names, self.error = names, error
         self.asked: list[str] = []
         self.systems: list[str | None] = []
+        self.closed = 0
 
     async def find(self, said: str, system: str | None = None) -> str | None:
         self.asked.append(said)
@@ -63,6 +64,9 @@ class FakePlaces:
 
     def name_of(self, route_id: str) -> str | None:
         return None
+
+    async def close(self) -> None:
+        self.closed += 1
 
 
 def _plotter(game: Game, places: FakePlaces | None = None, **kw: Any) -> Plotter:
@@ -169,6 +173,18 @@ def test_the_players_system_picks_between_same_named_places() -> None:
     assert best_place(rows, "pyro gateway") is not None  # unknown: either, typed the same
 
 
+def test_the_players_system_wins_across_kinds_of_place() -> None:
+    # #684: a city elsewhere and a station here with the same name: the station.
+    rows = [
+        {"city_name": "Twin Name (Pyro)", "star_system_name": "Pyro"},
+        {"space_station_name": "Twin Name (Stanton)", "star_system_name": "Stanton"},
+    ]
+    assert best_place(rows, "twin name", "Stanton") == "Twin Name (Stanton)"
+    assert best_place(rows, "twin name", "Pyro") == "Twin Name (Pyro)"
+    assert best_place(rows, "twin name") == "Twin Name (Pyro)"  # no system: kinds' order
+    assert best_place(rows, "twin name", "Nyx") == "Twin Name (Pyro)"  # neither is there
+
+
 def test_the_map_name_drops_only_a_system_at_the_end() -> None:
     assert map_name("Pyro Gateway (Stanton)") == "Pyro Gateway"
     assert map_name("Levski") == "Levski"
@@ -223,6 +239,33 @@ def test_tycho_says_how_a_route_ended() -> None:
     said = Result(1, "failed", commands=(ROUTE,), say=LINES.stuck)
     assert would_speak(said)
     assert not would_speak(Result(1, "done", commands=(ROUTE,)))
+
+
+def test_closing_the_session_closes_the_places_connections() -> None:
+    """#644: each restart (a new game, #295) left UEX's client open."""
+    places = FakePlaces("Levski")
+
+    async def scenario() -> None:
+        r = rig("plot a route to Levski", plotter=_plotter(Game(), places))
+        r.say()
+        await r.session.idle()
+        await r.session.close()
+
+    run(scenario)
+    assert places.closed == 1
+
+
+def test_uex_places_close_their_source_once() -> None:
+    closed: list[int] = []
+
+    async def closing() -> None:
+        closed.append(1)
+
+    places = UexPlaces(FakeTradeUex(), closing)
+    asyncio.run(places.close())
+    asyncio.run(places.close())
+    asyncio.run(UexPlaces(FakeTradeUex()).close())  # nothing to close
+    assert closed == [1]
 
 
 def test_the_session_hands_a_route_request_to_the_plotter() -> None:

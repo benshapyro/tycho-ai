@@ -205,6 +205,10 @@ class Plotter:
     system: Callable[[], str | None] = lambda: None
     """The player's star system, if the game's log shows it. Blocking (it reads the log)."""
 
+    async def close(self) -> None:
+        """Let go of the places' connections, when the session closes (#644)."""
+        await self.places.close()
+
     async def _find(self, said: str) -> str | None:
         """The place ``said`` names, in the player's system first: both under the time
         limit, as reading the system can catch up on the log (review of #683)."""
