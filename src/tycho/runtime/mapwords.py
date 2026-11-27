@@ -244,7 +244,16 @@ def leftover(reading: Reading, flow: RouteFlow) -> bool:
     """The search panel shows results ("NO RESULTS" too) with no empty words in the box:
     the box still holds an earlier name ("TERMINNUS", Ben's Pyro tries, 27 Nov 2026).
     Typing would add to it, and the map's key can't clear it."""
-    return reading.has(flow.results) and not reading.has(flow.search_box)
+    shown = reading.has(flow.results) and not reading.has(flow.recent)  # RECENT: empty
+    return shown and not reading.has(flow.search_box)
+
+
+def as_long(reading: Reading, name: str, flow: RouteFlow) -> bool:
+    """The box's line holds at least as many letters as ``name``: read wrong, maybe
+    ("TERMINI-JS"), but none dropped, which could have reached the game (#654)."""
+    marks = {mark.lower() for mark in flow.close_marks}
+    said = "".join(w.text for w in reading.words if w.text.strip().lower() not in marks)
+    return len(squeezed(said).replace(" ", "")) >= len(squeezed(name).replace(" ", ""))
 
 
 def id_names(route_id: str, name: str) -> bool:

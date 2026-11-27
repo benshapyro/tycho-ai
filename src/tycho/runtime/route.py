@@ -236,9 +236,10 @@ class _Run:
             raise _Stop("failed", lines.not_typed, "the search box didn't take the first letter")
         self._type_rest(name, box)
         self._wait(flow.beat_seconds)
-        typed = self._fresh()  # the exact row passes a box misread "TERMINI-JS" (27 Nov)
-        pick = mappicks.exact(typed, box, flow, name, self.place.system)
-        if pick is None and not mapwords.shows_alike(row(typed, box), name, flow):
+        boxed = row(typed := self._fresh(), box)  # the exact row passes "TERMINI-JS" (27 Nov)
+        whole = mapwords.as_long(boxed, name, flow)  # "LEVKI": a letter lost, maybe to the game
+        pick = mappicks.exact(typed, box, flow, name, self.place.system) if whole else None
+        if pick is None and not mapwords.shows_alike(boxed, name, flow):
             said = lines.mistyped.format(name=name)
             raise _Stop("failed", said, "the search box doesn't show the name")
         self.pressed[-1] = f"typed {name}"

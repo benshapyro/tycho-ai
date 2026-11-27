@@ -21,6 +21,7 @@ from tycho.input.keys import Code, code_for
 from tycho.keybinds import Action, Keybinds, KeyInput
 from tycho.packs import STAR_CITIZEN, as_run, built_in
 from tycho.packs.routes import RouteFlow, RouteLines
+from tycho.runtime import mapwords
 from tycho.runtime.mappicks import under_header
 from tycho.runtime.mapwords import alike, focused, heading, shows_alike
 from tycho.runtime.route import Place, Plotted, id_names, plot
@@ -550,6 +551,30 @@ def test_a_box_misread_still_picks_the_exact_row() -> None:
     done = _plot(game, reader=Reader())
     assert (done.status, done.say) == ("done", "Route set to Levski.")
     assert game.clicked_row == 1
+
+
+def test_a_box_short_a_letter_never_picks_the_row() -> None:
+    game = Game(rows=("STANTON SYSTEM", "LEVSKI"))  # review of #733: "LEVKI", an S lost
+    real = game.read
+
+    class Reader:
+        def read(self) -> Reading:
+            reading = real()
+            short = tuple(
+                replace(w, text="LEVKI") if w.text == "LEVSKI" and w.top == BOX[1] else w
+                for w in reading.words
+            )
+            return Reading(reading.width, reading.height, short, reading.window)
+
+    done = _plot(game, reader=Reader())
+    assert done.status == "failed"
+    assert game.clicked_row == -1
+
+
+def test_an_empty_box_with_the_keys_is_not_an_old_name() -> None:
+    reading = _box_holding("", "RECENT", "ALL", "RESULTS")  # review of #733
+    assert not mapwords.leftover(reading, FLOW)
+    assert mapwords.leftover(_box_holding("TERMINNUS", "NO", "RESULTS"), FLOW)
 
 
 def test_the_row_in_the_players_system_is_clicked() -> None:
