@@ -299,8 +299,9 @@ def _chances(result: Any) -> dict[str, float]:
 def test_with_no_time_left_for_details_they_are_still_fetched_for_next_time(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """#669: when finding the locations used up all of ``DETAILS_SECONDS``, every
-    detail fetch was cancelled before its first step, so nothing was kept either."""
+    """#669: with all of ``DETAILS_SECONDS`` used up finding the locations, the detail
+    fetches still start, and are kept for the next ask. (CPython's ``asyncio.wait``
+    already gave them their first step: this keeps that true.)"""
     monkeypatch.setattr(mining, "DETAILS_SECONDS", 0.0)
     wiki = _Slow()
     lookup = MiningLookup(wiki)

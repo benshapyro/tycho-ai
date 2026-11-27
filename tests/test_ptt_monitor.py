@@ -115,9 +115,23 @@ def test_a_stick_that_cant_be_read_doesnt_keep_tycho_listening(
     mouse.held.clear()
     assert ptt.poll() is Edge.RELEASED
     assert ptt.poll() is None
-    assert sticks.reads >= 2
+    assert sticks.reads == 1  # then left alone for RETRY_SECONDS
     failed = [r for r in caplog.records if "Reading push-to-talk" in r.getMessage()]
     assert len(failed) == 1  # once, not every 5 ms
+
+
+def test_a_stick_that_cant_be_read_is_tried_again_each_second() -> None:
+    """Review of #697: SDL was set up again on every 5 ms poll for the whole session."""
+    now = [0.0]
+    mouse, sticks = FakeInputSource(), _Broken()
+    ptt = PushToTalk([SIDE, STICK], [mouse, sticks], clock=lambda: now[0])
+    for _ in range(100):
+        ptt.poll()
+        now[0] += 0.005
+    assert sticks.reads == 1  # 0.5 s of polls: one try
+    now[0] += 0.6
+    ptt.poll()
+    assert sticks.reads == 2
 
 
 def test_a_source_that_fails_to_close_doesnt_keep_the_others_open(

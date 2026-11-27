@@ -125,8 +125,9 @@ def test_none_can_be_the_answer(say: str) -> None:
     assert parse_tool_call("run_actions", {"actions": [], "say": say}, ACTIONS, ()) == Reply(say)
 
 
-def test_a_placeholder_line_with_a_press_is_not_spoken() -> None:
-    picked = parse_tool_call("run_actions", {"actions": ["v_lights"], "say": "unused"}, ACTIONS, ())
+@pytest.mark.parametrize("say", ["unused", "None.", "nothing"])
+def test_a_placeholder_line_with_a_press_is_not_spoken(say: str) -> None:
+    picked = parse_tool_call("run_actions", {"actions": ["v_lights"], "say": say}, ACTIONS, ())
     assert picked == RunActions(("v_lights",), "")
     sequence = parse_tool_call("run_sequence", {"name": "startup", "say": "N/A"}, (), SEQUENCES)
     assert sequence == RunSequence("startup", "")
@@ -665,7 +666,14 @@ def test_an_empty_act_after_the_answer_in_words_says_the_words() -> None:
 
 
 @pytest.mark.parametrize(
-    "lead_in", ["Let me check your blueprints.", "Checking.", "One moment...", "I'll look."]
+    "lead_in",
+    [
+        "Let me check your blueprints.",
+        "Checking.",
+        "One moment...",
+        "I'll look.",
+        "I\u2019ll check.",
+    ],
 )
 def test_an_empty_act_after_a_lead_in_isnt_answered_with_the_lead_in(lead_in: str) -> None:
     """#669: "Let me check your blueprints." then an empty act ended the request with
@@ -675,9 +683,18 @@ def test_an_empty_act_after_a_lead_in_isnt_answered_with_the_lead_in(lead_in: st
     assert len(client.requests) == 2
 
 
-def test_an_answer_that_starts_like_a_lead_in_is_still_the_answer() -> None:
-    client = _Calls(_empty_act("Let me see. You have three blueprints."))
-    assert _ask(client, FakeLookup()) == Reply("Let me see. You have three blueprints.")
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Let me see. You have three blueprints.",
+        "Looking at your fleet, none of them can mine.",
+        "Let's go with the Prospector.",
+        "Checking… you have three blueprints.",
+    ],
+)
+def test_an_answer_that_starts_like_a_lead_in_is_still_the_answer(answer: str) -> None:
+    client = _Calls(_empty_act(answer))
+    assert _ask(client, FakeLookup()) == Reply(answer)
 
 
 def test_only_empty_acts_to_the_end_is_an_error_never_unused() -> None:

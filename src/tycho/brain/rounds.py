@@ -483,11 +483,12 @@ def fitted(reply: str, credits: Sequence[str]) -> Reply:
 
 
 _LEAD_IN = re.compile(
-    r"(let me|let's|i'll (check|look|see|find|pull)|i will (check|look)|checking|looking"
-    r"|one (moment|sec)|just a (moment|sec)|hold on|give me a)\b[^.!?]*[.!?…]*$",
+    r"(let me|i['\u2019]ll (check|look|see|find|pull)|i will (check|look)|checking|one (moment|sec)"
+    r"|just a (moment|sec)|hold on|give me a)\b[^.!?…,]{0,40}[.!?…]*$",
     re.IGNORECASE,
 )
-"""Words that only say an answer is coming, in one sentence: never the answer (#669)."""
+"""Words that only say an answer is coming, in one short sentence with no comma: never
+the answer (#669). "Looking at your fleet, none can mine." is an answer."""
 
 
 def spoken(text: str) -> str:

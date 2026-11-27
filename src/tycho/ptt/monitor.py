@@ -11,6 +11,10 @@ from tycho.ptt.binding import Binding
 
 log = logging.getLogger("tycho")
 
+RETRY_SECONDS = 1.0
+"""How long a source that failed to read is left alone before it's tried again (#676):
+a stick SDL won't start isn't set up again on every 5 ms poll."""
+
 
 class InputSource(Protocol):
     """A family of physical buttons, such as keyboard and mouse, or joysticks."""
@@ -35,7 +39,11 @@ class PushToTalk:
     to a stick button mid-sentence is one long press."""
 
     def __init__(
-        self, bindings: Binding | Sequence[Binding], sources: Sequence[InputSource]
+        self,
+        bindings: Binding | Sequence[Binding],
+        sources: Sequence[InputSource],
+        *,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.bindings = (bindings,) if isinstance(bindings, Binding) else tuple(bindings)
         if not self.bindings:
@@ -45,8 +53,10 @@ class PushToTalk:
         self._next: tuple[tuple[Binding, ...], tuple[InputSource, ...]] | None = None
         """Buttons chosen in the app while Tycho runs (#646), taken up by the next poll."""
         self._lock = threading.Lock()
-        self._failing: set[int] = set()
-        """Sources whose last read raised, by id: logged once, until one works (#676)."""
+        self._clock = clock
+        self._failing: dict[int, float] = {}
+        """Sources whose last read raised, by id, with when: logged once, and tried again
+        only after ``RETRY_SECONDS``, until one works (#676)."""
 
     @property
     def binding(self) -> Binding:
@@ -80,16 +90,20 @@ class PushToTalk:
     def _holds(self, source: InputSource) -> bool:
         """Whether one of the buttons is held on ``source``. A source that can't be read
         (SDL won't start, its DLL is missing) counts as nothing held, so a mouse button
-        let go is still a release (#676); it's logged once until it reads again."""
+        let go is still a release (#676). It's logged once, and tried again each
+        ``RETRY_SECONDS`` until it reads."""
+        failed = self._failing.get(id(source))
+        if failed is not None and self._clock() - failed < RETRY_SECONDS:
+            return False
         try:
             held = any(source.is_pressed(binding) for binding in self.bindings)
         except Exception:
-            if id(source) not in self._failing:
-                self._failing.add(id(source))
+            if failed is None:
                 log.exception("Reading push-to-talk from %s failed", type(source).__name__)
+            self._failing[id(source)] = self._clock()
             return False
-        if id(source) in self._failing:
-            self._failing.discard(id(source))
+        if failed is not None:
+            del self._failing[id(source)]
             log.info("Push-to-talk from %s is working again", type(source).__name__)
         return held
 

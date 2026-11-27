@@ -242,11 +242,11 @@ async def _by(
     tasks = [asyncio.ensure_future(f) for f in fetches]
     if not tasks:
         return []
-    # Each fetch starts before the deadline counts (#669): with no time left, one
-    # cancelled before its first step would never fetch, or keep it for the next ask.
-    await asyncio.sleep(0)
-    left = max(0.0, deadline - asyncio.get_running_loop().time())
     try:
+        # Each fetch starts before the deadline counts (#669): with no time left, one
+        # cancelled before its first step would never fetch, or keep it for the next ask.
+        await asyncio.sleep(0)
+        left = max(0.0, deadline - asyncio.get_running_loop().time())
         _, late = await asyncio.wait(tasks, timeout=left)
     except asyncio.CancelledError:
         for task in tasks:

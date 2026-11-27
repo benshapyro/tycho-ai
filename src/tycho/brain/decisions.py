@@ -142,12 +142,12 @@ def parse_tool_call(
             raise BrainError(f"run_actions: {len(names)} actions is too many")
         if unknown := [a for a in names if a not in actions]:
             raise UnboundAction(unknown)
-        return RunActions(names, say)
+        return RunActions(names, _pressing(say))
     if name == "run_sequence":
         sequence = args.get("name")
         if not isinstance(sequence, str) or sequence not in sequences:
             raise BrainError(f"run_sequence: {sequence!r} isn't one of your sequences")
-        return RunSequence(sequence, say)
+        return RunSequence(sequence, _pressing(say))
     if name == "show_card":
         try:
             card = from_tool(args)
@@ -201,6 +201,12 @@ def line(say: object) -> str:
     said = say[:MAX_SAY].strip()
     key = said.lower().strip(" .!\"'")
     return "" if not key or key in PLACEHOLDERS else said
+
+
+def _pressing(say: str) -> str:
+    """A press's line: "None." or "Nothing." beside a press is a placeholder after all
+    (#666), though alone they can be the answer (#669)."""
+    return "" if say.lower().strip(" .!\"'") in {"none", "nothing"} else say
 
 
 _ON_THE_TILE = re.compile(r"(?<=[.!?])\s+[^.!?]*\bon the Tile\b[^.!?]*[.!?]?\s*$", re.IGNORECASE)
