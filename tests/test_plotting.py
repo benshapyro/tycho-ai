@@ -442,6 +442,8 @@ def test_the_route_tool_only_hands_the_place_over() -> None:
         "Tycho, how do I get to Levski from here",
         "fastest way to Area 18",
         "which route to Lorville is safest",
+        "any route to Pyro that avoids pirates",  # kept: a missed plot is safer (#679)
+        "trade route to Area 18",
     ],
 )
 def test_the_route_tool_plots_nothing_for_a_question(said: str) -> None:
@@ -455,7 +457,16 @@ def test_the_route_tool_plots_nothing_for_a_question(said: str) -> None:
 
 @pytest.mark.parametrize(
     "said",
-    ["take us to Crusader", "can you get me a course over to Lorville", "a route to Levski"],
+    [
+        "take us to Crusader",
+        "can you get me a course over to Lorville",
+        "a route to Levski",
+        # Not questions, though they start with a word NOT_A_REQUEST has (#679):
+        "Great, take us to Lorville",
+        "good, now a route to Levski",
+        "another route to Levski",
+        "how about a route to Levski",
+    ],
 )
 def test_the_route_tool_still_hands_over_a_request(said: str) -> None:
     tool = RouteTool("Plot a route.")
