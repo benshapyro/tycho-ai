@@ -45,7 +45,7 @@ ANSWER_IN_WORDS = (
 
 
 GENERIC = frozenset(
-    {"system", "systems", "mode", "ship", "state", "level", "group", "set", "all", "view"}
+    {"system", "systems", "mode", "state", "level", "group", "set", "all", "view"}
     | {"reset", "fwd", "back", "next", "prev", "main", "default", "status", "current"}
 )
 """Parts of action names too common to say the player asked for the action: "what
