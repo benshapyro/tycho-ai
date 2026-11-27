@@ -8,6 +8,8 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-27
+
 ### Added
 - Say "plot a route to Levski" (or "set a course for Area 18") from your pilot's seat, and Tycho opens the star map, searches for the place, plots the route and closes the map again. It says "Route set to Levski." only once the game's log shows the route. If a route is already set, Tycho clears it first and says so. The map only searches the system you're in, and Tycho tells you if it can't find the place, if your quantum fuel may be low, or if you're not seated. It makes at most two mouse clicks, both on the map, and sets NAV mode first so a click can't fire a weapon. Place names come from UEX's list. Other ways of asking ("take us to Crusader") and misheard ones ("plotta route to Lewski") work too, and Tycho only says a route is set once it is. When it only guessed the place ("Dlevsky"), it asks "Plot a route to Levski?" first: say "confirm". Ask for a place "in the next system" and Tycho says the map only plots routes in the system you're in. Tycho waits for the map to finish opening before it clicks the search box, and pauses before typing. A place name Tycho doesn't know ("plot a route to Lipsky") goes to the brain, which can tell it's Levski. When Enter opens the place's own panel instead of a list, Tycho clicks the place's name there before plotting, and the same when Enter leaves the place at the top of the map's RECENT list. Tycho reads only the left half of the screen while it plots, where the map's search panel is, so each check is quicker and misreads fewer letters on wide screens. "Plot a route to Pyro Gateway" works too: of two places with the same name, Tycho picks the one in your system and types the name the map knows. "Ariel" finds the moon Arial, and asking with the star map already open works too. Tycho waits while the map works out the fuel to the place before it plots, and names with a letter on one of your keybinds ("Aberdeen") can be typed once the search box has the keys. Tycho clicks the place itself in the search results when it can, so "MicroTech" is the planet and not a depot of the same name, and it never picks a place from another system. ([#588](https://github.com/benshapyro/tycho-ai/issues/588), [#647](https://github.com/benshapyro/tycho-ai/issues/647), [#650](https://github.com/benshapyro/tycho-ai/issues/650), [#661](https://github.com/benshapyro/tycho-ai/issues/661), [#682](https://github.com/benshapyro/tycho-ai/issues/682))
 - You can have two push-to-talk buttons, say a mouse button and a button on your joystick, and hold whichever is closer. Add the second in setup (Talk and listen) or in Settings, under Game and controls, and remove it there too. In a terminal: `tycho bind --second` and `tycho bind --remove-second`. ([#621](https://github.com/benshapyro/tycho-ai/issues/621))
@@ -267,7 +269,8 @@ The first release with an installer, as a preview. Earlier versions weren't rele
 - A fleet Tycho remembers, and speech recognition on your PC.
 - A check for a newer version when Tycho starts (it never updates itself).
 
-[Unreleased]: https://github.com/benshapyro/tycho-ai/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/benshapyro/tycho-ai/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.11.0
 [0.10.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.10.0
 [0.9.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.9.0
 [0.8.0]: https://github.com/benshapyro/tycho-ai/releases/tag/v0.8.0

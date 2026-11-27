@@ -17,7 +17,7 @@ Hold a button and say what you want, the way you'd say it to a crewmate. Tycho p
 | **What you need** | A Windows PC and a microphone. Star Citizen or World of Warcraft: Forever. |
 | **What it costs** | Tycho is free and open source. The built-in commands need no account. Understanding anything said differently, and answering questions, uses your own Claude key: usually a few cents an evening. A spoken voice uses your own ElevenLabs key. Details in [Keys and costs](#keys-and-costs). |
 | **Is it allowed?** | In Star Citizen, Tycho only presses keys through your own keybinds, and only when you ask. It never reads the game's memory or changes the game. Voice tools that work this way have been used for years, and we have found no report of a ban for one. But CIG has not reviewed or approved Tycho, and its terms forbid "macro" software in general, so nobody can promise there is no risk ([how Tycho stays within the rules](docs/adr/0003-staying-within-cig-rules.md)). In World of Warcraft: Forever, Tycho presses no keys at all: it only answers and advises, as Blizzard's rules require. |
-| **How finished is it?** | Pre-alpha (0.10). It works, but it's early and has been played mostly by its maintainer: expect rough edges and changes between versions. |
+| **How finished is it?** | Pre-alpha (0.11). It works, but it's early and has been played mostly by its maintainer: expect rough edges and changes between versions. |
 | **Your privacy** | Your voice never leaves your PC. Only text goes out, to the services you gave a key for. Nothing about how you use Tycho is tracked. [The full list](#what-leaves-your-pc). |
 
 ## Why Tycho
@@ -118,11 +118,12 @@ Without an ElevenLabs key, Tycho's replies are shown in its window and it plays 
 - **Looks at the game window when you ask,** if you turned it on: "take a look". Only the game's own window, with a camera click each time, and the picture is never saved.
 - **Reads the game's log** on your PC, so it knows your ship, the zone you're in and whether you've plotted a quantum route. Speaking up comes from it, and the safeguards use a plotted route to know you're in the pilot seat.
 - **Speaks up when you want it to,** about a few things the game's log records, such as a quantum jump ending or entering an armistice zone. Off until you pick which.
+- **Plots a quantum route by voice** in Star Citizen: "plot a route to Levski" opens the star map, finds the place in the system you're in, plots the route and closes the map, and says "Route set" only once the game's log shows it.
 - **Settings by voice,** with "undo". By voice a safeguard can only get stricter, never looser.
 - **Its own window and tray icon:** guided setup, whether Tycho is ready and listening, everything you can say, your notes and history, and every setting.
 - **A log of every key it pressed,** and crash reports only if you say yes.
 
-Each of these is explained in the [player's guide](docs/current/players-guide.md). What changed in each version is in the [changelog](CHANGELOG.md). This page follows the newest code: memory, history, blueprints, the hangar import and turning the game down while Tycho speaks come in the next release after 0.10 (the changelog's **Unreleased** list).
+Each of these is explained in the [player's guide](docs/current/players-guide.md). What changed in each version is in the [changelog](CHANGELOG.md).
 
 ## What leaves your PC
 
@@ -178,7 +179,6 @@ Your agent does this by running commands on your PC: the same installer and chec
 
 These are plans, not promises. Each links its issue.
 
-- **Plot a quantum route by voice** ([#588](https://github.com/benshapyro/tycho-ai/issues/588)): "set a route to Port Tressler" types the place into the star map for you.
 - **Switch to the right game on its own,** from the game that's running ([#481](https://github.com/benshapyro/tycho-ai/issues/481)).
 - **Learns from misses and fixes itself** ([#51](https://github.com/benshapyro/tycho-ai/issues/51)): offers to add phrases you rephrased, and repairs keybinds after a patch, always with your OK.
 - **An optional wake word** ([#3](https://github.com/benshapyro/tycho-ai/issues/3)).
