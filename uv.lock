@@ -824,7 +824,7 @@ wheels = [
 
 [[package]]
 name = "tycho-ai"
-version = "0.10.0"
+version = "0.11.0"
 source = { editable = "." }
 default-groups = ["bench", "dev", "gpu"]
 dependencies = [
