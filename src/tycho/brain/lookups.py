@@ -32,8 +32,9 @@ class LookupResult:
 
 
 class Lookup(Protocol):
-    """One look-up tool. ``input_schema`` must suit strict tool use: every object
-    lists its properties and sets ``additionalProperties`` to false.
+    """One look-up tool. ``input_schema`` stays strict-shaped (every object lists its
+    properties and sets ``additionalProperties`` to false), though it's sent non-strict:
+    only the acts are strict (``claude.STRICT``, #638).
 
     A look-up may also set, read with ``getattr`` (so spell them exactly):
     ``seconds`` (its time limit), ``from_the_web`` (slow and unchecked: a filler line,
