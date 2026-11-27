@@ -94,7 +94,8 @@ def asks_about(text: str) -> bool:
     if tuple(words[: len(LEADING)]) == LEADING:
         words = words[len(LEADING) :]
         ends = [i for i, w in enumerate(words) if w in {"route", "routes", "course"}]
-        return bool(SUPERLATIVES & set(words[: ends[0] if ends else len(words)]))
+        before = set(words[: ends[0] if ends else len(words)])
+        return bool(SUPERLATIVES & before) or (bool(words) and words[0] in ASKING)
     if len(words) > 1 and words[0] in PRAISED:
         return words[1] in ROUTE_WORDS
     return bool(words) and words[0] in ASKING

@@ -492,6 +492,8 @@ def test_the_route_tool_only_hands_the_place_over() -> None:
         "great routes for cargo",
         "how about the fastest route to Pyro",
         "how about we find the safest route",
+        "how about any route to Pyro",  # review of #712: ASKING still counts after it
+        "how about which route is safest",
     ],
 )
 def test_the_route_tool_plots_nothing_for_a_question(said: str) -> None:
