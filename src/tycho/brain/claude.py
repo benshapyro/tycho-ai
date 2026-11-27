@@ -37,7 +37,7 @@ from anthropic.types import (
     ToolResultBlockParam,
 )
 
-from tycho.brain.briefing import briefing, offered_actions
+from tycho.brain.briefing import briefing, offered_actions, spoken
 from tycho.brain.decisions import BrainError, BrainRequest, Decision, Exchange, Reply
 from tycho.brain.looking import MAY_OFFER, SEEN, picture_block
 from tycho.brain.lookups import Lookup, LookupResult
@@ -192,7 +192,7 @@ class ClaudeBrain:
         """The briefing's hash, for the traces."""
         self._for: Keybinds | None = None
         self._system: list[TextBlockParam] = []
-        self._actions: frozenset[str] = frozenset()
+        self._actions: Mapping[str, frozenset[str]] = {}
         self._preparing: asyncio.Future[list[None]] | None = None
         self._draining: set[asyncio.Task[None]] = set()
         """Streams an act left, being read to the end (``_drain``)."""
@@ -314,7 +314,7 @@ class ClaudeBrain:
             raise BrainError("can't reach Claude (offline?)") from e
         except anthropic.APIStatusError as e:
             raise BrainError(f"Claude returned an error ({e.status_code})") from e
-        if turn.unbound is not None and turn.refused:
+        if turn.unbound is not None and turn.refused and not turn.asked:
             raise turn.unbound  # the last call too named actions that aren't bound
         raise BrainError(f"still looking things up after {MAX_CALLS} tries")
 
@@ -402,7 +402,7 @@ class ClaudeBrain:
         self._for = keybinds
         # In advisor mode nothing is offered, so a pick can only be refused (#191).
         offered = offered_actions(keybinds, self._matcher, self._pack) if self._keys else {}
-        self._actions = frozenset(offered)
+        self._actions = spoken(offered, self._matcher)
         text = briefing(keybinds, self._matcher, self._pack)
         if self._reference:
             text += f"\n{self._reference.strip()}\n"

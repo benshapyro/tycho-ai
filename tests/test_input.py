@@ -304,6 +304,16 @@ def test_a_click_waits_for_the_player_to_let_go_of_a_modifier() -> None:
     assert presser.let_go() == ""
 
 
+def test_letting_go_says_whether_it_may_have_waited() -> None:
+    """#705: a click aimed before a wait for a modifier looks again before it clicks."""
+    presser, clock = _presser(FakeKeySender())
+    assert presser.letting_go() == ("", False)
+    assert clock.now == 0
+    sender = FakeKeySender(players=[frozenset({code_for("lalt")})] * 3 + [frozenset()])
+    presser, _ = _presser(sender)
+    assert presser.letting_go() == ("", True)
+
+
 def test_a_modifier_still_held_after_the_wait_presses_nothing_and_says_so() -> None:
     sender = FakeKeySender(players=[frozenset({code_for("lshift"), code_for("rctrl")})])
     presser, clock = _presser(sender)

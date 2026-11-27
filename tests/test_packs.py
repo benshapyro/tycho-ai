@@ -50,7 +50,7 @@ from tycho.tile.design import accent_for, accent_for_maker
 
 SC = built_in(STAR_CITIZEN)
 
-STAR_CITIZEN_INSTRUCTIONS = "d85b8c4dcb069164277906b0d59903c34ec5d73009d02e72c1debb207ed4884a"
+STAR_CITIZEN_INSTRUCTIONS = "0a9856c65378bfd02563fce6f85be000058102957f5472bf7857bb9915651757"
 """The SHA-256 of Star Citizen's fixed briefing text: as it was before packs (main at
 6645025), then with "where is" and "how do I" searched on the first ask (#353), then
 saying a toggle was toggled, not which way (#545), then a card for any how-to with

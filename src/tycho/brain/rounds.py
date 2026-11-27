@@ -2,14 +2,14 @@
 
 A request is up to ``MAX_CALLS`` calls to the model. Each call is a *round*: as each
 tool call in the reply is complete, ``Round.tool_call`` starts its look-up, refuses an
-act that names unbound actions, or returns the act, which ends the request. The
-adapters (``claude``, ``openrouter``) only read their own provider's stream and say
-when a tool call is complete, so the rules live here once:
+act that names unbound actions, or returns the act, which ends the request. Adapters
+only read their own provider's stream and say when a tool call is complete, so:
 
 - only the first act in a reply is pressed;
 - a fleet or settings note (``instant``) in the same reply as an act finishes first,
   for up to ``INSTANT_SECONDS``;
 - nothing presses after a web search or a search of past talk (``unpressed``, ADR 14);
+- words that don't ask for the act are answered, never pressed (``unasked``, #708);
 - "Checking." is said only once a reply with look-ups is known not to end in a press.
 
 When tracing is on (``traces``, #282), the round records each call, tool call and
@@ -18,7 +18,6 @@ look-up on the turn's trace, and ``traced`` writes the request's line once it en
 
 import asyncio
 import dataclasses
-import difflib
 import logging
 import re
 import time
@@ -30,7 +29,10 @@ from tycho.brain.decisions import (
     BrainRequest,
     Decision,
     EmptyAct,
+    NotAnAct,
     Reply,
+    RunActions,
+    RunSequence,
     UnboundAction,
     parse_tool_call,
 )
@@ -44,7 +46,9 @@ from tycho.brain.lookups import (
     looked_up,
     run_lookup,
 )
+from tycho.brain.refusals import unbound
 from tycho.brain.traces import Look, Trace, TraceFile
+from tycho.brain.unasked import unasked
 from tycho.text import clip_spoken
 
 log = logging.getLogger(__name__)
@@ -65,10 +69,7 @@ SECOND_ACT = (
     "Not done: an earlier action in this reply was refused, so {tool} wasn't used. Call "
     "it again on its own if it's still wanted."
 )
-EMPTY_ACT = (
-    "Nothing was pressed or said: run_actions had no actions. Answer the player now, "
-    "in words or with show_card."
-)
+EMPTY_ACT = EmptyAct.answer
 """The result for an empty act with nothing real to say (#666): it isn't an answer."""
 LAST_PICK = "No more look-ups for this request: pick the actions again, or say what you can't do."
 """Instead of LAST_CALL, when the turn holds a refused act (review of #177)."""
@@ -110,6 +111,7 @@ class Turn:
     """The last act refused for naming unbound actions, for the final error (#167)."""
     refused: bool = False
     """This call's reply held a refused act: its result asks for another pick."""
+    asked: bool = False  # the last refusal was a question's: answer in words (#714)
     looked: bool = False
     """This reply looked something up to answer (no note): its results get ``CARD_NOTE`` (#490)."""
     trace: Trace | None = None
@@ -243,21 +245,28 @@ class Round:
             # refused (#176): this one waits for the next call.
             self.looking.append((use_id, answered(failure(SECOND_ACT.format(tool=name)))))
             return None
+        said = turn.heard.said if turn.heard is not None else ""
         try:
-            decided = parse_tool_call(name, arguments, self._actions, self._sequences)
-        except EmptyAct:
-            # Not an answer ("unused", #666): the model hears so and answers next call,
-            # unless this reply's words already did (``said``).
-            log.debug("Brain called run_actions with nothing to press or say")
-            self._empty += 1
-            self.looking.append((use_id, answered(failure(EMPTY_ACT))))
+            decided = parse_tool_call(name, arguments, self._actions, self._sequences, said)
+        except NotAnAct as e:
+            # Not an answer ("unused", #666; "how do I...?"): the model hears so and
+            # answers next call, unless this reply's words already did (``said``).
+            log.debug("Brain's act wasn't one: %s", e)
+            self._empty += isinstance(e, EmptyAct)
+            turn.asked |= e.question
+            self.looking.append((use_id, answered(failure(e.answer))))
             return None
         except UnboundAction as e:
             # Not pressed: the model hears why, with the closest bound names, and
             # picks again on the next call (#164).
             log.debug("Brain named unbound actions: %s", e.unknown)
-            turn.unbound, turn.refused = e, True
+            turn.unbound, turn.refused, turn.asked = e, True, False
             self.looking.append((use_id, answered(unbound(e, self._actions))))
+            return None
+        if (n := _named(decided)) and (why := unasked(turn.heard, n, self._actions)):
+            log.debug("Brain chose to act on words that didn't ask for it; not pressing")
+            turn.refused = turn.asked = True
+            self.looking.append((use_id, answered(failure(why))))
             return None
         await self._end()
         return decided
@@ -407,7 +416,7 @@ def last_note(call: int, turn: Turn, cards: bool = False) -> str | None:
     if cards and turn.looked and not turn.refused:
         notes.append(CARD_NOTE)
     if call == MAX_CALLS - 2:
-        notes.append(LAST_PICK if turn.refused else LAST_CALL)
+        notes.append(LAST_PICK if turn.refused and not turn.asked else LAST_CALL)
     return " ".join(notes) or None
 
 
@@ -418,22 +427,6 @@ def answered(result: LookupResult) -> asyncio.Task[LookupResult]:
         return result
 
     return asyncio.create_task(ready())
-
-
-def unbound(error: UnboundAction, actions: Collection[str]) -> LookupResult:
-    """What the model hears when it names actions that aren't bound: the closest that
-    are, or that there's no key for it, so it says so."""
-    close = {
-        name: difflib.get_close_matches(name, actions, n=3, cutoff=0.5) for name in error.unknown
-    }
-    hints = "; ".join(
-        f"{name}: did you mean {', '.join(found)}?" if found else f"{name}: nothing close is bound"
-        for name, found in close.items()
-    )
-    return failure(
-        f"Nothing was pressed. Not bound: {hints}. Pick from the bound actions, or say "
-        "there's no key for it and what to bind."
-    )
 
 
 def found(result: LookupResult) -> bool:
@@ -494,6 +487,13 @@ the answer (#669). "Looking at your fleet, none can mine." is an answer."""
 def spoken(text: str) -> str:
     """A reply as one line to say: no markdown (it would be read out), no line breaks."""
     return " ".join(_MARKUP.sub("", text).split())
+
+
+def _named(decided: Decision) -> tuple[str, ...]:
+    """The action or sequence names an act would press; none for a reply or a card."""
+    if isinstance(decided, RunActions):
+        return decided.actions
+    return (decided.name,) if isinstance(decided, RunSequence) else ()
 
 
 def ms(started: float) -> float:

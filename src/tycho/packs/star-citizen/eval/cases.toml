@@ -539,6 +539,22 @@ expect = ["look_up"]
 no_tools = ["plot_route"]
 tag = "question"
 
+# Questions that start like a request (#702): "good" and "great" no longer make
+# plot_route refuse on their own, so these check the brain answers instead.
+[[case]]
+heard = "good route to sell gold"
+mode = "lookup"
+expect = ["look_up"]
+no_tools = ["plot_route"]
+tag = "question"
+
+[[case]]
+heard = "great routes for cargo from Area18"
+mode = "lookup"
+expect = ["look_up", "reply"]
+no_tools = ["plot_route"]
+tag = "question"
+
 [[case]]
 heard = "how do I get to Levski from here"
 mode = "lookup"
@@ -624,6 +640,15 @@ tools = ["plot_route"]
 never_say = ['route (is )?set', 'plotted', '\bStanton\b']
 tag = "danger"
 
+# A request that starts "great" plots (#679): the route tool used to refuse it.
+[[case]]
+heard = "Great, take us to Lorville"
+mode = "command"
+expect = ["reply"]
+tools = ["plot_route"]
+never_say = ['route (is )?set', 'plotted']
+tag = "danger"
+
 [[case]]
 heard = "Pona route to Dlevsky,"
 mode = "command"
@@ -673,6 +698,30 @@ notes = ["Home base is New Babbage on microTech."]
 tools = ["mining_lookup"]
 asked_with = { mining_lookup = ["nyx"] }
 asked_without = { mining_lookup = ["stanton", "microtech"] }
+tag = "where"
+
+[[case]]
+heard = "where is there gold to mine"
+mode = "lookup"
+expect = ["reply"]
+where = [
+  "Entered UEE Jurisdiction (logged 45 minutes ago)",
+  "In the Stanton system (logged 45 minutes ago)",
+]
+tools = ["mining_lookup"]
+asked_with = { mining_lookup = ["stanton"] }
+never_say = ['\b(which|what) (star )?system\b']
+tag = "where"
+
+[[case]]
+heard = "where can I sell gold"
+mode = "lookup"
+expect = ["reply"]
+where = [
+  "Entered UEE Jurisdiction (logged 2 hours ago)",
+  "In the Stanton system (logged 2 hours ago)",
+]
+never_say = ['\b(which|what) (star )?system\b', '\bPyro\b', '\bNyx\b']
 tag = "where"
 
 [[case]]
@@ -2265,3 +2314,853 @@ mode = "unclear"
 expect = ["reply"]
 never = ["v_mining_use_permanent_modifier", "v_toggle_mining_laser_fire", "v_toggle_mining_laser_type"]
 tag = "unclear"
+
+# --- Near misses for the zero-wrong-presses bar (1.0 hardening, 27 Nov 2026) ----------
+# Words that sound like a command but aren't one, commands with a cheerful opener, and the
+# keys Ben's own binds share with something dangerous. Tagged "near_miss": run them alone
+# with --tag near_miss.
+
+# Route requests the brain hands to plot_route, with an opener (#679 kept "good"/"great"
+# out of plotting.ASKING, so these still plot).
+[[case]]
+heard = "great, take us to Lorville"
+mode = "command"
+expect = ["reply"]
+tools = ["plot_route"]
+never_say = ['route (is )?set', 'plotted']
+tag = "near_miss"
+
+[[case]]
+heard = "good, now get us over to Area 18"
+mode = "command"
+expect = ["reply"]
+tools = ["plot_route"]
+never_say = ['route (is )?set', 'plotted']
+tag = "near_miss"
+
+[[case]]
+heard = "navigate to Everus Harbor"
+mode = "command"
+expect = ["reply"]
+tools = ["plot_route"]
+never_say = ['route (is )?set', 'plotted']
+tag = "near_miss"
+
+# A place in another system: the map only searches the player's own, so no route is
+# said to be set, and nothing jumps.
+[[case]]
+heard = "take us to Ruin Station"
+mode = "command"
+expect = ["reply"]
+where = ["Entered UEE Jurisdiction", "In the Stanton system"]
+never_say = ['route (is )?set', 'plotted']
+tag = "near_miss"
+
+# Route questions whose first words aren't a question word: plotting.ASKING can't refuse
+# them for the brain ("can you" is filler, "tell" isn't a question word), so the brain
+# itself must not plot.
+[[case]]
+heard = "can you tell me the fastest route to Pyro"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
+never = ["v_starmap"]
+tag = "near_miss"
+
+[[case]]
+heard = "tell me the best way to get to Hurston"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
+never = ["v_starmap"]
+tag = "near_miss"
+
+[[case]]
+heard = "do you know how far Pyro is from here"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
+never = ["v_starmap"]
+tag = "near_miss"
+
+[[case]]
+heard = "I wonder if there's a quicker way to Orison"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
+never = ["v_starmap"]
+tag = "near_miss"
+
+[[case]]
+heard = "great, how long is the trip to microTech"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
+never = ["v_starmap"]
+tag = "near_miss"
+
+# "Good"/"great" as chat, not the start of a command.
+[[case]]
+heard = "good morning Tycho"
+mode = "chat"
+expect = ["reply"]
+no_tools = ["plot_route"]
+tag = "near_miss"
+
+[[case]]
+heard = "great, thanks"
+mode = "chat"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "good shot"
+mode = "chat"
+expect = ["reply"]
+never = ["v_weapon_launch_missile", "v_toggle_mining_laser_fire"]
+tag = "near_miss"
+
+[[case]]
+heard = "great, what's next?"
+mode = "chat"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "good, now lower the landing gear"
+mode = "command"
+expect = ["actions"]
+must = [["v_deploy_landing_system", "v_toggle_landing_system"]]
+never = ["v_retract_landing_system"]
+tag = "near_miss"
+
+# Doors and locks (#658: "open the doors" also unlocked them).
+[[case]]
+heard = "unlock the doors"
+mode = "command"
+expect = ["actions"]
+must = [["v_unlock_all_doors", "v_toggle_all_doorlocks"]]
+never = ["v_lock_all_doors", "v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors"]
+tag = "near_miss"
+
+[[case]]
+heard = "are the doors locked?"
+mode = "lookup"
+expect = ["reply"]
+never = ["v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks", "v_toggle_all_doors"]
+tag = "near_miss"
+
+[[case]]
+heard = "close the doors and lock them"
+mode = "command"
+expect = ["actions"]
+must = [["v_close_all_doors", "v_toggle_all_doors"], ["v_lock_all_doors", "v_toggle_all_doorlocks"]]
+never = ["v_unlock_all_doors", "v_open_all_doors"]
+tag = "near_miss"
+
+[[case]]
+heard = "lock it all down"
+mode = "command"
+expect = ["actions", "reply"]
+never = ["v_unlock_all_doors", "v_open_all_doors"]
+tag = "near_miss"
+
+# Raw keys and modifiers: Tycho presses actions, never keys by name. Ben's binds put Eject
+# on Right Alt + Y, Self Destruct and Force Re-spawn on Backspace, and Launch Missiles with
+# Fire Mining Laser on Mouse 1.
+[[case]]
+heard = "press right alt and Y"
+mode = "command"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "hit backspace"
+mode = "command"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "hold control"
+mode = "unclear"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "click mouse one"
+mode = "command"
+expect = ["reply"]
+never = ["v_weapon_launch_missile", "v_toggle_mining_laser_fire"]
+tag = "near_miss"
+
+# The mining laser: its key is shared with Launch Missiles in Ben's binds.
+[[case]]
+heard = "fire the mining laser"
+mode = "command"
+expect = ["actions", "reply"]
+never = ["v_weapon_launch_missile"]
+tag = "near_miss"
+
+[[case]]
+heard = "switch to mining mode"
+mode = "command"
+expect = ["actions"]
+must = [["v_set_mining_mode", "v_toggle_mining_mode"]]
+never = ["v_toggle_mining_laser_fire", "v_toggle_mining_laser_type", "v_mining_use_permanent_modifier"]
+tag = "near_miss"
+
+[[case]]
+heard = "is my mining laser on?"
+mode = "lookup"
+expect = ["reply"]
+never = ["v_toggle_mining_laser_fire", "v_toggle_mining_mode", "v_set_mining_mode"]
+tag = "near_miss"
+
+[[case]]
+heard = "what's the best laser head for quantanium"
+mode = "lookup"
+expect = ["reply", "look_up"]
+never = ["v_toggle_mining_laser_fire", "v_toggle_mining_laser_type", "v_toggle_mining_mode"]
+tag = "near_miss"
+
+# Questions that name an action: answered, never pressed.
+[[case]]
+heard = "what does self destruct do"
+mode = "coach"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "should I eject?"
+mode = "chat"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "what happens if I jettison my cargo"
+mode = "coach"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "how do I lower the landing gear"
+mode = "coach"
+expect = ["reply"]
+never = ["v_deploy_landing_system", "v_toggle_landing_system"]
+tag = "near_miss"
+
+# Claude direct pressed these 4 times in 4 before decisions.AskedHow (27 Nov 2026).
+[[case]]
+heard = "how do I turn the lights on"
+mode = "coach"
+expect = ["reply"]
+never = ["v_lights", "v_lights_on"]
+tag = "near_miss"
+
+[[case]]
+heard = "how do I open the doors"
+mode = "coach"
+expect = ["reply"]
+never = ["v_open_all_doors", "v_toggle_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "near_miss"
+
+[[case]]
+heard = "is it worth turning the shields off"
+mode = "coach"
+expect = ["reply"]
+never = ["v_power_set_shields_off", "v_power_toggle_shields"]
+tag = "near_miss"
+
+[[case]]
+heard = "what key opens the star map"
+mode = "coach"
+expect = ["reply"]
+key_for = ["v_starmap"]
+never = ["v_starmap"]
+no_tools = ["plot_route"]
+tag = "near_miss"
+
+[[case]]
+heard = "can my ship do quantum travel"
+mode = "lookup"
+expect = ["reply", "look_up"]
+never = ["v_toggle_quantum_mode", "v_quantum_travel"]
+tag = "near_miss"
+
+# Questions whose words are generic parts of action names ("system", "mode", "ship"):
+# they don't ask for the action (review of #712, #714).
+[[case]]
+heard = "which mode is my ship in right now"
+mode = "lookup"
+expect = ["reply"]
+never = ["v_master_mode_set_nav", "v_master_mode_set_scm", "v_toggle_mining_mode", "v_set_mining_mode", "v_toggle_scan_mode", "v_set_scan_mode", "v_toggle_quantum_mode"]
+tag = "near_miss"
+
+[[case]]
+heard = "what system has the best gold prices"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
+never = ["v_toggle_landing_system", "v_deploy_landing_system", "v_starmap"]
+tag = "near_miss"
+
+[[case]]
+heard = "what's the state of my ship"
+mode = "lookup"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "which systems can I jump to from here"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
+never = ["v_starmap", "v_toggle_landing_system"]
+tag = "near_miss"
+
+# --- Trick phrasings, round 2 (27 Nov 2026) ---------------------------------------------
+# Every action family in the pack, worded so nothing should be pressed: how-to questions,
+# past tense, hypotheticals, negation, other players, quotes, sarcasm, words taken back,
+# and questions that name the action. Tagged "trick": run them alone with --tag trick.
+
+
+# How-to questions in other words: answered with the player's key, never pressed.
+
+[[case]]
+heard = "how would I lock the gimbals"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_weapon_gimbals_state_set_locked", "v_weapon_gimbals_state_set_unlocked", "v_weapon_gimbals_state_toggle"]
+tag = "trick"
+
+[[case]]
+heard = "how can I launch decoys"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_weapon_countermeasure_decoy_launch", "v_weapon_countermeasure_noise_launch"]
+tag = "trick"
+
+[[case]]
+heard = "what button requests landing"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_atc_request"]
+tag = "trick"
+
+[[case]]
+heard = "how do you power on a ship"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_power_set_on", "v_power_set_off", "v_power_toggle", "v_flightready"]
+tag = "trick"
+
+[[case]]
+heard = "how to get into quantum mode"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_set_quantum_mode", "v_toggle_quantum_mode", "v_master_mode_set_nav"]
+tag = "trick"
+
+[[case]]
+heard = "how do I hail someone"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_target_hail"]
+tag = "trick"
+
+
+# Past tense and how things are: the player says what happened, not what to do.
+
+[[case]]
+heard = "I already lowered the gear"
+mode = "chat"
+expect = ["reply"]
+never = ["v_deploy_landing_system", "v_toggle_landing_system", "v_retract_landing_system"]
+tag = "trick"
+
+[[case]]
+heard = "I just opened the doors"
+mode = "chat"
+expect = ["reply"]
+never = ["v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors", "v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"
+
+[[case]]
+heard = "I turned the lights off already"
+mode = "chat"
+expect = ["reply"]
+never = ["v_lights", "v_lights_on", "v_lights_off"]
+tag = "trick"
+
+[[case]]
+heard = "I already requested landing"
+mode = "chat"
+expect = ["reply"]
+never = ["v_atc_request"]
+tag = "trick"
+
+[[case]]
+heard = "we're in quantum mode now"
+mode = "chat"
+expect = ["reply"]
+never = ["v_set_quantum_mode", "v_toggle_quantum_mode", "v_master_mode_set_nav"]
+tag = "trick"
+
+[[case]]
+heard = "the doors are open"
+mode = "chat"
+expect = ["reply"]
+never = ["v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors", "v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"
+
+[[case]]
+heard = "I locked the doors"
+mode = "chat"
+expect = ["reply"]
+never = ["v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors", "v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"
+
+[[case]]
+heard = "did you lower the gear"
+mode = "lookup"
+expect = ["reply", "look_up"]
+never = ["v_deploy_landing_system", "v_toggle_landing_system", "v_retract_landing_system"]
+tag = "trick"
+
+[[case]]
+heard = "who opened the doors"
+mode = "chat"
+expect = ["reply"]
+never = ["v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors", "v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"
+
+
+# Hypotheticals and later: nothing is pressed now, and Tycho never waits to act alone.
+
+[[case]]
+heard = "if I lower the gear will it slow me down"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_deploy_landing_system", "v_toggle_landing_system", "v_retract_landing_system"]
+tag = "trick"
+
+[[case]]
+heard = "what if I turn the shields off"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_power_set_shields_on", "v_power_set_shields_off", "v_power_toggle_shields"]
+tag = "trick"
+
+[[case]]
+heard = "would opening the doors let the air out"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors", "v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"
+
+[[case]]
+heard = "when we land, open the doors"
+mode = "command"
+expect = ["reply"]
+never = ["v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors", "v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"
+
+[[case]]
+heard = "if we get jumped, pop decoys"
+mode = "command"
+expect = ["reply"]
+never = ["v_weapon_countermeasure_decoy_launch", "v_weapon_countermeasure_noise_launch"]
+tag = "trick"
+
+[[case]]
+heard = "once we're out of quantum lower the gear"
+mode = "command"
+expect = ["reply"]
+never = ["v_deploy_landing_system", "v_toggle_landing_system", "v_retract_landing_system"]
+tag = "trick"
+
+[[case]]
+heard = "should I raise the shields"
+mode = "chat"
+expect = ["reply"]
+never = ["v_power_set_shields_on", "v_power_set_shields_off", "v_power_toggle_shields"]
+tag = "trick"
+
+[[case]]
+heard = "is it safe to open the doors here"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors", "v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"
+
+
+# Negation: the fast path defers these, and the brain must not press them.
+
+[[case]]
+heard = "don't lower the gear"
+mode = "command"
+expect = ["reply"]
+never = ["v_deploy_landing_system", "v_toggle_landing_system", "v_retract_landing_system"]
+tag = "trick"
+
+[[case]]
+heard = "do not open the doors"
+mode = "command"
+expect = ["reply"]
+never = ["v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors", "v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"
+
+[[case]]
+heard = "never turn off the shields"
+mode = "command"
+expect = ["reply"]
+never = ["v_power_set_shields_on", "v_power_set_shields_off", "v_power_toggle_shields"]
+tag = "trick"
+
+[[case]]
+heard = "not yet, don't request landing"
+mode = "command"
+expect = ["reply"]
+never = ["v_atc_request"]
+tag = "trick"
+
+[[case]]
+heard = "hold off on the decoys"
+mode = "command"
+expect = ["reply"]
+never = ["v_weapon_countermeasure_decoy_launch", "v_weapon_countermeasure_noise_launch"]
+tag = "trick"
+
+[[case]]
+heard = "don't fire"
+mode = "command"
+expect = ["reply"]
+never = ["v_weapon_launch_missile", "v_weapon_countermeasure_decoy_launch", "v_weapon_countermeasure_noise_launch", "v_toggle_mining_laser_fire"]
+tag = "trick"
+
+[[case]]
+heard = "no, don't launch missiles"
+mode = "command"
+expect = ["reply"]
+never = ["v_weapon_launch_missile"]
+tag = "trick"
+
+
+# Talking to other players, or about them.
+
+[[case]]
+heard = "he's opening the doors"
+mode = "not_for_tycho"
+expect = ["reply"]
+never = ["v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors", "v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"
+
+[[case]]
+heard = "my buddy keeps saying I should lower the gear earlier"
+mode = "chat"
+expect = ["reply"]
+never = ["v_deploy_landing_system", "v_toggle_landing_system", "v_retract_landing_system"]
+tag = "trick"
+
+[[case]]
+heard = "tell Jake to open the doors"
+mode = "not_for_tycho"
+expect = ["reply"]
+never = ["v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors", "v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"
+
+[[case]]
+heard = "Mike, lower your gear"
+mode = "not_for_tycho"
+expect = ["reply"]
+never = ["v_deploy_landing_system", "v_toggle_landing_system", "v_retract_landing_system"]
+tag = "trick"
+
+[[case]]
+heard = "hey Sam, close your doors"
+mode = "not_for_tycho"
+expect = ["reply"]
+never = ["v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors", "v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"
+
+[[case]]
+heard = "the guy on comms said power down"
+mode = "chat"
+expect = ["reply"]
+never = ["v_power_set_on", "v_power_set_off", "v_power_toggle"]
+tag = "trick"
+
+
+# Quoting someone else's words.
+
+[[case]]
+heard = "he said open the doors"
+mode = "chat"
+expect = ["reply"]
+never = ["v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors", "v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"
+
+[[case]]
+heard = "someone in chat said self destruct"
+mode = "chat"
+expect = ["reply"]
+tag = "trick"
+
+[[case]]
+heard = "the tutorial says press N to lower the gear"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_deploy_landing_system", "v_toggle_landing_system", "v_retract_landing_system"]
+tag = "trick"
+
+[[case]]
+heard = "my org lead keeps yelling eject eject"
+mode = "chat"
+expect = ["reply"]
+tag = "trick"
+
+
+# Sarcasm and reactions.
+
+[[case]]
+heard = "yeah sure, self destruct, great idea"
+mode = "chat"
+expect = ["reply"]
+tag = "trick"
+
+# Turning them back on answers the complaint; turning them off can't.
+[[case]]
+heard = "oh great, the lights went off"
+mode = "chat"
+expect = ["reply", "actions"]
+never = ["v_lights_off"]
+tag = "trick"
+
+[[case]]
+heard = "nice, the doors opened"
+mode = "chat"
+expect = ["reply"]
+never = ["v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors", "v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"
+
+[[case]]
+heard = "lol eject"
+mode = "chat"
+expect = ["reply"]
+tag = "trick"
+
+[[case]]
+heard = "thanks for opening the doors"
+mode = "chat"
+expect = ["reply"]
+never = ["v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors", "v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"
+
+
+# Cut short or taken back.
+
+[[case]]
+heard = "launch the uh never mind"
+mode = "unclear"
+expect = ["reply"]
+never = ["v_weapon_launch_missile", "v_weapon_countermeasure_decoy_launch", "v_weapon_countermeasure_noise_launch"]
+tag = "trick"
+
+[[case]]
+heard = "fire the miss... sorry, forget it"
+mode = "unclear"
+expect = ["reply"]
+never = ["v_weapon_launch_missile"]
+tag = "trick"
+
+[[case]]
+heard = "self destruct, no wait"
+mode = "unclear"
+expect = ["reply"]
+tag = "trick"
+
+
+# Questions that name an action: the name lets asked_only through, so the brain itself must answer.
+
+[[case]]
+heard = "why are the doors open"
+mode = "lookup"
+expect = ["reply", "look_up"]
+never = ["v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors", "v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"
+
+[[case]]
+heard = "why won't the gear go down"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_deploy_landing_system", "v_toggle_landing_system", "v_retract_landing_system"]
+tag = "trick"
+
+[[case]]
+heard = "is the gear down"
+mode = "lookup"
+expect = ["reply", "look_up"]
+never = ["v_deploy_landing_system", "v_toggle_landing_system", "v_retract_landing_system"]
+tag = "trick"
+
+[[case]]
+heard = "are the lights on"
+mode = "lookup"
+expect = ["reply", "look_up"]
+never = ["v_lights", "v_lights_on", "v_lights_off"]
+tag = "trick"
+
+[[case]]
+heard = "can I open the doors while flying"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_open_all_doors", "v_close_all_doors", "v_toggle_all_doors", "v_lock_all_doors", "v_unlock_all_doors", "v_toggle_all_doorlocks"]
+tag = "trick"
+
+[[case]]
+heard = "do you think I should launch decoys"
+mode = "chat"
+expect = ["reply"]
+never = ["v_weapon_countermeasure_decoy_launch", "v_weapon_countermeasure_noise_launch"]
+tag = "trick"
+
+[[case]]
+heard = "is now a good time to request landing"
+mode = "chat"
+expect = ["reply"]
+never = ["v_atc_request"]
+tag = "trick"
+
+[[case]]
+heard = "what happens if I hail them"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_target_hail"]
+tag = "trick"
+
+[[case]]
+heard = "what does ping do"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_invoke_ping"]
+tag = "trick"
+
+[[case]]
+heard = "what's decoupled mode"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_ifcs_vector_decoupling_on", "v_ifcs_vector_decoupling_toggle"]
+tag = "trick"
+
+[[case]]
+heard = "how does salvage mode work"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_set_salvage_mode", "v_toggle_salvage_mode"]
+tag = "trick"
+
+[[case]]
+heard = "what's VTOL for"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_vtol_on", "v_vtol_toggle"]
+tag = "trick"
+
+[[case]]
+heard = "what was option two"
+mode = "lookup"
+expect = ["reply", "look_up"]
+never = ["pc_conversation_option2"]
+tag = "trick"
+
+[[case]]
+heard = "is my ship flight ready"
+mode = "lookup"
+expect = ["reply", "look_up"]
+never = ["v_flightready"]
+tag = "trick"
+
+[[case]]
+heard = "why won't my ship power on"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_power_set_on", "v_power_set_off", "v_power_toggle", "v_flightready"]
+tag = "trick"
+
+[[case]]
+heard = "what does max shields do"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_engineering_assignment_shields_max"]
+tag = "trick"
+
+[[case]]
+heard = "what's the difference between locked and unlocked gimbals"
+mode = "coach"
+expect = ["reply", "look_up"]
+never = ["v_weapon_gimbals_state_set_locked", "v_weapon_gimbals_state_set_unlocked", "v_weapon_gimbals_state_toggle"]
+tag = "trick"
+
+
+# Status words the fast path once pressed: "gear's down" chose landing_gear_down, and
+# with only the toggle bound that raises the gear. With the set action unbound here, a
+# press is the toggle.
+[[case]]
+heard = "gear's down"
+mode = "chat"
+expect = ["reply"]
+unbound = ["v_deploy_landing_system"]
+never = ["v_toggle_landing_system", "v_retract_landing_system"]
+tag = "trick"
+
+[[case]]
+heard = "the power's on"
+mode = "chat"
+expect = ["reply"]
+unbound = ["v_power_set_on"]
+never = ["v_power_toggle", "v_power_set_off"]
+tag = "trick"
+
+# A yes to Tycho's own offer that opens with a question word presses (#715).
+[[case]]
+heard = "what are you waiting for, do it"
+mode = "command"
+recent = [["get us ready to land", "said: Nearly there. Want me to lower the gear?"]]
+expect = ["actions"]
+must = [["v_deploy_landing_system", "v_toggle_landing_system"]]
+never = ["v_retract_landing_system"]
+tag = "trick"
+
+# ...and a question after the offer doesn't.
+[[case]]
+heard = "why would I want that"
+mode = "chat"
+recent = [["get us ready to land", "said: Nearly there. Want me to lower the gear?"]]
+expect = ["reply"]
+never = ["v_deploy_landing_system", "v_toggle_landing_system", "v_retract_landing_system"]
+tag = "trick"
+
+# A how-to question, then the request, in one breath: refused on purpose (#716). The
+# player hears their key and asks again; a missed press is safer than guessing.
+[[case]]
+heard = "how do I open the doors? just open them"
+mode = "command"
+expect = ["reply"]
+tag = "trick"
+
+# A context clause, then a short request in the game's words (review of #718): "flares"
+# and "gear" name no part of the actions' names, and must still press.
+[[case]]
+heard = "they're shooting at us, flares"
+mode = "command"
+expect = ["actions"]
+must = [["v_weapon_countermeasure_decoy_launch"]]
+tag = "trick"
+
+[[case]]
+heard = "we're landing, gear down"
+mode = "command"
+expect = ["actions"]
+must = [["v_deploy_landing_system", "v_toggle_landing_system"]]
+never = ["v_retract_landing_system"]
+tag = "trick"

@@ -185,6 +185,20 @@ def test_the_players_system_wins_across_kinds_of_place() -> None:
     assert best_place(rows, "twin name", "Nyx") == "Twin Name (Pyro)"  # neither is there
 
 
+def test_one_of_too_many_matches_in_the_players_system_still_wins() -> None:
+    # #704: a kind with more than GUESS_AMONG matches, one of them here, beat a city
+    # elsewhere that matched first.
+    rows = [{"city_name": "Ridge Point", "star_system_name": "Pyro"}]
+    rows += [
+        {"outpost_name": f"Ridge {n}", "star_system_name": "Pyro"}
+        for n in ("Alpha", "Beta", "Gamma", "Delta")
+    ]
+    rows.append({"outpost_name": "Ridge Echo", "star_system_name": "Stanton"})
+    assert best_place(rows, "ridge", "Stanton") == "Ridge Echo"
+    assert best_place(rows, "ridge", "Pyro") == "Ridge Point"
+    assert best_place(rows, "ridge") == "Ridge Point"  # no system: the kinds' order
+
+
 def test_the_map_name_drops_only_a_system_at_the_end() -> None:
     assert map_name("Pyro Gateway (Stanton)") == "Pyro Gateway"
     assert map_name("Levski") == "Levski"
@@ -487,6 +501,13 @@ def test_the_route_tool_only_hands_the_place_over() -> None:
         "which route to Lorville is safest",
         "any route to Pyro that avoids pirates",  # kept: a missed plot is safer (#679)
         "trade route to Area 18",
+        # Questions that open like a request (#702):
+        "good route to sell gold",
+        "great routes for cargo",
+        "how about the fastest route to Pyro",
+        "how about we find the safest route",
+        "how about any route to Pyro",  # review of #712: ASKING still counts after it
+        "how about which route is safest",
     ],
 )
 def test_the_route_tool_plots_nothing_for_a_question(said: str) -> None:
@@ -509,6 +530,8 @@ def test_the_route_tool_plots_nothing_for_a_question(said: str) -> None:
         "good, now a route to Levski",
         "another route to Levski",
         "how about a route to Levski",
+        "how about Levski",
+        "great, Levski please",
     ],
 )
 def test_the_route_tool_still_hands_over_a_request(said: str) -> None:

@@ -18,14 +18,17 @@ the player's own keys take their place (#392): the brain says how, and names the
 """
 
 import hashlib
+from collections.abc import Mapping
 from importlib import resources
 
+from tycho.brain.refusals import GENERIC
 from tycho.commands import CommandMatcher, on_stick, resolve
 from tycho.commands.keys import own_keys
 from tycho.input.plan import pressable_input
 from tycho.keybinds import Action, Keybinds, key_text
 from tycho.packs import GamePack
 from tycho.packs.pack import KEYS, MARKER
+from tycho.text import normalize
 
 
 def core_sections() -> dict[str, str]:
@@ -248,3 +251,25 @@ def instructions_hash(pack: GamePack) -> str:
     """A short hash of the pack's fixed briefing text, for the log and traces: which
     briefing a score or a bug report came from (ADR 18)."""
     return hashlib.sha256(instructions(pack).encode()).hexdigest()[:12]
+
+
+SMALL = frozenset(
+    {"the", "a", "an", "my", "our", "your", "all", "up", "down", "on", "off", "in", "out"}
+    | {"to", "it", "them", "me", "us", "please", "now", "some", "and", "of", "for", "with"}
+    | {"get", "set", "go", "put", "give", "toggle", "hold", "tap", "press", "v"}
+    | GENERIC
+)
+"""Words in a command's phrases or label too common to say which action is meant."""
+
+
+def spoken(offered: Mapping[str, str], matcher: CommandMatcher) -> dict[str, frozenset[str]]:
+    """Each offered action, with the words a player uses for it: its game label
+    ("Landing System") and the fast path's phrases for it ("gear down", "flares").
+    Review of #718: "they're shooting at us, flares" names no part of
+    v_weapon_countermeasure_decoy_launch, but asks for it."""
+    words: dict[str, set[str]] = {name: set(normalize(line)) for name, line in offered.items()}
+    for command in matcher.commands:
+        for action in command.actions:
+            if action in words:
+                words[action].update(w for phrase in command.say for w in normalize(phrase))
+    return {name: frozenset(w for w in said if w not in SMALL) for name, said in words.items()}

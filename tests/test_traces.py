@@ -148,7 +148,9 @@ def test_no_key_or_absolute_path_reaches_a_line(tmp_path: Path) -> None:
     traces = TraceFile(tmp_path / FILE)
     gear = {"actions": ["v_toggle_landing_system"], "say": f"Gear. {paths.logs_dir()}"}
     client = claude_fakes._Client([claude_fakes._tool_stop("run_actions", gear)])
-    said = f"my key is {key}, my fleet is in {Path.home() / 'notes.txt'} and {paths.config_dir()}"
+    # A request first: "my key is ..." alone says how things are, which never presses.
+    home, config = Path.home() / "notes.txt", paths.config_dir()
+    said = f"gear down, my key is {key}, my fleet is in {home} and {config}"
     asyncio.run(_claude(client, traces).decide(BrainRequest(said, KEYBINDS)))
     traces.close()
     text = traces.path.read_text("utf-8")

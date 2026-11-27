@@ -35,6 +35,7 @@ from tycho.brain.briefing import (
 from tycho.brain.claude import ClaudeBrain, history, turns
 from tycho.brain.decisions import CARD_LINE
 from tycho.brain.lookups import LOOKUP_SECONDS, run_lookup
+from tycho.brain.refusals import ANSWER_IN_WORDS
 from tycho.brain.rounds import (
     CARD_NOTE,
     CUT_SHORT,
@@ -452,6 +453,113 @@ def test_an_unbound_action_is_never_pressed_and_claude_picks_again() -> None:
     assert "did you mean v_toggle_landing_system" in result["content"]
 
 
+def _asked(client: _Calls, said: str) -> Any:
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), pack=SC)
+    return asyncio.run(brain.decide(BrainRequest(said, KEYBINDS)))
+
+
+def test_a_question_is_answered_not_pressed() -> None:
+    """#708: "what's coming in the next patch" once pressed two actions, 1 in 11."""
+    client = _Calls(_picks(["v_toggle_landing_system"]), ([], _final("Not announced yet.")))
+    assert _asked(client, "what's coming in the next patch") == Reply("Not announced yet.")
+    (result,) = client.requests[1]["messages"][-1]["content"]
+    assert result["is_error"]
+    assert ANSWER_IN_WORDS in result["content"]
+
+
+@pytest.mark.parametrize(
+    "said", ["how about the landing gear", "what about toggling the gear", "why not"]
+)
+def test_a_request_that_opens_like_a_question_still_presses(said: str) -> None:
+    client = _Calls(_picks(["v_toggle_landing_system"]))
+    assert _asked(client, said) == RunActions(("v_toggle_landing_system",), "Done.")
+
+
+def test_a_question_that_names_the_action_still_presses() -> None:
+    client = _Calls(_picks(["v_toggle_landing_system"]))
+    decided = _asked(client, "where's my landing gear, it's not down")
+    assert decided == RunActions(("v_toggle_landing_system",), "Done.")
+
+
+def test_a_question_is_never_pressed_however_often_it_picks() -> None:
+    client = _Calls(*[_picks(["v_toggle_landing_system"], f"toolu_{n}") for n in range(MAX_CALLS)])
+    with pytest.raises(BrainError):
+        _asked(client, "what's coming in the next patch")
+
+
+def test_a_generic_name_part_doesnt_name_the_action() -> None:
+    """Review of #712 (#714): "system" in v_toggle_landing_system let "what system am I
+    in" press the landing gear."""
+    client = _Calls(_picks(["v_toggle_landing_system"]), ([], _final("Stanton.")))
+    assert _asked(client, "what system am I in") == Reply("Stanton.")
+    client = _Calls(_picks(["v_toggle_landing_system"]))
+    decided = _asked(client, "where's my landing gear")  # "landing" still names it
+    assert decided == RunActions(("v_toggle_landing_system",), "Done.")
+
+
+def test_a_question_refused_before_the_last_call_is_told_to_answer_not_pick() -> None:
+    """Review of #712 (#714): the last call after a question's refusal said "pick the
+    actions again", against "answer in words"."""
+    client = _Calls(
+        _picks(["v_toggle_landing_system"]),
+        _picks(["v_toggle_landing_system"], "toolu_2"),
+        ([], _final("Not announced yet.")),
+    )
+    assert _asked(client, "what's coming in the next patch") == Reply("Not announced yet.")
+    notes = [c["text"] for c in client.requests[2]["messages"][-1]["content"] if "text" in c]
+    assert LAST_CALL in notes
+    assert LAST_PICK not in notes
+
+
+def test_a_question_refused_last_doesnt_blame_an_unbound_action() -> None:
+    """Review of #712 (#714): an unbound pick, then picks for a question, ended in
+    "isn't one of your bound actions"."""
+    client = _Calls(
+        _picks(["v_unbound"]),
+        *[_picks(["v_toggle_landing_system"], f"toolu_{n}") for n in range(2, MAX_CALLS + 1)],
+    )
+    with pytest.raises(BrainError) as raised:
+        _asked(client, "what's coming in the next patch")
+    assert "isn't one of your bound" not in str(raised.value)
+
+
+GEAR_OFFER = (Exchange("get us ready to land", "said: Nearly there. Want me to lower the gear?"),)
+
+
+def _after_offer(client: _Calls, said: str, recent: tuple[Exchange, ...] = GEAR_OFFER) -> Any:
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), pack=SC)
+    return asyncio.run(brain.decide(BrainRequest(said, KEYBINDS, recent)))
+
+
+@pytest.mark.parametrize(
+    "said", ["what are you waiting for, do it", "why not already? Yes please", "what? Go ahead"]
+)
+def test_a_yes_to_tychos_offer_presses_even_after_a_question_word(said: str) -> None:
+    """#715: after "Want me to lower the gear?", "what are you waiting for, do it" was
+    refused as a question, and the player had to say it again."""
+    client = _Calls(_picks(["v_toggle_landing_system"]))
+    assert _after_offer(client, said) == RunActions(("v_toggle_landing_system",), "Done.")
+
+
+@pytest.mark.parametrize(
+    ("said", "recent"),
+    [
+        ("what's the point of that", GEAR_OFFER),  # no yes
+        ("why would I do it", GEAR_OFFER),  # "do it" inside the question
+        ("what are you waiting for, do it", ()),  # no offer
+        (
+            "what are you waiting for, do it",
+            (Exchange("is the gear down", "said: The gear is up."),),  # not an offer
+        ),
+    ],
+)
+def test_a_question_without_a_yes_to_an_offer_is_still_refused(
+    said: str, recent: tuple[Exchange, ...]
+) -> None:
+    client = _Calls(_picks(["v_toggle_landing_system"]), ([], _final("Okay.")))
+    assert _after_offer(client, said, recent) == Reply("Okay.")
+
+
 def test_an_action_with_nothing_close_bound_is_said_not_pressed() -> None:
     client = _Calls(_picks(["v_xyzzy_qqq"]), ([], _final("There's no key for that.")))
     assert _ask(client) == Reply("There's no key for that.")
@@ -589,7 +697,7 @@ def _looks_up(name: str = "ship_lookup", use_id: str = "toolu_1") -> tuple[list[
 
 def _ask(client: _Calls, *lookups: FakeLookup) -> Any:
     brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=lookups, pack=SC)
-    return asyncio.run(brain.decide(BrainRequest("who makes the Andromeda", KEYBINDS)))
+    return asyncio.run(brain.decide(BrainRequest("check the Andromeda", KEYBINDS)))
 
 
 def test_a_look_up_goes_back_to_claude_and_claude_answers() -> None:
@@ -695,6 +803,69 @@ def test_an_empty_act_after_a_lead_in_isnt_answered_with_the_lead_in(lead_in: st
 def test_an_answer_that_starts_like_a_lead_in_is_still_the_answer(answer: str) -> None:
     client = _Calls(_empty_act(answer))
     assert _ask(client, FakeLookup()) == Reply(answer)
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "how do I open the doors",
+        "Tycho, how do I lower the landing gear?",
+        "so how can I turn the lights on",
+        "what key opens the star map",
+        "Which button is the landing gear?",
+        "what\u2019s the key for the lights",
+        "how to turn on the lights",
+    ],
+)
+def test_a_press_for_a_how_to_question_is_never_pressed(said: str) -> None:
+    """27 Nov 2026 eval: for "how do I open the doors" Claude pressed Open All Doors 4
+    times in 4. The model hears why, and its next call's answer is said."""
+    client = _Calls(_picks(["v_lights"]), ([], _final("Right Ctrl plus L.")))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), pack=SC)
+    decided = asyncio.run(brain.decide(BrainRequest(said, KEYBINDS)))
+    assert decided == Reply("Right Ctrl plus L.")
+    (result,) = client.requests[1]["messages"][-1]["content"][:1]
+    assert "asked how to do it" in result["content"]
+
+
+@pytest.mark.parametrize(
+    "said",
+    ["open the doors", "how about the lights", "lights on, how do I look", "key the mic"],
+)
+def test_a_request_that_isnt_a_how_to_question_is_pressed(said: str) -> None:
+    picked = parse_tool_call("run_actions", {"actions": ["v_lights"], "say": ""}, ACTIONS, (), said)
+    assert picked == RunActions(("v_lights",), "")
+
+
+@pytest.mark.parametrize(
+    "said", ["how do I open the doors? Just open them", "what key is the gear, put it down"]
+)
+def test_a_how_to_question_then_a_request_is_still_never_pressed(said: str) -> None:
+    """#716, kept on purpose: a how-to question followed by a request in one breath is
+    refused, so the player hears their key and asks again. A missed press is safer than
+    reading the second half as the request (the zero-wrong-presses bar)."""
+    with pytest.raises(BrainError, match="asked how"):
+        parse_tool_call("run_actions", {"actions": ["v_lights"], "say": ""}, ACTIONS, (), said)
+
+
+def test_a_how_to_answer_in_an_empty_act_is_said() -> None:
+    """Review of #713: the answer written as run_actions with no actions (#192) was
+    thrown away for a how-to question, costing a call."""
+    picked = parse_tool_call(
+        "run_actions",
+        {"actions": [], "say": "Right Ctrl plus I."},
+        ACTIONS,
+        (),
+        "how do I open the doors",
+    )
+    assert picked == Reply("Right Ctrl plus I.")
+
+
+def test_a_sequence_for_a_how_to_question_is_never_run() -> None:
+    with pytest.raises(BrainError, match="asked how"):
+        parse_tool_call(
+            "run_sequence", {"name": "startup", "say": ""}, (), SEQUENCES, "how do I start up"
+        )
 
 
 def test_only_empty_acts_to_the_end_is_an_error_never_unused() -> None:
@@ -902,7 +1073,7 @@ def _web() -> FakeLookup:
 def _ask_web(client: _Calls, *lookups: FakeLookup) -> tuple[Any, list[str]]:
     waited: list[str] = []
     brain = ClaudeBrain(MATCHER, client=cast(Any, client), lookups=lookups, pack=SC)
-    request = BrainRequest("whats in the next patch", KEYBINDS, waiting=lambda: waited.append(""))
+    request = BrainRequest("look up the next patch", KEYBINDS, waiting=lambda: waited.append(""))
     return asyncio.run(brain.decide(request)), waited
 
 

@@ -110,6 +110,8 @@ def best_place(
                 key=lambda v: (bool(here) and v not in there, len(v), v),
             )
             if len(found) > GUESS_AMONG:
+                if first is not None and len(mine := [v for v in found if v in there]) == 1:
+                    return mine[0]  # the one of them in the player's system (#704)
                 if first is None:
                     log.debug("%r could be %d places", said, len(found))
                     return None

@@ -31,7 +31,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, cast
 
-from tycho.brain.briefing import briefing, offered_actions
+from tycho.brain.briefing import briefing, offered_actions, spoken
 from tycho.brain.claude import turns
 from tycho.brain.decisions import BrainError, BrainRequest, Decision, Reply
 from tycho.brain.looking import openai_turns
@@ -227,7 +227,7 @@ class OpenRouterBrain:
         self._briefed = ""
         self._for: Keybinds | None = None
         self._system: dict[str, object] = {}
-        self._actions: frozenset[str] = frozenset()
+        self._actions: Mapping[str, frozenset[str]] = {}
         self._preparing: asyncio.Future[list[None]] | None = None
         self._primer = Primer(self._client.connect, self._rewarm)
 
@@ -327,7 +327,7 @@ class OpenRouterBrain:
                 messages.append({"role": "tool", "tool_call_id": use_id, "content": result.content})
             if note := last_note(call, turn, self._cards()):
                 messages.append({"role": "user", "content": note})
-        if turn.unbound is not None and turn.refused:
+        if turn.unbound is not None and turn.refused and not turn.asked:
             raise turn.unbound  # the last call too named actions that aren't bound
         raise BrainError(f"still looking things up after {MAX_CALLS} tries")
 
@@ -413,7 +413,7 @@ class OpenRouterBrain:
         self._for = keybinds
         # In advisor mode nothing is offered, so a pick can only be refused (#191).
         offered = offered_actions(keybinds, self._matcher, self._pack) if self._keys else {}
-        self._actions = frozenset(offered)
+        self._actions = spoken(offered, self._matcher)
         text = briefing(keybinds, self._matcher, self._pack)
         if self._reference:
             text += f"\n{self._reference.strip()}\n"

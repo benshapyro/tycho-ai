@@ -99,13 +99,57 @@ class BrainError(Exception):
     """The brain gave no usable answer: offline, a refusal, a timeout, or bad output."""
 
 
-class EmptyAct(BrainError):
+class NotAnAct(BrainError):
+    """An act that isn't one: nothing is pressed, and the model hears ``answer`` and
+    answers on its next call."""
+
+    answer: str = ""
+    question: bool = False
+    """Refused because the player asked a question (``AskedHow``): answered in words."""
+
+
+class EmptyAct(NotAnAct):
     """``run_actions`` with no actions and nothing real to say (#666): "unused", or
     empty, which the acts' strict schema makes the model fill in. Not an answer: the
-    model is told, and answers on its next call (``rounds.EMPTY_ACT``)."""
+    model is told, and answers on its next call."""
+
+    answer = (
+        "Nothing was pressed or said: run_actions had no actions. Answer the player now, "
+        "in words or with show_card."
+    )
 
     def __init__(self) -> None:
         super().__init__("run_actions: no actions and nothing to say")
+
+
+class AskedHow(NotAnAct):
+    """An act for a question about how to do it ("how do I open the doors?"): the
+    player asked for their key, not the press (27 Nov 2026: Claude pressed Open All
+    Doors for it 4 times in 4). A check on the player's words, whatever the model."""
+
+    answer = (
+        "Nothing was pressed: the player asked how to do it, not for it. Call player_keys "
+        "and name their own key, and press nothing."
+    )
+    question = True
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"{name}: the player asked how, not for a press")
+
+
+HOW_TO = re.compile(
+    r"^(?:(?:tycho|hey|ok|okay|so|um|uh|er|quick question)\b[\s,.!?]*)*"
+    r"(?:how (?:do|can|would|should|could|might) (?:i|we|you)\b|how to\b"
+    r"|(?:what|which)(?:'s| is)? (?:the )?(?:key|button|bind|keybind)s?\b)",
+    re.IGNORECASE,
+)
+"""Words that start a question about how to do something: "how do I lower the gear",
+"what key opens the star map". Not "how about lowering the gear", which asks for it."""
+
+
+def asks_how(said: str) -> bool:
+    """Whether the player's words ask how to do something, not for it to be done."""
+    return bool(HOW_TO.match(said.strip().replace("\u2019", "'")))
 
 
 class UnboundAction(BrainError):
@@ -119,9 +163,14 @@ class UnboundAction(BrainError):
 
 
 def parse_tool_call(
-    name: str, arguments: object, actions: Collection[str], sequences: Collection[str]
+    name: str,
+    arguments: object,
+    actions: Collection[str],
+    sequences: Collection[str],
+    said: str = "",
 ) -> Decision:
-    """A tool call from the brain, checked. Raises ``BrainError`` if it can't be used."""
+    """A tool call from the brain, checked. Raises ``BrainError`` if it can't be used.
+    ``said``: the player's words, for a press asked for as a question (``AskedHow``)."""
     if not isinstance(arguments, dict):
         raise BrainError(f"{name}: the arguments aren't an object")
     args: dict[str, object] = {str(k): v for k, v in arguments.items()}  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
@@ -137,6 +186,8 @@ def parse_tool_call(
             raise EmptyAct
         if not isinstance(picked, list) or not picked:
             raise BrainError("run_actions: no actions")
+        if asks_how(said):  # something to press, for a how-to question
+            raise AskedHow(name)
         names = tuple(str(a) for a in picked)  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
         if len(names) > MAX_ACTIONS:
             raise BrainError(f"run_actions: {len(names)} actions is too many")
@@ -144,6 +195,8 @@ def parse_tool_call(
             raise UnboundAction(unknown)
         return RunActions(names, _pressing(say))
     if name == "run_sequence":
+        if asks_how(said):
+            raise AskedHow(name)
         sequence = args.get("name")
         if not isinstance(sequence, str) or sequence not in sequences:
             raise BrainError(f"run_sequence: {sequence!r} isn't one of your sequences")

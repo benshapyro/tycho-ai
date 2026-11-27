@@ -8,7 +8,7 @@ In order, a whole utterance is:
 2. "say that again" (#222);
 3. a reply to a question, "confirm" or "cancel" (ADR 13);
 4. asking Tycho to look at the game window, for the brain with a picture (#31);
-5. a fast-path command;
+5. a fast-path command, unless it says how things are ("gear's down": ``states``);
 6. otherwise, the brain's, if there is one.
 
 What the session does with 1 to 3 depends on what it last said and asked, so
@@ -27,7 +27,7 @@ from tycho.commands.reserved import (
     TILE_WORDS,
 )
 from tycho.packs import Safety
-from tycho.text import normalize
+from tycho.text import normalize, states
 
 type TileWord = Literal["pin", "clear", "again", "forward", "show"]
 type ReservedWord = TileWord | Literal["say_again", "confirm", "cancel"]
@@ -128,7 +128,7 @@ def route(
         return Reserved(reply)
     if look:
         return ToBrain("asked to look", look=True) if brain else NotUnderstood(NO_BRAIN_TO_LOOK)
-    match = matcher.match(text)
+    match = matcher.match(text) if not states(text) else Defer(text, "states")
     if not isinstance(match, Defer):
         if not keys and brain:
             return ToBrain("a built-in command, with key actions off", match.commands)

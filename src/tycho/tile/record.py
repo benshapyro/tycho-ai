@@ -89,6 +89,9 @@ class CardRecord:
         self._queue: queue.Queue[_Job | None] = queue.Queue(WAITING)
         self._thread: threading.Thread | None = None
         self._closed = False
+        self._lock = threading.Lock()
+        """Guards ``_closed`` and ``_thread``: ``close`` runs on the main thread, ``_save``
+        on the window's (#709)."""
 
     @property
     def run(self) -> Path | None:
@@ -113,8 +116,9 @@ class CardRecord:
         """Give what's waiting a moment to be saved, as Tycho stops, then end the
         writer's thread. A restart (picking a game) builds a new record, so the old
         thread must not be left waiting. Nothing is saved after this."""
-        self._closed = True
-        thread = self._thread
+        with self._lock:  # no card queued, nor writer started, after this (#709)
+            self._closed = True
+            thread = self._thread
         if thread is None:
             return
         deadline = time.monotonic() + timeout
@@ -166,14 +170,19 @@ class CardRecord:
         if not self._background:
             self._write(job)
             return
-        try:
-            self._queue.put_nowait(job)
-        except queue.Full:
-            log.debug("The Tile's record is behind: a card wasn't saved")
-            return
-        if self._thread is None:
-            self._thread = threading.Thread(target=self._writer, name="tile-record", daemon=True)
-            self._thread.start()
+        with self._lock:  # close may have come since the check above (#709)
+            if self._closed:
+                return
+            try:
+                self._queue.put_nowait(job)
+            except queue.Full:
+                log.debug("The Tile's record is behind: a card wasn't saved")
+                return
+            if self._thread is None:
+                self._thread = threading.Thread(
+                    target=self._writer, name="tile-record", daemon=True
+                )
+                self._thread.start()
 
     # On the record's own thread (or the caller's, with ``background=False``): making
     # the folder and deleting old runs touch the disk, so never inside the lock.

@@ -175,7 +175,8 @@ def checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Finding
             yield Finding("ok", "Your commands", f"{counts}, with yours from {commands_file}")
             for warning in matcher.warnings:
                 yield Finding("warn", "Your commands", warning)
-            if not names_listed([c.id for c in matcher.commands if c.is_sequence]):
+            sequenced = [c.id for c in matcher.commands if c.is_sequence]
+            if pack.mode == "keys" and not names_listed(sequenced):  # keys off: none sent
                 yield Finding("warn", "Your commands", TOO_MANY_SEQUENCES)  # #640
         else:
             yield Finding("ok", "Commands", f"{counts}; add your own in {commands_file}")
