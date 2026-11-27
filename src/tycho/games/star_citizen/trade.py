@@ -27,9 +27,9 @@ log = logging.getLogger(__name__)
 FRESH_SECONDS = 600.0
 """How long a fetched price or route list is reused (UEX itself updates hourly)."""
 TOP = 5
+"""How many places or routes an answer lists."""
 STALE_HOURS = 24
 """A price reported longer ago than this is ranked after the fresh ones."""
-"""How many places or routes an answer lists."""
 MAX_ORIGINS = 4
 """Terminals asked about at once when a route starts at a station, city or outpost."""
 RAW_WORDS = frozenset({"raw", "ore", "unrefined"})

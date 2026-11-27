@@ -1,6 +1,8 @@
 """The Tile's record (a review tool): each card saved as drawn, with what it held."""
 
 import json
+import threading
+import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -161,3 +163,89 @@ def _view(record: CardRecord) -> tuple[Shown, ...]:
 
 def _look() -> Look:
     return Look(accent="#f5901e", scale=1.0, see_through=80, high_contrast=False)
+
+
+def test_the_sample_card_after_a_setting_changes_is_saved(tmp_path: Path) -> None:
+    display, record = _tile(tmp_path)
+    display.change("tile_see_through", 0.4)
+    display.frame(SCREEN)
+    assert record.run is not None
+    [line] = _lines(record.run)
+    assert line["kind"] == "notice"
+    assert "see through" in str(line["said"])
+
+
+def test_a_write_that_fails_is_dropped_and_the_tile_keeps_drawing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def full_disk(*_args: object) -> None:
+        raise OSError("No space left on device")
+
+    monkeypatch.setattr(tile_record, "write", full_disk)
+    record = CardRecord(tmp_path, now=Ticks())
+    display = TileDisplay(Settings(), clock=lambda: 100.0, window=FakeWindow, record=record)  # type: ignore[arg-type]
+    display.show(SELL)
+    assert display.frame(SCREEN) is not None
+    display.show(ROUTE)
+    assert display.frame(SCREEN) is not None  # the writer's thread is still there
+    display.close()
+    assert record._thread is not None  # type: ignore[attr-defined]
+    assert not record._thread.is_alive()  # type: ignore[attr-defined]
+
+
+def test_a_full_queue_drops_a_card_without_waiting(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    gate = threading.Event()
+    written: list[str] = []
+
+    def slow(path: Path, _image: Image.Image, _line: dict[str, object]) -> None:
+        gate.wait(5)
+        written.append(path.name)
+
+    monkeypatch.setattr(tile_record, "write", slow)
+    monkeypatch.setattr(tile_record, "WAITING", 2)
+    record = CardRecord(tmp_path, now=Ticks())
+    started = time.monotonic()
+    for _ in range(6):  # one on the writer, two waiting, the rest dropped
+        record.shown(SELL)
+        record.drawn(_view(record), Image.new("RGBA", (10, 10)), _look())
+    assert time.monotonic() - started < 1.0
+    gate.set()
+    record.close()
+    assert 1 <= len(written) <= 3
+    assert len(written) < 6
+
+
+def test_closing_ends_the_writer_thread_and_nothing_is_saved_after(tmp_path: Path) -> None:
+    record = CardRecord(tmp_path, now=Ticks())
+    record.shown(SELL)
+    record.drawn(_view(record), Image.new("RGBA", (10, 10)), _look())
+    record.close()
+    assert record._thread is not None  # type: ignore[attr-defined]
+    assert not record._thread.is_alive()  # type: ignore[attr-defined]
+    record.shown(ROUTE)
+    record.drawn(_view(record), Image.new("RGBA", (10, 10)), _look())
+    assert record.run is not None
+    assert len(_lines(record.run)) == 1
+
+
+def test_making_the_folder_and_pruning_happen_off_the_window_thread(tmp_path: Path) -> None:
+    gate = threading.Event()
+    record = CardRecord(tmp_path, now=Ticks())
+    real = record._start  # type: ignore[attr-defined]
+    threads: list[str] = []
+
+    def start() -> Path:
+        threads.append(threading.current_thread().name)
+        gate.wait(5)
+        return real()
+
+    record._start = start  # type: ignore[method-assign]
+    record.shown(SELL)
+    record.drawn(_view(record), Image.new("RGBA", (10, 10)), _look())  # returns at once
+    assert record.run is None
+    gate.set()
+    record.close()
+    assert threads == ["tile-record"]
+    assert record.run is not None

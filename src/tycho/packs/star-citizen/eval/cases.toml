@@ -702,6 +702,7 @@ expect = ["reply"]
 where = []
 notes = ["Home base is New Babbage on microTech."]
 asked_without = { mining_lookup = ["stanton", "microtech", "babbage"] }
+mentions = [["which (star )?system", "what (star )?system"]]  # it asks (#659)
 never_say = ["you're in Stanton", "you are in Stanton", "near New Babbage", "around microTech"]
 tag = "where"
 
@@ -712,7 +713,7 @@ mode = "lookup"
 expect = ["reply"]
 where = []
 notes = ["Home base is New Babbage on microTech."]
-tools = ["item_lookup", "mining_lookup"]
+tools = ["item_lookup"]  # mining_lookup only if the recipe has an ore this patch (#659)
 asked_without = { mining_lookup = ["stanton", "microtech", "babbage"] }
 never_say = ['which system', 'what system']
 max_calls = 3
