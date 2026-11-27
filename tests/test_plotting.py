@@ -487,6 +487,11 @@ def test_the_route_tool_only_hands_the_place_over() -> None:
         "which route to Lorville is safest",
         "any route to Pyro that avoids pirates",  # kept: a missed plot is safer (#679)
         "trade route to Area 18",
+        # Questions that open like a request (#702):
+        "good route to sell gold",
+        "great routes for cargo",
+        "how about the fastest route to Pyro",
+        "how about we find the safest route",
     ],
 )
 def test_the_route_tool_plots_nothing_for_a_question(said: str) -> None:
@@ -509,6 +514,8 @@ def test_the_route_tool_plots_nothing_for_a_question(said: str) -> None:
         "good, now a route to Levski",
         "another route to Levski",
         "how about a route to Levski",
+        "how about Levski",
+        "great, Levski please",
     ],
 )
 def test_the_route_tool_still_hands_over_a_request(said: str) -> None:

@@ -69,16 +69,34 @@ course to Lorville" still ask for one (#679). "Any" stays: "any route to Pyro?" 
 question, and a missed plot is safer than a map opened for one."""
 LEADING = ("how", "about")
 """Words before a request that leave it one: "how about a route to Levski" (#679)."""
+SUPERLATIVES = frozenset(
+    {"best", "fastest", "quickest", "shortest", "safest", "cheapest", "longest", "nearest"}
+    | {"closest"}
+)
+"""After ``LEADING``, any of these before the route word make it a question: "how about
+the fastest route to Pyro", "how about we find the safest route" (#702)."""
+PRAISED = frozenset({"good", "great"})
+"""First words that start a request ("Great, take us to Lorville") or a question ("good
+route to sell gold?"): a question when ``ROUTE_WORDS`` follows (#702)."""
+ROUTE_WORDS = frozenset(
+    {"route", "routes", "way", "ways", "place", "places", "spot", "spots", "run", "runs"}
+    | {"trade", "trading", "cargo", "mining", "delivery", "loop", "loops"}
+)
 
 
 def asks_about(text: str) -> bool:
     """Whether ``text`` asks about a route rather than for one: its first word after
-    ``FILLER`` is one of ``ASKING``."""
+    ``FILLER`` is one of ``ASKING``, or ``PRAISED`` and then a route word; after "how
+    about", a superlative before "route" or "course" does too."""
     words = normalize(text)
     while words and words[0] in FILLER:
         words.pop(0)
     if tuple(words[: len(LEADING)]) == LEADING:
         words = words[len(LEADING) :]
+        ends = [i for i, w in enumerate(words) if w in {"route", "routes", "course"}]
+        return bool(SUPERLATIVES & set(words[: ends[0] if ends else len(words)]))
+    if len(words) > 1 and words[0] in PRAISED:
+        return words[1] in ROUTE_WORDS
     return bool(words) and words[0] in ASKING
 
 

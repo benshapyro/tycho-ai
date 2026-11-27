@@ -745,8 +745,9 @@ def test_bind_doesnt_take_the_second_button_as_the_first(
     assert settings.load().push_to_talk_2 == stick
 
 
+@pytest.mark.parametrize("keys", [True, False])
 def test_check_says_when_there_are_too_many_sequences_to_list(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, keys: bool
 ) -> None:
     # #640: past brain.tools.NAMES_BUDGET, run_sequence stops listing the names.
     monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path))
@@ -755,9 +756,11 @@ def test_check_says_when_there_are_too_many_sequences_to_list(
     )
     (tmp_path / "commands.toml").write_text("".join(one.format(n=n) for n in range(60)), "utf-8")
     details: list[str] = []
-    for finding in doctor.checks(settings.load(), quick=True):
+    current = settings.load().model_copy(update={"key_actions": keys})
+    for finding in doctor.checks(current, quick=True):
         if finding.what == "Your commands":
             details.append(finding.detail)
         elif details:
             break
-    assert doctor.TOO_MANY_SEQUENCES in details
+    # With key actions off the brain gets no run_sequence, so there's nothing to say (#702).
+    assert (doctor.TOO_MANY_SEQUENCES in details) is keys

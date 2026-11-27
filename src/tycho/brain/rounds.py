@@ -10,6 +10,7 @@ when a tool call is complete, so the rules live here once:
 - a fleet or settings note (``instant``) in the same reply as an act finishes first,
   for up to ``INSTANT_SECONDS``;
 - nothing presses after a web search or a search of past talk (``unpressed``, ADR 14);
+- a question with nothing in it to do is answered, never pressed (``asked_only``, #708);
 - "Checking." is said only once a reply with look-ups is known not to end in a press.
 
 When tracing is on (``traces``, #282), the round records each call, tool call and
@@ -18,7 +19,6 @@ look-up on the turn's trace, and ``traced`` writes the request's line once it en
 
 import asyncio
 import dataclasses
-import difflib
 import logging
 import re
 import time
@@ -31,6 +31,8 @@ from tycho.brain.decisions import (
     Decision,
     EmptyAct,
     Reply,
+    RunActions,
+    RunSequence,
     UnboundAction,
     parse_tool_call,
 )
@@ -44,6 +46,7 @@ from tycho.brain.lookups import (
     looked_up,
     run_lookup,
 )
+from tycho.brain.refusals import ANSWER_IN_WORDS, asked_only, unbound
 from tycho.brain.traces import Look, Trace, TraceFile
 from tycho.text import clip_spoken
 
@@ -259,6 +262,11 @@ class Round:
             turn.unbound, turn.refused = e, True
             self.looking.append((use_id, answered(unbound(e, self._actions))))
             return None
+        if (names := _named(decided)) and asked_only(turn.heard, names):  # #708
+            log.debug("Brain chose to act on a question; not pressing")
+            turn.refused = True
+            self.looking.append((use_id, answered(failure(ANSWER_IN_WORDS))))
+            return None
         await self._end()
         return decided
 
@@ -420,22 +428,6 @@ def answered(result: LookupResult) -> asyncio.Task[LookupResult]:
     return asyncio.create_task(ready())
 
 
-def unbound(error: UnboundAction, actions: Collection[str]) -> LookupResult:
-    """What the model hears when it names actions that aren't bound: the closest that
-    are, or that there's no key for it, so it says so."""
-    close = {
-        name: difflib.get_close_matches(name, actions, n=3, cutoff=0.5) for name in error.unknown
-    }
-    hints = "; ".join(
-        f"{name}: did you mean {', '.join(found)}?" if found else f"{name}: nothing close is bound"
-        for name, found in close.items()
-    )
-    return failure(
-        f"Nothing was pressed. Not bound: {hints}. Pick from the bound actions, or say "
-        "there's no key for it and what to bind."
-    )
-
-
 def found(result: LookupResult) -> bool:
     """Whether a look-up's result holds data: not an error, not a miss."""
     return not result.is_error and '"not_found"' not in result.content
@@ -494,6 +486,13 @@ the answer (#669). "Looking at your fleet, none can mine." is an answer."""
 def spoken(text: str) -> str:
     """A reply as one line to say: no markdown (it would be read out), no line breaks."""
     return " ".join(_MARKUP.sub("", text).split())
+
+
+def _named(decided: Decision) -> tuple[str, ...]:
+    """The action or sequence names an act would press; none for a reply or a card."""
+    if isinstance(decided, RunActions):
+        return decided.actions
+    return (decided.name,) if isinstance(decided, RunSequence) else ()
 
 
 def ms(started: float) -> float:
