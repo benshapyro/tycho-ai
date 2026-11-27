@@ -8,7 +8,7 @@ from tycho.commands.matcher import (
     Match,
     Step,
 )
-from tycho.commands.resolve import Resolved, resolve
+from tycho.commands.resolve import Resolved, on_stick, resolve
 
 __all__ = [
     "Command",
@@ -18,5 +18,6 @@ __all__ = [
     "Match",
     "Resolved",
     "Step",
+    "on_stick",
     "resolve",
 ]

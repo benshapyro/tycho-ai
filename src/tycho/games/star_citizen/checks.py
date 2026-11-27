@@ -7,7 +7,7 @@ from collections.abc import Callable, Generator, Iterator
 from pathlib import Path
 
 from tycho import paths, settings
-from tycho.commands import CommandMatcher, resolve
+from tycho.commands import CommandMatcher, on_stick, resolve
 from tycho.findings import Finding
 from tycho.games.star_citizen.fleet import Fleet
 from tycho.games.star_citizen.install import GameInstall, root_from, search_roots
@@ -67,19 +67,31 @@ def game_findings(
             install = find_install(current)
             yield Finding("ok", "Star Citizen", f"{install.folder} (saved to {saved})")
         store = KeybindStore.load(install)
-        unbound = [
-            c.id
+        keyless = [
+            c
             for c in matcher.commands
             if not c.is_sequence and resolve(c, store.keybinds).action is None
         ]
         detail = f"{len(store.keybinds)} actions"
+        # On a stick but not a key: bound, just not where Tycho can press it (#622).
+        stick = {c.id for c in keyless if on_stick(c, store.keybinds) is not None}
+        unbound = [c.id for c in keyless if c.id not in stick]
+        on_sticks = [c.id for c in keyless if c.id in stick]
         if unbound:
             yield Finding(
                 "warn",
                 "Keybinds",
                 f"{detail}; no key for {len(unbound)} voice command(s): {', '.join(unbound)}",
             )
-        else:
+        if on_sticks:
+            yield Finding(
+                "warn",
+                "Keybinds",
+                f"{len(on_sticks)} voice command(s) on your stick only, which Tycho can't "
+                f"press: {', '.join(on_sticks)}. Give each a keyboard key too if you want "
+                "Tycho to press it.",
+            )
+        if not unbound and not on_sticks:
             yield Finding("ok", "Keybinds", f"{detail}; every voice command has a key")
         log_file = install.game_log
         if log_file.exists():

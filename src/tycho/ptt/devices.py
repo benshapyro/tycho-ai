@@ -3,18 +3,45 @@
 Out of ``app.py`` (#398), so the desktop doesn't import the app to use them.
 """
 
+import logging
 from collections.abc import Iterable
 
 from tycho.ptt.binding import Binding, DeviceKind, every_binding
 from tycho.ptt.monitor import InputSource, PushToTalk
 
+log = logging.getLogger(__name__)
+
 
 def describe(binding: Binding) -> str:
+    """A button's name for people. A stick's is its own name once Tycho has seen it
+    plugged in (#623), so with two sticks the player can tell which: "VKBsim Gladiator
+    EVO R button 12", and "(2nd)" after it when two have the same name."""
     from tycho.ptt import windows as win
 
     if binding.kind is DeviceKind.JOYSTICK:
-        return f"joystick button {binding.code + 1}"
+        return f"{stick_name(binding)} button {binding.code + 1}"
     return win.describe(binding)
+
+
+def stick_name(binding: Binding) -> str:
+    """The stick a button is on, by its name, or "joystick" when it isn't plugged in."""
+    from tycho.ptt import sticks
+
+    device = binding.device or ""
+    found = sticks.name(device)
+    if found is None:
+        return "joystick"
+    _, mark, number = device.partition("#")
+    twins = sticks.doubled().get(sticks.guid(device), [])
+    if twins.count(found) > 1:
+        return f"{found} ({_ordinal(int(number) if mark and number.isdigit() else 1)})"
+    return found
+
+
+def _ordinal(n: int) -> str:
+    if 10 <= n % 100 <= 20:
+        return f"{n}th"
+    return f"{n}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }"
 
 
 def describe_all(bindings: Iterable[Binding]) -> str:
@@ -42,6 +69,19 @@ def rebind(ptt: PushToTalk, first: str | None, second: str | None) -> bool:
         return False
     ptt.rebind(bindings, input_sources(*bindings))
     return True
+
+
+def look_at_sticks() -> None:
+    """Open the sticks once and let them go, so Tycho knows their names and any pair
+    that can swap (#623): for ``tycho check``, where nothing else has opened them. Only
+    where no other thread has SDL open. A stick library that won't start is no problem
+    here: the names are only nicer."""
+    try:
+        from tycho.ptt.joystick import JoystickSource
+
+        JoystickSource().close()
+    except Exception:  # SDL missing or failing: the plain names stay
+        log.debug("Couldn't look at the sticks", exc_info=True)
 
 
 class PollThreadJoysticks:

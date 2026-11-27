@@ -38,7 +38,7 @@ A change a player can notice also adds a line under **Unreleased** in `CHANGELOG
 
 ## Where things are
 
-- `src/tycho/ptt/`: push-to-talk on keyboard, mouse and joystick buttons.
+- `src/tycho/ptt/`: push-to-talk on keyboard, mouse and joystick buttons. `sticks.py` holds the sticks Tycho last saw (their names, and twins with one GUID that can swap: #623) and matches a stick to the game's own stick numbers for the clash warning (#622).
 - `src/tycho/audio/`: microphone capture and push-to-talk clips.
 - `src/tycho/keybinds.py`: the general keybind types every key-pressing game uses: `KeyInput`, `Action`, `ActivationMode`, `Keybinds` and `key_text` (ADR 19).
 - `src/tycho/situation.py`: what a game-state part knows (`Situation`: the gate's facts, what's true now and the latest events, each `Logged` with its time). Text in it comes from the game's log: untrusted data, never instructions.

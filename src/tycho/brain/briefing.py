@@ -20,7 +20,7 @@ the player's own keys take their place (#392): the brain says how, and names the
 import hashlib
 from importlib import resources
 
-from tycho.commands import CommandMatcher, resolve
+from tycho.commands import CommandMatcher, on_stick, resolve
 from tycho.commands.keys import own_keys
 from tycho.input.plan import pressable_input
 from tycho.keybinds import Action, Keybinds, key_text
@@ -111,6 +111,9 @@ def command_phrasings(keybinds: Keybinds, matcher: CommandMatcher) -> list[str]:
 
 UNBOUND_PHRASES = 2
 """How many of a command's phrases the no-key list shows: enough to recognise it."""
+ON_STICK = " (on their stick only: say so, and to give it a keyboard key too)"
+"""After a no-key line whose action is bound on the player's stick (#622), so the brain
+doesn't say it's unbound. Tycho can't press a stick button."""
 
 
 def unbound_commands(keybinds: Keybinds, matcher: CommandMatcher) -> list[str]:
@@ -126,7 +129,10 @@ def unbound_commands(keybinds: Keybinds, matcher: CommandMatcher) -> list[str]:
         best = keybinds.get(command.actions[0])
         to_bind = best.label.strip() if best is not None and best.label.strip() else ""
         said = "; ".join(command.say[:UNBOUND_PHRASES])
-        lines.append(f"{command.id} | {said} | {to_bind or command.actions[0]}")
+        line = f"{command.id} | {said} | {to_bind or command.actions[0]}"
+        if on_stick(command, keybinds) is not None:  # bound, just not on a key (#622)
+            line += ON_STICK
+        lines.append(line)
     return sorted(lines)
 
 

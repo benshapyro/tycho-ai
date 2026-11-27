@@ -22,6 +22,7 @@ from tycho.games.star_citizen.keybinds import (
     apply_profile,
     parse_activation_modes,
     parse_defaults,
+    parse_sticks,
 )
 from tycho.games.star_citizen.p4k import P4kArchive
 from tycho.keybinds import Action, ActivationMode, Keybinds
@@ -86,15 +87,17 @@ class KeybindStore:
                 self._defaults = self._load_defaults(game)
                 self._defaults_stamp, self._ini_stamp = game, ini
             actions = self._defaults
+            sticks: dict[int, str] = {}
             if profile is not None:
                 root = ET.parse(self.install.actionmaps).getroot()  # noqa: S314 - local game file; expat guards entity expansion
                 actions = apply_profile(actions, root)
+                sticks = parse_sticks(root)
         except (ET.ParseError, OSError, ValueError, GameDataError) as e:
             # Mid-write, locked by the game, or mid-patch: keep what we had and retry later.
             self.last_error = f"{type(e).__name__}: {e}"
             return False
         self._profile_stamp = profile
-        self.keybinds = Keybinds(actions, self._modes)
+        self.keybinds = Keybinds(actions, self._modes, sticks)
         self.loaded = True
         self.last_error = None
         return True

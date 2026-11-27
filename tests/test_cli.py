@@ -694,7 +694,7 @@ def test_check_gives_each_push_to_talk_button_its_own_conflict_line(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """#629: a mouse button that's free in game was hidden behind the stick button's
-    "not checked yet"."""
+    "not checked yet". A stick button is checked too now (#622)."""
 
     def game(*_args: object, **_kwargs: object) -> Iterator[Finding]:
         yield from ()
@@ -713,7 +713,7 @@ def test_check_gives_each_push_to_talk_button_its_own_conflict_line(
     ]
     assert lines == [
         "Mouse side (forward): not bound to anything in game",
-        "joystick button 4: joystick buttons aren't checked yet",
+        "joystick button 4: not bound to anything in game",
     ]
 
 

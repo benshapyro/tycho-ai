@@ -97,7 +97,7 @@ def test_buttons_on_identical_sticks_are_told_apart(sdl: FakeSdl) -> None:
     assert source.is_pressed(second)
     assert not source.is_pressed(Binding(DeviceKind.JOYSTICK, 2, GUID))
     assert not source.is_pressed(Binding(DeviceKind.JOYSTICK, 9, f"{GUID}#2"))  # no such button
-    assert source.describe(second) == "VKB Gladiator button 3"
+    assert source.describe(second) == "VKB Gladiator (2nd) button 3"  # #623: which of the two
 
 
 def test_plugging_a_stick_in_or_out_is_noticed(sdl: FakeSdl) -> None:
@@ -116,3 +116,33 @@ def test_sdl_failing_to_start_is_a_clear_error(
     monkeypatch.setattr(sdl, "SDL_GetError", lambda: b"no joystick support")
     with pytest.raises(joystick.JoystickError, match="no joystick support"):
         joystick.JoystickSource()
+
+
+def test_the_second_of_two_sticks_is_named_with_that_stick(sdl: FakeSdl) -> None:
+    """#623: "joystick button 12" didn't say which of two sticks."""
+    from tycho.ptt.devices import describe
+
+    sdl.sticks[0].name, sdl.sticks[1].name = b"VKBsim Gladiator EVO L", b"VKBsim Gladiator EVO R"
+    joystick.JoystickSource().close()  # as `tycho check` or the push-to-talk thread does
+    second = Binding(DeviceKind.JOYSTICK, 11, f"{GUID}#2")
+    assert describe(second) == "VKBsim Gladiator EVO R button 12"
+
+
+def test_sticks_that_share_a_guid_are_a_check_finding(
+    sdl: FakeSdl, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#623: two sticks with one GUID are told apart by plug-in order, so can swap."""
+    from collections.abc import Iterator
+
+    from tycho import doctor, settings
+    from tycho.findings import Finding
+
+    def game(*_args: object, **_kwargs: object) -> Iterator[Finding]:
+        yield from ()
+        return None
+
+    monkeypatch.setattr(doctor, "game_findings", game)
+    joystick.JoystickSource().close()
+    current = settings.Settings(push_to_talk=f"joystick:{GUID}#2:3")
+    found = [f for f in doctor.checks(current, quick=True, ask=False) if f.level == "warn"]
+    assert any("USB ID" in f.detail and "plugged in" in f.detail for f in found)

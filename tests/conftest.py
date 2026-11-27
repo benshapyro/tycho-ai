@@ -29,6 +29,17 @@ def _no_real_keys() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _no_sticks_seen() -> Iterator[None]:
+    """Every test starts with no sticks seen (#623): a fake stick one test opens never
+    names another test's stick button."""
+    from tycho.ptt import sticks
+
+    sticks.saw({})
+    yield
+    sticks.saw({})
+
+
+@pytest.fixture(autouse=True)
 def _no_real_crash_reports(monkeypatch: pytest.MonkeyPatch) -> None:
     """No test sends to Tycho's real Sentry project (#450): tests that send pass their
     own ``dsn``."""
