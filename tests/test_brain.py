@@ -33,6 +33,7 @@ from tycho.brain.briefing import (
     unbound_commands,
 )
 from tycho.brain.claude import ClaudeBrain, history, turns
+from tycho.brain.decisions import CARD_LINE
 from tycho.brain.lookups import LOOKUP_SECONDS, run_lookup
 from tycho.brain.rounds import (
     CARD_NOTE,
@@ -108,7 +109,7 @@ def test_no_actions_with_a_line_to_say_is_a_reply() -> None:
     assert picked == Reply("o7.")
 
 
-@pytest.mark.parametrize("say", ["unused", "Unused.", "", "  ", "n/a", "None", "..."])
+@pytest.mark.parametrize("say", ["unused", "Unused.", "", "  ", "n/a", "N/A", "..."])
 def test_no_actions_and_a_placeholder_line_is_never_a_reply(say: str) -> None:
     """#666: for "which blueprints have I got" the brain ended with run_actions, no
     actions and say "unused" (the acts are strict, so say must be filled: #639), and
@@ -117,8 +118,16 @@ def test_no_actions_and_a_placeholder_line_is_never_a_reply(say: str) -> None:
         parse_tool_call("run_actions", {"actions": [], "say": say}, ACTIONS, ())
 
 
-def test_a_placeholder_line_with_a_press_is_not_spoken() -> None:
-    picked = parse_tool_call("run_actions", {"actions": ["v_lights"], "say": "unused"}, ACTIONS, ())
+@pytest.mark.parametrize("say", ["None.", "Nothing.", "none"])
+def test_none_can_be_the_answer(say: str) -> None:
+    """#669: for "which of my ships can mine?", "None." is the answer, not a
+    placeholder: blanking it cost another call, and failed on the last one."""
+    assert parse_tool_call("run_actions", {"actions": [], "say": say}, ACTIONS, ()) == Reply(say)
+
+
+@pytest.mark.parametrize("say", ["unused", "None.", "nothing"])
+def test_a_placeholder_line_with_a_press_is_not_spoken(say: str) -> None:
+    picked = parse_tool_call("run_actions", {"actions": ["v_lights"], "say": say}, ACTIONS, ())
     assert picked == RunActions(("v_lights",), "")
     sequence = parse_tool_call("run_sequence", {"name": "startup", "say": "N/A"}, (), SEQUENCES)
     assert sequence == RunSequence("startup", "")
@@ -656,6 +665,38 @@ def test_an_empty_act_after_the_answer_in_words_says_the_words() -> None:
     assert len(client.requests) == 2  # no third call for words it already wrote
 
 
+@pytest.mark.parametrize(
+    "lead_in",
+    [
+        "Let me check your blueprints.",
+        "Checking.",
+        "One moment...",
+        "I'll look.",
+        "I\u2019ll check.",
+    ],
+)
+def test_an_empty_act_after_a_lead_in_isnt_answered_with_the_lead_in(lead_in: str) -> None:
+    """#669: "Let me check your blueprints." then an empty act ended the request with
+    those words. The model is told, and its next call's answer is said."""
+    client = _Calls(_empty_act(lead_in), ([], _final("You have three blueprints.")))
+    assert _ask(client, FakeLookup()) == Reply("You have three blueprints.")
+    assert len(client.requests) == 2
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Let me see. You have three blueprints.",
+        "Looking at your fleet, none of them can mine.",
+        "Let's go with the Prospector.",
+        "Checking… you have three blueprints.",
+    ],
+)
+def test_an_answer_that_starts_like_a_lead_in_is_still_the_answer(answer: str) -> None:
+    client = _Calls(_empty_act(answer))
+    assert _ask(client, FakeLookup()) == Reply(answer)
+
+
 def test_only_empty_acts_to_the_end_is_an_error_never_unused() -> None:
     client = _Calls(*[_empty_act(use_id=f"toolu_{n}") for n in range(MAX_CALLS)])
     with pytest.raises(BrainError):
@@ -1050,6 +1091,16 @@ def test_an_empty_card_with_a_line_to_say_is_said_without_the_card() -> None:
     assert parse_tool_call("show_card", pointing, ACTIONS, SEQUENCES) == Reply(
         "Your power key is P."
     )
+
+
+@pytest.mark.parametrize("say", ["unused", "N/A."])
+def test_a_card_with_a_placeholder_line_still_shows(say: str) -> None:
+    """#669: a good card with say "unused" was the error sound and no card (after
+    #668 blanked the placeholder). Now the card shows, with a short line."""
+    decision = parse_tool_call("show_card", _CARD | {"say": say}, ACTIONS, SEQUENCES)
+    assert isinstance(decision, Reply)
+    assert decision.text == CARD_LINE
+    assert decision.card is not None
 
 
 def _offered(tile: bool) -> list[str]:
