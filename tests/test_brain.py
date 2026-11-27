@@ -487,6 +487,42 @@ def test_a_question_is_never_pressed_however_often_it_picks() -> None:
         _asked(client, "what's coming in the next patch")
 
 
+def test_a_generic_name_part_doesnt_name_the_action() -> None:
+    """Review of #712 (#714): "system" in v_toggle_landing_system let "what system am I
+    in" press the landing gear."""
+    client = _Calls(_picks(["v_toggle_landing_system"]), ([], _final("Stanton.")))
+    assert _asked(client, "what system am I in") == Reply("Stanton.")
+    client = _Calls(_picks(["v_toggle_landing_system"]))
+    decided = _asked(client, "where's my landing gear")  # "landing" still names it
+    assert decided == RunActions(("v_toggle_landing_system",), "Done.")
+
+
+def test_a_question_refused_before_the_last_call_is_told_to_answer_not_pick() -> None:
+    """Review of #712 (#714): the last call after a question's refusal said "pick the
+    actions again", against "answer in words"."""
+    client = _Calls(
+        _picks(["v_toggle_landing_system"]),
+        _picks(["v_toggle_landing_system"], "toolu_2"),
+        ([], _final("Not announced yet.")),
+    )
+    assert _asked(client, "what's coming in the next patch") == Reply("Not announced yet.")
+    notes = [c["text"] for c in client.requests[2]["messages"][-1]["content"] if "text" in c]
+    assert LAST_CALL in notes
+    assert LAST_PICK not in notes
+
+
+def test_a_question_refused_last_doesnt_blame_an_unbound_action() -> None:
+    """Review of #712 (#714): an unbound pick, then picks for a question, ended in
+    "isn't one of your bound actions"."""
+    client = _Calls(
+        _picks(["v_unbound"]),
+        *[_picks(["v_toggle_landing_system"], f"toolu_{n}") for n in range(2, MAX_CALLS + 1)],
+    )
+    with pytest.raises(BrainError) as raised:
+        _asked(client, "what's coming in the next patch")
+    assert "isn't one of your bound" not in str(raised.value)
+
+
 def test_an_action_with_nothing_close_bound_is_said_not_pressed() -> None:
     client = _Calls(_picks(["v_xyzzy_qqq"]), ([], _final("There's no key for that.")))
     assert _ask(client) == Reply("There's no key for that.")

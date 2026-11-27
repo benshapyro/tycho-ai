@@ -2586,3 +2586,34 @@ mode = "lookup"
 expect = ["reply", "look_up"]
 never = ["v_toggle_quantum_mode", "v_quantum_travel"]
 tag = "near_miss"
+
+# Questions whose words are generic parts of action names ("system", "mode", "ship"):
+# they don't ask for the action (review of #712, #714).
+[[case]]
+heard = "which mode is my ship in right now"
+mode = "lookup"
+expect = ["reply"]
+never = ["v_master_mode_set_nav", "v_master_mode_set_scm", "v_toggle_mining_mode", "v_set_mining_mode", "v_toggle_scan_mode", "v_set_scan_mode", "v_toggle_quantum_mode"]
+tag = "near_miss"
+
+[[case]]
+heard = "what system has the best gold prices"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
+never = ["v_toggle_landing_system", "v_deploy_landing_system", "v_starmap"]
+tag = "near_miss"
+
+[[case]]
+heard = "what's the state of my ship"
+mode = "lookup"
+expect = ["reply"]
+tag = "near_miss"
+
+[[case]]
+heard = "which systems can I jump to from here"
+mode = "lookup"
+expect = ["reply", "look_up"]
+no_tools = ["plot_route"]
+never = ["v_starmap", "v_toggle_landing_system"]
+tag = "near_miss"

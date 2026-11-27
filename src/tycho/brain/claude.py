@@ -314,7 +314,7 @@ class ClaudeBrain:
             raise BrainError("can't reach Claude (offline?)") from e
         except anthropic.APIStatusError as e:
             raise BrainError(f"Claude returned an error ({e.status_code})") from e
-        if turn.unbound is not None and turn.refused:
+        if turn.unbound is not None and turn.refused and not turn.asked:
             raise turn.unbound  # the last call too named actions that aren't bound
         raise BrainError(f"still looking things up after {MAX_CALLS} tries")
 

@@ -111,6 +111,7 @@ class Turn:
     """The last act refused for naming unbound actions, for the final error (#167)."""
     refused: bool = False
     """This call's reply held a refused act: its result asks for another pick."""
+    asked: bool = False  # the last refusal was a question's: answer in words (#714)
     looked: bool = False
     """This reply looked something up to answer (no note): its results get ``CARD_NOTE`` (#490)."""
     trace: Trace | None = None
@@ -252,18 +253,19 @@ class Round:
             # answers next call, unless this reply's words already did (``said``).
             log.debug("Brain's act wasn't one: %s", e)
             self._empty += isinstance(e, EmptyAct)
+            turn.asked |= e.question
             self.looking.append((use_id, answered(failure(e.answer))))
             return None
         except UnboundAction as e:
             # Not pressed: the model hears why, with the closest bound names, and
             # picks again on the next call (#164).
             log.debug("Brain named unbound actions: %s", e.unknown)
-            turn.unbound, turn.refused = e, True
+            turn.unbound, turn.refused, turn.asked = e, True, False
             self.looking.append((use_id, answered(unbound(e, self._actions))))
             return None
         if (names := _named(decided)) and asked_only(turn.heard, names):  # #708
             log.debug("Brain chose to act on a question; not pressing")
-            turn.refused = True
+            turn.refused = turn.asked = True
             self.looking.append((use_id, answered(failure(ANSWER_IN_WORDS))))
             return None
         await self._end()
@@ -414,7 +416,7 @@ def last_note(call: int, turn: Turn, cards: bool = False) -> str | None:
     if cards and turn.looked and not turn.refused:
         notes.append(CARD_NOTE)
     if call == MAX_CALLS - 2:
-        notes.append(LAST_PICK if turn.refused else LAST_CALL)
+        notes.append(LAST_PICK if turn.refused and not turn.asked else LAST_CALL)
     return " ".join(notes) or None
 
 

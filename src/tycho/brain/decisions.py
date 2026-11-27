@@ -104,6 +104,8 @@ class NotAnAct(BrainError):
     answers on its next call."""
 
     answer: str = ""
+    question: bool = False
+    """Refused because the player asked a question (``AskedHow``): answered in words."""
 
 
 class EmptyAct(NotAnAct):
@@ -129,6 +131,7 @@ class AskedHow(NotAnAct):
         "Nothing was pressed: the player asked how to do it, not for it. Call player_keys "
         "and name their own key, and press nothing."
     )
+    question = True
 
     def __init__(self, name: str) -> None:
         super().__init__(f"{name}: the player asked how, not for a press")
