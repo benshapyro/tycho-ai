@@ -123,7 +123,7 @@ def test_through_openrouter_the_openrouter_key_runs_haiku() -> None:
 
 def test_a_players_openrouter_brain_is_served_by_anthropic_only() -> None:
     """#313: no host was pinned, so OpenRouter could serve Claude from Bedrock or Vertex,
-    and the README says the words go to Anthropic."""
+    and the privacy policy says the words go to Anthropic."""
     _store(openrouter=OPENROUTER)
     brain = _load(Settings(brain_provider="openrouter"))
     assert isinstance(brain, OpenRouterBrain)

@@ -1,8 +1,12 @@
 name: Build
 
 # The installed app (#9): freeze with PyInstaller, smoke-test what was frozen, check
-# nothing GPL, LGPL or CUDA got in, and wrap it in an Inno Setup installer. Unsigned
-# for now, so Windows SmartScreen warns on first run.
+# nothing GPL, LGPL or CUDA got in, and wrap it in an Inno Setup installer.
+#
+# Signing (docs/code-signing.md): only a run started by hand on main with "sign" ticked,
+# once the SignPath variables exist. Tycho's two programs are signed first, then the
+# installer is built from them and signed too. Each signing request waits for the
+# maintainer to approve it in SignPath. Every other run builds unsigned, as before.
 
 on:
   push:
@@ -15,6 +19,11 @@ on:
       - "uv.lock"
       - ".github/workflows/build.yml"
   workflow_dispatch:
+    inputs:
+      sign:
+        description: "Sign with SignPath (a release build: approve each request in SignPath)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -26,8 +35,22 @@ concurrency:
 jobs:
   installer:
     runs-on: windows-latest
-    timeout-minutes: 30
+    # Signing waits for the maintainer to approve two requests in SignPath.
+    timeout-minutes: ${{ inputs.sign && 120 || 30 }}
+    permissions:
+      contents: read
+      actions: read # SignPath's action reads this run's artifacts to sign them
+    env:
+      SIGN: ${{ github.event_name == 'workflow_dispatch' && inputs.sign && github.ref == 'refs/heads/main' }}
+      SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+      SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG || 'tycho' }}
+      SIGNPATH_POLICY_SLUG: ${{ vars.SIGNPATH_POLICY_SLUG || 'release-signing' }}
     steps:
+      - name: Signing needs main and SignPath's settings
+        if: inputs.sign && (github.ref != 'refs/heads/main' || vars.SIGNPATH_ORGANIZATION_ID == '')
+        shell: pwsh
+        run: throw "Sign only from main, once the SIGNPATH_ORGANIZATION_ID variable and SIGNPATH_API_TOKEN secret are set (docs/code-signing.md)"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -92,14 +115,90 @@ jobs:
           if ($bad) { $bad | ForEach-Object { Write-Output $_.FullName }; throw "left-out files got in" }
           if (-not (Test-Path dist\tycho\_internal\sdl2dll\dll\SDL2.dll)) { throw "SDL2.dll is missing" }
 
+      - name: The version, for the installer and SignPath
+        id: version
+        shell: pwsh
+        run: '"version=$((uv version --short).Trim())" >> $env:GITHUB_OUTPUT'
+
+      # Signing, part 1: Tycho's own programs, so the installer carries signed copies.
+      - name: Upload the programs to sign
+        id: unsigned-exes
+        if: env.SIGN == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tycho-exes-unsigned
+          path: |
+            dist/tycho/tycho.exe
+            dist/tycho/tycho-app.exe
+          retention-days: 1
+      - name: Sign the programs (approve in SignPath)
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@a2c5b60d9c75f073142b653c354b632eedce097b # v3.2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ env.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ env.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ env.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: exes
+          github-artifact-id: ${{ steps.unsigned-exes.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3000
+          output-artifact-directory: dist/signed-exes
+          parameters: |
+            version: ${{ toJSON(steps.version.outputs.version) }}
+      - name: Put the signed programs in place, and check they still run
+        if: env.SIGN == 'true'
+        shell: pwsh
+        run: |
+          foreach ($name in "tycho.exe", "tycho-app.exe") {
+            $signed = "dist\signed-exes\$name"
+            if ((Get-AuthenticodeSignature $signed).Status -ne "Valid") { throw "$name isn't validly signed" }
+            Copy-Item $signed "dist\tycho\$name" -Force
+          }
+          & dist\tycho\tycho.exe --version
+          if ($LASTEXITCODE -ne 0) { throw "the signed tycho.exe doesn't run" }
+
       - name: Build the installer
         shell: pwsh
         run: |
           choco install innosetup --version=6.7.1 -y --no-progress
-          $version = (uv version --short).Trim()
+          $version = "${{ steps.version.outputs.version }}"
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Qp "/DAppVersion=$version" packaging\tycho.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
           Get-ChildItem dist\TychoSetup-*.exe | ForEach-Object { "{0}: {1:N0} MB" -f $_.Name, ($_.Length / 1MB) }
+
+      # Signing, part 2: the installer.
+      - name: Upload the installer to sign
+        id: unsigned-installer
+        if: env.SIGN == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tycho-installer-unsigned
+          path: dist/TychoSetup-*.exe
+          retention-days: 1
+      - name: Sign the installer (approve in SignPath)
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@a2c5b60d9c75f073142b653c354b632eedce097b # v3.2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ env.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ env.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ env.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: installer
+          github-artifact-id: ${{ steps.unsigned-installer.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3000
+          output-artifact-directory: dist/signed-installer
+          parameters: |
+            version: ${{ toJSON(steps.version.outputs.version) }}
+      - name: Put the signed installer in place
+        if: env.SIGN == 'true'
+        shell: pwsh
+        run: |
+          $name = "TychoSetup-${{ steps.version.outputs.version }}.exe"
+          $signed = "dist\signed-installer\$name"
+          if ((Get-AuthenticodeSignature $signed).Status -ne "Valid") { throw "$name isn't validly signed" }
+          Copy-Item $signed "dist\$name" -Force
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

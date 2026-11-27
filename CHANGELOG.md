@@ -8,6 +8,9 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 
 ## [Unreleased]
 
+### Changed
+- The installer now shows what leaves your PC, in short, before Tycho first starts, and asks whether to add Tycho to your PATH (ticked, as before). The full list is Tycho's new [privacy policy](PRIVACY.md). Getting ready for a signed installer, through SignPath Foundation. ([#9](https://github.com/benshapyro/tycho-ai/issues/9))
+
 ## [0.11.0] - 2026-11-27
 
 ### Added
