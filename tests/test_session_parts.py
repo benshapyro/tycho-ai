@@ -330,3 +330,26 @@ def test_a_follow_up_remembers_what_the_brain_searched_and_showed() -> None:
         'searched the web for "Galaxy loadout"; showed a card on the Tile: Galaxy loadout; '
         "said: Two on the Tile."
     )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "gear's down",
+        "the power's on",
+        "okay, lights\N{RIGHT SINGLE QUOTATION MARK}re on",
+        "he's opening the doors",
+    ],
+)
+def test_words_that_say_how_things_are_go_to_the_brain(text: str) -> None:
+    """A free probe of trick phrasings (27 Nov 2026): "gear's down" and "power's on"
+    were pressed as commands. Where only the toggle is bound, that raises the gear or
+    powers the ship off."""
+    assert isinstance(route(text, MATCHER), ToBrain)
+
+
+@pytest.mark.parametrize(
+    "text", ["gear down", "let's lower the gear", "target whoever's shooting at us"]
+)
+def test_a_request_with_an_apostrophe_still_takes_the_fast_path(text: str) -> None:
+    assert isinstance(route(text, MATCHER), Picked)
