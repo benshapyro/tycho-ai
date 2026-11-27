@@ -412,7 +412,7 @@ class _Run:
         under = column(reading.below(max(word.top + word.height for word in box)), box, reading)
         if reading.has(self.flow.no_results):
             raise _Stop("failed", lines.no_results.format(name=name), "the map found nothing")
-        header = under.find(self.flow.results)
+        header = mapwords.heading(under, self.flow.results)  # or misread (#684)
         if header is None:
             raise _Stop("failed", lines.stuck, "the frame doesn't show the search results")
         listed = under.below(max(word.top + word.height for word in header))
