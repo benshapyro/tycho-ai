@@ -157,7 +157,7 @@ Some "power user" automation requests will be declined by design.
 
 ## Amendment, 27 November 2026: clear a wrong name with the box's x, once
 
-*Status: proposed. On 27 November 2026 the maintainer chose to have Tycho clear a wrong name with the box's x and type it again once ("Yes, clear and retype once", [#682](https://github.com/benshapyro/tycho-ai/issues/682)). This text waits for his OK, because it needs two more clicks, not one: the x, then the box again.*
+*Status: accepted. The maintainer chose clearing on 27 November 2026 ("Yes, clear and retype once", [#682](https://github.com/benshapyro/tycho-ai/issues/682)) and approved this rule, which takes two more clicks (the x, then the box again), the same day ("Approve, merge it").*
 
 **Context.** In the 27 November Pyro test, Tycho sent each letter of "Terminus" once, but the game showed "TERMIINUS" one time and "TERMINNUS" another. Port Tressler had the same problem before that. The cause isn't known, and a slower key rhythm is only a guess. The box also keeps its text after the map closes, so a wrong name blocks the next try too. Backspace can't clear it: some players bind it to dangerous actions, such as the maintainer's Self Destruct.
 
