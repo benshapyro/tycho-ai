@@ -16,8 +16,9 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from concurrent.futures import Executor
 from dataclasses import dataclass, field
 
+from tycho.brain.decisions import Reply
 from tycho.brain.heard import heard
-from tycho.brain.lookups import LookupResult, failure
+from tycho.brain.lookups import HANDED_OVER, ROUTE_DROPPED, LookupResult, failure
 from tycho.eyes.words import Reading
 from tycho.input import Presser
 from tycho.keybinds import Keybinds
@@ -164,8 +165,6 @@ class RouteTool:
 
     name = "plot_route"
     instant = True
-    hands_over = True
-    """Nothing presses after it in the same request (#721): Tycho plots the route."""
 
     def __init__(self, description: str) -> None:
         self.description = description
@@ -185,11 +184,16 @@ class RouteTool:
     async def prepare(self) -> None:
         return None
 
+    def hands_over(self, arguments: Mapping[str, object]) -> bool:
+        """Whether ``run`` takes the place (#721, #728): then nothing presses after it in
+        the same request, as Tycho plots the route. Not for a question or no place."""
+        return bool(_place(arguments)) and not _questioned()
+
     async def run(self, arguments: Mapping[str, object]) -> LookupResult:
-        place = " ".join(str(arguments.get("place", "")).split())[:60]
+        place = _place(arguments)
         if not place:
             return failure("name the place")
-        if (now := heard()) is not None and asks_about(now.said):  # a question (#641)
+        if _questioned():  # a question (#641)
             return LookupResult(json.dumps({"not_plotted": place, "reply": QUESTION}))
         self.place = place
         said = 'Tycho plots it after your reply and says how it went: reply "On it." only'
@@ -198,6 +202,29 @@ class RouteTool:
     def take(self) -> str | None:
         place, self.place = self.place, None
         return place
+
+
+def _place(arguments: Mapping[str, object]) -> str:
+    return " ".join(str(arguments.get("place", "")).split())[:60]
+
+
+def _questioned() -> bool:
+    """Whether the player's words ask about a route rather than for one (#641)."""
+    return (now := heard()) is not None and asks_about(now.said)
+
+
+JOINED = {"and", "then"}
+"""Words that join a route to another request ("take us to Hurston and lower the gear")."""
+REST = "Ask for the rest again."
+"""Said after the route's line when the brain's act for the rest wasn't pressed (#728)."""
+
+
+@dataclass(slots=True)
+class Handed:
+    """Whether the player asked for more than the route ``Plotter.handed`` plotted, which
+    wasn't pressed (#728): the route's line says so."""
+
+    rest: bool = False
 
 
 @dataclass(slots=True)
@@ -228,6 +255,7 @@ class Plotter:
     tool: RouteTool | None = None
     """The brain's way to ask for a route, if the pack gives it one."""
     asking: Asking = field(default_factory=Asking)
+    handing: Handed = field(default_factory=Handed)
     address: Callable[[], str] = lambda: ""
     """What to call the player, at the end of a question (#15)."""
     record: FailedRoute | None = None
@@ -276,13 +304,18 @@ class Plotter:
             log.info("No place called %r: the brain hears the words", said)
         return place if name is not None else None
 
-    def handed(self, plain: bool) -> str | None:
+    def handed[T](self, plain: bool, picked: T, said: str = "") -> tuple[str | None, T | Reply]:
         """The place the brain handed over in this request, if it did and ``plain``: the
         brain looked at nothing, searched nothing and looked nothing up first, so the
         place is the player's words. Otherwise it's dropped: nothing presses after a
-        look (ADR 14), a web search (ADR 15) or a search of past talk."""
+        look (ADR 14), a web search (ADR 15) or a search of past talk. With it, what the
+        brain ``picked``, but never "On it." for a dropped route (#728)."""
         place = self.tool.take() if self.tool is not None else None
-        return place if plain else None
+        refused = picked == Reply(HANDED_OVER)  # an act after the route wasn't pressed
+        if place is None or not plain:
+            return None, Reply(ROUTE_DROPPED) if place and refused else picked
+        self.handing.rest = refused and bool(JOINED & set(normalize(said)))
+        return place, picked
 
     async def answer(
         self,
@@ -300,6 +333,7 @@ class Plotter:
         it, and nothing is pressed."""
         lines = self.route.flow.lines
         progress.commands, progress.by_brain = (ROUTE,), False
+        rest, self.handing.rest = self.handing.rest, False
         if trying:  # setup's Try it: nothing is pressed, and a route can't be shown
             progress.say = lines.trying
             return "refused", "routes aren't plotted in Try it"
@@ -346,5 +380,5 @@ class Plotter:
         )
         plotted = await asyncio.get_running_loop().run_in_executor(keys, run)
         progress.pressed.extend(plotted.pressed)
-        progress.say = plotted.say
+        progress.say = f"{plotted.say} {REST}" if rest and plotted.say else plotted.say
         return plotted.status, plotted.detail

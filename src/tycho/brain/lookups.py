@@ -97,6 +97,26 @@ NO_PRESS_AFTER_RECALL = (
 HANDED_OVER = "On it."
 """The brain's reply for an act after it handed a route over (#721): Tycho plots the
 route and says how it went, so these words are never spoken."""
+ROUTE_DROPPED = "I don't plot a route after a look or a look-up. Ask for the route on its own."
+"""Said instead of ``HANDED_OVER`` when the route was dropped (#728): nothing was done."""
+CUT_SHORT = "That answer ran too long for me. Ask me for part of it."
+"""Said when a reply hit the output limit before it was whole (#266): true whatever was cut."""
+STOPPED = {
+    NO_PRESS_AFTER_SEARCH: "act after a web search; not pressed",
+    NO_PRESS_AFTER_RECALL: "act after a search of past conversations; not pressed",
+    HANDED_OVER: "act after a route hand-over; not pressed",  # #728
+    CUT_SHORT: "cut off at the output limit",
+}
+"""Why a reply stopped, for its trace."""
+
+
+def hands_over(lookup: object, arguments: object) -> bool:
+    """Whether ``lookup`` takes the call to plot a route itself (``RouteTool.hands_over``,
+    #721, #728): then nothing presses after it in the same request."""
+    hands = getattr(lookup, "hands_over", None)
+    return callable(hands) and bool(hands(arguments))
+
+
 RECALLED = "searched past conversations (its words are left out here: never pressed again)"
 """A search of the history in the follow-ups (ADR 14): what it found stays out of them."""
 LOOKED_UP_CHARS = 80

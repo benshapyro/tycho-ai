@@ -38,14 +38,17 @@ from tycho.brain.decisions import (
 )
 from tycho.brain.heard import Heard, hearing
 from tycho.brain.lookups import (
+    CUT_SHORT,
     HANDED_OVER,
     LOOKUP_SECONDS,
     NO_PRESS_AFTER_RECALL,
     NO_PRESS_AFTER_SEARCH,
     RECALLED,
+    STOPPED,
     Lookup,
     LookupResult,
     failure,
+    hands_over,
     looked_up,
     run_lookup,
 )
@@ -83,8 +86,6 @@ CARD_NOTE = (
 )
 """Added to a look-up's results while the Tile is on (#490). The briefing's rule is far
 from the answer: in play, a trade route and a loadout were spoken, numbers and all."""
-CUT_SHORT = "That answer ran too long for me. Ask me for part of it."
-"""Said when a reply hit the output limit before it was whole (#266): true whatever was cut."""
 CUT_OFF = frozenset({"max_tokens", "length"})
 """How each provider says a reply stopped at the output limit (Anthropic, OpenAI's shape)."""
 TOOL_AS_TEXT = re.compile(r"\b[a-z_]{3,}\s*\(\s*\{", re.IGNORECASE)
@@ -220,7 +221,7 @@ class Round:
                 # not to end in an act (#176).
                 turn.looking()
                 self._checking = True
-            turn.handed = turn.handed or bool(getattr(chosen, "hands_over", False))  # #721
+            turn.handed |= hands_over(chosen, arguments)  # #721, #728
             if getattr(chosen, "recalls", False):
                 turn.recalled = True
                 turn.looked_up.append(RECALLED)  # its words stay out of the follow-ups
@@ -358,13 +359,7 @@ async def _traced(traces: TraceFile | None, turn: Turn, deciding: Awaitable[Deci
         trace.failed(e)
         traces.write(trace)
         raise
-    stopped = ""
-    if isinstance(decided, Reply) and decided.text == NO_PRESS_AFTER_SEARCH:
-        stopped = "act after a web search; not pressed"
-    elif isinstance(decided, Reply) and decided.text == NO_PRESS_AFTER_RECALL:
-        stopped = "act after a search of past conversations; not pressed"
-    elif isinstance(decided, Reply) and decided.text == CUT_SHORT:
-        stopped = "cut off at the output limit"
+    stopped = STOPPED.get(decided.text, "") if isinstance(decided, Reply) else ""
     trace.ended(decided, stopped)
     traces.write(trace)
     return decided

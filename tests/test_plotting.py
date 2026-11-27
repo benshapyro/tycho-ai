@@ -18,7 +18,7 @@ from tests.test_runtime import rig, run
 from tycho.brain import Reply
 from tycho.brain.decisions import BrainRequest, Decision
 from tycho.brain.heard import Heard, hearing
-from tycho.brain.lookups import RECALLED
+from tycho.brain.lookups import HANDED_OVER, RECALLED, ROUTE_DROPPED, STOPPED
 from tycho.games import BUILT_IN
 from tycho.games.star_citizen.places import UexPlaces, best_place
 from tycho.input import Presser
@@ -27,7 +27,7 @@ from tycho.packs.routes import PlaceError, Route, read
 from tycho.runtime.conversation import would_speak
 from tycho.runtime.mapwords import map_name
 from tycho.runtime.messages import Progress, Result
-from tycho.runtime.plotting import ROUTE, Plotter, RouteTool, asked_place, placed
+from tycho.runtime.plotting import REST, ROUTE, Plotter, RouteTool, asked_place, placed
 from tycho.situation import Logged, Situation
 from tycho.start.assemble import system_of
 
@@ -546,7 +546,7 @@ def test_a_new_request_drops_a_place_handed_over_earlier() -> None:
     plotter = _plotter(Game(), tool=tool)
     asyncio.run(tool.run({"place": "Levski"}))
     assert plotter.asked("landing gear") is None
-    assert plotter.handed(plain=True) is None
+    assert plotter.handed(True, None) == (None, None)
 
 
 def test_a_place_no_list_has_goes_to_the_brain_when_there_is_one() -> None:
@@ -604,8 +604,14 @@ def test_a_route_table_without_a_tool_gives_the_brain_none() -> None:
 class HandingBrain(FakeBrain):
     """A brain that calls ``plot_route`` with ``place``, then replies as if it plotted."""
 
-    def __init__(self, tool: RouteTool, place: str, looked_up: tuple[str, ...] = ()) -> None:
-        super().__init__(Reply("Plotting a route to Levski.", looked_up=looked_up))
+    def __init__(
+        self,
+        tool: RouteTool,
+        place: str,
+        looked_up: tuple[str, ...] = (),
+        reply: str = "Plotting a route to Levski.",
+    ) -> None:
+        super().__init__(Reply(reply, looked_up=looked_up))
         self.tool, self.place = tool, place
 
     async def decide(self, request: BrainRequest) -> Decision:
@@ -613,11 +619,13 @@ class HandingBrain(FakeBrain):
         return await super().decide(request)
 
 
-def _handed(said: str, place: str, *looked_up: str) -> tuple[Result | None, Game]:
+def _handed(
+    said: str, place: str, *looked_up: str, reply: str = "Plotting a route to Levski."
+) -> tuple[Result | None, Game]:
     game, tool = Game(), RouteTool("Plot a route.")
 
     async def scenario() -> Result | None:
-        brain = HandingBrain(tool, place, looked_up)
+        brain = HandingBrain(tool, place, looked_up, reply)
         r = rig(said, plotter=_plotter(game, tool=tool, brain=True), brain=brain)
         r.say()
         result = await r.session.idle()
@@ -636,6 +644,27 @@ def test_a_place_the_brain_hands_over_is_plotted_and_tycho_says_how_it_went() ->
         LINES.done.format(name="Levski"),
     )
     assert game.route_id == "levski_all-001"
+
+
+@pytest.mark.parametrize(
+    ("said", "rest"),
+    [("take us to Levski and lower the gear", True), ("take us to Levski", False)],
+)
+def test_a_route_says_when_the_rest_of_the_request_wasnt_done(said: str, rest: bool) -> None:
+    """#728: the brain's act after ``plot_route`` isn't pressed (#721), so when the player
+    asked for more, the route's line asks for the rest again."""
+    result, game = _handed(said, "Levski", reply=HANDED_OVER)
+    assert result is not None
+    done = LINES.done.format(name="Levski")
+    assert (result.status, result.say) == ("done", f"{done} {REST}" if rest else done)
+    assert game.route_id == "levski_all-001"
+
+
+def test_a_route_dropped_after_a_look_up_says_so() -> None:
+    result, game = _handed("take me where we went yesterday", "Levski", RECALLED, reply=HANDED_OVER)
+    assert result is not None
+    assert (result.status, result.say) == ("replied", ROUTE_DROPPED)
+    assert not game.nav
 
 
 def test_a_phrase_with_a_place_no_list_has_goes_to_the_brain() -> None:
@@ -671,8 +700,42 @@ def test_after_a_look_the_place_is_dropped() -> None:
     tool = RouteTool("Plot a route.")
     plotter = _plotter(Game(), tool=tool)
     asyncio.run(tool.run({"place": "Levski"}))
-    assert plotter.handed(plain=False) is None
-    assert plotter.handed(plain=True) is None  # dropped, not kept for later
+    assert plotter.handed(False, None) == (None, None)
+    assert plotter.handed(True, None) == (None, None)  # dropped, not kept for later
+
+
+def test_a_dropped_route_is_never_on_it() -> None:
+    """#728: "On it." after a route that was dropped would promise what isn't done."""
+    tool = RouteTool("Plot a route.")
+    plotter = _plotter(Game(), tool=tool)
+    asyncio.run(tool.run({"place": "Levski"}))
+    assert plotter.handed(False, Reply(HANDED_OVER)) == (None, Reply(ROUTE_DROPPED))
+    other = Reply("Laranite sells best at Levski.")
+    asyncio.run(tool.run({"place": "Levski"}))
+    assert plotter.handed(False, other) == (None, other)  # the brain's own answer stays
+
+
+@pytest.mark.parametrize(
+    ("said", "place", "hands"),
+    [
+        ("take us to Ruin Station", "Ruin Station", True),
+        ("what's the best route to Levski?", "Levski", False),  # a question (#641)
+        ("take us there", "  ", False),  # no place: "name the place"
+    ],
+)
+def test_the_route_tool_hands_over_only_a_place_it_takes(
+    said: str, place: str, hands: bool
+) -> None:
+    """#728: only a call that really takes a place stops the acts after it."""
+    tool = RouteTool("Plot a route.")
+    with hearing(Heard(said)):
+        assert tool.hands_over({"place": place}) is hands
+        asyncio.run(tool.run({"place": place}))
+    assert (tool.take() is not None) is hands
+
+
+def test_a_trace_says_why_nothing_was_pressed_after_a_route() -> None:
+    assert STOPPED[HANDED_OVER] == "act after a route hand-over; not pressed"  # #728
 
 
 # --- A guessed place is asked about first (#650) ------------------------------------------

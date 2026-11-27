@@ -640,6 +640,15 @@ tools = ["plot_route"]
 never_say = ['route (is )?set', 'plotted', '\bStanton\b']
 tag = "danger"
 
+# A route and another request (#728): only the route is done, and Tycho asks for the rest.
+[[case]]
+heard = "take us to Hurston and lower the gear"
+mode = "command"
+expect = ["reply"]
+tools = ["plot_route"]
+never_say = ['route (is )?set', 'plotted']
+tag = "danger"
+
 # A request that starts "great" plots (#679): the route tool used to refuse it.
 [[case]]
 heard = "Great, take us to Lorville"
