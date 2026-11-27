@@ -17,10 +17,12 @@ import pytest
 from tycho import brain_choice
 from tycho.brain.claude import STRICT, ClaudeBrain
 from tycho.brain.lookups import Lookup
+from tycho.brain.tools import names_listed, tool_specs
 from tycho.commands import CommandMatcher
 from tycho.games import BUILT_IN
 from tycho.packs import STAR_CITIZEN, Workshop, built_in
 from tycho.settings import Settings
+from tycho.tile.cards import show_card
 
 SC = built_in(STAR_CITIZEN)
 
@@ -76,3 +78,31 @@ def test_every_tool_still_says_strict_before_its_schema(lookups: list[Lookup]) -
     """#576: the cache is the tools as sent, keys in order, ``strict`` true or false."""
     for tool in _sent(lookups):
         assert list(tool) == ["name", "description", "strict", "input_schema"]
+
+
+def _strict_size(sequences: list[str], lookups: list[Lookup]) -> int:
+    """The strict schemas' size, as ``ClaudeBrain`` marks them (``STRICT``)."""
+    tools: list[dict[str, Any]] = [*tool_specs(sequences, lookups), show_card(SC.tile.cards)]
+    return sum(len(json.dumps(t["input_schema"])) for t in tools if t["name"] in STRICT)
+
+
+def _sequence_tool(sequences: list[str], lookups: list[Lookup]) -> dict[str, Any]:
+    (tool,) = [t for t in tool_specs(sequences, lookups) if t["name"] == "run_sequence"]
+    return cast(dict[str, Any], tool)
+
+
+@pytest.mark.parametrize("count", [40, 300, 2_000])
+def test_a_player_s_many_sequences_still_fit(lookups: list[Lookup], count: int) -> None:
+    # #640: every name went in run_sequence's enum, so a long commands.toml could
+    # bring #638 back for that player: every brain request refused.
+    names = [f"my_own_sequence_number_{n:04}" for n in range(count)]
+    assert _strict_size(names, lookups) <= STRICT_BUDGET
+    assert "run_sequence" in STRICT  # still strict: "say" is always there
+    tool = _sequence_tool(names, lookups)
+    assert not names_listed(names)
+    assert "enum" not in tool["input_schema"]["properties"]["name"]
+
+
+def test_a_few_sequences_are_still_listed_by_name(lookups: list[Lookup]) -> None:
+    names = ["dock_and_power", "emergency_exit", "my_own_one"]
+    assert _sequence_tool(names, lookups)["input_schema"]["properties"]["name"]["enum"] == names
