@@ -377,8 +377,7 @@ class _Run:
     def _typed_in(
         self, box: tuple[Word, ...], reading: Reading, risky: str
     ) -> tuple[Reading | None, mappicks.Line]:
-        """Click the box and type the name; the frame after, and the exact row in it if
-        any. No frame when the box doesn't show the name (a letter doubled or lost)."""
+        """Click the box, type the name: the frame after, and its exact row; None if wrong."""
         flow, lines, name = self.flow, self.flow.lines, self.place.name
         self._click(reading, middle(box), "the search box")
         after = self._fresh()  # a box with the keys drops its empty words (26 Nov 2026)
@@ -401,22 +400,23 @@ class _Run:
         whole = mapwords.as_long(boxed, name, flow)  # "LEVKI": a letter lost, maybe to the game
         pick = mappicks.exact(typed, box, flow, name, self.place.system) if whole else None
         if pick is None and not mapwords.shows_alike(boxed, name, flow):
+            self.pressed[-1] = f"typed {name}"  # every key went out (review of #734)
             return None, None
         return typed, pick
 
     def _cleared(
         self, reading: Reading | None, box: tuple[Word, ...], said: str | None
     ) -> tuple[tuple[Word, ...], Reading]:
-        """Click the box's own x to empty it, once a request (Ben, 27 Nov 2026): then the
-        box and the frame that shows its empty words. ``said``: the line if it can't."""
-        said = said or self.flow.lines.mistyped.format(name=self.place.name)
-        spot = mapwords.close_spot(reading, box, self.flow) if reading and box else None
+        """Empty the box with its own x, once a request (Ben, 27 Nov 2026); ``said`` if not."""
+        where = mapwords.read_x if said else mapwords.close_spot  # the offset is from the
+        spot = where(reading, box, self.flow) if reading and box else None  # empty words
         if self.cleared or spot is None or reading is None:
+            said = said or self.flow.lines.mistyped.format(name=self.place.name)
             raise _Stop("failed", said, "the search box holds the wrong text")
         self.cleared = True
         self._click(reading, spot, "the search box's x, to clear it")
         if (empty := (now := self._fresh()).find(self.flow.search_box)) is None:
-            raise _Stop("failed", said, "the search box's x didn't empty it")
+            raise _Stop("failed", self.flow.lines.not_cleared, "the box's x didn't empty it")
         return empty, now
 
     def _enter(self, enter: Press, box: tuple[Word, ...]) -> None:

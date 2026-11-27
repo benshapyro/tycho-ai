@@ -154,16 +154,23 @@ def map_name(name: str) -> str:
     return SYSTEM_SUFFIX.sub("", name).strip() or name
 
 
+def read_x(reading: Reading, box: tuple[Word, ...], flow: RouteFlow) -> tuple[int, int] | None:
+    """The x read on the box's line, right of its words; None if none is read."""
+    said = {mark.lower() for mark in flow.close_marks}
+    right = max(word.right for word in box)
+    line = [w for w in row(reading, box).words if w.text.strip().lower() in said]
+    marks = [w for w in line if w.left > right]
+    return min(marks, key=lambda word: word.left).middle if marks else None
+
+
 def close_spot(reading: Reading, box: tuple[Word, ...], flow: RouteFlow) -> tuple[int, int] | None:
     """The search panel's close button: the x read on the box's line right of where its
     words were (there once the box has the keys, 26 Nov 2026), or where the pack's offset
     puts it from the box, if text recognition agrees (the offset was measured at
     2560x1440; on a 5120x2160 screen the x sat nearer). None if neither."""
+    if (read := read_x(reading, box, flow)) is not None:
+        return read
     said = {mark.lower() for mark in flow.close_marks}
-    right = max(word.right for word in box)
-    line = [w for w in row(reading, box).words if w.text.strip().lower() in said]
-    if marks := [w for w in line if w.left > right]:
-        return min(marks, key=lambda word: word.left).middle
     height, (x, y) = reading.height, middle(box)
     spot = (round(x + flow.close_offset[0] * height), round(y + flow.close_offset[1] * height))
     reach = flow.close_reach * height

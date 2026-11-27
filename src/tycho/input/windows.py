@@ -131,7 +131,7 @@ class WindowsKeySender:
 
 class WindowsClicker:
     """One left click on the game window, at a spot in a frame the check just read (ADR
-    3's amendments for #588). Satisfies ``runtime.route.Clicker``. Blocking: call it on
+    3's amendments for #588). Satisfies ``runtime.mapports.Clicker``. Blocking: call it on
     the key thread.
 
     It clicks only if ``window`` is the window in front and is exactly the size of the

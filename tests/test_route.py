@@ -153,6 +153,7 @@ class Game:
     """Letters the game types twice, each once, as it did "TERMIINUS" (27 Nov 2026)."""
     kept: str = ""
     """A name the box still holds when the map opens; its x empties it (27 Nov 2026)."""
+    x_clears: bool = True
 
     def __post_init__(self) -> None:
         if self.route_id:
@@ -215,7 +216,7 @@ class Game:
             if self.rows and not self.entered and 0 <= at < len(self.rows):
                 self.clicked_row, self.entered, self.picked = at, True, True
                 self.box_has_keys = self.rows[at] != self.typed.upper()  # another row: no
-            if on_x and self.typed and not self.entered:  # the box's x empties it
+            if on_x and self.typed and not self.entered and self.x_clears:  # its x empties it
                 self.typed = self.kept = ""
             if on_name or on_x:  # a click outside the box gives the keys back to the map
                 self.box_has_keys = False
@@ -516,7 +517,7 @@ def _box_holding(text: str, *under: str) -> Reading:
     return Reading(WIDTH, HEIGHT, tuple(words), 7)
 
 
-def test_a_map_open_with_an_old_name_in_its_box_is_left_alone() -> None:
+def test_an_open_map_with_an_old_name_and_no_readable_x_says_so() -> None:
     game = Game(kept="levsski", shows_x=False, map_open=True)  # no x read to clear it
     game.typed = game.kept
     done = _plot(game)
@@ -563,6 +564,22 @@ def test_an_old_name_in_the_box_is_cleared_first() -> None:
     done = _plot(game)
     assert (done.status, done.say) == ("done", "Route set to Levski.")
     assert game.clicks == [CLOSE, BOX_MIDDLE, CLOSE]
+
+
+def test_an_x_that_doesnt_empty_the_box_ends_it() -> None:
+    game = Game(doubles="s", x_clears=False)  # review of #734
+    done = _plot(game)
+    assert (done.status, done.say) == ("failed", LINES.not_cleared)
+    assert game.clicks == [BOX_MIDDLE, CLOSE]
+    assert game.typed == "levsski"
+
+
+def test_an_old_name_then_a_doubled_letter_clears_only_once() -> None:
+    game = Game(kept="levsski", doubles="s")  # review of #734
+    done = _plot(game)
+    assert (done.status, done.say) == ("failed", LINES.mistyped.format(name="Levski"))
+    assert game.clicks == [CLOSE, BOX_MIDDLE]
+    assert "typed Levski" in done.pressed
 
 
 def test_an_old_name_without_a_readable_x_is_left_for_the_player() -> None:
