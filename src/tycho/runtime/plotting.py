@@ -164,6 +164,8 @@ class RouteTool:
 
     name = "plot_route"
     instant = True
+    hands_over = True
+    """Nothing presses after it in the same request (#721): Tycho plots the route."""
 
     def __init__(self, description: str) -> None:
         self.description = description

@@ -88,6 +88,15 @@ async def run_lookup(
         return failure(f"the look-up failed ({type(e).__name__}); answer without it")
 
 
+NO_PRESS_AFTER_SEARCH = (
+    "I looked that up online, so I won't press anything for it. Say the command again."
+)
+NO_PRESS_AFTER_RECALL = (
+    "That's from an earlier talk, so I won't press it again. Ask for it now if you want it."
+)
+HANDED_OVER = "On it."
+"""The brain's reply for an act after it handed a route over (#721): Tycho plots the
+route and says how it went, so these words are never spoken."""
 RECALLED = "searched past conversations (its words are left out here: never pressed again)"
 """A search of the history in the follow-ups (ADR 14): what it found stays out of them."""
 LOOKED_UP_CHARS = 80

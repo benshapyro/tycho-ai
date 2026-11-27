@@ -1973,3 +1973,24 @@ def test_claudes_card_tool_keeps_its_keys_in_the_cached_order() -> None:
     asyncio.run(brain.decide(BrainRequest("hi", KEYBINDS)))
     card = next(t for t in client.requests[0]["tools"] if t["name"] == "show_card")
     assert list(card) == ["name", "description", "strict", "input_schema"]
+
+
+def test_nothing_is_pressed_after_a_place_is_handed_to_the_route_tool() -> None:
+    """#721: "take us to Ruin Station" handed the place over, then pressed flight ready
+    and asked ATC for clearance. Tycho plots the route after the reply, so nothing else
+    is pressed, in the next reply or the same one."""
+    from tycho.brain.lookups import HANDED_OVER
+    from tycho.runtime.plotting import RouteTool
+
+    act = _tool_stop("run_actions", {"actions": ["v_toggle_landing_system"], "say": "Go."})
+    plot = _tool_stop("plot_route", {"place": "Ruin Station"}, "toolu_0")
+    waits = SimpleNamespace(
+        content=[plot.content_block], stop_reason="tool_use", usage=_final("").usage
+    )
+    request = BrainRequest("take us to Ruin Station", KEYBINDS)
+    for calls in (_Calls(([plot], waits), ([act], None)), _Calls(([plot, act], None))):
+        route = RouteTool("Plot a route.")
+        lookups = cast(Any, (route,))
+        brain = ClaudeBrain(MATCHER, client=cast(Any, calls), lookups=lookups, pack=SC)
+        assert asyncio.run(brain.decide(request)) == Reply(HANDED_OVER)
+        assert route.take() == "Ruin Station"  # still plotted, by Tycho

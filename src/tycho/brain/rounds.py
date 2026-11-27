@@ -8,7 +8,7 @@ only read their own provider's stream and say when a tool call is complete, so:
 - only the first act in a reply is pressed;
 - a fleet or settings note (``instant``) in the same reply as an act finishes first,
   for up to ``INSTANT_SECONDS``;
-- nothing presses after a web search or a search of past talk (``unpressed``, ADR 14);
+- nothing presses after a web search, a search of past talk or a route (``unpressed``);
 - words that don't ask for the act are answered, never pressed (``unasked``, #708);
 - "Checking." is said only once a reply with look-ups is known not to end in a press.
 
@@ -38,7 +38,10 @@ from tycho.brain.decisions import (
 )
 from tycho.brain.heard import Heard, hearing
 from tycho.brain.lookups import (
+    HANDED_OVER,
     LOOKUP_SECONDS,
+    NO_PRESS_AFTER_RECALL,
+    NO_PRESS_AFTER_SEARCH,
     RECALLED,
     Lookup,
     LookupResult,
@@ -55,12 +58,6 @@ log = logging.getLogger(__name__)
 
 MAX_CALLS = 3
 """Calls to the model per request: up to two rounds of look-ups, then the answer (ADR 15)."""
-NO_PRESS_AFTER_SEARCH = (
-    "I looked that up online, so I won't press anything for it. Say the command again."
-)
-NO_PRESS_AFTER_RECALL = (
-    "That's from an earlier talk, so I won't press it again. Ask for it now if you want it."
-)
 ACTS = frozenset({"run_actions", "run_sequence", "show_card"})
 INSTANT_SECONDS = 1.0
 """How long an act waits for a fleet or settings note from the same reply."""
@@ -124,6 +121,7 @@ class Turn:
     """Called as each call's stream starts: the cache was read, even if it's cut off (#540)."""
     heard: Heard | None = None  # what the player said, for the memory tool (ADR 8)
     recalled: bool = False  # searched past conversations: nothing presses (ADR 14, #484)
+    handed: bool = False  # a place went to the route tool (``hands_over``): nothing presses
 
     @classmethod
     def of(cls, request: BrainRequest, answering: Callable[[], None] | None = None) -> Turn:
@@ -222,6 +220,7 @@ class Round:
                 # not to end in an act (#176).
                 turn.looking()
                 self._checking = True
+            turn.handed = turn.handed or bool(getattr(chosen, "hands_over", False))  # #721
             if getattr(chosen, "recalls", False):
                 turn.recalled = True
                 turn.looked_up.append(RECALLED)  # its words stay out of the follow-ups
@@ -372,11 +371,12 @@ async def _traced(traces: TraceFile | None, turn: Turn, deciding: Awaitable[Deci
 
 
 def unpressed(turn: Turn, decided: Decision) -> Reply | None:
-    """Said instead of an act after a web search, or a search of past talk (ADR 14)."""
-    if isinstance(decided, Reply) or not (turn.searched or turn.recalled):
+    """Said instead of an act after a web search, a search of past talk or a route (#721)."""
+    if isinstance(decided, Reply) or not (turn.searched or turn.recalled or turn.handed):
         return None
-    log.warning("The brain chose to act after a search; not pressing")
-    return Reply(NO_PRESS_AFTER_SEARCH if turn.searched else NO_PRESS_AFTER_RECALL)
+    log.warning("The brain chose to act after a search or a route; not pressing")
+    stopped = NO_PRESS_AFTER_SEARCH if turn.searched else NO_PRESS_AFTER_RECALL
+    return Reply(stopped if turn.searched or turn.recalled else HANDED_OVER)
 
 
 def noted(decided: Decision, turn: Turn) -> Decision:

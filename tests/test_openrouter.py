@@ -584,3 +584,31 @@ def test_nothing_is_pressed_after_a_search_of_past_conversations() -> None:
         ]
     )
     assert asyncio.run(_brain(both, past).decide(request)) == Reply(NO_PRESS_AFTER_RECALL)
+
+
+def test_nothing_is_pressed_after_a_place_is_handed_to_the_route_tool() -> None:
+    """#721, as for Claude: Tycho plots the route after the reply, so an act after
+    ``plot_route`` is never pressed."""
+    from typing import cast
+
+    from tycho.brain.lookups import HANDED_OVER
+    from tycho.runtime.plotting import RouteTool
+
+    request = BrainRequest("take us to Ruin Station", KEYBINDS)
+    place = {"place": "Ruin Station"}
+    later = FakeChat(
+        [*tool_call("plot_route", place), *finished()],
+        tool_call("run_actions", GEAR, use_id="call_2"),
+    )
+    route = RouteTool("Plot a route.")
+    assert asyncio.run(_brain(later, cast(FakeLookup, route)).decide(request)) == Reply(HANDED_OVER)
+    assert route.take() == "Ruin Station"
+    both = FakeChat(
+        [
+            *tool_call("plot_route", place),
+            *tool_call("run_actions", GEAR, use_id="call_2", index=1),
+            *finished(),
+        ]
+    )
+    route = RouteTool("Plot a route.")
+    assert asyncio.run(_brain(both, cast(FakeLookup, route)).decide(request)) == Reply(HANDED_OVER)
