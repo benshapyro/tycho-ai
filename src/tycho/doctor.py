@@ -17,6 +17,7 @@ import numpy as np
 
 from tycho import __version__, crashes, paths, settings, updates
 from tycho.audio.source import AudioError, microphone_device
+from tycho.brain.tools import names_listed
 from tycho.brain_choice import brain_findings
 from tycho.commands import CommandFileError, CommandMatcher
 from tycho.findings import TYCHO, Finding, key_finding
@@ -45,6 +46,11 @@ UNKNOWN_SETTING = (
     "{name} in settings.toml isn't a setting this Tycho knows, so it's ignored. It may be a "
     "typo, or from a newer Tycho."
 )
+TOO_MANY_SEQUENCES = (
+    "you have a lot of sequences, so Tycho picks one by its name alone. A name it gets "
+    "wrong presses nothing; shorter names or fewer sequences help."
+)
+"""When the player's sequences are too many to list in the brain's tool (#640)."""
 
 
 def key_actions_finding(pack: GamePack) -> Finding:
@@ -165,6 +171,8 @@ def checks(current: Settings, quick: bool, ask: bool = True) -> Iterator[Finding
             yield Finding("ok", "Your commands", f"{counts}, with yours from {commands_file}")
             for warning in matcher.warnings:
                 yield Finding("warn", "Your commands", warning)
+            if not names_listed([c.id for c in matcher.commands if c.is_sequence]):
+                yield Finding("warn", "Your commands", TOO_MANY_SEQUENCES)  # #640
         else:
             yield Finding("ok", "Commands", f"{counts}; add your own in {commands_file}")
 

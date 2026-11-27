@@ -743,3 +743,21 @@ def test_bind_doesnt_take_the_second_button_as_the_first(
     assert "joystick button 4 is your second push-to-talk button" in capsys.readouterr().out
     assert settings.load().push_to_talk == "mouse:0x05"
     assert settings.load().push_to_talk_2 == stick
+
+
+def test_check_says_when_there_are_too_many_sequences_to_list(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # #640: past brain.tools.NAMES_BUDGET, run_sequence stops listing the names.
+    monkeypatch.setenv("TYCHO_CONFIG_DIR", str(tmp_path))
+    one = (
+        '[[sequence]]\nid = "my_own_sequence_{n}"\nsay = ["my own {n}"]\nsteps = ["flight_ready"]\n'
+    )
+    (tmp_path / "commands.toml").write_text("".join(one.format(n=n) for n in range(60)), "utf-8")
+    details: list[str] = []
+    for finding in doctor.checks(settings.load(), quick=True):
+        if finding.what == "Your commands":
+            details.append(finding.detail)
+        elif details:
+            break
+    assert doctor.TOO_MANY_SEQUENCES in details

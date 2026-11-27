@@ -29,6 +29,8 @@ Each version's full notes, with examples, are on its [GitHub release](https://gi
 - Tycho offers "Want me to take a look?" only when your screen could show the answer. For something only a menu shows, like a loadout, it says which screen to open first. ([#566](https://github.com/benshapyro/tycho-ai/issues/566))
 
 ### Fixed
+- "Great, take us to Lorville", "another route to Levski" and "how about a route to Levski" plot the route again: only a question ("what's the fastest route to Pyro", "any route to Pyro?") is answered instead. ([#679](https://github.com/benshapyro/tycho-ai/issues/679))
+- A `commands.toml` with a great many of your own sequences no longer stops the brain answering at all: past a size, Tycho picks a sequence by its name alone, and `tycho check` says so. ([#640](https://github.com/benshapyro/tycho-ai/issues/640))
 - While Tycho plots a route, its clicks on the star map now wait for you to let go of Shift, Ctrl or Alt, as its key presses already did, so the map never gets Ctrl + click. And when Tycho refuses a press because another action shares its key, it names that action in words, not its id from the game's files. ([#678](https://github.com/benshapyro/tycho-ai/issues/678))
 - Plotting a route picks the place in your own system even when a place of another kind elsewhere has the same name, and still finds the search results when the map's "ALL RESULTS" heading is misread. ([#684](https://github.com/benshapyro/tycho-ai/issues/684))
 - Asking for the best price puts prices checked in the last day first: a price that is over a day old now comes after the fresh ones, even if it looks better. ([#688](https://github.com/benshapyro/tycho-ai/issues/688))
