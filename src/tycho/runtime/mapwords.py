@@ -234,6 +234,28 @@ _COMMON = frozenset({"the", "of", "on", "at", "station", "port", "city", "outpos
 """Words in a place's name too common to tell the route line's id it's this place."""
 
 
+def open_map(reading: Reading, flow: RouteFlow) -> bool:
+    """The map's search panel shows: its box's empty words, RECENT or RESULTS."""
+    words = (flow.search_box, flow.recent, flow.results)
+    return any(word and reading.has(word) for word in words)
+
+
+def leftover(reading: Reading, flow: RouteFlow) -> bool:
+    """The search panel shows results ("NO RESULTS" too) with no empty words in the box:
+    the box still holds an earlier name ("TERMINNUS", Ben's Pyro tries, 27 Nov 2026).
+    Typing would add to it, and the map's key can't clear it."""
+    shown = reading.has(flow.results) and not reading.has(flow.recent)  # RECENT: empty
+    return shown and not reading.has(flow.search_box)
+
+
+def as_long(reading: Reading, name: str, flow: RouteFlow) -> bool:
+    """The box's line holds at least as many letters as ``name``: read wrong, maybe
+    ("TERMINI-JS"), but none dropped, which could have reached the game (#654)."""
+    marks = {mark.lower() for mark in flow.close_marks}
+    said = "".join(w.text for w in reading.words if w.text.strip().lower() not in marks)
+    return len(squeezed(said).replace(" ", "")) >= len(squeezed(name).replace(" ", ""))
+
+
 def id_names(route_id: str, name: str) -> bool:
     """Whether the log's route id ("levski_all-001") names the place ("Levski"): one of
     the name's own words (not ``_COMMON``, at least 3 letters) is one of the id's.

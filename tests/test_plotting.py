@@ -412,6 +412,8 @@ def test_uex_places_name_a_route_id_by_its_first_word() -> None:
     assert places.name_of("lorville_city-001") == "Lorville"
     assert places.name_of("area18_all-002") == "Area 18"
     assert places.name_of("rs_ext_pyro3_leo") is None
+    assert places.name_of("pyro3") == "Bloom"  # Ben's Pyro try, 27 Nov 2026
+    assert places.name_of("pyro6") == "Terminus"
 
 
 def test_a_place_whose_name_starts_with_a_filler_word_still_matches() -> None:
@@ -435,6 +437,7 @@ SPACE = [
     {"poi_name": "Lazarus Complex"},
     {"moon_name": "Arial", "planet_name": "Hurston"},
     {"moon_name": "Aberdeen", "planet_name": "Hurston"},
+    {"outpost_name": "Shepherd's Rest", "planet_name": "Bloom"},
 ]
 
 
@@ -453,6 +456,8 @@ SPACE = [
         ("port tresler", "Port Tressler"),
         ("Ariel", "Arial"),  # Ben's PC try, 26 Nov 2026 (#682)
         ("aryal", "Arial"),
+        ("blum", "Bloom"),  # Ben's Pyro try, 27 Nov 2026
+        ("blim", None),  # four letters only when they sound the same
         ("sell gold", None),
         ("lev", None),
     ],

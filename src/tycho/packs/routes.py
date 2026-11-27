@@ -74,6 +74,12 @@ class RouteLines:
     elsewhere: str = "The map can't plot a route to {name} from where you are."
     """Said for a place the player put somewhere the map doesn't reach (``Route.away``)."""
     not_typed: str = "The map's search box didn't take what I typed, so I left the map open."
+    mistyped: str = "The search box shows {name} wrong. Clear it with its x, then ask again."
+    """Said when the box shows the name wrong after typing ("TERMINNUS", 27 Nov 2026)."""
+    box_full: str = (
+        "The map's search box still has text in it. Clear it with its x, then ask again."
+    )
+    """Said when the box holds an earlier name, which typing would add to (27 Nov 2026)."""
     risky_first: str = "I can't type {name}: its first letter is your {action} key."
     """Said when the name's first letter, typed before Tycho can see the box took the
     keys, would press a confirm-grade action (#682)."""

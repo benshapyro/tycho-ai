@@ -11,26 +11,20 @@ The flow, as the pack declares it (``RouteFlow``):
 3. once the box sits still in two looks ``settle_seconds`` apart (the map has finished
    opening), click it, in the later frame (the first click), and wait ``click_seconds``;
 4. check the map is still open: the box's empty words, or the list a box with the keys
-   shows under it (it drops them, 26 Nov 2026); else nothing is typed. Type the name,
-   letter by letter: after the first (the only one on a risky key's letter typed before
-   the box shows it took keys, #682), the empty words must be gone and a letter on the
-   box's line or the RECENT list gone, and after the last, the box's own line must
-   show the name, before Enter (``enter``) is pressed (#654: letters that didn't land
-   could reach the game);
+   shows under it; else nothing is typed. A risky first letter waits for the box to show
+   it has the keys (#682). Type the name: the first letter must land, and after the last
+   the box's line must show the name, or the exact row be listed (#654, #682);
 5. the row that is exactly the place under the results, in the player's system's
    section, if one is read: that's the second click, instead of Enter (#682). Else Enter,
-   then read a fresh frame: the RESULTS header under the box, and the chosen place under it
-   in the panel's column (a RECENT list doesn't count, #654);
-   or, as Enter can open it straight away (Ben's PC try, 26 Nov 2026), the place's own
-   panel: its name as a line of its own just under the box; or, when Enter emptied the
-   box (its empty words back), the place under RECENT (Orison, 26 Nov 2026);
+   then a fresh frame: the place under RESULTS in the panel's column (not RECENT, #654),
+   or its own panel's name just under the box, or under RECENT once Enter emptied it;
 6. the second, last click, to take the keys from the box: on that place's name (Ben: it
    only needs a click outside the search bar, which also leaves the place chosen), else
    on the results panel's close button, read on the box's line or found by the pack's
    offset, and only if text recognition agrees something is there;
 7. wait while the panel works out the fuel (``calculating``, #682: R does nothing then),
    then clear the route (``clear``) if one is set, then plot (``plot``);
-8. wait for the log's route line, and check its id names the chosen place;
+8. wait for the log's route line, and check its id names the place (pyro3 is Bloom);
 9. close the map (``close_map``).
 
 Every key goes through the safety gate (``plan_request``), so with key actions off, or a
@@ -219,7 +213,8 @@ class _Run:
         self.opened = True
         box, reading = self._map_open(mark)
         if box is None:
-            raise _Stop("failed", lines.no_map, "no frame showed the map's search box")
+            said = lines.box_full if mapwords.leftover(reading, flow) else lines.no_map
+            raise _Stop("failed", said, "no frame showed the map's search box")
         if not self._seated(mark):
             self._press(presses[flow.close_map])
             raise _Stop("refused", lines.on_foot, "the log shows no pilot's seat")
@@ -241,11 +236,14 @@ class _Run:
             raise _Stop("failed", lines.not_typed, "the search box didn't take the first letter")
         self._type_rest(name, box)
         self._wait(flow.beat_seconds)
-        if not mapwords.shows_alike(row(typed := self._fresh(), box), name, flow):  # ORBITUARV
-            raise _Stop("failed", lines.not_typed, "the search box doesn't show the name")
+        boxed = row(typed := self._fresh(), box)  # the exact row passes "TERMINI-JS" (27 Nov)
+        whole = mapwords.as_long(boxed, name, flow)  # "LEVKI": a letter lost, maybe to the game
+        pick = mappicks.exact(typed, box, flow, name, self.place.system) if whole else None
+        if pick is None and not mapwords.shows_alike(boxed, name, flow):
+            said = lines.mistyped.format(name=name)
+            raise _Stop("failed", said, "the search box doesn't show the name")
         self.pressed[-1] = f"typed {name}"
-        place, system = self.place.name, self.place.system
-        if (pick := mappicks.exact(typed, box, flow, place, system)) is not None:  # #682
+        if pick is not None:  # #682
             self._click(typed, middle(pick), "the place's name in the results")
         else:
             self._enter(presses[flow.enter], box)
@@ -261,7 +259,7 @@ class _Run:
         route = self._route_line(mark)
         if route is None:
             raise _Stop("failed", lines.no_route.format(name=name), "no route line in the log")
-        if not id_names(route.name, name):
+        if not id_names(route.name, name) and squeezed(name_of(route.name) or "") != squeezed(name):
             detail = f"the log's route is to {route.name}"
             raise _Stop("failed", lines.other_place.format(name=name), detail)
         self._press(presses[flow.close_map])
@@ -393,13 +391,15 @@ class _Run:
         raise _Stop("failed", flow.lines.no_map, "the map's search box didn't sit still")
 
     def _open_already(self) -> bool:
-        """The map is open before its key is pressed: its search panel's words show."""
-        words = (self.flow.search_box, self.flow.recent, self.flow.results)
+        """The map is open before its key is pressed: its search panel's words show. One
+        whose box still holds text (Ben's Terminus tries, 27 Nov 2026) can't be typed in."""
         try:  # no frame: a closed map, which its key opens as ever
             reading = self.last = self.reader.read()
         except CaptureError:
             return False
-        return any(word and reading.has(word) for word in words)
+        if mapwords.leftover(reading, self.flow):
+            raise _Stop("refused", self.flow.lines.box_full, "the search box holds text")
+        return mapwords.open_map(reading, self.flow)
 
     def _seated(self, mark: int) -> bool:
         if self.flow.route_set in self.log.facts():
@@ -490,7 +490,7 @@ class _Run:
             self._wait(self.flow.read_every)
 
 
-_KEY_GAP = 0.03
+_KEY_GAP = 0.1
 """Between one letter's key coming up and the next one's going down."""
 _CALCULATING_STARTS = 1.0
 """How long after the pick the panel may take to start working out the fuel."""

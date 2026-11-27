@@ -72,6 +72,8 @@ class UexPlaces:
         first = re.split(r"[^a-z0-9]+", route_id.lower())[0]
         if not first:
             return None
+        if body := BODIES.get(route_id.lower()):  # "pyro3" is Bloom (Ben's Pyro try, #682)
+            return body
         for terminal in self._trade.terminals.values():
             for field in ROUTE_FIELDS:
                 value = terminal.get(field)
@@ -124,7 +126,23 @@ def best_place(
     return _sounds_like(rows, key)
 
 
+BODIES = {
+    "stanton1": "Hurston",
+    "stanton2": "Crusader",
+    "stanton3": "ArcCorp",
+    "stanton4": "microTech",
+    "pyro1": "Pyro I",
+    "pyro2": "Monox",
+    "pyro3": "Bloom",
+    "pyro4": "Pyro IV",
+    "pyro5": "Pyro V",
+    "pyro6": "Terminus",
+}
+"""The planets Game.log names by number ("Successfully calculated route to pyro3"):
+only a whole id, so "rs_ext_pyro6_leo" (a point near Terminus) isn't Terminus."""
+
 SOUNDS = (
+    (r"oo", "u"),
     (r"ph", "f"),
     (r"ck", "k"),
     (r"w", "v"),
@@ -137,7 +155,7 @@ SOUNDS = (
 )
 """Letters speech-to-text swaps for one another in a name it doesn't know ("Lewski",
 "Lefsky" for Levski: #647; "Lipsky", "Lepski": Ben's PC try, 25 Nov 2026; "Ariel" for
-Arial: #682)."""
+Arial: #682; "Blum" for Bloom: 27 Nov 2026)."""
 SOUNDS_ALIKE = 0.8
 """How alike, letter for letter, a misheard name and the place's must sound."""
 
@@ -147,15 +165,16 @@ def _sounds_like(rows: list[Mapping[str, Any]], key: str) -> str | None:
     it's alike enough and nothing else is as close. The map's own search still has to
     list it before anything is clicked."""
     heard = _sound(key)
-    if len(key) < 5:  # as said: "ariel" sounds "aril", still five letters said (#682)
+    if len(key) < 4:  # as said: "ariel" sounds "aril", still five letters said (#682)
         return None
+    least = SOUNDS_ALIKE if len(key) >= 5 else 1.0  # "blum" only if it sounds the same
     scored: dict[str, float] = {}
     for row in rows:
         for field in ROUTE_FIELDS:
             if value := row.get(field):
                 scored[str(value)] = similarity(heard, _sound(squash(str(value))))
     ranked = sorted(scored.items(), key=lambda pair: -pair[1])
-    if not ranked or ranked[0][1] < SOUNDS_ALIKE:
+    if not ranked or ranked[0][1] < least:
         return None
     if len(ranked) > 1 and ranked[1][1] >= ranked[0][1] - 0.05:
         log.debug("%r sounds like %s and %s", key, ranked[0][0], ranked[1][0])
