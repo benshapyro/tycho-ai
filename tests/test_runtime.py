@@ -41,6 +41,7 @@ from tycho.runtime.look import Eyes
 from tycho.runtime.plotting import Plotter
 from tycho.runtime.pressing import SAID_DURING_TRY_IT, TRYING_IN_GAME
 from tycho.runtime.speaking import CHECKING, FILLERS, KEEP_CHARACTERS
+from tycho.situation import Logged
 from tycho.tile import Card, Row
 
 SC = built_in(STAR_CITIZEN)
@@ -247,6 +248,16 @@ def _conversation(*lines: str, **options: Any) -> Rig:
         return r
 
     return run(scenario)
+
+
+def test_a_brain_request_carries_where_the_log_says_the_player_is() -> None:
+    """#659: the session hands its game state to the brain's asker (#656)."""
+    game_state = FakeGameState()
+    game_state.now = (Logged("system", "In the Nyx system", None, 1, "Nyx"),)
+    brain = FakeBrain(Reply("Try Delamar."))
+    _conversation("where can I mine gold", brain=brain, game_state=game_state)
+    assert len(brain.asked) == 1
+    assert "In the Nyx system" in brain.asked[0].where
 
 
 def test_eject_asks_first_and_presses_nothing() -> None:
