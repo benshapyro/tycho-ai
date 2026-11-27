@@ -33,6 +33,8 @@ from tycho.input.plan import Press
 log = logging.getLogger(__name__)
 
 _SLICE_SECONDS = 0.01
+_CLICK = Press("click", (code_for("mouse1"),), 0.0)
+"""A left click as a press, which holds no modifier: for ``Presser.let_go``."""
 MODIFIER_WAIT_SECONDS = 1.0
 """How long a press waits for the player to let go of a modifier it doesn't use (#645)."""
 
@@ -211,6 +213,14 @@ class Presser:
         key-up, so if that fails the ``finally`` still knows to release it."""
         self._sender.up(held[-1])
         held.pop()
+
+    def let_go(self, cancel: threading.Event | None = None) -> str:
+        """Before a click, which holds no modifier (#678): "" once the player holds no
+        Shift, Ctrl or Alt, waiting up to ``MODIFIER_WAIT_SECONDS`` as a press does; else
+        what Tycho says ("Let go of Ctrl and say it again."). The game would read Ctrl +
+        click."""
+        held = self._players_modifiers(_CLICK, cancel or threading.Event())
+        return let_go_line(held) if held else ""
 
     def _players_modifiers(self, press: Press, cancel: threading.Event) -> frozenset[Code]:
         """The modifiers down before the press, after waiting up to

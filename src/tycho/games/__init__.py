@@ -304,7 +304,8 @@ def _places() -> Places:
     from tycho.games.star_citizen.places import UexPlaces
     from tycho.games.star_citizen.uex import UexApi
 
-    return UexPlaces(UexApi())
+    uex = UexApi()
+    return UexPlaces(uex, uex.aclose)  # closed with the session (#644)
 
 
 def _settings(workshop: Workshop) -> Built:

@@ -19,9 +19,8 @@ from typing import Literal
 from tycho import safety
 from tycho.commands import Command, resolve
 from tycho.input import NotPressable, Press, UnsupportedKey, plan
-from tycho.keybinds import Action, Keybinds
+from tycho.keybinds import Action, Keybinds, readable
 from tycho.packs import Safety
-from tycho.runtime.pressing import readable
 
 CHAIN_BEAT_SECONDS = 0.15
 """A pause between the actions of a chain, so the game registers each one."""
