@@ -11,7 +11,12 @@ from tycho import doctor, settings
 from tycho.brain.briefing import ON_STICK, unbound_commands
 from tycho.commands import Command, CommandMatcher, on_stick
 from tycho.findings import TYCHO, Finding
-from tycho.games.star_citizen.keybinds import apply_profile, parse_defaults, parse_sticks
+from tycho.games.star_citizen.keybinds import (
+    apply_profile,
+    parse_defaults,
+    parse_sticks,
+    without_sticks,
+)
 from tycho.input.plan import NotPressable, plan
 from tycho.keybinds import Action, Keybinds, KeyInput, StickInput
 from tycho.packs import STAR_CITIZEN, built_in
@@ -69,6 +74,17 @@ def _store(keybinds: Keybinds) -> _Store:
 
 
 # --- Reading the game's stick bindings (#622) ----------------------------------------------
+
+
+def test_a_player_with_no_stick_gets_no_default_stick_binds() -> None:
+    """Review of #706: the default profile's joystick inputs count only once the game
+    names a stick, so a keyboard-only player isn't told "that's on your stick"."""
+    defaults = parse_defaults(ET.fromstring(DEFAULTS), {})  # noqa: S314
+    no_stick = ET.fromstring("<ActionMaps><ActionProfiles/></ActionMaps>")  # noqa: S314
+    gear = Keybinds(apply_profile(defaults, no_stick)).get("v_toggle_landing_system")
+    assert gear is not None
+    assert gear.stick_inputs == ()
+    assert [a.stick_inputs for a in without_sticks(defaults)] == [(), (), ()]
 
 
 def test_stick_bindings_are_read_per_stick_and_kept_apart_from_keys(keybinds: Keybinds) -> None:

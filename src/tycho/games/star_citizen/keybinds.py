@@ -13,7 +13,8 @@ joystick leaves its keyboard key in place.
 Joystick inputs are kept apart, as ``stick_inputs``, and never pressed (#622): to warn
 when push-to-talk is on a stick button bound in game, and to say an action is on the
 player's stick rather than unbound. Each stick has its own slot: a "js2_" rebind
-replaces only stick 2's. The default profile's joystick inputs are taken as stick 1's.
+replaces only stick 2's. The default profile's joystick inputs are taken as stick 1's,
+once actionmaps.xml names a stick.
 actionmaps.xml's ``<options type="joystick" instance="N" Product="...">`` names each.
 """
 
@@ -111,6 +112,8 @@ def apply_profile(defaults: Iterable[Action], profile: ET.Element) -> list[Actio
                 if taps := _int(rebind.get("multiTap")):
                     multi_taps[key] = taps
 
+    if not parse_sticks(profile):  # no stick the game knows of (review of #706)
+        defaults = without_sticks(defaults)
     result: list[Action] = []
     for action in defaults:
         key = (action.actionmap, action.name)
@@ -129,6 +132,13 @@ def apply_profile(defaults: Iterable[Action], profile: ET.Element) -> list[Actio
             replace(action, inputs=inputs, activation=mode, multi_tap=taps, customized=True)
         )
     return result
+
+
+def without_sticks(actions: Iterable[Action]) -> list[Action]:
+    """``actions`` without the default profile's stick inputs: for a player whose
+    actionmaps.xml names no stick, or who has none, so a keyboard-only player isn't told
+    an action is "on your stick" (review of #706)."""
+    return [replace(a, stick_inputs=()) if a.stick_inputs else a for a in actions]
 
 
 def parse_sticks(profile: ET.Element) -> dict[int, str]:
