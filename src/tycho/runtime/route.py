@@ -445,6 +445,11 @@ class _Run:
             raise _Stop("cancelled", "", "cancelled")
         if self.clicks >= MAX_CLICKS:
             raise _Stop("failed", self.flow.lines.stuck, "no more clicks")
+        said = self.presser.let_go(self.cancel)  # Ctrl + click isn't a click (#678)
+        if self.cancel.is_set():
+            raise _Stop("cancelled", "", "cancelled")
+        if said:
+            raise _Stop("modifier_held", said, f"a modifier is held for {what}")
         try:
             why = self.clicker.click(reading.window, (reading.width, reading.height), *spot)
         except OSError as e:  # Windows refused the input
