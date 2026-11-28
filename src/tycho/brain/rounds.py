@@ -55,6 +55,7 @@ from tycho.brain.lookups import (
 from tycho.brain.refusals import unbound
 from tycho.brain.traces import Look, Trace, TraceFile
 from tycho.brain.unasked import unasked
+from tycho.packs import GamePack
 from tycho.text import clip_spoken
 
 log = logging.getLogger(__name__)
@@ -148,12 +149,14 @@ class Round:
         actions: Collection[str],
         sequences: Collection[str],
         started: float,
+        pack: GamePack | None = None,
     ) -> None:
         self.turn = turn
         self.looking: list[tuple[str, asyncio.Task[LookupResult]]] = []
         self._lookups = lookups
         self._actions = actions
         self._sequences = sequences
+        self._named = pack.safety.named if pack is not None else frozenset[str]()
         self._started = started
         self._checking = False
         self._streamed = False
@@ -263,7 +266,7 @@ class Round:
             turn.unbound, turn.refused, turn.asked = e, True, False
             self.looking.append((use_id, answered(unbound(e, self._actions))))
             return None
-        if (n := _named(decided)) and (why := unasked(turn.heard, n, self._actions)):
+        if (n := _named(decided)) and (why := unasked(turn.heard, n, self._actions, self._named)):
             log.debug("Brain chose to act on words that didn't ask for it; not pressing")
             turn.refused = turn.asked = True
             self.looking.append((use_id, answered(failure(why))))

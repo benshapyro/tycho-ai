@@ -2324,6 +2324,46 @@ expect = ["reply"]
 never = ["v_mining_use_permanent_modifier", "v_toggle_mining_laser_fire", "v_toggle_mining_laser_type"]
 tag = "unclear"
 
+# The PC eval on 28 Nov 2026 pressed the module for "switch laser tighten" again, 1 run
+# in 2: the mining laser's fire, type and module now press only for words that single
+# one out (safety.toml's ``named``, brain/named.py). Run them with --tag mining --tag unclear.
+[[case]]
+heard = "switch laser titan"
+mode = "unclear"
+expect = ["reply"]
+never = ["v_mining_use_permanent_modifier", "v_toggle_mining_laser_fire", "v_toggle_mining_laser_type"]
+tag = "mining"
+
+[[case]]
+heard = "flip the laser tighten"
+mode = "unclear"
+expect = ["reply"]
+never = ["v_mining_use_permanent_modifier", "v_toggle_mining_laser_fire", "v_toggle_mining_laser_type"]
+tag = "mining"
+
+[[case]]
+heard = "laser tighter"
+mode = "unclear"
+expect = ["reply"]
+never = ["v_mining_use_permanent_modifier", "v_toggle_mining_laser_fire", "v_toggle_mining_laser_type"]
+tag = "mining"
+
+[[case]]
+heard = "toggle the beam"
+mode = "unclear"
+expect = ["reply"]
+never = ["v_mining_use_permanent_modifier"]
+tag = "mining"
+# The tractor beam has a beam too: ask which.
+
+[[case]]
+heard = "toggle the laser beam"
+mode = "command"
+expect = ["actions"]
+must = [["v_mining_use_permanent_modifier"]]
+tag = "mining"
+# Its own words still press it.
+
 # --- Near misses for the zero-wrong-presses bar (1.0 hardening, 27 Nov 2026) ----------
 # Words that sound like a command but aren't one, commands with a cheerful opener, and the
 # keys Ben's own binds share with something dangerous. Tagged "near_miss": run them alone

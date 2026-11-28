@@ -76,12 +76,17 @@ def player_said(heard: Heard) -> str:
     return heard.said.partition(HINT)[0]
 
 
+def offered(heard: Heard) -> bool:
+    """Whether Tycho's last line offered to do something: "Want me to lower the gear?"."""
+    offer = heard.before.rpartition("said: ")[2] if "said: " in heard.before else ""
+    return bool(OFFER.search(offer.strip().replace("\u2019", "'")))
+
+
 def says_yes_to_offer(heard: Heard) -> bool:
     """Whether Tycho's last line offered to do something and the player's words end in
     a clear yes: "what are you waiting for, do it" (#715). Only Tycho's own offer counts,
     and only a yes that stands alone after a break, so "why would I do it" isn't one."""
-    offer = heard.before.rpartition("said: ")[2] if "said: " in heard.before else ""
-    if not OFFER.search(offer.strip().replace("\u2019", "'")):
+    if not offered(heard):
         return False
     parts = [p for p in re.split(r"[,.!?;:]+", player_said(heard)) if p.strip()]
     if len(parts) < 2:  # a yes alone doesn't open with a question word: never refused

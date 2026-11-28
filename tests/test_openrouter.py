@@ -15,6 +15,7 @@ from tests.fakes.fake_lookup import FakeLookup
 from tycho import credentials
 from tycho.brain import BrainError, BrainRequest, Reply, RunActions
 from tycho.brain.decisions import UnboundAction
+from tycho.brain.named import WHICH_ONE
 from tycho.brain.openrouter import MAX_TOKENS, REASONING_TOKENS, OpenRouterBrain, Prices, route
 from tycho.brain.openrouter_http import SAID_CHARACTERS, OpenRouterClient, chunks
 from tycho.brain.rounds import (
@@ -612,3 +613,19 @@ def test_nothing_is_pressed_after_a_place_is_handed_to_the_route_tool() -> None:
     )
     route = RouteTool("Plot a route.")
     assert asyncio.run(_brain(both, cast(FakeLookup, route)).decide(request)) == Reply(ACT_HELD)
+
+
+def test_words_that_dont_single_out_a_mining_laser_action_never_press_it() -> None:
+    """#648, as for Claude: "switch laser tighten" pressed the mining laser's module."""
+    keybinds = Keybinds(
+        [
+            _action("v_mining_use_permanent_modifier", "4", "Toggle Laser Beam (High / low)"),
+            _action("v_toggle_mining_laser_type", "j", "Switch Mining Laser (Toggle)"),
+        ]
+    )
+    module = {"actions": ["v_mining_use_permanent_modifier"], "say": "Toggling the beam."}
+    client = FakeChat([*tool_call("run_actions", module), *finished()], text("Which one?"))
+    decided = asyncio.run(_brain(client).decide(BrainRequest("switch laser tighten", keybinds)))
+    assert decided == Reply("Which one?")
+    (result,) = [m for m in client.requests[1]["messages"] if m["role"] == "tool"]
+    assert WHICH_ONE in result["content"]

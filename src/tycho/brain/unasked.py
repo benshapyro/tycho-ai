@@ -24,19 +24,19 @@ from collections.abc import Collection, Iterable, Mapping
 from typing import cast
 
 from tycho.brain.heard import Heard
+from tycho.brain.named import FILLER, unnamed
 from tycho.brain.refusals import (
     ACTION_WORDS,
     ANSWER_IN_WORDS,
     QUESTION_WORDS,
     asked_only,
     names_any,
+    offered,
     player_said,
     says_yes_to_offer,
 )
 from tycho.text import normalize, states
 
-FILLER = frozenset({"tycho", "hey", "ok", "okay", "so", "um", "uh", "er", "oh", "and", "well"})
-"""Words before the ones that say what the player wants."""
 NOT_A_NAME = FILLER | {
     *("yes", "yeah", "yep", "no", "now", "right", "alright", "copy", "roger", "sure", "cool"),
     *("good", "great", "nice", "perfect", "thanks", "quick", "actually", "also", "first"),
@@ -100,17 +100,30 @@ NOT_NOW = (
 )
 
 
-def unasked(heard: Heard | None, picked: Iterable[str], words: Collection[str] = ()) -> str:
+def unasked(
+    heard: Heard | None,
+    picked: Iterable[str],
+    words: Collection[str] = (),
+    named: Collection[str] = (),
+) -> str:
     """Why the words ``heard`` don't ask for the act that would press ``picked``, as the
     model hears it, or "" when they do. ``words``: every offered action, mapped to the
     words players use for it (``spoken``) when known, so a short request after a break
-    counts ("we're landing, gear down")."""
+    counts ("we're landing, gear down"). ``named``: the pack's actions pressed only when
+    the words single them out (#648)."""
     if heard is None or says_yes_to_offer(heard):
         return ""
     picked = tuple(picked)
     used: Mapping[str, Collection[str]] = {}
     if isinstance(words, Mapping):
         used = cast(Mapping[str, Collection[str]], words)
+    if why := _unasked(heard, picked, used):
+        return why
+    # A yes to Tycho's own offer names nothing, and needn't: Tycho named it (#715).
+    return "" if offered(heard) else unnamed(player_said(heard), picked, used, named)
+
+
+def _unasked(heard: Heard, picked: tuple[str, ...], used: Mapping[str, Collection[str]]) -> str:
     known = {w for name in picked for w in used.get(name, ())}
     said = player_said(heard).strip().replace("\N{RIGHT SINGLE QUOTATION MARK}", "'")
     clauses = [c for c in re.split(r"[,.!?;:]+", said) if normalize(c)]

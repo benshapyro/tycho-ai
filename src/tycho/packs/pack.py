@@ -33,6 +33,7 @@ from typing import Literal, cast
 
 from tycho.packs import callouts, onboarding, routes, tiles
 from tycho.packs.callouts import Callout
+from tycho.packs.lists import LISTS, LOOSENING, Safety
 from tycho.packs.onboarding import Setup
 from tycho.packs.parts import Registry
 from tycho.packs.routes import Route
@@ -87,47 +88,6 @@ class Parts:
     keybinds: str | None = None
     game_state: str | None = None
     lookups: tuple[str, ...] = ()
-
-
-LOOSENING = ("not_danger", "mode_guards", "state_guards", "accepted_risks")
-"""The safety lists that make a check let something through. Only a pack that ships
-inside Tycho, reviewed like code, may set them (ADR 18)."""
-_SAFETY = frozenset({"confirm", "travel", "facts", "toggles", *LOOSENING})
-
-
-@dataclass(frozen=True, slots=True)
-class Safety:
-    """A game's lists for the safety gate (``safety.toml``). The rules that use them, and
-    the danger-word backstop on top of them, stay in ``safety.py``."""
-
-    confirm: frozenset[str] = frozenset()
-    """Actions that always ask first."""
-    travel: frozenset[str] = frozenset()
-    """Actions that ask when the brain chose them from looser words (ADR 14)."""
-    facts: Mapping[str, str] = field(default_factory=dict[str, str])
-    """Facts the game state can report, with what the gate says when one is missing."""
-    not_danger: tuple[str, ...] = ()
-    """Words in harmless action names the backstop would catch (built-in packs only)."""
-    mode_guards: Mapping[str, frozenset[str]] = field(default_factory=dict[str, frozenset[str]])
-    """Setup actions, and the control contexts they switch off (built-in packs only)."""
-    state_guards: Mapping[str, frozenset[str]] = field(default_factory=dict[str, frozenset[str]])
-    """Facts, and the control contexts they rule out (built-in packs only)."""
-    accepted_risks: frozenset[str] = frozenset()
-    """Contexts a command may accept the risk of (built-in packs only)."""
-    toggles: tuple[str, ...] = ()
-    """Words in an action's name or label that mean it flips or cycles a state, so
-    Tycho says it can't see which way it went (#29). Any pack may list them: they only
-    make Tycho claim less."""
-    keys_off: str = ""
-    """Set when Tycho may press nothing (advisor mode, #191), to the sentence that says
-    why. The gate's first check refuses every press while it's set. It comes from the
-    pack's mode or the player's ``key_actions`` setting (``as_run``), never from
-    ``safety.toml``."""
-
-    def flips(self, name: str, label: str) -> bool:
-        """Whether the action ``name`` (``label``) is one of the pack's toggles."""
-        said = f"{name} {label}".lower()
-        return any(word in said for word in self.toggles)
 
 
 @dataclass(frozen=True, slots=True)
@@ -468,7 +428,7 @@ def _check_briefing(text: str, where: str) -> None:
 
 
 def _safety(table: Mapping[str, object], where: str, *, built_in: bool) -> Safety:
-    if extra := sorted(table.keys() - _SAFETY):
+    if extra := sorted(table.keys() - LISTS):
         raise PackError(f"{where}: unknown lists: {', '.join(extra)}")
     if not built_in and (loosening := [name for name in LOOSENING if table.get(name)]):
         # "Eject without asking" from a pack Tycho didn't ship: refused, never trusted.
@@ -485,6 +445,7 @@ def _safety(table: Mapping[str, object], where: str, *, built_in: bool) -> Safet
     return Safety(
         confirm=frozenset(_strings(table, "confirm", where)),
         travel=frozenset(_strings(table, "travel", where)),
+        named=frozenset(_strings(table, "named", where)),
         # Read-only: the built-in packs are cached and shared by the whole process.
         facts=MappingProxyType(cast(dict[str, str], facts)),
         not_danger=_strings(table, "not_danger", where),
