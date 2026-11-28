@@ -9,7 +9,7 @@ version = 1
 # The game Tycho helps with: its commands, keybinds, look-ups and what the brain knows. Changes apply when Tycho restarts.
 game = "wow-forever"
 
-# game_root = (not set). For Star Citizen: the folder that contains LIVE. Empty means Tycho finds it from the RSI Launcher, the default folder, or common folders on each drive.
+# game_root = (not set). For Star Citizen: the game's folder, LIVE itself or the folder that contains it. Empty means Tycho finds it from the RSI Launcher, the default folder, or common folders on each drive.
 # For Star Citizen: which version of the game you play: LIVE, PTU, EPTU, TECH-PREVIEW or HOTFIX. Tycho reads that version's keybinds.
 game_channel = "LIVE"
 
@@ -49,7 +49,7 @@ web_search = true
 # Let web search look on any website (guides, forums, Reddit's search results), not only the game's own sites, for where things are and how to do things. Answers from players' posts say so. With only an Anthropic key, it tries the game's sites first and takes longer (about 10 s). Off: the game's own sites only.
 web_search_open = true
 
-# Who runs Tycho's brain, for anything the built-in phrasings don't cover: anthropic (Claude direct, with your Anthropic key) or openrouter (the same Claude through OpenRouter, with your OpenRouter key). Web search needs an Anthropic key either way.
+# Who runs Tycho's brain, for anything the built-in phrasings don't cover: anthropic (Claude direct, with your Anthropic key) or openrouter (the same Claude through OpenRouter, with your OpenRouter key). With an OpenRouter key, web search runs through it, whichever runs the brain.
 brain_provider = "anthropic"
 
 # The brain's model. Only models that passed Tycho's safety test (no wrong key presses) can be picked.

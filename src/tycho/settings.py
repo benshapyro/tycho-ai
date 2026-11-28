@@ -91,8 +91,9 @@ class Settings(BaseModel):
     )
     game_root: Path | None = Field(
         default=None,
-        description="For Star Citizen: the folder that contains LIVE. Empty means Tycho "
-        "finds it from the RSI Launcher, the default folder, or common folders on each drive.",
+        description="For Star Citizen: the game's folder, LIVE itself or the folder that "
+        "contains it. Empty means Tycho finds it from the RSI Launcher, the default folder, or "
+        "common folders on each drive.",
         json_schema_extra=_rule("no", how=FILE_FOR_NOW),
     )
     game_channel: Channel = Field(
@@ -188,8 +189,8 @@ class Settings(BaseModel):
         default="anthropic",
         description="Who runs Tycho's brain, for anything the built-in phrasings don't cover: "
         "anthropic (Claude direct, with your Anthropic key) or openrouter (the same Claude "
-        "through OpenRouter, with your OpenRouter key). Web search needs an Anthropic key "
-        "either way.",
+        "through OpenRouter, with your OpenRouter key). With an OpenRouter key, web search "
+        "runs through it, whichever runs the brain.",
         # It decides who receives what you say: never by a misheard sentence (ADR 5).
         json_schema_extra=_rule("no", how=FILE_OR_APP),
     )

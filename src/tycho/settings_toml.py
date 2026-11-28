@@ -38,9 +38,26 @@ def read_toml(path: Path) -> dict[str, Any] | None:
         return None
     try:
         # utf-8-sig: Notepad and PowerShell can save a byte-order mark, which TOML rejects.
-        return tomllib.loads(path.read_text("utf-8-sig"))
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        text = path.read_text("utf-8-sig")
+    except (OSError, UnicodeDecodeError) as e:
         raise ValueError(f"Couldn't read {path}: {e}") from e
+    try:
+        return tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        raise ValueError(f"Couldn't read {path}: {e}{_folder_hint(text, e.lineno)}") from e
+
+
+def _folder_hint(text: str, line: int) -> str:
+    """How to write a Windows folder, when the line TOML refused has one in double
+    quotes: there a backslash starts an escape, so "D:\\Games" can't be read."""
+    lines = text.splitlines()
+    said = lines[line - 1] if 0 < line <= len(lines) else ""
+    if "\\" not in said or '"' not in said:
+        return ""
+    return (
+        ". A Windows folder goes in single quotes, so its backslashes are kept: "
+        "game_root = 'D:\\Games\\StarCitizen'"
+    )
 
 
 def write_atomic(path: Path, text: str) -> None:

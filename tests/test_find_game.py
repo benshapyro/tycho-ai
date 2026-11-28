@@ -84,6 +84,20 @@ def test_the_channel_setting_picks_ptu(tmp_path: Path, monkeypatch: pytest.Monke
         checks.find_install(current.model_copy(update={"game_channel": "EPTU"}))
 
 
+def test_the_setting_may_name_the_channel_folder_itself(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A player (or their agent) writes game_root = '...\StarCitizen\LIVE': the folder
+    # with Data.p4k in it. Found, not looked for in LIVE\LIVE.
+    root = _game(_game(tmp_path / "Games" / "StarCitizen"), "PTU")
+    monkeypatch.setattr(checks, "search_roots", lambda: ())
+    assert checks.find_install(Settings(game_root=root / "LIVE")).folder == root / "LIVE"
+    ptu = Settings(game_root=root / "LIVE", game_channel="PTU")
+    assert checks.find_install(ptu).folder == root / "PTU"
+    upper = Settings(game_root=tmp_path / "Games")
+    assert checks.find_install(upper).folder == root / "LIVE"
+
+
 def test_any_level_of_folder_will_do(tmp_path: Path) -> None:
     root = _game(tmp_path / "Roberts Space Industries" / "StarCitizen")
     assert root_from(root / "LIVE") == root
