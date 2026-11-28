@@ -88,3 +88,9 @@ def test_an_action_the_pack_doesnt_list_isnt_checked() -> None:
 def test_a_yes_to_tychos_own_offer_still_presses() -> None:
     heard = Heard("yes", "said: Want me to toggle the laser beam?")
     assert unasked(heard, (MODULE,), WORDS, NAMED) == ""
+
+
+def test_other_words_after_tychos_offer_are_still_checked() -> None:
+    """Review of #741: "no, switch laser tighten" after an offer pressed the module."""
+    heard = Heard("no, switch laser tighten", "said: Want me to lower the gear?")
+    assert unasked(heard, (MODULE,), WORDS, NAMED) == WHICH_ONE

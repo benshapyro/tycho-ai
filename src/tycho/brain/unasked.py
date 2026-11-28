@@ -29,6 +29,7 @@ from tycho.brain.refusals import (
     ACTION_WORDS,
     ANSWER_IN_WORDS,
     QUESTION_WORDS,
+    YES,
     asked_only,
     names_any,
     offered,
@@ -119,8 +120,10 @@ def unasked(
         used = cast(Mapping[str, Collection[str]], words)
     if why := _unasked(heard, picked, used):
         return why
-    # A yes to Tycho's own offer names nothing, and needn't: Tycho named it (#715).
-    return "" if offered(heard) else unnamed(player_said(heard), picked, used, named)
+    # A yes to Tycho's own offer names nothing, and needn't: Tycho named it (#715). Any
+    # other words after an offer ("no, switch laser tighten") are checked (review of #741).
+    yes = tuple(normalize(player_said(heard))) in YES or says_yes_to_offer(heard)
+    return "" if yes and offered(heard) else unnamed(player_said(heard), picked, used, named)
 
 
 def _unasked(heard: Heard, picked: tuple[str, ...], used: Mapping[str, Collection[str]]) -> str:
