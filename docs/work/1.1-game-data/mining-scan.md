@@ -27,7 +27,7 @@ Example: the player says "what's ten thousand six twenty?" and Tycho says "Beryl
 - several: "Either Savrilium, six rocks, or Aslarite, five"
 - none: "I don't know that signature." Never the nearest guess, because one wrong digit would name the wrong ore.
 
-**Step 3: the player says the number.** Works today with no screen at all. The brain gets the tool and a short line in the pack's briefing: a scan number asked about goes to `scan_signature`. Spoken numbers ("ten thousand six twenty", "ten six twenty") are turned into digits before the look-up.
+**Step 3: the player says the number.** Works with no screen at all; ships together with step 4 (Ben, 28 Nov). The brain gets the tool and a short line in the pack's briefing: a scan number asked about goes to `scan_signature`. Spoken numbers ("ten thousand six twenty", "ten six twenty") are turned into digits before the look-up.
 
 **Step 4: Tycho reads the number (only when asked).** "What's that signature?" or "what am I scanning?" counts as asking to look (#31): one capture of the game window (ADR 3), local text recognition looks for a number shaped like `10,620` near the middle of the screen, and the look-up runs. If no number is found, the picture goes to the brain as any look does, and it calls the look-up with the number it reads. Only on request, never a constant overlay, and nothing is pressed.
 
@@ -42,12 +42,12 @@ Example: the player says "what's ten thousand six twenty?" and Tycho says "Beryl
 - Brain eval cases: each of the above said aloud; zero wrong presses still holds.
 - Text recognition replayed on saved frames from the step 5 PC check.
 
-## Decisions for Ben
+## Decided (Ben, 28 Nov 2026)
 
-1. **Where the numbers come from.** *Recommendation:* our own hand-checked table in the pack, each entry naming its patch, with the community tables credited as the source we checked against. The numbers are facts about the game, not anyone's code or text.
-2. **Spoken number first, screen reading second.** *Recommendation:* yes. Step 3 is useful on its own, needs no capture and no new look phrase, and can ship in 1.1 even if screen reading slips.
-3. **The look phrases.** Plain "what's that?" is too broad to mean "look at my scanner". *Recommendation:* add only scan-specific phrases ("what's that signature", "what am I scanning", "what's that rock") to the pack's `look` list.
+1. **Where the numbers come from:** our own hand-checked table in the pack, each entry naming its patch, with the community tables credited as the source we checked against.
+2. **How Tycho gets the number:** both ways ship together, saying it and Tycho reading it off the screen.
+3. **The look phrases:** only scan-specific phrases ("what's that signature", "what am I scanning", "what's that rock") in the pack's `look` list. Plain "what's that?" is too broad.
 
 ## Size
 
-Steps 1 to 3: one PR, cloud only. Step 4: one PR, cloud, then step 5 on the PC.
+Steps 1 to 4: two PRs, cloud (the table and sums, then the spoken and screen paths), released together. Step 5 on the PC before release.

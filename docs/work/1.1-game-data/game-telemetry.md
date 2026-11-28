@@ -41,11 +41,11 @@ Example: "open the doors". Today: "Pressed doors. I can't see which way it went.
 - At least one test fails on old code (a toggle with the feed showing the change says the result).
 - Brain cases: state says shields on (no press), state unknown (press, said honestly). Zero wrong presses still holds.
 
-## Decisions for Ben
+## Decided (Ben, 28 Nov 2026)
 
-1. **The ADR 3 amendment** drafted on #689: Tycho may read the feed, off until the player turns it on, read only, never sends game actions. *Recommendation:* approve the idea now, approve the final text after Phase 0, so it names the real switch.
-2. **Tycho writing `user.cfg` for the player.** *Recommendation:* yes, only after asking, with a backup and a way to undo in Settings. Players shouldn't need to edit game files by hand.
-3. **Skipping a press when the feed says it's already done** (Phase 3). This changes what a command does. *Recommendation:* yes, only with a reading under a second old; otherwise press as today.
+1. **The ADR 3 amendment** drafted on #689 is agreed in principle. The final text is written and approved after Phase 0, so it names the real switch. Nothing built on it merges before then.
+2. **Tycho writes `user.cfg` for the player**, only after asking, with a backup and a way to undo in Settings.
+3. **Tycho skips a press when the feed says it's already done** (Phase 3), only with a reading under a second old; otherwise it presses as today.
 
 ## Size
 

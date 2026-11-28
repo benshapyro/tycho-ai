@@ -15,15 +15,19 @@ Three features came out of the 26 November 2026 audit. Each has a plan here; non
 
 **Recommended order:** mining scan first (smallest, no ADR change, useful today), then local game data, then telemetry when CIG ships it.
 
-## Decisions for Ben
+## Ben's decisions (28 November 2026)
 
-Each plan lists its own, with a recommendation. In short:
+Ben answered in the project thread on 28 Nov 2026 (**stated**):
 
-1. **Mining:** keep the signature table as hand-checked pack data, crediting the community tables as a source. *Recommend yes.*
-2. **Mining:** start with the player saying the number; reading it off the screen comes second. *Recommend yes.*
-3. **Local data:** once the spike works, the game's own place list replaces UEX's for routes (an ADR 3 amendment). *Recommend yes, with UEX kept only while the first copy is being built.*
-4. **Telemetry:** accept the ADR 3 amendment drafted on #689 (opt-in, read only, never send game actions), but only after a real build shows how it's switched on. *Recommend yes, after Phase 0.*
-5. **Telemetry:** when the feed says something is already on, Tycho skips the press and says so. *Recommend yes, only with a fresh reading.*
+1. **Order:** mining scan, then local game data, then telemetry.
+2. **Mining numbers:** our own hand-checked table in the pack, each entry naming its patch, crediting the community tables.
+3. **Mining, how Tycho gets the number:** both at once. Saying the number and Tycho reading it off the screen ship together.
+4. **Mining look phrases:** scan-specific words only ("what's that signature", "what am I scanning").
+5. **Local data:** yes, the game's own place list replaces UEX for routes, with UEX only while the first copy builds. Ben added: a local database Tycho controls is better in general (no web search every time, better tools on top), with UEX, the Wiki API and web search kept as backup and refresh. **Benchmarks and evals must show it's better.** See [local-game-data.md](local-game-data.md) and #740.
+6. **Telemetry ADR 3 amendment:** agreed in principle now; the final text is approved after Phase 0, so it names the real switch.
+7. **Telemetry behaviour:** Tycho may write the `user.cfg` lines after asking, with a backup and an undo; and Tycho skips a press when a reading under a second old shows it's already done.
+
+The ADR texts themselves still need Ben's approval when their PRs come.
 
 ## Ground rules for all three
 

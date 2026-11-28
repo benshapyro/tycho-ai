@@ -32,7 +32,16 @@ Example: Game.log says the route went to `rs_ext_pyro3_leo`. Today Tycho can't n
 
 **Step 5: ADR 3 amendment** (Ben's call, drafted in the PR for step 4): route names and id checks come from the player's own patch data; UEX's list and the word check go.
 
-**Later, only if the Wiki falls short:** missions and blueprints offline from the same database. Not part of 1.1.
+**Step 6: benchmark before switching (Ben, 28 Nov).** A `tools/bench` comparison runs the same questions through today's online look-ups and through the local database: right and wrong answers, time to answer, and cost per question. Routes first. Nothing switches until the local side is at least as right and faster or cheaper.
+
+## Where this goes next: a local database Tycho controls (#740)
+
+Ben's direction (28 Nov 2026, **stated**): a local database Tycho controls beats a web look-up every time. It answers faster, works offline, and lets us build better tools on top. UEX, the Star Citizen Wiki API and web search stay as backup and refresh.
+
+- Places are first. Then each other kind of data (ships, items and crafting, mining locations) moves to local-first only after the step 6 benchmark shows it's better for that kind.
+- Prices change by the hour, so they likely stay online-first, saved into the database as they're fetched.
+- Refresh: from the player's own game files when the patch changes; online data when Tycho starts or when a question finds it old.
+- The same brain evals run after each switch, and zero wrong presses still holds (#112).
 
 ## Tests and eval
 
@@ -42,12 +51,12 @@ Example: Game.log says the route went to `rs_ext_pyro3_leo`. Today Tycho can't n
 - At least one test fails on today's word check (an id with no shared word, like the Pyro one).
 - Upgrade test: a player with no local copy yet still plots through UEX.
 
-## Decisions for Ben
+## Decided (Ben, 28 Nov 2026)
 
-1. **Replace UEX for routes.** *Recommendation:* yes, once the spike maps every place on one patch. Keep UEX only as the stand-in while the first local copy builds. Needs an ADR 3 amendment, which you approve.
-2. **Reading the game's database file is within ADR 3.** *Recommendation:* yes. It's a file on disk that Tycho already opens for keybinds: no memory reading, no injection. Worth a line in the amendment so it's on record.
-3. **Places only in 1.1.** *Recommendation:* yes. Missions and blueprints stay on the Wiki API, which works.
+1. **Replace UEX for routes** once the spike maps every place on one patch, with UEX only while the first local copy builds. The ADR 3 amendment text still needs Ben's approval in its PR.
+2. **Reading the game's database file is within ADR 3:** it's a file on disk Tycho already opens for keybinds. The amendment says so on the record.
+3. **Local-first in general, proved by benchmarks** (see above and #740).
 
 ## Size
 
-Step 1: one PC session. Steps 2 to 4: two PRs, cloud. Step 5 rides with step 4.
+Step 1: one PC session. Steps 2 to 4: two PRs, cloud. Step 5 rides with step 4. Step 6 (the benchmark) is one PR and comes before step 4 merges.
