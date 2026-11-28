@@ -35,6 +35,7 @@ from tycho.brain.briefing import (
 from tycho.brain.claude import ClaudeBrain, history, turns
 from tycho.brain.decisions import CARD_LINE
 from tycho.brain.lookups import LOOKUP_SECONDS, run_lookup
+from tycho.brain.named import WHICH_ONE
 from tycho.brain.refusals import ANSWER_IN_WORDS
 from tycho.brain.rounds import (
     CARD_NOTE,
@@ -1994,3 +1995,23 @@ def test_nothing_is_pressed_after_a_place_is_handed_to_the_route_tool() -> None:
         brain = ClaudeBrain(MATCHER, client=cast(Any, calls), lookups=lookups, pack=SC)
         assert asyncio.run(brain.decide(request)) == Reply(ACT_HELD)
         assert route.take() == "Ruin Station"  # still plotted, by Tycho
+
+
+def test_words_that_dont_single_out_a_mining_laser_action_never_press_it() -> None:
+    """#648: "switch laser tighten" pressed Toggle Laser Beam (High / low), the mining
+    laser's module, in play and in the PC eval (28 Nov 2026), whatever the briefing said."""
+    keybinds = Keybinds(
+        [
+            Action(name, "m", label, inputs=(KeyInput(key),))
+            for name, label, key in [
+                ("v_mining_use_permanent_modifier", "Toggle Laser Beam (High / low)", "4"),
+                ("v_toggle_mining_laser_type", "Switch Mining Laser (Toggle)", "j"),
+            ]
+        ]
+    )
+    client = _Calls(_picks(["v_mining_use_permanent_modifier"]), ([], _final("Which one?")))
+    brain = ClaudeBrain(MATCHER, client=cast(Any, client), pack=SC)
+    decided = asyncio.run(brain.decide(BrainRequest("switch laser tighten", keybinds)))
+    assert decided == Reply("Which one?")
+    (result,) = client.requests[1]["messages"][-1]["content"]
+    assert WHICH_ONE in result["content"]

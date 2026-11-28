@@ -336,7 +336,7 @@ class OpenRouterBrain:
     ) -> tuple[Decision | None, _Message, Round]:
         """One call: an act if the model picked one (the stream is left there),
         otherwise the whole reply and the round, with the look-ups it started."""
-        round_ = Round(turn, self._lookups, self._actions, self._sequences, started)
+        round_ = Round(turn, self._lookups, self._actions, self._sequences, started, self._pack)
         message = _Message()
         try:
             async with self._client.stream(self._body(messages)) as stream:

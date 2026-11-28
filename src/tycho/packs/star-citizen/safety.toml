@@ -26,6 +26,16 @@ confirm = [
 # path's words, but the brain's reading of looser words asks first (ADR 14).
 travel = ["v_toggle_qdrive_engagement", "v_toggle_jump_request"]
 
+# Actions the brain presses only when the player's words single them out (#648): with a
+# word Tycho can't place, or only words another action has too, it asks which they mean.
+# The mining laser's fire, type and module (Toggle Laser Beam (High / low)) share "mining
+# laser", and "switch laser tighten" pressed the module in play.
+named = [
+    "v_toggle_mining_laser_fire",
+    "v_toggle_mining_laser_type",
+    "v_mining_use_permanent_modifier",
+]
+
 # Words in an action's name or label that mean it flips or cycles a state: pressed for
 # a direction ("open the doors" with only the toggle bound), Tycho says it can't see
 # which way it went (#29). "Cycle attacker" isn't one: it picks a target.

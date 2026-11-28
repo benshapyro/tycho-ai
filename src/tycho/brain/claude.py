@@ -323,7 +323,7 @@ class ClaudeBrain:
     ) -> tuple[Decision | None, Any, Round]:
         """One call to Claude: an act if it picked one (the stream is left there),
         otherwise the whole message and the round, with the look-ups it started."""
-        round_ = Round(turn, self._lookups, self._actions, self._sequences, started)
+        round_ = Round(turn, self._lookups, self._actions, self._sequences, started, self._pack)
         tools = self._offered()
         opened = contextlib.AsyncExitStack()
         try:
